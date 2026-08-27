@@ -1644,11 +1644,20 @@ func TestResponder_Char_Template(t *testing.T) {
 	}
 }
 
-// TestResponder_Char_TemplatePointerIsRendered pins the fix for a sharp edge:
-// the type switch used to match resTypes.Template by VALUE only, so a
-// *resTypes.Template was JSON-serialized instead of rendered. It is now
-// dereferenced first and renders exactly like the value form.
-func TestResponder_Char_TemplatePointerIsRendered(t *testing.T) {
+// TestResponder_Char_TemplatePointerIsNotRendered pins a sharp edge that this
+// PR deliberately does NOT change: the type switch matches resTypes.Template by
+// VALUE only, so a *resTypes.Template is JSON-serialized instead of rendered.
+//
+// Dereferencing pointers to the special response types would make *T behave like
+// T, which reads like an obvious fix. It is a WIRE-FORMAT CHANGE for anyone who
+// returns a pointer today, and GoFr follows semantic versioning on a v1 line, so
+// it does not belong in a minor release. A client that reads the serialized
+// struct out of the envelope - decoding base64 Content itself, or routing on
+// .data.URL rather than following a 302 - works today and would break.
+//
+// Pinned rather than fixed so the behavior is recorded, and so whenever it does
+// change that change is deliberate and this test has to be edited to allow it.
+func TestResponder_Char_TemplatePointerIsNotRendered(t *testing.T) {
 	createTemplateFile(t, "./templates/char.html", "<h1>{{.Title}}</h1>")
 
 	defer removeTemplateDir(t)
@@ -1660,35 +1669,57 @@ func TestResponder_Char_TemplatePointerIsRendered(t *testing.T) {
 	}, nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "text/html", w.Header().Get("Content-Type"))
-	assert.Equal(t, "<h1>Hi</h1>", w.Body.String())
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"),
+		"a pointer to Template is enveloped as JSON, not rendered as HTML")
 }
 
-// TestResponder_Char_SpecialTypePointersAreDereferenced pins the fix: every
-// special response type is now matched through a pointer too, so *T behaves
-// byte-for-byte like T. Previously each of these fell through to the JSON
-// envelope — a redirect returned 200 with a serialized struct and no Location
-// header, a file was base64-encoded, and so on. WIRE-FORMAT CHANGE for anyone
-// who returned a pointer to a special response type.
-func TestResponder_Char_SpecialTypePointersAreDereferenced(t *testing.T) {
+// TestResponder_Char_SpecialTypePointersAreEnveloped pins what a POINTER to a
+// special response type does today: it falls through to the ordinary JSON
+// envelope instead of performing the response. A redirect returns 200 with a
+// serialized struct and no Location header, a file and an XML document are
+// base64-encoded into the envelope, and Raw/Response are wrapped a second time.
+//
+// This is a footgun, and it is deliberately NOT fixed here. Dereferencing would
+// be a wire-format change on a v1 line that follows semantic versioning, and the
+// current output is not merely parseable but usable: a fetch() client can read
+// .data.URL and route client-side rather than following a 302 - which fetch
+// auto-follows by default, so "fixing" it would silently send that client to the
+// destination instead. A client base64-decoding .data.Content works the same way.
+//
+// So the shape is recorded here. Whoever changes it has to edit this test, which
+// is the point.
+func TestResponder_Char_SpecialTypePointersAreEnveloped(t *testing.T) {
 	tests := []struct {
-		name       string
-		data       any
-		wantStatus int
-		wantCType  string
-		wantBody   string
-		wantLoc    string
+		name      string
+		data      any
+		wantCType string
+		wantBody  string
 	}{
-		{"file-ptr", &resTypes.File{Content: []byte("ab"), ContentType: "text/plain"},
-			http.StatusOK, "text/plain", "ab", ""},
-		{"xml-ptr", &resTypes.XML{Content: []byte("<a/>")},
-			http.StatusOK, "application/xml", "<a/>", ""},
-		{"redirect-ptr", &resTypes.Redirect{URL: "/x"},
-			http.StatusFound, "", "", "/x"},
-		{"raw-ptr", &resTypes.Raw{Data: "x"},
-			http.StatusOK, "application/json", "\"x\"\n", ""},
-		{"response-ptr", &resTypes.Response{Data: "x"},
-			http.StatusOK, "application/json", "{\"data\":\"x\"}\n", ""},
+		{
+			name: "file-ptr", data: &resTypes.File{Content: []byte("ab"), ContentType: "text/plain"},
+			wantCType: "application/json",
+			wantBody:  "{\"data\":{\"Content\":\"YWI=\",\"ContentType\":\"text/plain\"}}\n",
+		},
+		{
+			name: "xml-ptr", data: &resTypes.XML{Content: []byte("<a/>")},
+			wantCType: "application/json",
+			wantBody:  "{\"data\":{\"Content\":\"PGEvPg==\",\"ContentType\":\"\"}}\n",
+		},
+		{
+			name: "redirect-ptr", data: &resTypes.Redirect{URL: "/x"},
+			wantCType: "application/json",
+			wantBody:  "{\"data\":{\"URL\":\"/x\"}}\n",
+		},
+		{
+			name: "raw-ptr", data: &resTypes.Raw{Data: "x"},
+			wantCType: "application/json",
+			wantBody:  "{\"data\":{\"Data\":\"x\"}}\n",
+		},
+		{
+			name: "response-ptr", data: &resTypes.Response{Data: "x"},
+			wantCType: "application/json",
+			wantBody:  "{\"data\":{\"data\":\"x\"}}\n",
+		},
 	}
 
 	for _, tc := range tests {
@@ -1697,10 +1728,11 @@ func TestResponder_Char_SpecialTypePointersAreDereferenced(t *testing.T) {
 
 			NewResponder(w, http.MethodGet).Respond(tc.data, nil)
 
-			assert.Equal(t, tc.wantStatus, w.Code)
+			assert.Equal(t, http.StatusOK, w.Code)
 			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"))
 			assert.Equal(t, tc.wantBody, w.Body.String())
-			assert.Equal(t, tc.wantLoc, w.Header().Get("Location"))
+			assert.Empty(t, w.Header().Get("Location"),
+				"a pointer to Redirect must not emit Location today")
 		})
 	}
 }
@@ -1798,70 +1830,3 @@ func TestResponder_Char_MethodCaseSensitivity(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
-
-// TestResponder_Char_SpecialTypePointersWithError pins the pointer paths that
-// carry a NON-NIL error, which is where dereferencing changes the outcome most
-// sharply. Both results below are inherited from the value forms — the deref
-// does not invent them — but it does route pointer callers into them for the
-// first time, so they are pinned here rather than left to be discovered.
-//
-// *Raw + error: the Raw branch of the switch has no error field at all, so the
-// error is dropped and a success-shaped body is served. Previously the pointer
-// fell to the default branch and the error was carried in the envelope.
-//
-// *Response{} + error: isEmptyStruct compares against the zero value with
-// reflect.DeepEqual, and a *Response never equaled a zero Response. The value
-// form does, so determineResponse substitutes the generic errEmptyResponse and
-// the caller's real message is replaced by a 500.
-//
-// Neither is being endorsed here. They are the value forms' pre-existing quirks
-// and fixing them would change behavior for existing value callers, which is
-// out of scope for this PR; see the behavior table in the PR description.
-func TestResponder_Char_SpecialTypePointersWithError(t *testing.T) {
-	errBoom := errCharBoom
-
-	tests := []struct {
-		name       string
-		data       any
-		wantStatus int
-		wantBody   string
-	}{
-		{
-			name: "raw-ptr-with-error drops the error",
-			data: &resTypes.Raw{Data: map[string]string{"a": "b"}},
-			// The value form behaves identically; the pointer used to land in
-			// the default branch and emit {"error":...,"data":...} at 206.
-			wantStatus: http.StatusPartialContent,
-			wantBody:   "{\"a\":\"b\"}\n",
-		},
-		{
-			name: "empty-response-ptr-with-error becomes a generic 500",
-			data: &resTypes.Response{},
-			// The pointer used to escape isEmptyStruct and emit 206 with the
-			// real message.
-			wantStatus: http.StatusInternalServerError,
-			wantBody:   "{\"error\":{\"message\":\"internal server error\"}}\n",
-		},
-		{
-			name:       "non-empty-response-ptr-with-error keeps the caller's message",
-			data:       &resTypes.Response{Data: "x"},
-			wantStatus: http.StatusPartialContent,
-			wantBody:   "{\"error\":{\"message\":\"boom\"},\"data\":\"x\"}\n",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-
-			NewResponder(w, http.MethodGet).Respond(tc.data, errBoom)
-
-			assert.Equal(t, tc.wantStatus, w.Code)
-			assert.Equal(t, tc.wantBody, w.Body.String())
-		})
-	}
-}
-
-// errCharBoom is the stand-in error for the characterization tests above; a
-// package-level static error keeps err113 satisfied.
-var errCharBoom = errors.New("boom")
