@@ -24,7 +24,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/otlptranslator v1.0.0
 	github.com/redis/go-redis/extra/redisotel/v9 v9.21.0
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/segmentio/kafka-go v0.4.51
 	github.com/stretchr/testify v1.11.1
 	github.com/vektah/gqlparser/v2 v2.5.36
