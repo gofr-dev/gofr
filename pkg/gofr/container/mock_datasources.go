@@ -1183,6 +1183,20 @@ func (mr *MockRedisMockRecorder) BLMove(ctx, source, destination, srcpos, destpo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BLMove", reflect.TypeOf((*MockRedis)(nil).BLMove), ctx, source, destination, srcpos, destpos, timeout)
 }
 
+// BLMoveM mocks base method.
+func (m *MockRedis) BLMoveM(ctx context.Context, source, destination, srcpos, destpos string, timeout time.Duration, args redis.LMoveMArgs) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BLMoveM", ctx, source, destination, srcpos, destpos, timeout, args)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// BLMoveM indicates an expected call of BLMoveM.
+func (mr *MockRedisMockRecorder) BLMoveM(ctx, source, destination, srcpos, destpos, timeout, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BLMoveM", reflect.TypeOf((*MockRedis)(nil).BLMoveM), ctx, source, destination, srcpos, destpos, timeout, args)
+}
+
 // BLPop mocks base method.
 func (m *MockRedis) BLPop(ctx context.Context, timeout time.Duration, keys ...string) *redis.StringSliceCmd {
 	m.ctrl.T.Helper()
@@ -2019,6 +2033,48 @@ func (m *MockRedis) ClientPause(ctx context.Context, dur time.Duration) *redis.B
 func (mr *MockRedisMockRecorder) ClientPause(ctx, dur any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientPause", reflect.TypeOf((*MockRedis)(nil).ClientPause), ctx, dur)
+}
+
+// ClientTracking mocks base method.
+func (m *MockRedis) ClientTracking(ctx context.Context, on bool, opt *redis.ClientTrackingOptions) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClientTracking", ctx, on, opt)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// ClientTracking indicates an expected call of ClientTracking.
+func (mr *MockRedisMockRecorder) ClientTracking(ctx, on, opt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientTracking", reflect.TypeOf((*MockRedis)(nil).ClientTracking), ctx, on, opt)
+}
+
+// ClientTrackingOff mocks base method.
+func (m *MockRedis) ClientTrackingOff(ctx context.Context) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClientTrackingOff", ctx)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// ClientTrackingOff indicates an expected call of ClientTrackingOff.
+func (mr *MockRedisMockRecorder) ClientTrackingOff(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientTrackingOff", reflect.TypeOf((*MockRedis)(nil).ClientTrackingOff), ctx)
+}
+
+// ClientTrackingOn mocks base method.
+func (m *MockRedis) ClientTrackingOn(ctx context.Context, opt *redis.ClientTrackingOptions) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClientTrackingOn", ctx, opt)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// ClientTrackingOn indicates an expected call of ClientTrackingOn.
+func (mr *MockRedisMockRecorder) ClientTrackingOn(ctx, opt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientTrackingOn", reflect.TypeOf((*MockRedis)(nil).ClientTrackingOn), ctx, opt)
 }
 
 // ClientUnblock mocks base method.
@@ -2980,6 +3036,20 @@ func (m *MockRedis) FTAliasDel(ctx context.Context, alias string) *redis.StatusC
 func (mr *MockRedisMockRecorder) FTAliasDel(ctx, alias any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAliasDel", reflect.TypeOf((*MockRedis)(nil).FTAliasDel), ctx, alias)
+}
+
+// FTAliasList mocks base method.
+func (m *MockRedis) FTAliasList(ctx context.Context, index string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FTAliasList", ctx, index)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// FTAliasList indicates an expected call of FTAliasList.
+func (mr *MockRedisMockRecorder) FTAliasList(ctx, index any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAliasList", reflect.TypeOf((*MockRedis)(nil).FTAliasList), ctx, index)
 }
 
 // FTAliasUpdate mocks base method.
@@ -4037,6 +4107,72 @@ func (mr *MockRedisMockRecorder) HGetEXWithArgs(ctx, key, options any, fields ..
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HGetEXWithArgs", reflect.TypeOf((*MockRedis)(nil).HGetEXWithArgs), varargs...)
 }
 
+// HImportDiscard mocks base method.
+func (m *MockRedis) HImportDiscard(ctx context.Context, fieldsetName string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HImportDiscard", ctx, fieldsetName)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// HImportDiscard indicates an expected call of HImportDiscard.
+func (mr *MockRedisMockRecorder) HImportDiscard(ctx, fieldsetName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HImportDiscard", reflect.TypeOf((*MockRedis)(nil).HImportDiscard), ctx, fieldsetName)
+}
+
+// HImportDiscardAll mocks base method.
+func (m *MockRedis) HImportDiscardAll(ctx context.Context) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HImportDiscardAll", ctx)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// HImportDiscardAll indicates an expected call of HImportDiscardAll.
+func (mr *MockRedisMockRecorder) HImportDiscardAll(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HImportDiscardAll", reflect.TypeOf((*MockRedis)(nil).HImportDiscardAll), ctx)
+}
+
+// HImportPrepare mocks base method.
+func (m *MockRedis) HImportPrepare(ctx context.Context, fieldsetName string, fields ...string) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, fieldsetName}
+	for _, a := range fields {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "HImportPrepare", varargs...)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// HImportPrepare indicates an expected call of HImportPrepare.
+func (mr *MockRedisMockRecorder) HImportPrepare(ctx, fieldsetName any, fields ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, fieldsetName}, fields...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HImportPrepare", reflect.TypeOf((*MockRedis)(nil).HImportPrepare), varargs...)
+}
+
+// HImportSet mocks base method.
+func (m *MockRedis) HImportSet(ctx context.Context, key, fieldsetName string, values ...any) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, key, fieldsetName}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "HImportSet", varargs...)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// HImportSet indicates an expected call of HImportSet.
+func (mr *MockRedisMockRecorder) HImportSet(ctx, key, fieldsetName any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, key, fieldsetName}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HImportSet", reflect.TypeOf((*MockRedis)(nil).HImportSet), varargs...)
+}
+
 // HIncrBy mocks base method.
 func (m *MockRedis) HIncrBy(ctx context.Context, key, field string, incr int64) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -4539,6 +4675,25 @@ func (mr *MockRedisMockRecorder) Info(ctx any, section ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx}, section...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockRedis)(nil).Info), varargs...)
+}
+
+// InfoMap mocks base method.
+func (m *MockRedis) InfoMap(ctx context.Context, section ...string) *redis.InfoCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx}
+	for _, a := range section {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "InfoMap", varargs...)
+	ret0, _ := ret[0].(*redis.InfoCmd)
+	return ret0
+}
+
+// InfoMap indicates an expected call of InfoMap.
+func (mr *MockRedisMockRecorder) InfoMap(ctx any, section ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx}, section...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InfoMap", reflect.TypeOf((*MockRedis)(nil).InfoMap), varargs...)
 }
 
 // JSONArrAppend mocks base method.
@@ -5102,6 +5257,20 @@ func (m *MockRedis) LMove(ctx context.Context, source, destination, srcpos, dest
 func (mr *MockRedisMockRecorder) LMove(ctx, source, destination, srcpos, destpos any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LMove", reflect.TypeOf((*MockRedis)(nil).LMove), ctx, source, destination, srcpos, destpos)
+}
+
+// LMoveM mocks base method.
+func (m *MockRedis) LMoveM(ctx context.Context, source, destination, srcpos, destpos string, args redis.LMoveMArgs) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LMoveM", ctx, source, destination, srcpos, destpos, args)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// LMoveM indicates an expected call of LMoveM.
+func (mr *MockRedisMockRecorder) LMoveM(ctx, source, destination, srcpos, destpos, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LMoveM", reflect.TypeOf((*MockRedis)(nil).LMoveM), ctx, source, destination, srcpos, destpos, args)
 }
 
 // LPop mocks base method.
@@ -6016,6 +6185,25 @@ func (mr *MockRedisMockRecorder) SDiff(ctx any, keys ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SDiff", reflect.TypeOf((*MockRedis)(nil).SDiff), varargs...)
 }
 
+// SDiffCard mocks base method.
+func (m *MockRedis) SDiffCard(ctx context.Context, opts *redis.SDiffCardOptions, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, opts}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SDiffCard", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// SDiffCard indicates an expected call of SDiffCard.
+func (mr *MockRedisMockRecorder) SDiffCard(ctx, opts any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, opts}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SDiffCard", reflect.TypeOf((*MockRedis)(nil).SDiffCard), varargs...)
+}
+
 // SDiffStore mocks base method.
 func (m *MockRedis) SDiffStore(ctx context.Context, destination string, keys ...string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -6287,6 +6475,25 @@ func (mr *MockRedisMockRecorder) SUnion(ctx any, keys ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx}, keys...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SUnion", reflect.TypeOf((*MockRedis)(nil).SUnion), varargs...)
+}
+
+// SUnionCard mocks base method.
+func (m *MockRedis) SUnionCard(ctx context.Context, opts *redis.SUnionCardOptions, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, opts}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SUnionCard", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// SUnionCard indicates an expected call of SUnionCard.
+func (mr *MockRedisMockRecorder) SUnionCard(ctx, opts any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, opts}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SUnionCard", reflect.TypeOf((*MockRedis)(nil).SUnionCard), varargs...)
 }
 
 // SUnionStore mocks base method.
@@ -7389,6 +7596,62 @@ func (mr *MockRedisMockRecorder) TSMRevRangeWithArgs(ctx, fromTimestamp, toTimes
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSMRevRangeWithArgs", reflect.TypeOf((*MockRedis)(nil).TSMRevRangeWithArgs), ctx, fromTimestamp, toTimestamp, filterExpr, options)
 }
 
+// TSNRange mocks base method.
+func (m *MockRedis) TSNRange(ctx context.Context, keys []string, fromTimestamp, toTimestamp any) *redis.TSNRangePivotRowSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSNRange", ctx, keys, fromTimestamp, toTimestamp)
+	ret0, _ := ret[0].(*redis.TSNRangePivotRowSliceCmd)
+	return ret0
+}
+
+// TSNRange indicates an expected call of TSNRange.
+func (mr *MockRedisMockRecorder) TSNRange(ctx, keys, fromTimestamp, toTimestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSNRange", reflect.TypeOf((*MockRedis)(nil).TSNRange), ctx, keys, fromTimestamp, toTimestamp)
+}
+
+// TSNRangeWithArgs mocks base method.
+func (m *MockRedis) TSNRangeWithArgs(ctx context.Context, keys []string, fromTimestamp, toTimestamp any, options *redis.TSNRangeOptions) *redis.TSNRangePivotRowSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSNRangeWithArgs", ctx, keys, fromTimestamp, toTimestamp, options)
+	ret0, _ := ret[0].(*redis.TSNRangePivotRowSliceCmd)
+	return ret0
+}
+
+// TSNRangeWithArgs indicates an expected call of TSNRangeWithArgs.
+func (mr *MockRedisMockRecorder) TSNRangeWithArgs(ctx, keys, fromTimestamp, toTimestamp, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSNRangeWithArgs", reflect.TypeOf((*MockRedis)(nil).TSNRangeWithArgs), ctx, keys, fromTimestamp, toTimestamp, options)
+}
+
+// TSNRevRange mocks base method.
+func (m *MockRedis) TSNRevRange(ctx context.Context, keys []string, fromTimestamp, toTimestamp any) *redis.TSNRangePivotRowSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSNRevRange", ctx, keys, fromTimestamp, toTimestamp)
+	ret0, _ := ret[0].(*redis.TSNRangePivotRowSliceCmd)
+	return ret0
+}
+
+// TSNRevRange indicates an expected call of TSNRevRange.
+func (mr *MockRedisMockRecorder) TSNRevRange(ctx, keys, fromTimestamp, toTimestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSNRevRange", reflect.TypeOf((*MockRedis)(nil).TSNRevRange), ctx, keys, fromTimestamp, toTimestamp)
+}
+
+// TSNRevRangeWithArgs mocks base method.
+func (m *MockRedis) TSNRevRangeWithArgs(ctx context.Context, keys []string, fromTimestamp, toTimestamp any, options *redis.TSNRevRangeOptions) *redis.TSNRangePivotRowSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSNRevRangeWithArgs", ctx, keys, fromTimestamp, toTimestamp, options)
+	ret0, _ := ret[0].(*redis.TSNRangePivotRowSliceCmd)
+	return ret0
+}
+
+// TSNRevRangeWithArgs indicates an expected call of TSNRevRangeWithArgs.
+func (mr *MockRedisMockRecorder) TSNRevRangeWithArgs(ctx, keys, fromTimestamp, toTimestamp, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSNRevRangeWithArgs", reflect.TypeOf((*MockRedis)(nil).TSNRevRangeWithArgs), ctx, keys, fromTimestamp, toTimestamp, options)
+}
+
 // TSQueryIndex mocks base method.
 func (m *MockRedis) TSQueryIndex(ctx context.Context, filterExpr []string) *redis.StringSliceCmd {
 	m.ctrl.T.Helper()
@@ -7401,6 +7664,34 @@ func (m *MockRedis) TSQueryIndex(ctx context.Context, filterExpr []string) *redi
 func (mr *MockRedisMockRecorder) TSQueryIndex(ctx, filterExpr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSQueryIndex", reflect.TypeOf((*MockRedis)(nil).TSQueryIndex), ctx, filterExpr)
+}
+
+// TSQueryLabelValues mocks base method.
+func (m *MockRedis) TSQueryLabelValues(ctx context.Context, label string, filterExpr []string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSQueryLabelValues", ctx, label, filterExpr)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// TSQueryLabelValues indicates an expected call of TSQueryLabelValues.
+func (mr *MockRedisMockRecorder) TSQueryLabelValues(ctx, label, filterExpr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSQueryLabelValues", reflect.TypeOf((*MockRedis)(nil).TSQueryLabelValues), ctx, label, filterExpr)
+}
+
+// TSQueryLabels mocks base method.
+func (m *MockRedis) TSQueryLabels(ctx context.Context, filterExpr []string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSQueryLabels", ctx, filterExpr)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// TSQueryLabels indicates an expected call of TSQueryLabels.
+func (mr *MockRedisMockRecorder) TSQueryLabels(ctx, filterExpr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSQueryLabels", reflect.TypeOf((*MockRedis)(nil).TSQueryLabels), ctx, filterExpr)
 }
 
 // TSRange mocks base method.
@@ -7429,6 +7720,34 @@ func (m *MockRedis) TSRangeWithArgs(ctx context.Context, key string, fromTimesta
 func (mr *MockRedisMockRecorder) TSRangeWithArgs(ctx, key, fromTimestamp, toTimestamp, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSRangeWithArgs", reflect.TypeOf((*MockRedis)(nil).TSRangeWithArgs), ctx, key, fromTimestamp, toTimestamp, options)
+}
+
+// TSRead mocks base method.
+func (m *MockRedis) TSRead(ctx context.Context, key string, timestamp any) *redis.TSTimestampValueSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSRead", ctx, key, timestamp)
+	ret0, _ := ret[0].(*redis.TSTimestampValueSliceCmd)
+	return ret0
+}
+
+// TSRead indicates an expected call of TSRead.
+func (mr *MockRedisMockRecorder) TSRead(ctx, key, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSRead", reflect.TypeOf((*MockRedis)(nil).TSRead), ctx, key, timestamp)
+}
+
+// TSReadWithArgs mocks base method.
+func (m *MockRedis) TSReadWithArgs(ctx context.Context, key string, timestamp any, options *redis.TSReadOptions) *redis.TSTimestampValueSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TSReadWithArgs", ctx, key, timestamp, options)
+	ret0, _ := ret[0].(*redis.TSTimestampValueSliceCmd)
+	return ret0
+}
+
+// TSReadWithArgs indicates an expected call of TSReadWithArgs.
+func (mr *MockRedisMockRecorder) TSReadWithArgs(ctx, key, timestamp, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TSReadWithArgs", reflect.TypeOf((*MockRedis)(nil).TSReadWithArgs), ctx, key, timestamp, options)
 }
 
 // TSRevRange mocks base method.
