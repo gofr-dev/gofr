@@ -74,13 +74,15 @@ func Test_WebSocket_Success(t *testing.T) {
 // Test_WebSocket_PlainHTTPRequestDoesNotPanic pins the fix for #3862: a plain
 // HTTP request to a route registered via app.WebSocket (no Upgrade headers,
 // so no WSConnectionKey is ever set on the request context) must get a clean
-// error response instead of panicking. Before the fix, the unsafe type
+// 400 error response instead of panicking. Before the fix, the unsafe type
 // assertion on WSConnectionKey panicked; the panic-recovery middleware then
-// converted that into a generic "Internal Server Error" response, which is
-// indistinguishable by status code alone (both paths return 500) from the
-// websocket.ErrorConnection this handler is supposed to return on its own.
-// The response body's message is checked instead, since only the
-// panic-recovery path produces the generic message.
+// converted that into a generic 500 "Internal Server Error" response, which
+// is indistinguishable by status code alone from a naive fix that also
+// returned 500. The response is checked for both the 400 status (per RFC
+// 6455 4.2.1 - a request that never attempted an upgrade is a client error,
+// same as a request whose upgrade attempt failed, handled a few lines away
+// in middleware/web_socket.go) and the specific message, since only the
+// panic-recovery path produces the generic one.
 func Test_WebSocket_PlainHTTPRequestDoesNotPanic(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -104,9 +106,9 @@ func Test_WebSocket_PlainHTTPRequestDoesNotPanic(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	assert.Contains(t, string(body), "couldn't establish connection to web socket",
-		"expected the websocket.ErrorConnection message, not a panic-recovery response")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, string(body), "request did not include a WebSocket upgrade",
+		"expected the websocket.ErrorNotWebSocketUpgrade message, not a panic-recovery response")
 }
 
 func Test_AddWSService(t *testing.T) {

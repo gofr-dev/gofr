@@ -28,6 +28,24 @@ type Connection struct {
 // ErrorConnection is the connection error that occurs when websocket connection cannot be established.
 var ErrorConnection = errors.New("couldn't establish connection to web socket")
 
+// ErrorNotWebSocketUpgrade is returned by a WebSocket route handler when the request never went
+// through the WebSocket upgrade handshake (no WSConnectionKey on its context), as opposed to
+// ErrorConnection, which means the upgrade happened but the resulting connection is missing or
+// already closed. The former is a client error - the client simply never attempted an upgrade -
+// while the latter is a server-side fault, so the two carry different HTTP status codes: this type
+// implements StatusCode() to map to 400 (RFC 6455 4.2.1 calls for "an appropriate error code (such
+// as 400 Bad Request)" on a failed handshake attempt), while ErrorConnection has no StatusCode()
+// method and falls back to gofr's default 500.
+type ErrorNotWebSocketUpgrade struct{}
+
+func (ErrorNotWebSocketUpgrade) Error() string {
+	return "request did not include a WebSocket upgrade"
+}
+
+func (ErrorNotWebSocketUpgrade) StatusCode() int {
+	return http.StatusBadRequest
+}
+
 // The message types are defined in RFC 6455, section 11.8.
 const (
 	// TextMessage denotes a text data message. The text message payload is

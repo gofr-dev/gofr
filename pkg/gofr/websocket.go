@@ -34,7 +34,7 @@ func (a *App) WebSocket(route string, handler Handler) {
 			// The request never went through the WebSocket upgrade middleware
 			// (e.g. a plain HTTP GET with no Upgrade headers), so no
 			// WSConnectionKey was ever set on the context.
-			return nil, websocket.ErrorConnection
+			return nil, websocket.ErrorNotWebSocketUpgrade{}
 		}
 
 		conn := a.httpServer.ws.GetWebsocketConnection(connID)
