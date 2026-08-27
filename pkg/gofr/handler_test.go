@@ -317,77 +317,166 @@ func TestHandler_aggregateStatus(t *testing.T) {
 	}
 }
 
-func TestHandler_healthHandler_SetHealthCheck(t *testing.T) {
-	testutil.NewServerConfigs(t)
+// downstream returns a dependency URL that makes GoFr's own dependency checks report DEGRADED
+// (500) or UP (200), so readiness can be exercised against both framework verdicts.
+func downstream(t *testing.T, healthy bool) string {
+	t.Helper()
+
+	code := http.StatusInternalServerError
+	if healthy {
+		code = http.StatusOK
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+	}))
+	t.Cleanup(srv.Close)
+
+	return srv.URL
+}
+
+// assertReadiness drives healthHandler and asserts the outcome. wantStatus is the status expected in
+// the redacted {name, status} body of a 200; an empty wantStatus expects a not-ready result instead —
+// no body and a 503 whose message is only "DOWN", the reason staying in the logs.
+func assertReadiness(t *testing.T, a *App, ctx *Context, wantStatus, msg string) {
+	t.Helper()
+
+	h, err := a.healthHandler(ctx)
+
+	if wantStatus != "" {
+		require.NoError(t, err, msg)
+
+		resp, ok := h.(healthResponse)
+		require.True(t, ok, "%s: expected healthResponse, got %T", msg, h)
+		assert.Equal(t, wantStatus, resp.Status, msg)
+
+		return
+	}
+
+	require.Nil(t, h, msg)
+
+	var sc interface{ StatusCode() int }
+
+	require.ErrorAs(t, err, &sc, msg)
+	assert.Equal(t, http.StatusServiceUnavailable, sc.StatusCode(), msg)
+	assert.Equal(t, statusDown, err.Error(), msg)
+}
+
+// errCheck is the failure a registered readiness check reports in these tests.
+var errCheck = errors.New("dependency unavailable")
+
+func TestApp_SetReadinessCheck(t *testing.T) {
+	// propagate requires GoFr's checks in addition to the app's own; override ignores them.
+	propagate := func(appErr error) ReadinessCheck {
+		return func(_ *Context, framework error) error {
+			if framework != nil {
+				return framework
+			}
+
+			return appErr
+		}
+	}
+
+	override := func(appErr error) ReadinessCheck {
+		return func(*Context, error) error { return appErr }
+	}
 
 	tests := []struct {
-		name       string
-		check      HealthCheckFunc
+		desc       string
+		depHealthy bool
+		check      ReadinessCheck
+		// wantStatus is the status reported with a 200; empty means a not-ready 503 is expected.
 		wantStatus string
-		wantCode   int // 0 => handler returns (body, nil), i.e. 200
 	}{
+		{"no check registered still answers 200 with the aggregate", false, nil, "DEGRADED"},
+		{"propagating check is ready when both sides pass", true, propagate(nil), statusUp},
+		{"propagating check fails on the framework verdict", false, propagate(nil), ""},
+		{"propagating check fails on its own verdict", true, propagate(errCheck), ""},
+		{"overriding check ignores a degraded framework", false, override(nil), statusUp},
+		{"overriding check still gates readiness", true, override(errCheck), ""},
+	}
+
+	for i, tc := range tests {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddHTTPService("test-service", downstream(t, tc.depHealthy))
+
+		if tc.check != nil {
+			a.SetReadinessCheck(tc.check)
+		}
+
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+		ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
+
+		assertReadiness(t, a, ctx, tc.wantStatus, fmt.Sprintf("TEST[%d], Failed.\n%s", i, tc.desc))
+	}
+}
+
+func TestApp_frameworkReadiness(t *testing.T) {
+	tests := []struct {
+		desc       string
+		depHealthy bool
+		wantErr    bool
+	}{
+		{"all dependencies healthy", true, false},
+		{"a dependency down", false, true},
+	}
+
+	for i, tc := range tests {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddHTTPService("test-service", downstream(t, tc.depHealthy))
+
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+		ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
+
+		err := frameworkReadiness(ctx)
+
+		if !tc.wantErr {
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			continue
+		}
+
+		require.ErrorIs(t, err, errFrameworkChecks, "TEST[%d], Failed.\n%s", i, tc.desc)
+		// The aggregate status may be reported, but never the per-dependency detail behind it.
+		assert.Contains(t, err.Error(), "DEGRADED", "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestApp_logReadiness(t *testing.T) {
+	tests := []struct {
+		desc  string
+		check ReadinessCheck
+		want  string
+	}{
+		{"nothing logged without an app check", nil, ""},
 		{
-			name:       "ready overrides status but keeps 200",
-			check:      func(context.Context, *container.Container) (string, int) { return "UP", http.StatusOK },
-			wantStatus: "UP",
-			wantCode:   0,
-		},
-		{
-			name: "not ready returns caller status code",
-			check: func(context.Context, *container.Container) (string, int) {
-				return "DOWN", http.StatusServiceUnavailable
-			},
-			wantStatus: "DOWN",
-			wantCode:   http.StatusServiceUnavailable,
-		},
-		{
-			name:       "zero code falls back to 200",
-			check:      func(context.Context, *container.Container) (string, int) { return "UP", 0 },
-			wantStatus: "UP",
-			wantCode:   0,
-		},
-		{
-			name:       "empty status derived from code",
-			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusServiceUnavailable },
-			wantStatus: "DOWN",
-			wantCode:   http.StatusServiceUnavailable,
-		},
-		{
-			name:       "empty status with 200 derives UP",
-			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusOK },
-			wantStatus: "UP",
-			wantCode:   0,
+			"a registered check is announced at startup",
+			func(*Context, error) error { return nil },
+			"readiness: app check registered",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for i, tc := range tests {
+		logs := testutil.StdoutOutputForFunc(func() {
+			testutil.NewServerConfigs(t)
+
 			a := New()
-			a.SetHealthCheck(tc.check)
-
-			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
-			ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
-
-			h, err := a.healthHandler(ctx)
-
-			if tc.wantCode == 0 {
-				require.NoError(t, err)
-
-				resp, ok := h.(healthResponse)
-				require.True(t, ok, "expected healthResponse, got %T", h)
-				assert.Equal(t, tc.wantStatus, resp.Status)
-
-				return
+			if tc.check != nil {
+				a.SetReadinessCheck(tc.check)
 			}
 
-			require.Nil(t, h)
-
-			var sc interface{ StatusCode() int }
-
-			require.ErrorAs(t, err, &sc)
-			assert.Equal(t, tc.wantCode, sc.StatusCode())
-			assert.Equal(t, tc.wantStatus, err.Error())
+			a.logReadiness()
 		})
+
+		if tc.want == "" {
+			assert.NotContains(t, logs, "readiness:", "TEST[%d], Failed.\n%s", i, tc.desc)
+			continue
+		}
+
+		assert.Contains(t, logs, tc.want, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

@@ -1,10 +1,10 @@
 package gofr
 
 import (
-	"context"
+	"errors"
+	"fmt"
 	"net/http"
 
-	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -13,21 +13,45 @@ const (
 	statusDown = "DOWN"
 )
 
-// HealthCheckFunc lets an application decide the readiness reported by the public, unauthenticated
-// /.well-known/health endpoint. It receives the request context and the container — so critical
-// datasources such as c.Redis or c.SQL can be probed — and returns the status string to report in
-// the response body along with the HTTP status code to respond with. For example, return
-// ("UP", http.StatusOK) when ready, or ("DOWN", http.StatusServiceUnavailable) when a critical
-// dependency is not yet available so the pod is kept out of service until it is.
-type HealthCheckFunc func(ctx context.Context, c *container.Container) (status string, statusCode int)
+// ReadinessCheck decides whether the application is ready to serve traffic, for the public,
+// unauthenticated /.well-known/health endpoint. It receives the request context — which carries the
+// container, so datasources such as ctx.Redis or ctx.SQL can be probed — and framework, GoFr's own
+// verdict on every registered datasource and service: nil when they are all up, non-nil when one or
+// more are not.
+//
+// Returning nil means ready; returning any error means not ready, and the endpoint answers 503 so a
+// Kubernetes readiness probe keeps the pod out of service. The returned error is logged but never
+// written to the response: the endpoint is unauthenticated and must not leak dependency details.
+//
+// What the check does with framework is the whole of the policy. Propagate it to require GoFr's
+// checks in addition to your own:
+//
+//	app.SetReadinessCheck(func(ctx *gofr.Context, framework error) error {
+//		if framework != nil {
+//			return framework
+//		}
+//
+//		return licenseDB.PingContext(ctx)
+//	})
+//
+// Or ignore it — writing _ — to replace GoFr's verdict entirely, which is what readiness that is a
+// relationship between dependencies rather than a conjunction of them requires:
+//
+//	app.SetReadinessCheck(func(ctx *gofr.Context, _ error) error {
+//		if redisUp(ctx) || sqlUp(ctx) {
+//			return nil
+//		}
+//
+//		return errNoBackingStore
+//	})
+type ReadinessCheck func(ctx *Context, framework error) error
 
-// SetHealthCheck registers an optional readiness closure for the public /.well-known/health
-// endpoint. Without it, the endpoint responds 200 with the aggregate {name, status} of all
-// registered dependencies, preserving existing behavior. Either way the endpoint never exposes
-// per-dependency details (hosts, ports, credentials, connection stats) — that information is
-// intentionally kept off the unauthenticated port.
-func (a *App) SetHealthCheck(fn HealthCheckFunc) {
-	a.healthCheck = fn
+// SetReadinessCheck registers the application's readiness check for /.well-known/health. Without
+// one the endpoint behaves exactly as before — HTTP 200 with the aggregate {name, status}, DEGRADED
+// included, since which dependencies are critical is an application decision. Register before
+// App.Run; a second call replaces the first.
+func (a *App) SetReadinessCheck(check ReadinessCheck) {
+	a.readinessCheck = check
 }
 
 // healthResponse is the minimal, non-sensitive body returned by /.well-known/health. It carries
@@ -37,22 +61,23 @@ type healthResponse struct {
 	Status string `json:"status"`
 }
 
-// errHealthNotReady carries a caller-chosen HTTP status code for a not-ready readiness result so
-// the responder emits that code instead of the default 200. Its message is the status string, so
-// the body still conveys the reported status without leaking any dependency details.
-type errHealthNotReady struct {
-	status string
-	code   int
-}
+// errNotReady is the only thing a failed readiness reports to the caller: the status string and a
+// 503. The reason — which check failed and why — goes to the logs, never to this unauthenticated
+// endpoint.
+type errNotReady struct{}
 
-func (e errHealthNotReady) Error() string   { return e.status }
-func (e errHealthNotReady) StatusCode() int { return e.code }
+func (errNotReady) Error() string   { return statusDown }
+func (errNotReady) StatusCode() int { return http.StatusServiceUnavailable }
 
 // LogLevel keeps a not-ready readiness at WARN rather than ERROR. A 503 is expected during startup
 // and rolling deploys — Kubernetes probes it repeatedly — so it should not flood logs as an error.
-func (errHealthNotReady) LogLevel() logging.Level { return logging.WARN }
+func (errNotReady) LogLevel() logging.Level { return logging.WARN }
 
-var _ logging.LogLevelResponder = errHealthNotReady{}
+var _ logging.LogLevelResponder = errNotReady{}
+
+// errFrameworkChecks marks a not-ready result that came from GoFr's own dependency checks rather
+// than from an application check, so the log line says which side failed.
+var errFrameworkChecks = errors.New("framework dependency checks")
 
 // healthHandler serves the public, unauthenticated /.well-known/health endpoint. It reports only
 // the application name and aggregate status — no hosts, ports, credentials, or connection stats.
@@ -60,46 +85,46 @@ var _ logging.LogLevelResponder = errHealthNotReady{}
 // tooling, and #3806 tracks exposing it on the metrics server (METRICS_PORT), behind the same
 // network boundary as /metrics and /debug/pprof.
 func (a *App) healthHandler(c *Context) (any, error) {
-	status, code := a.readiness(c)
-
-	body := healthResponse{Name: c.GetAppName(), Status: status}
-
-	if code == http.StatusOK {
-		return body, nil
+	// Default behavior, unchanged: with no application check registered the endpoint reports the
+	// aggregate dependency status with a 200 — DEGRADED is informational, not a readiness verdict.
+	if a.readinessCheck == nil {
+		return healthResponse{Name: c.GetAppName(), Status: aggregateStatus(c)}, nil
 	}
 
-	return nil, errHealthNotReady{status: status, code: code}
+	if err := a.readinessCheck(c, frameworkReadiness(c)); err != nil {
+		c.Warnf("readiness: not ready: %v", err)
+
+		return nil, errNotReady{}
+	}
+
+	return healthResponse{Name: c.GetAppName(), Status: statusUp}, nil
 }
 
-// readiness resolves the status string and HTTP status code for the health endpoint. It delegates
-// to the app-provided closure when one is set, and otherwise falls back to the aggregate dependency
-// status served with a 200 — matching the pre-existing default behavior.
-func (a *App) readiness(c *Context) (status string, code int) {
-	if a.healthCheck == nil {
-		return aggregateStatus(c), http.StatusOK
+// frameworkReadiness renders GoFr's own dependency checks as the error passed to the application's
+// check: nil when every registered datasource and service is up, and otherwise an error naming the
+// aggregate status — never the per-dependency detail behind it, which must not reach the response
+// even by way of a check that returns this error unchanged.
+//
+// It is evaluated before the check runs, so the datasource sweep happens on every probe even for a
+// check that ignores the parameter. That matches the pre-existing default path, which sweeps on
+// every probe too.
+func frameworkReadiness(c *Context) error {
+	if status := aggregateStatus(c); status != statusUp {
+		return fmt.Errorf("%w: reported %s", errFrameworkChecks, status)
 	}
 
-	status, code = a.healthCheck(c.Context, c.Container)
-
-	if code == 0 {
-		code = http.StatusOK
-	}
-
-	if status == "" {
-		status = statusFromCode(code)
-	}
-
-	return status, code
+	return nil
 }
 
-// statusFromCode derives a status string when the closure returned a code but no status: 200 maps
-// to UP and any other code to DOWN, so the body still reports a status consistent with the code.
-func statusFromCode(code int) string {
-	if code == http.StatusOK {
-		return statusUp
+// logReadiness states at startup that readiness is no longer the default, so a 503 from this
+// endpoint is never a surprise about where the verdict came from.
+func (a *App) logReadiness() {
+	if a.container.Logger == nil || a.readinessCheck == nil {
+		return
 	}
 
-	return statusDown
+	a.container.Logger.Infof("readiness: app check registered - framework checks: enabled, " +
+		"propagated to the app check")
 }
 
 // aggregateStatus runs the full health check and keeps only the overall status, discarding every

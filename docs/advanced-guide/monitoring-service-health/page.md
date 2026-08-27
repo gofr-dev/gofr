@@ -46,8 +46,8 @@ aggregates the health of every registered datasource and service into a single s
 Note that the endpoint answers `200` in both cases: a `DEGRADED` aggregate does **not** produce a
 non-2xx response, so a probe wired directly to the status code will always see the service as ready.
 A caller that wants to act on degradation must read the `status` field itself, or register a
-readiness closure with [`SetHealthCheck`](#controlling-readiness-with-sethealthcheck) to decide the
-status code the endpoint answers with.
+[readiness check](#controlling-readiness-with-a-readiness-check) so the endpoint answers `503` when
+the service is not ready to serve traffic.
 
 To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
 **not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
@@ -71,58 +71,73 @@ Sample response when the service is ready (HTTP 200):
 }
 ```
 
-#### Controlling readiness with `SetHealthCheck`
+#### Controlling readiness with a readiness check
 
-By default the endpoint always responds with HTTP `200` (readiness probes keep working unchanged).
-To hold a pod out of service until its critical dependencies are ready, register a readiness closure.
-It receives the request context and the container and returns the status string to report along
-with the HTTP status code to respond with. The closure is **not limited to the container** — because
-it is a closure it can also *capture* and probe dependencies GoFr never registered (a datasource you
-opened yourself, a third-party SDK client, a warm-up flag). It can combine any checks that define
-"ready" for your service:
+By default the endpoint always responds with HTTP `200` (existing probes keep working unchanged).
+To hold a pod out of service until it can actually serve traffic, register a readiness check:
+
+```go
+func (a *App) SetReadinessCheck(check func(ctx *gofr.Context, framework error) error)
+```
+
+Return `nil` when ready, any error when not — in which case the endpoint answers `503` and
+Kubernetes stops routing traffic to the pod. The error is logged, never written to the response:
+the endpoint is unauthenticated and must not leak dependency details.
+
+`framework` is GoFr's own verdict on every registered datasource and service: `nil` when they are
+all up, non-nil when one or more are not. What the check does with it *is* the readiness policy —
+so the same single method covers both composing with GoFr's checks and replacing them.
+
+##### Requiring GoFr's checks in addition to your own
+
+Propagate `framework` and the endpoint gates on both. Because the check is a closure it can also
+probe dependencies GoFr never registered — a datasource you opened yourself, a third-party SDK
+client, an in-process warm-up flag:
 
 ```go
 package main
 
 import (
-	"context"
 	"database/sql"
-	"net/http"
+	"errors"
+	"sync/atomic"
 
 	_ "github.com/lib/pq" // driver for the app-managed datasource below
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/container"
 )
+
+// cacheWarm is flipped once the in-process cache has been populated.
+var cacheWarm atomic.Bool
+
+var errCacheNotWarm = errors.New("cache not warm")
 
 func main() {
 	app := gofr.New()
 
-	// A downstream HTTP dependency this service must be able to reach before it is ready.
+	// A downstream HTTP dependency — already covered by GoFr's own checks.
 	app.AddHTTPService("payment", "https://payment.internal")
 
-	// An external datasource the app connects to itself — GoFr's container has no handle on it.
-	// The closure below captures it, showing readiness can gate on dependencies that live
-	// entirely outside the framework.
+	// An external datasource the app connects to itself: GoFr's container has no handle on it,
+	// so readiness can only account for it through a check that captures it.
 	licenseDB := openLicenseStore(app)
 
-	app.SetHealthCheck(func(ctx context.Context, c *container.Container) (status string, statusCode int) {
-		// 1. A datasource on the container.
-		if c.Redis == nil || c.Redis.Ping(ctx).Err() != nil {
-			return "DOWN", http.StatusServiceUnavailable
+	app.SetReadinessCheck(func(ctx *gofr.Context, framework error) error {
+		// Every registered datasource and service must be up ...
+		if framework != nil {
+			return framework
 		}
 
-		// 2. A registered HTTP service — reached over HTTP, not a datasource field.
-		if h := c.GetHTTPService("payment").HealthCheck(ctx); h == nil || h.Status != "UP" {
-			return "DOWN", http.StatusServiceUnavailable
-		}
-
-		// 3. An external datasource captured by the closure — not on the container at all.
+		// ... and so must the dependencies GoFr does not know about.
 		if err := licenseDB.PingContext(ctx); err != nil {
-			return "DOWN", http.StatusServiceUnavailable
+			return err
 		}
 
-		return "UP", http.StatusOK
+		if !cacheWarm.Load() {
+			return errCacheNotWarm
+		}
+
+		return nil
 	})
 
 	app.Run()
@@ -139,10 +154,51 @@ func openLicenseStore(app *gofr.App) *sql.DB {
 }
 ```
 
-When the closure returns a non-`200` code, `/.well-known/health` responds with that code so
-Kubernetes readiness probes stop routing traffic to the pod. Returning `("UP", http.StatusOK)`
-(or no closure at all) preserves the default behavior. A not-ready `503` is logged at `WARN`, not
-`ERROR` — it is expected during startup and rolling deploys.
+##### Replacing GoFr's verdict
+
+Ignore `framework` — writing `_`, so the override is visible at the call site — and readiness is
+exactly what your check says. This is what readiness that is a *relationship between* dependencies
+needs, which a set of independently-evaluated checks could not express. For example, when the
+service can serve from either backing store:
+
+```go
+app.SetReadinessCheck(func(ctx *gofr.Context, _ error) error {
+	if redisUp(ctx) || sqlUp(ctx) {
+		return nil
+	}
+
+	return errNoBackingStore
+})
+```
+
+The same shape narrows readiness when only one of several registered datasources is critical:
+
+```go
+app.SetReadinessCheck(func(ctx *gofr.Context, _ error) error {
+	if h := ctx.SQL.HealthCheck(); h == nil || h.Status != "UP" {
+		return errors.New("postgres not reachable")
+	}
+
+	return nil
+})
+```
+
+Note that GoFr's checks still *run* — `framework` is computed before your check is called — so a
+check that ignores the parameter pays for the datasource sweep without using its result. That
+matches the default path, which sweeps on every probe too.
+
+##### What you see at startup and at runtime
+
+When a check is registered, GoFr says so at startup, so a `503` from this endpoint is never a
+surprise about where the verdict came from:
+
+```
+INFO  readiness: app check registered - framework checks: enabled, propagated to the app check
+```
+
+A not-ready result responds `503` with `{"error":{"message":"DOWN"}}`. The reason — the error your
+check returned — is logged at `WARN`, not `ERROR`: a `503` here is expected during startup and
+rolling deploys, and Kubernetes probes it repeatedly.
 
 > **Note:** The detailed per-dependency health map is being moved to the metrics server
 > (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that

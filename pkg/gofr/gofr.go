@@ -53,8 +53,11 @@ type App struct {
 	subscriptionManager SubscriptionManager
 	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
-	healthCheck         HealthCheckFunc
 	mu                  sync.Mutex
+
+	// readinessCheck is the application-registered readiness check for /.well-known/health. It is
+	// handed GoFr's own verdict and returns the answer; nil means the endpoint keeps its default.
+	readinessCheck ReadinessCheck
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -176,6 +179,8 @@ func (a *App) httpServerSetup() {
 	}
 
 	a.setupGraphQL()
+
+	a.logReadiness()
 
 	if a.container.Logger != nil {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
