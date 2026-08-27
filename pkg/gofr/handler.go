@@ -65,6 +65,17 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
+	// RFC 10008: a QUERY request MUST carry a Content-Type the server can interpret.
+	// Reject a missing (400) or unsupported (415) one before the handler runs, so a
+	// search endpoint fails the request instead of binding an empty query. Only the
+	// QUERY verb enters this branch — POST and the rest are untouched.
+	if r.Method == gofrHTTP.MethodQuery {
+		if err := gofrHTTP.ValidateQueryContentType(r); err != nil {
+			c.responder.Respond(nil, err)
+			return
+		}
+	}
+
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	isWebSocket := websocket.IsWebSocketUpgrade(r)

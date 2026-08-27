@@ -2,7 +2,10 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 	"strings"
+
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 const (
@@ -11,6 +14,12 @@ const (
 	headerAccessControlAllowMethods = "Access-Control-Allow-Methods"
 	headerAccessControlAllowHeaders = "Access-Control-Allow-Headers"
 	headerAccessControlAllowOrigin  = "Access-Control-Allow-Origin"
+
+	// headerAcceptQuery advertises QUERY (RFC 10008) support and the request
+	// media types a QUERY body may use, mirroring how Access-Control-Allow-Methods
+	// is derived from the registered routes.
+	headerAcceptQuery = "Accept-Query"
+	acceptQueryTypes  = "application/json"
 )
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
@@ -39,6 +48,12 @@ func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 	w http.ResponseWriter, origin string, allowedOrigins map[string]bool,
 ) {
 	routes = append(routes, "OPTIONS")
+
+	// Advertise QUERY support (RFC 10008) via Accept-Query when a QUERY route is
+	// registered — the same registered-routes source that builds Allow-Methods.
+	if slices.Contains(routes, gofrHTTP.MethodQuery) {
+		w.Header().Set(headerAcceptQuery, acceptQueryTypes)
+	}
 
 	// Handle Access-Control-Allow-Origin separately for dynamic matching.
 	if allowedOrigins["*"] {

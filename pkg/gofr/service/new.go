@@ -24,8 +24,11 @@ const (
 	metricLabelService = "service"
 )
 
-// methodQuery is the HTTP QUERY method (RFC 10008). Go's net/http does not yet
-// define an http.MethodQuery constant, so it is declared here.
+// methodQuery is the HTTP QUERY method (RFC 10008). It mirrors the exported
+// http.MethodQuery / gofr.MethodQuery constant, kept local here because the
+// outbound service package cannot import gofr/http (its internal test suite
+// imports container -> service, which would form a cycle). Go's net/http has no
+// http.MethodQuery yet.
 const methodQuery = "QUERY"
 
 type httpService struct {

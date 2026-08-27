@@ -409,3 +409,45 @@ func TestContext_ReturnsRequestContext(t *testing.T) {
 
 	assert.Equal(t, httpReq.Context(), ctx)
 }
+
+func TestValidateQueryContentType(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantErr     error
+	}{
+		{"json is accepted", "application/json", nil},
+		{"json with charset is accepted", "application/json; charset=utf-8", nil},
+		{"form-urlencoded is accepted", "application/x-www-form-urlencoded", nil},
+		{"multipart is accepted", "multipart/form-data", nil},
+		{"binary is accepted", "binary/octet-stream", nil},
+		{"missing content-type is 400", "", ErrorMissingParam{Params: []string{"Content-Type"}}},
+		{"xml is 415", "application/xml", ErrorUnsupportedMediaType{ContentType: "application/xml"}},
+		{"text/plain is 415", "text/plain", ErrorUnsupportedMediaType{ContentType: "text/plain"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(MethodQuery, "/search", http.NoBody)
+			if tc.contentType != "" {
+				r.Header.Set("Content-Type", tc.contentType)
+			}
+
+			err := ValidateQueryContentType(r)
+
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+func TestErrorUnsupportedMediaType(t *testing.T) {
+	assert.Equal(t, http.StatusUnsupportedMediaType, ErrorUnsupportedMediaType{}.StatusCode())
+	assert.Equal(t, "unsupported media type", ErrorUnsupportedMediaType{}.Error())
+	assert.Equal(t, "unsupported media type: application/xml",
+		ErrorUnsupportedMediaType{ContentType: "application/xml"}.Error())
+}

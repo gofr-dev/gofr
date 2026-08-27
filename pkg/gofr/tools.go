@@ -30,13 +30,16 @@ const (
 	schemaTypeString = "string"
 	schemaTypeObject = "object"
 
-	// methodQuery is the HTTP QUERY method (RFC 10008). Go's net/http has no such constant yet.
-	methodQuery = "QUERY"
 	// bodyKey is the tool argument that carries a QUERY request body (the query payload).
 	bodyKey = "body"
 
 	maxToolResponseBytes = 4 << 20 // cap a captured tool response at 4 MiB
 )
+
+// MethodQuery is the HTTP QUERY method (RFC 10008), re-exported from
+// gofr.dev/pkg/gofr/http so callers can reference gofr.MethodQuery the way they
+// use http.MethodGet from the stdlib, instead of hardcoding the "QUERY" string.
+const MethodQuery = gofrHTTP.MethodQuery
 
 // registerTools builds the router-backed tool provider and installs it so both the MCP server and
 // ctx.LLM().Tools() expose the app's handlers. It is the tool-exposure step, independent of the MCP
@@ -211,7 +214,7 @@ func isReadOnlyMethod(method string) bool {
 // methods (GET/HEAD/OPTIONS) and QUERY (RFC 10008 — safe and idempotent, carrying its input in the
 // request body) qualify; write methods never do.
 func isExposableMethod(method string) bool {
-	return isReadOnlyMethod(method) || method == methodQuery
+	return isReadOnlyMethod(method) || method == MethodQuery
 }
 
 func toolName(method, pathTemplate string) string {
@@ -236,7 +239,7 @@ func toolName(method, pathTemplate string) string {
 // with no path parameters and no body gets no schema (nil).
 func toolSchema(method, pathTemplate string) json.RawMessage {
 	params := pathParams(pathTemplate)
-	needsBody := method == methodQuery
+	needsBody := method == MethodQuery
 
 	if len(params) == 0 && !needsBody {
 		return nil
@@ -314,7 +317,7 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		hasBody bool
 	)
 
-	if method == methodQuery {
+	if method == MethodQuery {
 		if raw, ok := fields[bodyKey]; ok {
 			delete(fields, bodyKey)
 

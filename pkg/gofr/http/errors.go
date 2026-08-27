@@ -65,6 +65,29 @@ func (ErrorInvalidParam) LogLevel() logging.Level {
 	return logging.INFO
 }
 
+// ErrorUnsupportedMediaType represents an error for a request whose Content-Type
+// the endpoint cannot interpret (HTTP 415). Used by the QUERY (RFC 10008) path,
+// which MUST reject an unsupported media type rather than bind to a zero value.
+type ErrorUnsupportedMediaType struct {
+	ContentType string `json:"contentType,omitempty"` // ContentType is the rejected media type.
+}
+
+func (e ErrorUnsupportedMediaType) Error() string {
+	if e.ContentType == "" {
+		return "unsupported media type"
+	}
+
+	return fmt.Sprintf("unsupported media type: %s", e.ContentType)
+}
+
+func (ErrorUnsupportedMediaType) StatusCode() int {
+	return http.StatusUnsupportedMediaType
+}
+
+func (ErrorUnsupportedMediaType) LogLevel() logging.Level {
+	return logging.INFO
+}
+
 // ErrorMissingParam represents an error for missing parameters in a request.
 type ErrorMissingParam struct {
 	Params []string `json:"param,omitempty"`
@@ -184,6 +207,7 @@ var (
 	_ StatusCodeResponder = ErrorEntityAlreadyExist{}
 	_ StatusCodeResponder = ErrorInvalidParam{}
 	_ StatusCodeResponder = ErrorMissingParam{}
+	_ StatusCodeResponder = ErrorUnsupportedMediaType{}
 	_ StatusCodeResponder = ErrorInvalidRoute{}
 	_ StatusCodeResponder = ErrorRequestTimeout{}
 	_ StatusCodeResponder = ErrorPanicRecovery{}
@@ -196,6 +220,7 @@ var (
 	_ logging.LogLevelResponder = ErrorEntityAlreadyExist{}
 	_ logging.LogLevelResponder = ErrorInvalidParam{}
 	_ logging.LogLevelResponder = ErrorMissingParam{}
+	_ logging.LogLevelResponder = ErrorUnsupportedMediaType{}
 	_ logging.LogLevelResponder = ErrorInvalidRoute{}
 	_ logging.LogLevelResponder = ErrorRequestTimeout{}
 	_ logging.LogLevelResponder = ErrorPanicRecovery{}

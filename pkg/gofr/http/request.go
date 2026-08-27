@@ -18,7 +18,41 @@ const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 
 	contentTypeJSON = "application/json"
+
+	// MethodQuery is the HTTP QUERY method (RFC 10008). Go's net/http has no such
+	// constant yet, so GoFr exports it here for use in routing, middleware, RBAC
+	// method lists, and method comparisons.
+	MethodQuery = "QUERY"
 )
+
+// queryBindableContentTypes are the request media types Bind can decode. Per
+// RFC 10008 a QUERY request MUST carry a Content-Type the server can interpret;
+// this is the set ValidateQueryContentType accepts.
+var queryBindableContentTypes = map[string]bool{
+	contentTypeJSON:                     true,
+	"multipart/form-data":               true,
+	"application/x-www-form-urlencoded": true,
+	"binary/octet-stream":               true,
+}
+
+// ValidateQueryContentType enforces RFC 10008's requirement that a QUERY request
+// carry a Content-Type the server can interpret. A missing Content-Type yields a
+// 400 (ErrorMissingParam); a present-but-unsupported one yields a 415
+// (ErrorUnsupportedMediaType). It mirrors Bind's supported set exactly, so a
+// QUERY body that Bind could not decode is rejected up front instead of silently
+// binding to a zero value. POST and the other verbs never call this.
+func ValidateQueryContentType(r *http.Request) error {
+	ct := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])
+	if ct == "" {
+		return ErrorMissingParam{Params: []string{"Content-Type"}}
+	}
+
+	if !queryBindableContentTypes[ct] {
+		return ErrorUnsupportedMediaType{ContentType: ct}
+	}
+
+	return nil
+}
 
 var (
 	errNoFileFound    = errors.New("no files were bounded")

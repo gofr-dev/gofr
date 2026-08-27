@@ -33,11 +33,12 @@ func (a *App) PATCH(pattern string, handler Handler) {
 // QUERY adds a Handler for the HTTP QUERY method (RFC 10008) for a route pattern.
 // QUERY is a safe, idempotent method that carries a request body describing the
 // query; read it in the handler via ctx.Bind, the same way as a POST body.
-// Per RFC 10008 a server should reject a QUERY with a missing/invalid Content-Type
-// with 400; gofr does not enforce this automatically, so validate it in the handler
-// when required.
+// Per RFC 10008 a QUERY request MUST carry a Content-Type the server can interpret;
+// GoFr enforces this on the QUERY path, rejecting a missing Content-Type with 400
+// and an unsupported one with 415 before the handler runs. Other verbs, including
+// POST, are unaffected.
 func (a *App) QUERY(pattern string, handler Handler) {
-	a.add(methodQuery, pattern, handler)
+	a.add(MethodQuery, pattern, handler)
 }
 
 func (a *App) add(method, pattern string, h Handler) {

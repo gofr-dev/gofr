@@ -72,13 +72,17 @@ func (*mockHTTP) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
+// Query/QueryWithHeaders stamp X-Mock-Method so a test can prove the decorator
+// delegated to Query and not to some other verb whose mock also returns 200.
 func (*mockHTTP) Query(_ context.Context, _ string, _ map[string]any, _ []byte) (*http.Response, error) {
-	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody,
+		Header: http.Header{"X-Mock-Method": []string{methodQuery}}}, nil
 }
 
 func (*mockHTTP) QueryWithHeaders(_ context.Context, _ string, _ map[string]any, _ []byte,
 	_ map[string]string) (*http.Response, error) {
-	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody,
+		Header: http.Header{"X-Mock-Method": []string{methodQuery}}}, nil
 }
 
 // Helper to create a retry HTTP instance.
@@ -148,6 +152,7 @@ func TestRetryProvider_Query(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "retry must delegate to Query, not another verb")
 }
 
 func TestRetryProvider_QueryWithHeaders(t *testing.T) {
@@ -160,6 +165,7 @@ func TestRetryProvider_QueryWithHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "retry must delegate to QueryWithHeaders, not another verb")
 }
 
 func TestRetryProvider_Put(t *testing.T) {

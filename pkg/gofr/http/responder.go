@@ -160,10 +160,13 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 		return true
 
 	case resTypes.Redirect:
-		// Redirect status codes are determined by HTTP method, not error state
+		// Redirect status codes are determined by HTTP method, not error state.
+		// QUERY (RFC 10008) uses 303 See Other so the result can be retrieved with
+		// a normal GET on the Location URI — the same semantics as POST/PUT/PATCH.
 		redirectStatusCode := http.StatusFound
 
-		if r.method == http.MethodPost || r.method == http.MethodPut || r.method == http.MethodPatch {
+		if r.method == http.MethodPost || r.method == http.MethodPut ||
+			r.method == http.MethodPatch || r.method == MethodQuery {
 			redirectStatusCode = http.StatusSeeOther
 		}
 

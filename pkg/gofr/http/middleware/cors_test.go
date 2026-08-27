@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 type MockHandlerForCORS struct {
@@ -136,6 +138,20 @@ func setMiddlewareHeadersTestCases() []struct {
 				"Access-Control-Allow-Origin":  "*",
 				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
+				// no QUERY route registered -> Accept-Query must be absent.
+				headerAcceptQuery: "",
+			},
+		},
+		{
+			name:              "query route advertises accept-query",
+			environmentConfig: map[string]string{},
+			registeredRoutes:  []string{gofrHTTP.MethodQuery, "GET"},
+			allowedOrigins:    map[string]bool{"*": true},
+			expectedHeaders: map[string]string{
+				"Access-Control-Allow-Origin":  "*",
+				"Access-Control-Allow-Headers": allowedHeaders,
+				"Access-Control-Allow-Methods": "QUERY, GET, OPTIONS",
+				headerAcceptQuery:              acceptQueryTypes,
 			},
 		},
 		{

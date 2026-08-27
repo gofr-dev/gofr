@@ -40,12 +40,14 @@ route and the remaining arguments become query values.
 
 ### Read-only
 
-Only safe-to-retry handlers (`GET`, `HEAD`, `OPTIONS`) are exposed as tools. Write handlers
-(`POST`/`PUT`/`PATCH`/`DELETE`) are never exposed, so an agent cannot mutate state through this
-surface.
+Only safe, non-mutating handlers are exposed as tools: the read-only methods (`GET`, `HEAD`,
+`OPTIONS`) and `QUERY` ([RFC 10008](https://www.rfc-editor.org/rfc/rfc10008.html)), which is safe and
+idempotent and carries its input in the request body. A `QUERY` tool therefore takes a required `body`
+argument alongside any path parameters. Write handlers (`POST`/`PUT`/`PATCH`/`DELETE`) are never
+exposed, so an agent cannot mutate state through this surface.
 
 Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework `/.well-known/*` probes are
-never exposed. The read-only rule is enforced at call time, not just in the tool listing — a write
+never exposed. The safe-method rule is enforced at call time, not just in the tool listing — a write
 route cannot be invoked by guessing its tool name.
 
 ### Safety

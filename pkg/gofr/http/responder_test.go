@@ -405,6 +405,24 @@ func TestResponder_RedirectResponse_Post(t *testing.T) {
 	assert.Empty(t, recorder.Body.String(), "Redirect response should not have a body")
 }
 
+func TestResponder_RedirectResponse_Query(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	r := NewResponder(recorder, MethodQuery)
+
+	redirectURL := "/results?from=query"
+
+	redirect := resTypes.Redirect{URL: redirectURL}
+
+	r.Respond(redirect, nil)
+
+	// RFC 10008: a QUERY redirect uses 303 See Other so the result can be
+	// retrieved with a normal GET on the Location URI.
+	assert.Equal(t, http.StatusSeeOther, recorder.Code, "QUERY redirect must be 303 See Other")
+	assert.Equal(t, redirectURL, recorder.Header().Get("Location"),
+		"Redirect should set the Location header")
+	assert.Empty(t, recorder.Body.String(), "Redirect response should not have a body")
+}
+
 func TestResponder_RedirectResponse_Head(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	r := NewResponder(recorder, http.MethodHead)
