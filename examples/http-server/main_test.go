@@ -128,7 +128,6 @@ func TestIntegration_QueryHandler(t *testing.T) {
 	assert.Equal(t, "golang", data.Data["matched"])
 }
 
-
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	httpPort := testutil.GetFreePort(t)
 	port := testutil.GetFreePort(t)
@@ -380,7 +379,6 @@ func TestTraceHandler(t *testing.T) {
 	mocks.Redis.EXPECT().Ping(gomock.Any()).Return(nil).Times(5)
 
 	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
-
 
 	// HTTP service mock - use mocks.HTTPServices["serviceName"] to access the specific service
 	// Important: Use the map keyed by service name, not mocks.HTTPService (singular)

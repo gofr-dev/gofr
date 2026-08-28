@@ -204,7 +204,6 @@ func (mr *MockHTTPMockRecorder) QueryWithHeaders(ctx, path, queryParams, body, h
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithHeaders", reflect.TypeOf((*MockHTTP)(nil).QueryWithHeaders), ctx, path, queryParams, body, headers)
 }
 
-
 // Put mocks base method.
 func (m *MockHTTP) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
 	m.ctrl.T.Helper()
