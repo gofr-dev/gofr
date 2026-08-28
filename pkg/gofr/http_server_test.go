@@ -351,6 +351,18 @@ func (d *benchDiscardResponseWriter) Header() http.Header {
 	return d.h
 }
 
+// reset returns the writer to the state a FRESH request would find it in.
+//
+// Without it one writer is reused across every iteration, so a header written
+// only when absent -- Content-Type is exactly that -- is set on the first
+// iteration and measured as free on every one after. Any benchmark that reaches
+// Responder.Respond must call this, or it silently understates the response
+// path by one allocation.
+func (d *benchDiscardResponseWriter) reset() {
+	clear(d.Header())
+	d.code = 0
+}
+
 func (*benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (d *benchDiscardResponseWriter) WriteHeader(c int)         { d.code = c }
 
@@ -417,6 +429,7 @@ func BenchmarkRequest_FullChain(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
@@ -433,6 +446,7 @@ func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
@@ -464,6 +478,7 @@ func BenchmarkRequest_FullChain_SDK(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
