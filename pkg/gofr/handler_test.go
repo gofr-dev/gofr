@@ -20,7 +20,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
@@ -565,7 +567,81 @@ func TestIntegration_ServerTimeout(t *testing.T) {
 	assert.Equal(t, "request timed out", errorObj["message"])
 }
 
-// ---------------------------------------------------------------------------
+// TestLogErrorStillCarriesTraceID is the feature guard for resolving the trace
+// ID lazily: an erroring handler must still log it. The value is now formatted
+// inside logError rather than on every request, so this pins that the error path
+// did not lose it.
+func TestLogErrorStillCarriesTraceID(t *testing.T) {
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10},
+		SpanID:     trace.SpanID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
+		TraceFlags: trace.FlagsSampled,
+	})
+
+	logs := testutil.StderrOutputForFunc(func() {
+		c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+		h := handler{
+			function:  func(*Context) (any, error) { return nil, errTraceIDGuard },
+			container: c,
+		}
+
+		// Chain from t.Context(), not context.Background(): the chained WithContext replaces the
+		// one NewRequestWithContext installed, so backgrounding it here would silently drop the
+		// test's cancellation and make the NewRequestWithContext call pointless.
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody).
+			WithContext(trace.ContextWithSpanContext(t.Context(), sc))
+
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	})
+
+	assert.Contains(t, logs, "0102030405060708090a0b0c0d0e0f10",
+		"the error log must still carry the trace ID")
+}
+
+var errTraceIDGuard = errors.New("trace id guard")
+
+// buildRealPathRouter mirrors what a GoFr application actually serves: the handler is wrapped in
+// gofr's own handler{}, so newHTTPContext builds the Context/Request/Responder and the result goes
+// back through responder.Respond as a JSON envelope.
+//
+// The existing BenchmarkRequest_FullChain family registers raw http.HandlerFunc values straight on
+// the router, so none of that code runs there — it measures the middleware chain only.
+//
+// The chain itself comes from useGoFrMiddleware rather than being rebuilt here, so there is one
+// definition to keep in sync with newHTTPServer.
+func buildRealPathRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+
+	useGoFrMiddleware(r, c)
+
+	r.Add(http.MethodGet, "/real/{id}", handler{
+		function:  func(ctx *Context) (any, error) { return map[string]string{"id": ctx.PathParam("id")}, nil },
+		container: c,
+	})
+
+	return r
+}
+
+// BenchmarkRequest_RealHandlerPath measures the per-request allocations of the wrapped-handler path.
+//
+// Note what it does NOT exercise: the handler always returns a nil error, and the mock config
+// installs no real TracerProvider, so the span context is invalid. After this PR TraceID().String()
+// runs only inside logError, on the error path — so no trace ID is formatted here. The alloc delta
+// this reports is the Context/Request/Responder bundling alone, which is what the PR claims.
+func BenchmarkRequest_RealHandlerPath(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	h := buildRealPathRouter(c)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/real/42", http.NoBody)
+	w := &benchDiscardResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		h.ServeHTTP(w, req)
+	}
+}
+
 // Characterization suite for handler.ServeHTTP.
 //
 // Pins the handler-execution contract with exact status codes and exact body
