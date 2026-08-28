@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -464,4 +466,433 @@ func BenchmarkLoggerInfofJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		l.Infof("handled %s in %d us", "GET /users", 1234)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Characterization suite: the JSON log-entry envelope on the wire.
+//
+// These tests pin the enclosing logEntry that wraps every message written by
+// this package — the outer object that a log shipper actually parses. The
+// payload used throughout is shaped exactly like
+// middleware.RequestLog (redeclared locally as logCharRequestLog to avoid an
+// import cycle), because the per-request access log is by far the highest
+// volume consumer of this envelope.
+//
+// Nothing here asserts what the code *should* do — only what it does today.
+// All added identifiers are prefixed `logChar`.
+// ---------------------------------------------------------------------------
+
+// logCharRequestLog mirrors gofr.dev/pkg/gofr/http/middleware.RequestLog field
+// for field, tag for tag. Redeclared rather than imported so the logging
+// package keeps no dependency on the HTTP middleware.
+type logCharRequestLog struct {
+	TraceID      string `json:"trace_id,omitempty"`
+	SpanID       string `json:"span_id,omitempty"`
+	StartTime    string `json:"start_time,omitempty"`
+	ResponseTime int64  `json:"response_time,omitempty"`
+	Method       string `json:"method,omitempty"`
+	UserAgent    string `json:"user_agent,omitempty"`
+	IP           string `json:"ip,omitempty"`
+	URI          string `json:"uri,omitempty"`
+	Response     int    `json:"response,omitempty"`
+}
+
+// logCharSampleRequestLog is a fully populated access-log payload.
+func logCharSampleRequestLog() *logCharRequestLog {
+	return &logCharRequestLog{
+		TraceID:      "e1f2d3c4b5a6978877665544332211ff",
+		SpanID:       "0011223344556677",
+		StartTime:    "2024-03-01T12:34:56.789-05:00",
+		ResponseTime: 1234,
+		Method:       "GET",
+		UserAgent:    "curl/8.4.0",
+		IP:           "192.0.2.10",
+		URI:          "/api/v1/users?q=1",
+		Response:     200,
+	}
+}
+
+// logCharTimeRe and logCharVersionRe normalize the two non-deterministic parts
+// of a log line so the rest can be compared byte for byte.
+var (
+	logCharTimeRe    = regexp.MustCompile(`"time":"[^"]*"`)
+	logCharVersionRe = regexp.MustCompile(`"gofrVersion":"[^"]*"`)
+)
+
+// logCharNormalize replaces the wall-clock timestamp and the framework version
+// with fixed placeholders.
+func logCharNormalize(line string) string {
+	line = logCharTimeRe.ReplaceAllString(line, `"time":"<TIME>"`)
+
+	return logCharVersionRe.ReplaceAllString(line, `"gofrVersion":"<VERSION>"`)
+}
+
+// Test_LogWireFormat_RequestLogEnvelopeExact pins the ENTIRE log line for an
+// access-log entry, byte for byte after timestamp/version normalization:
+//   - the envelope keys and their order: level, time, message, gofrVersion;
+//   - `trace_id` is ABSENT at the envelope level (it is omitempty and nothing
+//     populates it for a request log — the trace ID travels inside `message`);
+//   - `level` renders as the level NAME, via Level.MarshalJSON;
+//   - the payload is nested as a JSON object under `message`, preserving the
+//     RequestLog field order;
+//   - exactly one trailing newline, courtesy of json.Encoder.Encode.
+func Test_LogWireFormat_RequestLogEnvelopeExact(t *testing.T) {
+	const want = `{"level":"INFO","time":"<TIME>","message":{` +
+		`"trace_id":"e1f2d3c4b5a6978877665544332211ff","span_id":"0011223344556677",` +
+		`"start_time":"2024-03-01T12:34:56.789-05:00","response_time":1234,"method":"GET",` +
+		`"user_agent":"curl/8.4.0","ip":"192.0.2.10","uri":"/api/v1/users?q=1","response":200},` +
+		`"gofrVersion":"<VERSION>"}` + "\n"
+
+	buf := &bytes.Buffer{}
+	newBufLogger(buf).Log(logCharSampleRequestLog())
+
+	//nolint:testifylint // byte equality is the contract; JSONEq ignores key order.
+	assert.Equal(t, want, logCharNormalize(buf.String()))
+}
+
+// Test_LogWireFormat_ErrorEnvelopeExact pins the same line at ERROR level and
+// that it is routed to errorOut, leaving normalOut untouched.
+func Test_LogWireFormat_ErrorEnvelopeExact(t *testing.T) {
+	const want = `{"level":"ERROR","time":"<TIME>","message":{` +
+		`"trace_id":"e1f2d3c4b5a6978877665544332211ff","span_id":"0011223344556677",` +
+		`"start_time":"2024-03-01T12:34:56.789-05:00","response_time":1234,"method":"GET",` +
+		`"user_agent":"curl/8.4.0","ip":"192.0.2.10","uri":"/api/v1/users?q=1","response":500},` +
+		`"gofrVersion":"<VERSION>"}` + "\n"
+
+	normal := &bytes.Buffer{}
+	errs := &bytes.Buffer{}
+	l := &logger{level: DEBUG, normalOut: normal, errorOut: errs}
+
+	payload := logCharSampleRequestLog()
+	payload.Response = 500
+
+	l.Error(payload)
+
+	assert.Empty(t, normal.String(), "ERROR must not reach normalOut")
+	//nolint:testifylint // byte equality is the contract; JSONEq ignores key order.
+	assert.Equal(t, want, logCharNormalize(errs.String()))
+}
+
+// Test_LogWireFormat_EnvelopeKeyOrder pins the ordered envelope key list on its
+// own, so inserting an envelope field is caught even if values change.
+func Test_LogWireFormat_EnvelopeKeyOrder(t *testing.T) {
+	tests := []struct {
+		name string
+		log  func(l *logger)
+		want []string
+	}{
+		{
+			"without a trace ID",
+			func(l *logger) { l.Log(logCharSampleRequestLog()) },
+			[]string{"level", "time", "message", "gofrVersion"},
+		},
+		{
+			"with a trace ID, which slots between message and gofrVersion",
+			func(l *logger) {
+				l.Log(map[string]any{traceIDMarkerKey: "abc123"}, logCharSampleRequestLog())
+			},
+			[]string{"level", "time", "message", "trace_id", "gofrVersion"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			tc.log(newBufLogger(buf))
+
+			assert.Equal(t, tc.want, logCharTopLevelKeys(t, buf.Bytes()))
+		})
+	}
+}
+
+// logCharTopLevelKeys returns the top-level object keys of a JSON document in
+// wire order.
+func logCharTopLevelKeys(t *testing.T, b []byte) []string {
+	t.Helper()
+
+	dec := json.NewDecoder(bytes.NewReader(b))
+
+	tok, err := dec.Token()
+	require.NoError(t, err)
+	require.Equal(t, json.Delim('{'), tok)
+
+	keys := make([]string, 0, 5)
+
+	for dec.More() {
+		k, kerr := dec.Token()
+		require.NoError(t, kerr)
+
+		key, ok := k.(string)
+		require.True(t, ok)
+
+		keys = append(keys, key)
+
+		var discard any
+
+		require.NoError(t, dec.Decode(&discard))
+	}
+
+	return keys
+}
+
+// Test_LogWireFormat_TraceIDEnvelopeExact pins the full line when a trace-ID
+// marker IS present: the marker map is stripped from the message and lifted
+// into the envelope's `trace_id`.
+func Test_LogWireFormat_TraceIDEnvelopeExact(t *testing.T) {
+	const want = `{"level":"INFO","time":"<TIME>","message":"handled",` +
+		`"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","gofrVersion":"<VERSION>"}` + "\n"
+
+	buf := &bytes.Buffer{}
+	newBufLogger(buf).Log(map[string]any{traceIDMarkerKey: "4bf92f3577b34da6a3ce929d0e0e4736"}, "handled")
+
+	//nolint:testifylint // byte equality is the contract; JSONEq ignores key order.
+	assert.Equal(t, want, logCharNormalize(buf.String()))
+}
+
+// Test_LogWireFormat_LevelRendering pins that every level serializes as its
+// upper-case NAME (not the underlying integer) via Level.MarshalJSON, and that
+// the unknown level renders as an empty string.
+func Test_LogWireFormat_LevelRendering(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  string
+	}{
+		{DEBUG, `"DEBUG"`},
+		{INFO, `"INFO"`},
+		{NOTICE, `"NOTICE"`},
+		{WARN, `"WARN"`},
+		{ERROR, `"ERROR"`},
+		{FATAL, `"FATAL"`},
+		{Level(0), `""`},
+		{Level(99), `""`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			b, err := json.Marshal(tc.level)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, string(b))
+		})
+	}
+}
+
+// Test_LogWireFormat_MessageShapeByArity pins how `message` is typed depending
+// on how many args reach logf. One arg is embedded directly (object, string,
+// number...); zero or 2+ args become a JSON array — and zero args produce
+// `null`, because the nil []any marshals to null rather than [].
+func Test_LogWireFormat_MessageShapeByArity(t *testing.T) {
+	tests := []struct {
+		name string
+		log  func(l *logger)
+		want string
+	}{
+		{"no args yields null", func(l *logger) { l.Log() }, `null`},
+		{"one string arg is embedded as a string", func(l *logger) { l.Log("hello") }, `"hello"`},
+		{"one int arg is embedded as a number", func(l *logger) { l.Log(42) }, `42`},
+		{
+			"one struct arg is embedded as an object",
+			func(l *logger) { l.Log(&logCharRequestLog{Method: "GET", Response: 200}) },
+			`{"method":"GET","response":200}`,
+		},
+		{"two args become an array", func(l *logger) { l.Log("a", 1) }, `["a",1]`},
+		{"three args become an array", func(l *logger) { l.Log("a", 1, true) }, `["a",1,true]`},
+		{"a format string collapses to one string", func(l *logger) { l.Logf("a=%d", 7) }, `"a=7"`},
+		{"a nil arg is embedded as null", func(l *logger) { l.Log(nil) }, `null`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			tc.log(newBufLogger(buf))
+
+			assert.Equal(t, `{"level":"INFO","time":"<TIME>","message":`+tc.want+`,"gofrVersion":"<VERSION>"}`+"\n",
+				logCharNormalize(buf.String()))
+		})
+	}
+}
+
+// Test_LogWireFormat_HTMLEscapingOnTheRealPath pins that the production writer
+// (json.NewEncoder(out).Encode) HTML-escapes by default, exactly like
+// json.Marshal. A URI carrying `<`, `>` or `&` is rewritten on the wire, and
+// invalid UTF-8 becomes the escaped replacement character.
+func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
+	tests := []struct {
+		name string
+		uri  string
+		want string
+	}{
+		{
+			"HTML significant characters",
+			"/q?x=<a>&y=1",
+			`{"uri":"/q?x=\u003ca\u003e\u0026y=1"}`,
+		},
+		{
+			"quote, backslash and control characters",
+			"/a\"b\\c\nd\te",
+			`{"uri":"/a\"b\\c\nd\te"}`,
+		},
+		{
+			"line and paragraph separators",
+			"/\u2028\u2029",
+			`{"uri":"/\u2028\u2029"}`,
+		},
+		{
+			"invalid UTF-8",
+			"/\xff/ok",
+			`{"uri":"/\ufffd/ok"}`,
+		},
+		{
+			"CJK and emoji stay raw",
+			"/日本語/\U0001F680",
+			"{\"uri\":\"/日本語/\U0001F680\"}",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			newBufLogger(buf).Log(&logCharRequestLog{URI: tc.uri})
+
+			assert.Equal(t, `{"level":"INFO","time":"<TIME>","message":`+tc.want+`,"gofrVersion":"<VERSION>"}`+"\n",
+				logCharNormalize(buf.String()))
+		})
+	}
+}
+
+// Test_LogWireFormat_TimeIsRFC3339Nano pins the envelope timestamp format:
+// time.Time marshals through its own MarshalJSON, i.e. RFC3339 with nanosecond
+// precision and TRAILING ZEROS REMOVED — so a whole-second instant renders
+// without a fractional part, and UTC renders as "Z" (unlike the RequestLog
+// `start_time` field, which uses a numeric offset). The two timestamps in a
+// single access-log line therefore use DIFFERENT formats.
+func Test_LogWireFormat_TimeIsRFC3339Nano(t *testing.T) {
+	buf := &bytes.Buffer{}
+	newBufLogger(buf).Log("x")
+
+	var envelope struct {
+		Time string `json:"time"`
+	}
+
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &envelope))
+
+	parsed, err := time.Parse(time.RFC3339Nano, envelope.Time)
+	require.NoError(t, err, "envelope time %q must be RFC3339Nano", envelope.Time)
+	assert.WithinDuration(t, time.Now(), parsed, time.Minute)
+
+	// The two timestamp formats in play, pinned side by side.
+	fixed := time.Date(2024, 3, 1, 12, 34, 56, 0, time.UTC)
+
+	marshaled, err := json.Marshal(fixed)
+	require.NoError(t, err)
+	assert.Equal(t, `"2024-03-01T12:34:56Z"`, string(marshaled), "envelope time: RFC3339Nano, UTC renders as Z")
+	assert.Equal(t, "2024-03-01T12:34:56+00:00",
+		fixed.Format("2006-01-02T15:04:05.999999999-07:00"), "RequestLog start_time: numeric offset")
+}
+
+// Test_LogWireFormat_OneLinePerEntry pins that entries are newline-delimited
+// with no pretty-printing: no indentation, one entry per line, and consecutive
+// entries append rather than overwrite.
+func Test_LogWireFormat_OneLinePerEntry(t *testing.T) {
+	buf := &bytes.Buffer{}
+	l := newBufLogger(buf)
+
+	l.Log(logCharSampleRequestLog())
+	l.Log(logCharSampleRequestLog())
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+
+	require.Len(t, lines, 2)
+	assert.Equal(t, 2, strings.Count(out, "\n"), "one newline per entry, none inside")
+	assert.Equal(t, logCharNormalize(lines[0]), logCharNormalize(lines[1]),
+		"identical payloads produce identical lines once the timestamp is normalized")
+
+	for _, line := range lines {
+		assert.NotContains(t, line, "  ", "entries are never indented")
+		require.True(t, json.Valid([]byte(line)))
+	}
+}
+
+// Test_LogWireFormat_BelowThresholdWritesNothing pins that a filtered-out level
+// produces ZERO bytes — not an empty JSON object, not a bare newline.
+func Test_LogWireFormat_BelowThresholdWritesNothing(t *testing.T) {
+	buf := &bytes.Buffer{}
+	l := &logger{level: ERROR, normalOut: buf, errorOut: buf}
+
+	l.Debug(logCharSampleRequestLog())
+	l.Info(logCharSampleRequestLog())
+	l.Log(logCharSampleRequestLog())
+	l.Notice(logCharSampleRequestLog())
+	l.Warn(logCharSampleRequestLog())
+
+	assert.Empty(t, buf.String())
+
+	l.Error(logCharSampleRequestLog())
+	assert.NotEmpty(t, buf.String())
+}
+
+// Test_LogWireFormat_PayloadOmitemptyPropagates pins that the nested payload's
+// omitempty tags apply inside the envelope too: a mostly-zero access log
+// collapses to a tiny `message` object, and a fully zero one to `{}`.
+func Test_LogWireFormat_PayloadOmitemptyPropagates(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload *logCharRequestLog
+		want    string
+	}{
+		{"fully zero payload collapses to an empty object", &logCharRequestLog{}, `{}`},
+		{
+			"only a status survives",
+			&logCharRequestLog{Response: 200},
+			`{"response":200}`,
+		},
+		{
+			"a zero response_time drops the key",
+			&logCharRequestLog{Method: "GET", ResponseTime: 0, Response: 204},
+			`{"method":"GET","response":204}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			newBufLogger(buf).Log(tc.payload)
+
+			assert.Equal(t, `{"level":"INFO","time":"<TIME>","message":`+tc.want+`,"gofrVersion":"<VERSION>"}`+"\n",
+				logCharNormalize(buf.String()))
+		})
+	}
+}
+
+// Test_LogWireFormat_GofrVersionIsPopulated pins that gofrVersion is always
+// present and non-empty (it has no omitempty tag, so it would appear even if
+// the value were empty).
+func Test_LogWireFormat_GofrVersionIsPopulated(t *testing.T) {
+	buf := &bytes.Buffer{}
+	newBufLogger(buf).Log(logCharSampleRequestLog())
+
+	var envelope struct {
+		GofrVersion string `json:"gofrVersion"`
+	}
+
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &envelope))
+	assert.NotEmpty(t, envelope.GofrVersion)
+	assert.Contains(t, buf.String(), `"gofrVersion":"`)
+}
+
+// Test_LogWireFormat_PrettyPrintPathIsNotJSON pins the alternative branch: when
+// isTerminal is true the entry is rendered as ANSI text and is NOT valid JSON,
+// which is why every wire-format assertion above depends on the sink not being
+// a terminal (checkIfTerminal returns false for a *bytes.Buffer).
+func Test_LogWireFormat_PrettyPrintPathIsNotJSON(t *testing.T) {
+	assert.False(t, checkIfTerminal(&bytes.Buffer{}), "a bytes.Buffer is never a terminal, so JSON is emitted")
+
+	buf := &bytes.Buffer{}
+	l := &logger{level: DEBUG, normalOut: buf, errorOut: buf, isTerminal: true, lock: make(chan struct{}, 1)}
+
+	l.Log("hello")
+
+	assert.False(t, json.Valid(buf.Bytes()), "the terminal branch emits ANSI text, not JSON")
+	assert.Contains(t, buf.String(), "hello")
+	assert.Contains(t, buf.String(), "INFO")
 }
