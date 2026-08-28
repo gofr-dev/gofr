@@ -110,18 +110,51 @@ func TestGetEndpointForRequest_MostSpecificWins(t *testing.T) {
 }
 
 func TestGetEndpointForRequest_ExplicitMethodBeatsWildcard(t *testing.T) {
-	config := newTestConfig(t, []EndpointMapping{
-		{Path: "/admin/reports", Methods: []string{"*"}, RequiredPermissions: []string{"admin:read"}},
-		{Path: "/admin/reports", Methods: []string{"DELETE"}, RequiredPermissions: []string{"admin:write"}},
-	}, nil)
+	// A literal path is answered by the exact-key fast path, which probes the request's own
+	// method before "*". A pattern path has no exact key, so it reaches the ordered scan and is
+	// the only case that exercises the methodScore tie-break in buildEndpointRules - with the
+	// wildcard declared first, so a stable sort alone cannot produce the right answer.
+	wildcardLiteral := EndpointMapping{Path: "/admin/reports", Methods: []string{"*"}, RequiredPermissions: []string{"admin:read"}}
+	deleteLiteral := EndpointMapping{Path: "/admin/reports", Methods: []string{"DELETE"}, RequiredPermissions: []string{"admin:write"}}
 
-	for range 100 {
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/admin/reports", http.NoBody)
+	wildcardPattern := EndpointMapping{Path: "/admin/{id}", Methods: []string{"*"}, RequiredPermissions: []string{"admin:read"}}
+	deletePattern := EndpointMapping{Path: "/admin/{id}", Methods: []string{"DELETE"}, RequiredPermissions: []string{"admin:write"}}
+
+	testCases := []struct {
+		desc      string
+		endpoints []EndpointMapping
+		path      string
+		expected  []string
+	}{
+		{"exact path, wildcard declared first", []EndpointMapping{wildcardLiteral, deleteLiteral}, "/admin/reports", []string{"admin:write"}},
+		{"exact path, explicit declared first", []EndpointMapping{deleteLiteral, wildcardLiteral}, "/admin/reports", []string{"admin:write"}},
+		{"pattern path, wildcard declared first", []EndpointMapping{wildcardPattern, deletePattern}, "/admin/42", []string{"admin:write"}},
+		{"pattern path, explicit declared first", []EndpointMapping{deletePattern, wildcardPattern}, "/admin/42", []string{"admin:write"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := newTestConfig(t, tc.endpoints, nil)
+
+			for range 100 {
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, tc.path, http.NoBody)
+				endpoint, _ := getEndpointForRequest(req, config)
+
+				require.NotNil(t, endpoint)
+				require.Equal(t, tc.expected, endpoint.RequiredPermissions)
+			}
+		})
+	}
+
+	t.Run("the wildcard rule still governs a method the explicit one does not cover", func(t *testing.T) {
+		config := newTestConfig(t, []EndpointMapping{wildcardPattern, deletePattern}, nil)
+
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/admin/42", http.NoBody)
 		endpoint, _ := getEndpointForRequest(req, config)
 
 		require.NotNil(t, endpoint)
-		require.Equal(t, []string{"admin:write"}, endpoint.RequiredPermissions)
-	}
+		require.Equal(t, []string{"admin:read"}, endpoint.RequiredPermissions)
+	})
 }
 
 func TestConfig_GetEndpointPermission_WildcardMethod(t *testing.T) {
