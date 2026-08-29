@@ -63,6 +63,26 @@ ctx.Bind(&p)
 // the Bind() method will map the incoming request to variable p
 ```
 
+> **Pass a pointer.** `Bind` needs the address of your variable (`&p`) so it can write into it.
+> For an HTTP request, passing a value (`ctx.Bind(p)`) returns an error rather than silently
+> leaving your variable untouched. Always check the returned error:
+>
+> ```go
+> if err := ctx.Bind(&p); err != nil {
+>     return nil, err
+> }
+> ```
+
+The `Content-Type` header selects how the body is decoded. It is matched case-insensitively and
+any parameters are ignored, so `application/json`, `Application/JSON` and
+`application/json; charset=utf-8` are all treated the same.
+
+If a request carries a body whose `Content-Type` GoFr has no decoder for — `text/plain`,
+`application/xml`, or no header at all — `Bind` is a **no-op**: it returns no error and leaves
+your target zeroed, and the body is discarded. Check the `Content-Type` your clients actually
+send. `fetch(url, {method: "POST", body: str})` with no headers sends `text/plain`, not JSON, so
+a request that looks correct can bind nothing.
+
 - `Binding multipart-form data / urlencoded form data `
   - To bind multipart-form data or url-encoded form, we can use the Bind method similarly. The struct fields should be tagged appropriately
     to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`

@@ -88,10 +88,13 @@ func Tracer(inner http.Handler) http.Handler {
 		// http.response.status_code is set after the handler returns via
 		// the StatusResponseWriter wrap shared with Logging.
 
-		// Use the StatusResponseWriter wrap (provided by the Logging
-		// middleware) to capture the response status; type assert on the
-		// way out. If we are not after Logging in the chain — uncommon —
-		// fall back to wrapping locally.
+		// Capture the response status via a StatusResponseWriter. Reuse an
+		// existing wrap if some outer middleware already provided one;
+		// otherwise wrap locally.
+		//
+		// In GoFr's default chain Tracer is registered FIRST, i.e. outermost,
+		// so nothing has wrapped w yet and the local wrap is what actually
+		// happens on every request — Logging then wraps this one in turn.
 		srw, ok := w.(*StatusResponseWriter)
 		if !ok {
 			srw = &StatusResponseWriter{ResponseWriter: w}
