@@ -182,3 +182,21 @@ func TestSerializeMessage(t *testing.T) {
 		})
 	}
 }
+func Test_WebSocket_PlainHTTPRequest(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		return "ok", nil
+	})
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/ws")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
