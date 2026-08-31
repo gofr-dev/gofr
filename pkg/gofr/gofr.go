@@ -245,9 +245,21 @@ func (a *App) httpServerSetup() {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
 	}
 
-	a.httpServer.router.PathPrefix("/").Handler(handler{
+	a.httpServer.router.NotFoundHandler = handler{
 		function:  catchAllHandler,
 		container: a.container,
+	}
+
+	a.httpServer.router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := a.httpServer.router.AllowedMethods(r)
+		if len(methods) > 0 {
+			w.Header().Set("Allow", strings.Join(methods, ", "))
+		}
+
+		handler{
+			function:  methodNotAllowedHandler,
+			container: a.container,
+		}.ServeHTTP(w, r)
 	})
 
 	var registeredMethods []string

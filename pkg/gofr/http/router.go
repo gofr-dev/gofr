@@ -8,6 +8,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -444,7 +446,7 @@ func isDotSegment(p string, idx int) bool {
 // directly, avoiding the per-request child span and attribute slice grow
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	rou.markOwned(rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler))
+	rou.markOwned(rou.Router.NewRoute().Path(pattern).Methods(method).Handler(handler))
 }
 
 // markOwned records a route whose handler is the one GoFr installed and never
@@ -455,6 +457,37 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 // chainFor for why such a route must not be cached.
 func (rou *Router) markOwned(route *mux.Route) {
 	rou.own.Store(route, struct{}{})
+}
+
+// AllowedMethods returns the sorted list of HTTP methods accepted for the given request's path.
+func (rou *Router) AllowedMethods(r *http.Request) []string {
+	var allowed []string
+
+	testReq := r.Clone(r.Context())
+
+	_ = rou.Router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		methods, err := route.GetMethods()
+		if err != nil || len(methods) == 0 {
+			return nil
+		}
+
+		var match mux.RouteMatch
+
+		for _, m := range methods {
+			testReq.Method = m
+			if route.Match(testReq, &match) {
+				if !slices.Contains(allowed, m) {
+					allowed = append(allowed, m)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	sort.Strings(allowed)
+
+	return allowed
 }
 
 // UseMiddleware registers middlewares to the router.
@@ -484,17 +517,24 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 		return
 	}
 
-	// App.AddStaticFiles only stats the path, so a regular file passes registration. The containment
-	// check admits the served path itself now that the endpoint root has to resolve to it, which
-	// would turn that misconfiguration into the file being served verbatim at the endpoint. Refusing
-	// to register a non-directory keeps that guard closed where the prefix comparison used to.
-	if info, statErr := os.Stat(absDir); statErr != nil || !info.IsDir() {
-		logger.Errorf("error in registering '%v' static endpoint, %v is not a directory", endpoint, absDir)
+	evalDir, err := filepath.EvalSymlinks(absDir)
+	if err != nil {
+		logger.Errorf("error in registering '%v' static endpoint, cannot evaluate directory %v: %v", endpoint, absDir, err)
 
 		return
 	}
 
-	cfg := staticFileConfig{directoryName: absDir, logger: logger}
+	// App.AddStaticFiles only stats the path, so a regular file passes registration. The containment
+	// check admits the served path itself now that the endpoint root has to resolve to it, which
+	// would turn that misconfiguration into the file being served verbatim at the endpoint. Refusing
+	// to register a non-directory keeps that guard closed where the prefix comparison used to.
+	if info, statErr := os.Stat(evalDir); statErr != nil || !info.IsDir() {
+		logger.Errorf("error in registering '%v' static endpoint, %v is not a directory", endpoint, evalDir)
+
+		return
+	}
+
+	cfg := staticFileConfig{directoryName: evalDir, logger: logger}
 
 	handler := cfg.staticHandler()
 
@@ -614,8 +654,17 @@ func (staticConfig staticFileConfig) isWithinDirectory(absPath string) bool {
 
 // Validates file existence and permissions, and resolves a directory to the file that represents
 // it. The returned path is absPath for an ordinary file, and absPath's index file for a directory.
-func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err error) {
-	fileInfo, err := os.Stat(absPath)
+func (staticConfig staticFileConfig) validateFile(absPath string) (resolvedPath string, err error) {
+	evalPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", err
+	}
+
+	if !staticConfig.isWithinDirectory(evalPath) {
+		return "", fs.ErrNotExist
+	}
+
+	fileInfo, err := os.Stat(evalPath)
 	if err != nil {
 		return "", err
 	}
@@ -625,9 +674,20 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 	// business disclosing. Without an index, os.Stat reports the same not-exist error a missing
 	// file gives, so the request takes the ordinary 404 path.
 	if fileInfo.IsDir() {
-		absPath = filepath.Join(absPath, staticServerIndexFileName)
+		indexPath := filepath.Join(evalPath, staticServerIndexFileName)
 
-		fileInfo, err = os.Stat(absPath)
+		evalIndexPath, err := filepath.EvalSymlinks(indexPath)
+		if err != nil {
+			return "", err
+		}
+
+		if !staticConfig.isWithinDirectory(evalIndexPath) {
+			return "", fs.ErrNotExist
+		}
+
+		evalPath = evalIndexPath
+
+		fileInfo, err = os.Stat(evalPath)
 		if err != nil {
 			return "", err
 		}
@@ -654,7 +714,7 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 		return "", errReadPermissionDenied
 	}
 
-	return absPath, nil
+	return evalPath, nil
 }
 
 // Handles different file-related errors.
