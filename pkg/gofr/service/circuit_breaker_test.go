@@ -930,10 +930,83 @@ func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 	resp.Body.Close()
 }
 
+// barrierTimeout bounds how long a handler waits for its peers to show up. It is
+// a LIVENESS bound, not a performance one: the barrier releases the instant the
+// last participant arrives, so a healthy run never spends time here no matter
+// how loaded the machine is. It exists only so that a genuinely serialized
+// client fails as an assertion instead of hanging until go test's own deadline.
+//
+// Fifteen seconds is therefore enormous - what it has to cover is five
+// goroutines each opening a localhost connection, which is sub-millisecond work
+// - and the whole timeout is spent only on a run that was going to fail anyway.
+const barrierTimeout = 15 * time.Second
+
+// concurrencyBarrier proves that n requests were in flight at the same instant,
+// without measuring how long anything took.
+//
+// The two tests below used to assert a wall-clock bound - "all five finished in
+// under 2s, therefore they ran in parallel". That conflates "concurrent" with
+// "fast": the bound sat one second above a one-second floor, so a loaded runner
+// failed a circuit breaker that was behaving perfectly. It also could not tell a
+// serialized-but-quick implementation from a parallel one.
+//
+// A barrier asserts the property itself. Every handler blocks until all n
+// handlers are inside it together, which is reachable only if the client
+// dispatched them concurrently, and is unreachable if it did not - at any speed.
+type concurrencyBarrier struct {
+	n       int
+	all     chan struct{} // closed once every participant has arrived
+	givenUp chan struct{} // closed by the first participant to time out
+
+	giveUp sync.Once
+
+	mu      sync.Mutex
+	arrived int
+}
+
+func newConcurrencyBarrier(n int) *concurrencyBarrier {
+	return &concurrencyBarrier{n: n, all: make(chan struct{}), givenUp: make(chan struct{})}
+}
+
+// arrive records one participant and blocks until all n have arrived, reporting
+// whether that happened within timeout. A false return means the requests were
+// serialized.
+//
+// The first participant to time out releases every other waiter too. Without
+// that, serialized requests each wait the full timeout in turn and a failing run
+// costs n*timeout - long enough to hit the CI step budget instead of reporting.
+func (b *concurrencyBarrier) arrive(timeout time.Duration) bool {
+	b.mu.Lock()
+
+	b.arrived++
+	if b.arrived == b.n {
+		close(b.all)
+	}
+
+	b.mu.Unlock()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-b.all:
+		return true
+	case <-b.givenUp:
+		return false
+	case <-timer.C:
+		b.giveUp.Do(func() { close(b.givenUp) })
+
+		return false
+	}
+}
+
 // TestCircuitBreaker_ParallelExecution tests that requests execute in parallel.
 func TestCircuitBreaker_ParallelExecution(t *testing.T) {
+	const numRequests = 5
+
 	requestCount := 0
 	mu := sync.Mutex{}
+	barrier := newConcurrencyBarrier(numRequests)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		mu.Lock()
@@ -942,7 +1015,15 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 
 		mu.Unlock()
 
-		time.Sleep(1 * time.Second) // Simulate slow endpoint
+		// Releases only when all five requests are inside the handler at once.
+		// If they were serialized, the first one waits alone and answers 503,
+		// which the status assertion below turns into a failure.
+		if !barrier.arrive(barrierTimeout) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 
 		_, _ = w.Write([]byte(`{"status": "ok"}`))
@@ -963,13 +1044,10 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 			Interval:  5 * time.Second,
 		})
 
-	startTime := time.Now()
-
 	var wg sync.WaitGroup
 
-	numRequests := 5
-
 	errors := make([]error, numRequests)
+	statuses := make([]int, numRequests)
 
 	// Launch 5 concurrent requests
 	for i := 0; i < numRequests; i++ {
@@ -982,6 +1060,8 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 			errors[index] = err
 
 			if err == nil && resp != nil {
+				statuses[index] = resp.StatusCode
+
 				_, _ = io.ReadAll(resp.Body)
 
 				_ = resp.Body.Close()
@@ -991,15 +1071,14 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 
 	wg.Wait()
 
-	totalTime := time.Since(startTime)
-
-	// Verify all requests completed successfully
+	// Verify all requests completed successfully. A 503 is the barrier reporting
+	// that this request never overlapped the other four.
 	for i := 0; i < numRequests; i++ {
 		require.NoError(t, errors[i], "Request %d should not error", i)
+		assert.Equal(t, http.StatusOK, statuses[i],
+			"Request %d did not overlap the others: requests were serialized, not parallel", i)
 	}
 
-	// All 5 requests should complete in ~2s (parallel)
-	assert.Less(t, totalTime, 4*time.Second, "Requests should execute in parallel")
 	assert.Equal(t, numRequests, requestCount, "All requests should have been processed")
 }
 
@@ -1062,8 +1141,19 @@ func TestCircuitBreaker_ConcurrentFailures(t *testing.T) {
 
 // TestCircuitBreaker_MixedHTTPMethods tests parallel requests with different HTTP methods.
 func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
+	const numMethods = 5
+
+	barrier := newConcurrencyBarrier(numMethods)
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(1 * time.Second)
+		// See TestCircuitBreaker_ParallelExecution: 503 means this request never
+		// overlapped its peers.
+		if !barrier.arrive(barrierTimeout) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -1082,8 +1172,6 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 			Interval:  2 * time.Second,
 		})
 
-	startTime := time.Now()
-
 	var wg sync.WaitGroup
 
 	// Test all HTTP methods in parallel
@@ -1095,25 +1183,37 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 		func() (*http.Response, error) { return httpSvc.Delete(t.Context(), "test", []byte(`{}`)) },
 	}
 
-	for _, method := range methods {
+	// The barrier is sized for exactly this many participants, so a method added
+	// above without widening numMethods would leave every handler waiting.
+	require.Len(t, methods, numMethods)
+
+	errs := make([]error, numMethods)
+	statuses := make([]int, numMethods)
+
+	for i, method := range methods {
 		wg.Add(1)
 
-		go func(fn func() (*http.Response, error)) {
+		go func(index int, fn func() (*http.Response, error)) {
 			defer wg.Done()
 
 			resp, err := fn()
+			errs[index] = err
+
 			if err == nil && resp != nil {
+				statuses[index] = resp.StatusCode
+
 				_ = resp.Body.Close()
 			}
-		}(method)
+		}(i, method)
 	}
 
 	wg.Wait()
 
-	totalTime := time.Since(startTime)
-
-	// All 5 methods should complete in ~1s (parallel)
-	assert.Less(t, totalTime, 2*time.Second, "Different HTTP methods should execute in parallel")
+	for i := 0; i < numMethods; i++ {
+		require.NoError(t, errs[i], "Method %d should not error", i)
+		assert.Equal(t, http.StatusOK, statuses[i],
+			"Method %d did not overlap the others: the methods were serialized, not parallel", i)
+	}
 }
 
 // TestCircuitBreaker_SlowHealthCheckDoesNotBlock asserts that while tryCircuitRecovery's
