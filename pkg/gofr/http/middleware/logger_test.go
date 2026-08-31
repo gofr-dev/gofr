@@ -1018,9 +1018,9 @@ func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 			`{"uri":"/\u2028\u2029"}`,
 		},
 		{
-			"invalid UTF-8 bytes become the escaped replacement character",
+			"invalid UTF-8 bytes become the replacement character",
 			RequestLog{URI: "/\xff\xfe/ok"},
-			`{"uri":"/\ufffd\ufffd/ok"}`,
+			`{"uri":"/` + replacementInJSON + replacementInJSON + `/ok"}`,
 		},
 	}
 

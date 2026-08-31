@@ -824,7 +824,7 @@ func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 		{
 			"invalid UTF-8",
 			"/\xff/ok",
-			`{"uri":"/\ufffd/ok"}`,
+			`{"uri":"/` + replacementInJSON + `/ok"}`,
 		},
 		{
 			"CJK and emoji stay raw",
