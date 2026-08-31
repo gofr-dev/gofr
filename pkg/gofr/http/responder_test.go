@@ -1606,12 +1606,15 @@ func TestResponder_Char_Template(t *testing.T) {
 	}{
 		{"get-is-200", http.MethodGet, map[string]string{"Title": "Hi"}, nil, http.StatusOK, "<h1>Hi</h1>"},
 		{"post-is-201", http.MethodPost, map[string]string{"Title": "Hi"}, nil, http.StatusCreated, "<h1>Hi</h1>"},
-		// LATENT BUG (pinned as-is): a Template returned from a DELETE handler
-		// gets status 204, and the HTTP layer rejects a body on a 204. Because
-		// html/template writes incrementally and Render discards Execute's
-		// error, the client receives a TRUNCATED page (only the first text
-		// node) rather than either the full page or an error.
-		{"delete-is-204", http.MethodDelete, map[string]string{"Title": "Hi"}, nil, http.StatusNoContent, "<h1>"},
+		// A Template returned from a DELETE handler gets status 204, which must not
+		// carry a body — net/http drops one, so a real client has always received
+		// nothing here. The render is now skipped rather than attempted, so what a
+		// recorder captures matches what the wire carries. Previously the attempt left
+		// a truncated page, and where it truncated depended on the Go version: 1.25
+		// recorded "<h1>Hi</h1>", 1.26 and later "<h1>", because Write only began
+		// reporting the rejected body in 1.26 and html/template stops at the first
+		// write error, which Render discards.
+		{"delete-is-204", http.MethodDelete, map[string]string{"Title": "Hi"}, nil, http.StatusNoContent, ""},
 		{
 			"with-status-coded-error", http.MethodGet, map[string]string{"Title": "Hi"},
 			ErrorEntityNotFound{}, http.StatusNotFound, "<h1>Hi</h1>",

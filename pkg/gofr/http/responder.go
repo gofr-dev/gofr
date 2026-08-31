@@ -148,7 +148,15 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 	case resTypes.Template:
 		r.w.Header().Set("Content-Type", "text/html")
 		r.w.WriteHeader(statusCode)
-		v.Render(r.w)
+
+		// Rendering into a status that forbids a body writes nothing the client can
+		// receive: net/http drops it. html/template writes incrementally and Render
+		// discards Execute's error, so the attempt used to leave a truncated page in
+		// anything that records writes verbatim, and where it truncated moved with the
+		// Go version. Skip the render instead.
+		if bodyAllowedForStatus(statusCode) {
+			v.Render(r.w)
+		}
 
 		return true
 
@@ -338,4 +346,22 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Pointer && v.IsNil()
+}
+
+// bodyAllowedForStatus reports whether a response with this status may carry a body,
+// mirroring the rule net/http applies when it writes the response. Informational,
+// 204 and 304 responses must not, and net/http silently drops anything written for
+// them — so producing a body for one is wasted work whose only visible effect is in
+// tests, where a recorder keeps the bytes the wire would have discarded.
+func bodyAllowedForStatus(status int) bool {
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == http.StatusNoContent:
+		return false
+	case status == http.StatusNotModified:
+		return false
+	}
+
+	return true
 }
