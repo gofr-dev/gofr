@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func Test_ListHandler(t *testing.T) {
 	c := &http.Client{}
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	// Make a GET request to the /list endpoint
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -62,7 +61,7 @@ func Test_IndexHTML(t *testing.T) {
 	c := &http.Client{}
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Allow server to start
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	// Request root endpoint
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -91,7 +90,7 @@ func Test_404HTML(t *testing.T) {
 	c := &http.Client{}
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Allow server to start
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	// Request non-existent endpoint
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,

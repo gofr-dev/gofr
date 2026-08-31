@@ -3,6 +3,7 @@
 //   - response.Stream   stream tokens to the client (POST /stream)
 //   - app.EnableMCP     expose the GET /inventory/{sku} handler as an agent tool
 //   - ctx.LLM().Tools() drive an agent loop over that tool (POST /agent)
+//   - ctx.LLM().Embed   turn text into vectors (POST /embed)
 package main
 
 import (
@@ -29,6 +30,7 @@ func main() {
 	app.POST("/ask", ask)       // one-shot completion
 	app.POST("/stream", stream) // streamed completion
 	app.POST("/agent", agent)   // agent loop using the service's own tools
+	app.POST("/embed", embed)   // text -> vectors
 
 	app.Run()
 }
@@ -64,6 +66,28 @@ func stream(c *gofr.Context) (any, error) {
 	}
 
 	return response.Stream{Source: s}, nil
+}
+
+// embed turns text into vectors, the primitive behind semantic search and agent memory. Embeddings
+// are usually a different model from the chat one, so a real service registers a second LLM with
+// gofr.WithName("embed") and selects it per call; this example has a single model and uses the
+// default. A model that cannot embed reports ai.ErrEmbedNotSupported from the call itself.
+func embed(c *gofr.Context) (any, error) {
+	var in struct {
+		Inputs []string `json:"inputs"`
+	}
+
+	if err := c.Bind(&in); err != nil {
+		return nil, err
+	}
+
+	resp, err := c.LLM().Embed(c, in.Inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	// One vector per input, in input order: resp.Embeddings[i] belongs to in.Inputs[i].
+	return resp.Embeddings, nil
 }
 
 func agent(c *gofr.Context) (any, error) {
