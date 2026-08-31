@@ -1,6 +1,6 @@
 module gofr.dev/examples/using-gcp-metrics
 
-go 1.26.0
+go 1.27.0
 
 require (
 	gofr.dev v1.57.0

@@ -799,7 +799,13 @@ func Test_LogWireFormat_MessageShapeByArity(t *testing.T) {
 // Test_LogWireFormat_HTMLEscapingOnTheRealPath pins that the production writer
 // (json.NewEncoder(out).Encode) HTML-escapes by default, exactly like
 // json.Marshal. A URI carrying `<`, `>` or `&` is rewritten on the wire, and
-// invalid UTF-8 becomes the escaped replacement character.
+// invalid UTF-8 is replaced by U+FFFD.
+//
+// Go 1.27 re-implemented encoding/json on top of encoding/json/v2, which emits
+// that replacement character as a raw UTF-8 rune rather than as the six-byte
+// backslash-u escape earlier releases produced. Both decode to the same string
+// — only the escaping differs — but this test exists to pin wire bytes, so it
+// pins the 1.27 form. GOEXPERIMENT=nojsonv2 restores the escaped form.
 func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -824,7 +830,7 @@ func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 		{
 			"invalid UTF-8",
 			"/\xff/ok",
-			`{"uri":"/\ufffd/ok"}`,
+			"{\"uri\":\"/\ufffd/ok\"}",
 		},
 		{
 			"CJK and emoji stay raw",

@@ -603,6 +603,12 @@ func TestRequest_Char_Context(t *testing.T) {
 
 // TestRequest_Char_BindJSON pins the JSON binding path, including the exact
 // error strings produced by encoding/json for malformed input.
+//
+// Go 1.27 re-implemented encoding/json on top of encoding/json/v2, which
+// changed how UnmarshalTypeError renders a struct field: the Go type name is
+// no longer prefixed, so "…field charBindTarget.a…" became "…field .a…". The
+// error's *classification* is unchanged, only its text — see the two
+// wrong-type cases below. GOEXPERIMENT=nojsonv2 restores the old wording.
 func TestRequest_Char_BindJSON(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -647,12 +653,12 @@ func TestRequest_Char_BindJSON(t *testing.T) {
 		// COULD decode, so the target is left partially bound alongside the error.
 		{
 			"wrong-type-for-string", "application/json", `{"a":5}`,
-			"json: cannot unmarshal number into Go struct field charBindTarget.a of type string",
+			"json: cannot unmarshal number into Go struct field .a of type string",
 			charBindTarget{},
 		},
 		{
 			"wrong-type-for-int", "application/json", `{"a":"x","b":"nope"}`,
-			"json: cannot unmarshal string into Go struct field charBindTarget.b of type int",
+			"json: cannot unmarshal string into Go struct field .b of type int",
 			charBindTarget{A: "x"},
 		},
 		{

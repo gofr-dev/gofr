@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/pubsub/nats
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/nats-io/nats-server/v2 v2.14.5

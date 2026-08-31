@@ -48,7 +48,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26', '1.25']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -226,9 +226,9 @@ jobs:
           S3_REQUIRE_MINIO: "true"
         run: go test -v ./...
 
-      # Upload coverage report for the 1.24 Go version only
+      # Upload coverage report for the lowest matrix Go version only
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.24'}}
+        if: ${{ matrix.go-version == '1.25'}}
         uses: actions/upload-artifact@v7
         with:
           name: Example-Test-Report
@@ -241,7 +241,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26', '1.25']
       fail-fast: false
 
     steps:
@@ -314,9 +314,9 @@ jobs:
             # Show coverage summary
             go tool cover -func profile.cov
 
-      # Upload coverage report for the 1.24 Go version only
+      # Upload coverage report for the lowest matrix Go version only
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.24'}}
+        if: ${{ matrix.go-version == '1.25'}}
         uses: actions/upload-artifact@v7
         with:
           name: PKG-Coverage-Report
@@ -368,7 +368,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version:  ['1.26','1.25', '1.24']
+        go-version:  ['1.27','1.26', '1.25']
       fail-fast: false
 
     steps:
@@ -530,7 +530,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache: false
 
       - name: Get dependencies
@@ -564,7 +564,7 @@ jobs:
       - name: Lint Root Module
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.13.2
           only-new-issues: true
           args: --timeout=5m
 
@@ -652,7 +652,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache: false
 
       - name: Download dependencies for ${{ matrix.module }}
@@ -663,7 +663,7 @@ jobs:
       - name: Lint ${{ matrix.module }}
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.13.2
           working-directory: ${{ matrix.module }}
           only-new-issues: true
           args: --timeout=9m
@@ -680,7 +680,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v7
         with:
-          go-version: 1.26
+          go-version: 1.27
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
