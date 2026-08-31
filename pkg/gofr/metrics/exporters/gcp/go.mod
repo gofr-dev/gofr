@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/metrics/exporters/gcp
 
-go 1.27.0
+go 1.25.0
 
 require (
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0

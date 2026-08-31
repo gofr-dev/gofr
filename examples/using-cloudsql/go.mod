@@ -1,6 +1,6 @@
 module gofr.dev/examples/using-cloudsql
 
-go 1.27.0
+go 1.25.0
 
 require (
 	gofr.dev v1.57.0

@@ -135,11 +135,16 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # go.work pins a newer Go than the older matrix versions install, and a
-      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
-      # See the action for why that breaks coverage builds.
-      - name: Allow Go toolchain auto-upgrade
-        uses: ./.github/actions/setup-go-toolchain
+      # Keep this leg on the Go that setup-go installed. The go command will happily
+      # upgrade itself to satisfy a newer go directive, and when it does every leg of
+      # the matrix ends up testing the same toolchain while still reporting three.
+      # go.work is at the minimum supported version so no upgrade is needed; this pin
+      # is what stops one from being introduced unnoticed.
+      - name: Pin the toolchain to this matrix version
+        shell: bash
+        run: |
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+          go version
 
       - name: Get dependencies
         run: |
@@ -256,11 +261,16 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # go.work pins a newer Go than the older matrix versions install, and a
-      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
-      # See the action for why that breaks coverage builds.
-      - name: Allow Go toolchain auto-upgrade
-        uses: ./.github/actions/setup-go-toolchain
+      # Keep this leg on the Go that setup-go installed. The go command will happily
+      # upgrade itself to satisfy a newer go directive, and when it does every leg of
+      # the matrix ends up testing the same toolchain while still reporting three.
+      # go.work is at the minimum supported version so no upgrade is needed; this pin
+      # is what stops one from being introduced unnoticed.
+      - name: Pin the toolchain to this matrix version
+        shell: bash
+        run: |
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+          go version
 
       - name: Get dependencies
         run: |
@@ -383,11 +393,16 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # go.work pins a newer Go than the older matrix versions install, and a
-      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
-      # See the action for why that breaks coverage builds.
-      - name: Allow Go toolchain auto-upgrade
-        uses: ./.github/actions/setup-go-toolchain
+      # Keep this leg on the Go that setup-go installed. The go command will happily
+      # upgrade itself to satisfy a newer go directive, and when it does every leg of
+      # the matrix ends up testing the same toolchain while still reporting three.
+      # go.work is at the minimum supported version so no upgrade is needed; this pin
+      # is what stops one from being introduced unnoticed.
+      - name: Pin the toolchain to this matrix version
+        shell: bash
+        run: |
+          echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+          go version
 
       # Find all submodules (directories with go.mod files) in the pkg directory
       - name: Detect Submodules

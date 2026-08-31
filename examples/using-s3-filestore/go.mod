@@ -1,6 +1,6 @@
 module gofr.dev/examples/using-s3-filestore
 
-go 1.27.0
+go 1.25.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.43.6
