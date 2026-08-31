@@ -850,10 +850,6 @@ func BenchmarkTracer_WithPropagationHeaders(b *testing.B) {
 // unmodified source.
 // ---------------------------------------------------------------------------
 
-// tracerCharScopeName returns the exact instrumentation-scope (tracer) name
-// the middleware resolves at chain-build time.
-func tracerCharScopeName() string { return "gofr-" + version.Framework }
-
 // tracerCharInstallRecordingTP installs an sdktrace provider with an in-memory
 // span recorder and restores the previously installed global provider on
 // cleanup. The provider MUST be installed before Tracer() is called because
@@ -957,9 +953,14 @@ func Test_TracerContract_InstrumentationScopeName(t *testing.T) {
 	spans := rec.Ended()
 	require.Len(t, spans, 1)
 
-	assert.Equal(t, "gofr-dev", tracerCharScopeName(),
-		"version.Framework changed; the scope name below moves with it")
-	assert.Equal(t, tracerCharScopeName(), spans[0].InstrumentationScope().Name)
+	// The scope name embeds version.Framework: "gofr-dev" on a development build, "gofr-v1.60.0" on
+	// a release build. That moving part is the contract — a consumer filtering on the scope name has
+	// to expect it to change every release — so the assertion derives the expected value rather than
+	// pinning a literal, which would fail on every release branch.
+	assert.Equal(t, "gofr-"+version.Framework, spans[0].InstrumentationScope().Name,
+		"scope name is the gofr- prefix plus version.Framework")
+	assert.NotEqual(t, "gofr-", spans[0].InstrumentationScope().Name,
+		"the version must actually be appended, not an empty string")
 	assert.Empty(t, spans[0].InstrumentationScope().Version,
 		"middleware passes no WithInstrumentationVersion")
 	assert.Empty(t, spans[0].InstrumentationScope().SchemaURL)

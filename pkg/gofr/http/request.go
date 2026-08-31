@@ -39,7 +39,19 @@ type Request struct {
 
 // NewRequest creates a new GoFr Request instance from the given http.Request.
 func NewRequest(r *http.Request) *Request {
-	return &Request{
+	req := RequestFor(r)
+
+	return &req
+}
+
+// RequestFor returns a Request by value.
+//
+// The per-request construction site stores the Request inside the request
+// Context, which is itself heap allocated and has exactly the same lifetime.
+// Returning a value lets the caller place it in that same allocation instead of
+// taking a second one. Callers needing a pointer keep using NewRequest.
+func RequestFor(r *http.Request) Request {
+	return Request{
 		req:        r,
 		pathParams: mux.Vars(r),
 	}

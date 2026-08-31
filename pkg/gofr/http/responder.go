@@ -37,7 +37,16 @@ var respBufPool = sync.Pool{
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
-	return &Responder{w: w, method: method}
+	res := ResponderFor(w, method)
+
+	return &res
+}
+
+// ResponderFor returns a Responder by value, so a caller that stores it inside
+// an allocation it already owns does not need a second one. Callers needing a
+// pointer keep using NewResponder.
+func ResponderFor(w http.ResponseWriter, method string) Responder {
+	return Responder{w: w, method: method}
 }
 
 // Responder encapsulates an http.ResponseWriter and is responsible for crafting structured responses.
