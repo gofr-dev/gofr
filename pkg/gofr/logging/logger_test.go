@@ -305,9 +305,19 @@ func TestNewFileLogger_Close(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrClosed)
 }
 
+// newLoggerAt builds a logger at a level. It exists because level is atomic --
+// so that ChangeLevel is safe to call from the remote logger's polling
+// goroutine -- and so cannot be given in a struct literal.
+func newLoggerAt(level Level, normalOut, errorOut io.Writer) *logger {
+	l := &logger{normalOut: normalOut, errorOut: errorOut, lock: make(chan struct{}, 1)}
+	l.level.Store(int64(level))
+
+	return l
+}
+
 // newBufLogger builds a JSON-mode logger writing to out (isTerminal=false).
 func newBufLogger(out io.Writer) *logger {
-	return &logger{level: DEBUG, normalOut: out, errorOut: out}
+	return newLoggerAt(DEBUG, out, out)
 }
 
 // wireLog decodes a JSON log line for assertions. It mirrors the production
@@ -437,11 +447,7 @@ func TestExtractTraceID_SlowPath_Marker(t *testing.T) {
 // newBenchLogger builds a logger writing to out with the JSON (non-terminal)
 // path, matching production behavior where stdout is not a TTY.
 func newBenchLogger(out io.Writer) *logger {
-	return &logger{
-		level:     INFO,
-		normalOut: out,
-		errorOut:  out,
-	}
+	return newLoggerAt(INFO, out, out)
 }
 
 // BenchmarkLoggerInfoJSON measures the single-string JSON log hot path.
@@ -468,7 +474,86 @@ func BenchmarkLoggerInfofJSON(b *testing.B) {
 	}
 }
 
-// ---------------------------------------------------------------------------
+// TestTraceMarkerMapFormStillAccepted pins the cross-package contract: pkg/gofr/ai
+// emits the trace ID as a map, and that form must keep working alongside the
+// cheaper marker type emitted by ContextLogger.
+func TestTraceMarkerMapFormStillAccepted(t *testing.T) {
+	const want = "0102030405060708090a0b0c0d0e0f10"
+
+	traceID, filtered := extractTraceIDAndFilterArgs(
+		[]any{"msg", map[string]any{traceIDMarkerKey: want}})
+
+	require.Equal(t, want, traceID, "the map form must still be recognized")
+	require.Equal(t, []any{"msg"}, filtered, "the marker must still be stripped")
+}
+
+// TestTraceMarkerTypeFormAccepted covers the cheaper form.
+func TestTraceMarkerTypeFormAccepted(t *testing.T) {
+	const want = "0102030405060708090a0b0c0d0e0f10"
+
+	traceID, filtered := extractTraceIDAndFilterArgs([]any{"msg", traceIDMarker(want)})
+
+	require.Equal(t, want, traceID)
+	require.Equal(t, []any{"msg"}, filtered)
+}
+
+// TestLoggerLogEnabledMatchesLevel is the direct test of the gate the request
+// middleware consults. Log writes at INFO, so the answer must be true exactly
+// when an INFO entry would be emitted -- notably including the DEFAULT level,
+// where the gate deliberately does not fire.
+func TestLoggerLogEnabledMatchesLevel(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  bool
+	}{
+		{DEBUG, true},
+		{INFO, true},
+		{NOTICE, false},
+		{WARN, false},
+		{ERROR, false},
+		{FATAL, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			l, ok := NewLogger(tt.level).(*logger)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, l.LogEnabled())
+		})
+	}
+}
+
+// TestLoggerLogEnabledAgreesWithLog is the anti-drift guard: whatever the gate
+// answers must match whether Log actually writes anything.
+func TestLoggerLogEnabledAgreesWithLog(t *testing.T) {
+	for _, level := range []Level{DEBUG, INFO, NOTICE, WARN, ERROR, FATAL} {
+		t.Run(level.String(), func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			l := newLoggerAt(level, buf, buf)
+
+			l.Log("entry")
+
+			assert.Equal(t, l.LogEnabled(), buf.Len() > 0,
+				"LogEnabled must predict whether Log emits")
+		})
+	}
+}
+
+// TestLoggerLogEnabledFollowsChangeLevel pins that the gate tracks a level
+// changed at runtime -- the remote logger does exactly this.
+func TestLoggerLogEnabledFollowsChangeLevel(t *testing.T) {
+	l, ok := NewLogger(INFO).(*logger)
+	require.True(t, ok)
+	require.True(t, l.LogEnabled())
+
+	l.ChangeLevel(WARN)
+	assert.False(t, l.LogEnabled(), "raising the level must close the gate")
+
+	l.ChangeLevel(DEBUG)
+	assert.True(t, l.LogEnabled(), "lowering it must reopen it")
+}
+
 // Characterization suite: the JSON log-entry envelope on the wire.
 //
 // These tests pin the enclosing logEntry that wraps every message written by
@@ -561,7 +646,7 @@ func Test_LogWireFormat_ErrorEnvelopeExact(t *testing.T) {
 
 	normal := &bytes.Buffer{}
 	errs := &bytes.Buffer{}
-	l := &logger{level: DEBUG, normalOut: normal, errorOut: errs}
+	l := logCharLoggerAt(DEBUG, &logger{normalOut: normal, errorOut: errs})
 
 	payload := logCharSampleRequestLog()
 	payload.Response = 500
@@ -817,7 +902,7 @@ func Test_LogWireFormat_OneLinePerEntry(t *testing.T) {
 // produces ZERO bytes — not an empty JSON object, not a bare newline.
 func Test_LogWireFormat_BelowThresholdWritesNothing(t *testing.T) {
 	buf := &bytes.Buffer{}
-	l := &logger{level: ERROR, normalOut: buf, errorOut: buf}
+	l := logCharLoggerAt(ERROR, &logger{normalOut: buf, errorOut: buf})
 
 	l.Debug(logCharSampleRequestLog())
 	l.Info(logCharSampleRequestLog())
@@ -888,11 +973,23 @@ func Test_LogWireFormat_PrettyPrintPathIsNotJSON(t *testing.T) {
 	assert.False(t, checkIfTerminal(&bytes.Buffer{}), "a bytes.Buffer is never a terminal, so JSON is emitted")
 
 	buf := &bytes.Buffer{}
-	l := &logger{level: DEBUG, normalOut: buf, errorOut: buf, isTerminal: true, lock: make(chan struct{}, 1)}
+	l := logCharLoggerAt(DEBUG, &logger{normalOut: buf, errorOut: buf, isTerminal: true, lock: make(chan struct{}, 1)})
 
 	l.Log("hello")
 
 	assert.False(t, json.Valid(buf.Bytes()), "the terminal branch emits ANSI text, not JSON")
 	assert.Contains(t, buf.String(), "hello")
 	assert.Contains(t, buf.String(), "INFO")
+}
+
+// logCharLoggerAt sets the logger's level and returns it.
+//
+// The level moved from a plain field to an atomic.Int64 on this branch, to close
+// the unsynchronized read that ChangeLevel raced with from the remote logger's
+// polling goroutine. A composite literal can no longer set it, so these
+// characterization tests set it through the same accessor production uses.
+func logCharLoggerAt(level Level, l *logger) *logger {
+	l.level.Store(int64(level))
+
+	return l
 }
