@@ -10,14 +10,14 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-// LLM documents a compatibility freeze: capabilities arrive as new optional interfaces asserted by
-// the caller, never as new methods on LLM, so that hand-written fakes and third-party wrappers keep
-// compiling across minor versions. The freeze is only worth the words if something enforces it.
+// LLM is the one callable surface a handler gets from ctx.LLM(), so a capability is added as a
+// method on it rather than as a side interface the caller has to assert. That makes any addition to
+// LLM a breaking change for a hand-written fake, which is a cost worth paying once but never worth
+// paying by accident.
 //
-// legacyFake is the fake a user writes against LLM. It deliberately implements the interface and
-// nothing more — no Embed, no future capability method. If a capability is ever added to LLM
-// directly, this file stops compiling, which is the point: the break surfaces here, in this repo,
-// instead of in a user's build after they upgrade.
+// legacyFake is the fake a user writes against LLM, implementing the interface and nothing more. If
+// a method is added to LLM, this file stops compiling — the break surfaces here, in this repo, in
+// the same commit that causes it, instead of in a user's build after they upgrade.
 type legacyFake struct{}
 
 func (*legacyFake) Chat(context.Context, []Message, ...Option) (*Response, error) {
@@ -32,6 +32,10 @@ func (*legacyFake) Stream(context.Context, []Message, ...Option) (Streamer, erro
 	return nil, ErrStreamNotSupported
 }
 
+func (*legacyFake) Embed(context.Context, []string, ...Option) (*EmbeddingResponse, error) {
+	return nil, ErrEmbedNotSupported
+}
+
 func (*legacyFake) Tools() Tools                                  { return emptyTools{} }
 func (*legacyFake) HealthCheck(context.Context) datasource.Health { return datasource.Health{} }
 func (*legacyFake) Name() string                                  { return "legacy-fake" }
@@ -39,10 +43,7 @@ func (*legacyFake) Name() string                                  { return "lega
 // The assignment a user actually writes in their tests.
 var _ LLM = (*legacyFake)(nil)
 
-// The capability is reachable from the LLM GoFr hands to a handler, without being declared on LLM.
-var _ EmbeddingLLM = (*llm)(nil)
-
-func TestLLM_FreezeHoldsForHandWrittenFakes(t *testing.T) {
+func TestLLM_HandWrittenFakeSatisfiesInterface(t *testing.T) {
 	// Compiling is the assertion; this body just proves the fake is usable as an LLM.
 	var l LLM = &legacyFake{}
 
@@ -52,16 +53,18 @@ func TestLLM_FreezeHoldsForHandWrittenFakes(t *testing.T) {
 
 	_, err = l.Stream(t.Context(), nil)
 	require.ErrorIs(t, err, ErrStreamNotSupported)
+
+	_, err = l.Embed(t.Context(), []string{"x"})
+	require.ErrorIs(t, err, ErrEmbedNotSupported)
 }
 
-func TestLLM_EmbeddingCapabilityAlwaysAssertable(t *testing.T) {
-	// Chat-only provider: the assertion must still succeed, so a handler never has to distinguish
+func TestLLM_Embed_ChatOnlyProviderReportsError(t *testing.T) {
+	// A chat-only provider is reported by the call, so a handler never has to distinguish
 	// "capability missing from this build" from "provider does not support it".
-	e, ok := NewLLM(&fakeModel{}, Deps{}).(EmbeddingLLM)
-	require.True(t, ok, "ctx.LLM() must always be assertable to EmbeddingLLM")
+	l := NewLLM(&fakeModel{}, Deps{})
 
-	_, err := e.Embed(t.Context(), []string{"x"})
-	assert.ErrorIs(t, err, ErrEmbedNotSupported, "a chat-only provider reports the error, not a failed assertion")
+	_, err := l.Embed(t.Context(), []string{"x"})
+	assert.ErrorIs(t, err, ErrEmbedNotSupported, "a chat-only provider reports the error from the call")
 }
 
 // nilEmbedder is a third-party provider that violates the contract mildly: it reports success but
