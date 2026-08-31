@@ -124,6 +124,8 @@ func TestResponder_getStatusCode(t *testing.T) {
 		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
 		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
 			map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+		{"method not allowed error", http.MethodPost, nil, ErrorMethodNotAllowed{}, http.StatusMethodNotAllowed,
+			map[string]any{"message": ErrorMethodNotAllowed{}.Error()}},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},

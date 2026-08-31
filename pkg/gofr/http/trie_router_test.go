@@ -288,8 +288,8 @@ func TestTrieDifferential_MethodMismatchParity(t *testing.T) {
 	muxStatus, _ := serve(muxR, http.MethodGet, "/a/xyz")
 	trieStatus, _ := serve(trieR, http.MethodGet, "/a/xyz")
 
-	assert.Equal(t, http.StatusNotFound, muxStatus, "mux baseline: registration-order 404")
-	assert.Equal(t, muxStatus, trieStatus, "trie must reproduce mux's order-dependent status, not a 405")
+	assert.Equal(t, http.StatusMethodNotAllowed, muxStatus, "mux baseline: 405 Method Not Allowed")
+	assert.Equal(t, muxStatus, trieStatus, "trie must match mux status")
 }
 
 // TestTrieRouter_UnmatchedFallsBackToMux asserts the safety property that the

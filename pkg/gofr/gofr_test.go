@@ -1935,3 +1935,91 @@ func Test_HTTPMethods(t *testing.T) {
 		})
 	}
 }
+
+func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+	app.GET("/thing", func(*Context) (any, error) {
+		return "ok", nil
+	})
+	app.POST("/multi", func(*Context) (any, error) {
+		return "multi-post", nil
+	})
+	app.PUT("/multi", func(*Context) (any, error) {
+		return "multi-put", nil
+	})
+
+	app.httpServerSetup()
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedAllow string
+		expectedBody  string
+	}{
+		{
+			name:          "GET registered route returns 200",
+			method:        http.MethodGet,
+			path:          "/thing",
+			expectedCode:  http.StatusOK,
+			expectedAllow: "",
+			expectedBody:  `{"data":"ok"}`,
+		},
+		{
+			name:          "POST on GET-only route returns 405 with Allow header",
+			method:        http.MethodPost,
+			path:          "/thing",
+			expectedCode:  http.StatusMethodNotAllowed,
+			expectedAllow: "GET",
+			expectedBody:  `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			name:          "DELETE on GET-only route returns 405 with Allow header",
+			method:        http.MethodDelete,
+			path:          "/thing",
+			expectedCode:  http.StatusMethodNotAllowed,
+			expectedAllow: "GET",
+			expectedBody:  `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			name:          "GET on multi-method route (POST, PUT) returns 405 with sorted Allow header",
+			method:        http.MethodGet,
+			path:          "/multi",
+			expectedCode:  http.StatusMethodNotAllowed,
+			expectedAllow: "POST, PUT",
+			expectedBody:  `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			name:          "GET on unregistered route returns 404",
+			method:        http.MethodGet,
+			path:          "/unregistered",
+			expectedCode:  http.StatusNotFound,
+			expectedAllow: "",
+			expectedBody:  `{"error":{"message":"route not registered"}}`,
+		},
+		{
+			name:          "POST on unregistered route returns 404",
+			method:        http.MethodPost,
+			path:          "/unregistered",
+			expectedCode:  http.StatusNotFound,
+			expectedAllow: "",
+			expectedBody:  `{"error":{"message":"route not registered"}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+
+			app.httpServer.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedAllow, w.Header().Get("Allow"))
+			assert.JSONEq(t, tc.expectedBody, w.Body.String())
+		})
+	}
+}
