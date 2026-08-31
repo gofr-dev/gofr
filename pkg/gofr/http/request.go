@@ -90,7 +90,11 @@ func (r *Request) Bind(i any) error {
 			return err
 		}
 
-		return json.Unmarshal(body, &i)
+		// i is already a pointer — the guard above rejects anything else — so unmarshal into it
+		// directly. Passing &i hands encoding/json a **any, and from Go 1.27 (encoding/json on
+		// json/v2) the extra indirection costs the struct name in the error: a wrong-typed field
+		// reports "field .a" instead of "field charBindTarget.a".
+		return json.Unmarshal(body, i)
 	case "multipart/form-data":
 		return r.bindMultipart(i)
 	case "application/x-www-form-urlencoded":
