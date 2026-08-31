@@ -77,7 +77,8 @@ func (r *Request) Bind(i any) error {
 	// Binding into a non-pointer would unmarshal into a throwaway copy and leave
 	// the caller's value untouched, so reject it up front instead of silently
 	// doing nothing.
-	if rv := reflect.ValueOf(i); rv.Kind() != reflect.Pointer {
+	rv := reflect.ValueOf(i)
+	if rv.Kind() != reflect.Pointer {
 		return errNonPointerBind
 	}
 
@@ -91,9 +92,19 @@ func (r *Request) Bind(i any) error {
 		}
 
 		// i is already a pointer — the guard above rejects anything else — so unmarshal into it
-		// directly. Passing &i hands encoding/json a **any, and from Go 1.27 (encoding/json on
-		// json/v2) the extra indirection costs the struct name in the error: a wrong-typed field
-		// reports "field .a" instead of "field charBindTarget.a".
+		// directly. Passing &i handed encoding/json a **any, and from Go 1.27 (encoding/json
+		// rebuilt on json/v2) the extra indirection costs the struct name in the error: a
+		// wrong-typed field reported "field .a" rather than "field charBindTarget.a".
+		//
+		// A nil pointer cannot be written to, and the old form quietly decoded into the local
+		// interface instead — which dropped the static type, so syntax errors surfaced but type
+		// errors never did. That is preserved verbatim rather than tightened here, so the Go
+		// upgrade changes nothing for a caller that binds a nil pointer.
+		if rv.IsNil() {
+			var throwaway any
+			return json.Unmarshal(body, &throwaway)
+		}
+
 		return json.Unmarshal(body, i)
 	case "multipart/form-data":
 		return r.bindMultipart(i)
