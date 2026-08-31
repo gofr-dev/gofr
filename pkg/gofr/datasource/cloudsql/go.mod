@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/cloudsql
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/cloudsqlconn v1.25.1

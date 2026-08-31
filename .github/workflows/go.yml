@@ -48,7 +48,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.27','1.26', '1.25']
+        go-version: ['1.27','1.26']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -233,7 +233,7 @@ jobs:
 
       # Upload coverage report for the lowest matrix Go version only
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.25'}}
+        if: ${{ matrix.go-version == '1.26'}}
         uses: actions/upload-artifact@v7
         with:
           name: Example-Test-Report
@@ -246,7 +246,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version: ['1.27','1.26', '1.25']
+        go-version: ['1.27','1.26']
       fail-fast: false
 
     steps:
@@ -326,7 +326,7 @@ jobs:
 
       # Upload coverage report for the lowest matrix Go version only
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.25'}}
+        if: ${{ matrix.go-version == '1.26'}}
         uses: actions/upload-artifact@v7
         with:
           name: PKG-Coverage-Report
@@ -378,7 +378,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version:  ['1.27','1.26', '1.25']
+        go-version:  ['1.27','1.26']
       fail-fast: false
 
     steps:
