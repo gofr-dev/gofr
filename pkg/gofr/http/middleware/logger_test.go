@@ -10,17 +10,20 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging/remotelogger"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -498,7 +501,185 @@ func BenchmarkGetIPAddress(b *testing.B) {
 	}
 }
 
-// ---------------------------------------------------------------------------
+// levelGateLogger records what it was asked and what it received, so the tests
+// below can assert both that the gate is consulted and that it is obeyed.
+type levelGateLogger struct {
+	enabled  bool
+	logCalls int
+	errCalls int
+}
+
+func (l *levelGateLogger) Log(...any)       { l.logCalls++ }
+func (l *levelGateLogger) Error(...any)     { l.errCalls++ }
+func (l *levelGateLogger) LogEnabled() bool { return l.enabled }
+
+// TestRequestLogEmittedWhenLevelAllows is the feature guard: when the level
+// permits an informational entry, the request log is still written.
+func TestRequestLogEmittedWhenLevelAllows(t *testing.T) {
+	lg := &levelGateLogger{enabled: true}
+	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+
+	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
+		time.Now(), "tid", trace.SpanContext{}, lg)
+
+	require.Equal(t, 1, lg.logCalls, "an allowed level must still emit the request log")
+}
+
+// TestRequestLogSkippedWhenLevelDiscards pins the win.
+func TestRequestLogSkippedWhenLevelDiscards(t *testing.T) {
+	lg := &levelGateLogger{enabled: false}
+	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+
+	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
+		time.Now(), "tid", trace.SpanContext{}, lg)
+
+	require.Zero(t, lg.logCalls, "a discarded level must not be handed an entry")
+}
+
+// TestRequestLogAlwaysEmittedForServerErrors is the important boundary: a 5xx
+// goes through Error, which the informational gate must never suppress.
+func TestRequestLogAlwaysEmittedForServerErrors(t *testing.T) {
+	lg := &levelGateLogger{enabled: false}
+	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusInternalServerError}
+
+	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
+		time.Now(), "tid", trace.SpanContext{}, lg)
+
+	require.Equal(t, 1, lg.errCalls, "a server error must be logged regardless of the informational level")
+}
+
+// TestRequestLogUngatedLoggerUnaffected pins backward compatibility: a logger
+// that does not implement the optional interface behaves exactly as before.
+func TestRequestLogUngatedLoggerUnaffected(t *testing.T) {
+	lg := &plainLogger{}
+	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+
+	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
+		time.Now(), "tid", trace.SpanContext{}, lg)
+
+	require.Equal(t, 1, lg.logCalls, "a logger without the gate must still receive the entry")
+}
+
+type plainLogger struct{ logCalls int }
+
+func (l *plainLogger) Log(...any) { l.logCalls++ }
+func (*plainLogger) Error(...any) {}
+
+// TestCorrelationIDHeaderSpellingUnchanged pins that assigning the canonical key
+// directly still produces the header clients read today.
+func TestCorrelationIDHeaderSpellingUnchanged(t *testing.T) {
+	h := http.Header{}
+	h[canonicalCorrelationID] = []string{"abc123"}
+
+	require.Equal(t, "abc123", h.Get("X-Correlation-ID"), "lookup by the documented name must work")
+	require.Equal(t, "abc123", h.Get("X-Correlation-Id"), "and by the canonical form")
+
+	// The const is only safe to hard-code while it equals what
+	// Header.Set would have canonicalized the documented name to.
+	require.Equal(t, canonicalCorrelationID, textproto.CanonicalMIMEHeaderKey("X-Correlation-ID"))
+}
+
+// loggingBenchWriter keeps a header map and discards the rest, so the benchmark measures the
+// middleware rather than a recorder.
+type loggingBenchWriter struct{ h http.Header }
+
+func (w *loggingBenchWriter) Header() http.Header       { return w.h }
+func (*loggingBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*loggingBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkLogging measures the middleware at a level that DISCARDS the entry.
+//
+// The request log is written through Log, which logs at INFO, so the gate only discards from
+// NOTICE upward -- a service at the default level still emits it and still pays to build it.
+// This benchmark therefore runs at ERROR, the shape of a service that has deliberately turned
+// access logging off. Anything spent building an entry that is then thrown away is pure waste,
+// which is what the change targets — hence allocations, not wall clock, are the metric here.
+func BenchmarkLogging(b *testing.B) {
+	// A real *logging.logger, not NewMockLogger: MockLogger does not implement
+	// LogEnabled, so the logEnabler assertion would fail and the benchmark would
+	// measure the pre-optimization path while appearing to measure the gate.
+	logger := logging.NewLogger(logging.ERROR)
+
+	router := mux.NewRouter()
+	router.Use(Logging(LogProbes{}, logger))
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	req.RemoteAddr = "192.0.2.10:5555"
+
+	w := &loggingBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}
+
+// TestRequestLogGateWithRealLoggers pins the gate against the loggers production
+// actually wires, not the levelGateLogger double above. container.go builds a
+// remotelogger, so that wrapper -- and the plain logger it embeds -- are what
+// decide whether a request log is built.
+//
+// It also pins the reach honestly: at the DEFAULT level the entry is still
+// emitted. The saving lands only on a service that has raised LOG_LEVEL.
+func TestRequestLogGateWithRealLoggers(t *testing.T) {
+	tests := []struct {
+		name    string
+		level   logging.Level
+		emitted bool
+	}{
+		{"default INFO still logs", logging.INFO, true},
+		{"NOTICE skips", logging.NOTICE, false},
+		{"WARN skips", logging.WARN, false},
+	}
+
+	for _, tt := range tests {
+		for _, build := range []struct {
+			kind string
+			make func(logging.Level) logging.Logger
+		}{
+			{"logger", logging.NewLogger},
+			{"remotelogger", func(l logging.Level) logging.Logger {
+				return remotelogger.New(l, "", time.Second)
+			}},
+		} {
+			t.Run(build.kind+"/"+tt.name, func(t *testing.T) {
+				out := testutil.StdoutOutputForFunc(func() {
+					srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+					req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+
+					handleRequestLog(srw, req, time.Now(), "tid", trace.SpanContext{}, build.make(tt.level))
+				})
+
+				assert.Equal(t, tt.emitted, strings.Contains(out, "/x"),
+					"the gate must agree with what the logger would emit")
+			})
+		}
+	}
+}
+
+// TestRequestLogGateNeverSuppresses5xx is the same guard against a real logger:
+// a server error goes through Error and must survive however high the
+// informational level is set.
+func TestRequestLogGateNeverSuppresses5xx(t *testing.T) {
+	out := testutil.StderrOutputForFunc(func() {
+		srw := &StatusResponseWriter{
+			ResponseWriter: httptest.NewRecorder(),
+			status:         http.StatusInternalServerError,
+		}
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/boom", http.NoBody)
+
+		handleRequestLog(srw, req, time.Now(), "tid", trace.SpanContext{},
+			remotelogger.New(logging.ERROR, "", time.Second))
+	})
+
+	assert.Contains(t, out, "/boom", "a 5xx must be logged even at ERROR")
+}
+
 // Characterization suite: HTTP logging middleware + RequestLog wire format.
 //
 // Everything below is a *characterization* test: it pins the behavior of the
@@ -1722,7 +1903,7 @@ func Test_LoggingContract_HandleRequestLogNilLogger(t *testing.T) {
 	req := logCharNewRequest(t, http.MethodGet, "http://dummy/nil-logger")
 
 	assert.NotPanics(t, func() {
-		handleRequestLog(srw, req, time.Now(), zeroTraceID, zeroSpanID, nil)
+		handleRequestLog(srw, req, time.Now(), zeroTraceID, trace.SpanContext{}, nil)
 	})
 }
 
