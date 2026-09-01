@@ -103,3 +103,12 @@ func (m *MockLogger) Logf(format string, args ...any) {
 func (m *MockLogger) ChangeLevel(level Level) {
 	m.level = level
 }
+
+// LogEnabled mirrors *logger.LogEnabled so a test that swaps the real logger for
+// this mock exercises the same code path production does. Without it, callers
+// that gate expensive entry-building on the optional logEnabler interface fall
+// back to building unconditionally when handed a mock -- which is exactly the
+// branch production does not take.
+func (m *MockLogger) LogEnabled() bool {
+	return INFO >= m.level
+}

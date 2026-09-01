@@ -24,17 +24,13 @@ func (e *embedModel) Embed(_ context.Context, input []string, _ ...Option) (*Emb
 	return e.embResp, e.embErr
 }
 
-// embedderOf builds the LLM GoFr hands to a handler and asserts EmbeddingLLM on it, exactly as a
-// handler does. The assertion is part of what is under test: the LLM returned by ctx.LLM() must
-// always satisfy EmbeddingLLM, so the capability is reachable without the caller knowing whether
-// the configured provider happens to support it.
-func embedderOf(t *testing.T, m Model, d Deps) EmbeddingLLM {
+// embedderOf builds the LLM GoFr hands to a handler, exactly as ctx.LLM() does. Embed is reachable
+// on it without the caller knowing whether the configured provider happens to support it; a provider
+// that does not reports ErrEmbedNotSupported from the call.
+func embedderOf(t *testing.T, m Model, d Deps) LLM {
 	t.Helper()
 
-	e, ok := NewLLM(m, d).(EmbeddingLLM)
-	require.True(t, ok, "the LLM returned by GoFr must always implement EmbeddingLLM")
-
-	return e
+	return NewLLM(m, d)
 }
 
 // Embed forwards the input to the model, returns its vectors, and records exactly one successful
