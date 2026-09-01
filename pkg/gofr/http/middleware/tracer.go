@@ -101,10 +101,15 @@ func spanMetaFor(method, route string, templated bool) *spanMeta {
 	}
 
 	key := routeKey{method: method, route: route}
-	if v, ok := tracerSpanCache.load(key); ok {
-		meta, _ := v.(*spanMeta)
 
-		return meta
+	// A failed assertion falls through to the rebuild below rather than returning
+	// the nil it would otherwise produce. Nothing else stores into this cache, so
+	// it cannot fail today; ignoring the result would turn any future change that
+	// broke that into a nil dereference on the request path.
+	if v, ok := tracerSpanCache.load(key); ok {
+		if meta, ok := v.(*spanMeta); ok {
+			return meta
+		}
 	}
 
 	meta := newSpanMeta(method, route)
