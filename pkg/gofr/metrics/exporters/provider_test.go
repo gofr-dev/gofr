@@ -118,9 +118,15 @@ func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
 func TestBuildResource_detectorRunsOnlyForItsExporter(t *testing.T) {
 	var called bool
 
+	// A non-empty schema URL that differs from the SDK's own is what a real vendor
+	// detector supplies -- contrib/detectors/gcp v1.44.0 pins semconv 1.41.0 while
+	// the SDK host detector pins 1.43.0. An empty one never conflicts in
+	// resource.Merge, so a probe using it would pass this test trivially.
 	RegisterResourceDetector("detector-probe", detectorFunc(func(context.Context) (*resource.Resource, error) {
 		called = true
-		return resource.NewWithAttributes("", attribute.String("probe", "yes")), nil
+
+		return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0",
+			attribute.String("probe", "yes")), nil
 	}))
 
 	buildResource(context.Background(), &Config{AppName: "app"}, logging.NewMockLogger(logging.INFO))
@@ -176,5 +182,39 @@ func TestBuildResource_prometheusOnlySkipsHostIDDetection(t *testing.T) {
 				t.Error("service.name missing")
 			}
 		})
+	}
+}
+
+// A vendor detector pinning an older semconv than the SDK's is the normal case,
+// not a fault: resource.Merge drops the schema URL but keeps every attribute. It
+// must not be reported as a failure, or every healthy boot on Google Cloud logs
+// a warning.
+func TestBuildResource_schemaURLConflictIsNotAFailure(t *testing.T) {
+	RegisterResourceDetector("schema-conflict", detectorFunc(func(context.Context) (*resource.Resource, error) {
+		return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0",
+			attribute.String("cloud.region", "us-central1")), nil
+	}))
+
+	// Warnf is WARN level, which the logger routes to normalOut (stdout); only
+	// ERROR and above go to stderr.
+	logs := testutil.StdoutOutputForFunc(func() {
+		res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "schema-conflict"},
+			logging.NewMockLogger(logging.DEBUG))
+
+		// The attributes are what the backend reads; they must all survive.
+		got := map[string]bool{}
+		for _, kv := range res.Attributes() {
+			got[string(kv.Key)] = true
+		}
+
+		for _, want := range []string{"cloud.region", "host.id", "service.name", "framework_version"} {
+			if !got[want] {
+				t.Errorf("%s was dropped by the conflicting-schema merge", want)
+			}
+		}
+	})
+
+	if strings.Contains(logs, "resource detection was incomplete") {
+		t.Errorf("a schema-URL conflict must not be logged as a failure, got: %q", logs)
 	}
 }

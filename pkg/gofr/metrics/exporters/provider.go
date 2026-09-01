@@ -101,7 +101,18 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 	// say). Degrade loudly but keep whatever was resolved rather than dropping
 	// the service name with it.
 	res, err := resource.New(ctx, opts...)
-	if err != nil {
+
+	switch {
+	case err == nil:
+	// A vendor detector pinning an older semconv than the SDK's own is the normal
+	// case, not a fault: contrib/detectors/gcp v1.44.0 carries semconv 1.41.0
+	// while the SDK's host detector carries 1.43.0. Merge keeps every attribute
+	// and only drops the schema URL, so warning here would fire on every healthy
+	// boot on Google Cloud -- the one environment this exporter targets.
+	case errors.Is(err, resource.ErrSchemaURLConflict):
+		logger.Debug("metrics: resource schema URLs differ between detectors; " +
+			"attributes are unaffected, schema URL omitted")
+	default:
 		logger.Warnf("metrics: resource detection was incomplete: %v", err)
 	}
 

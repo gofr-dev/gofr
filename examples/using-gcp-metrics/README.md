@@ -83,6 +83,15 @@ OTEL_RESOURCE_ATTRIBUTES=location=us-central1
 
 `location` also accepts `cloud.region` or `cloud.availability_zone`.
 
+`instance` is filled from `host.id`, which GoFr detects automatically. Some
+environments -- minimal containers and some CI runners -- have no machine ID, and
+there `instance` has no source either and points are dropped for the same reason.
+Supply one the same way:
+
+```
+OTEL_RESOURCE_ATTRIBUTES=location=us-central1,service.instance.id=${HOSTNAME}
+```
+
 ## Local run
 
 Locally, ADC comes from `gcloud auth application-default login`. To avoid a real
