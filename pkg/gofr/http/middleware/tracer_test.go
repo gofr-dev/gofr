@@ -566,11 +566,16 @@ func TestSpanMetaContentIsCorrect(t *testing.T) {
 	meta := spanMetaFor(http.MethodPost, "/orders/{id}", true)
 
 	require.Equal(t, "POST /orders/{id}", meta.name)
-	require.Len(t, meta.attrs, 2)
-	require.Equal(t, attribute.Key("http.request.method"), meta.attrs[0].Key)
-	require.Equal(t, "POST", meta.attrs[0].Value.AsString())
-	require.Equal(t, attribute.Key("http.route"), meta.attrs[1].Key)
-	require.Equal(t, "/orders/{id}", meta.attrs[1].Value.AsString())
+
+	// Read the attributes back the way the SDK does, by resolving the start
+	// options, rather than from a field the middleware itself never consults.
+	cfg := otelTrace.NewSpanStartConfig(meta.startOpts...)
+	attrs := cfg.Attributes()
+	require.Len(t, attrs, 2)
+	require.Equal(t, attribute.Key("http.request.method"), attrs[0].Key)
+	require.Equal(t, "POST", attrs[0].Value.AsString())
+	require.Equal(t, attribute.Key("http.route"), attrs[1].Key)
+	require.Equal(t, "/orders/{id}", attrs[1].Value.AsString())
 
 	// A second call must return the identical cached instance.
 	require.Same(t, meta, spanMetaFor(http.MethodPost, "/orders/{id}", true))
@@ -594,7 +599,14 @@ func TestSpanMetaConcurrent(t *testing.T) {
 
 			for range 100 {
 				m := spanMetaFor(http.MethodGet, "/c/"+strconv.Itoa(g%4)+"/{id}", true)
-				if m == nil || m.name == "" || len(m.attrs) != 2 {
+				if m == nil || m.name == "" {
+					bad.Add(1)
+
+					continue
+				}
+
+				cfg := otelTrace.NewSpanStartConfig(m.startOpts...)
+				if len(cfg.Attributes()) != 2 {
 					bad.Add(1)
 				}
 			}

@@ -59,12 +59,11 @@ func routeTemplate(r *http.Request) (route string, templated bool) {
 }
 
 // spanMeta is the immutable per-route span data: the semconv span name and the
-// attribute slice handed to trace.WithAttributes. Both are pure functions of
-// (method, route), so they are provider-independent and safe to share process
-// wide even across TracerProvider replacement.
+// start options carrying its attributes. Both are pure functions of (method,
+// route), so they are provider-independent and safe to share process wide even
+// across TracerProvider replacement.
 type spanMeta struct {
-	name  string
-	attrs []attribute.KeyValue
+	name string
 	// startOpts is the fully built []trace.SpanStartOption handed to Start.
 	// trace.WithAttributes allocates an option wrapper AND the variadic option
 	// slice on every call, so caching the attribute slice alone still left two
@@ -122,7 +121,6 @@ func newSpanMeta(method, route string) *spanMeta {
 
 	return &spanMeta{
 		name:      buildSpanName(method, route),
-		attrs:     attrs,
 		startOpts: []trace.SpanStartOption{trace.WithAttributes(attrs...)},
 	}
 }
@@ -253,6 +251,14 @@ func Tracer(inner http.Handler) http.Handler {
 		//
 		// Recording spans are unaffected: they still get the wrapper and the
 		// attribute, pinned by TestTracerStatusAttributeStillRecorded.
+		//
+		// The cost of this is that the ResponseWriter reaching the next middleware
+		// now depends on whether the span records. GoFr's own chain is unaffected --
+		// Logging wraps immediately after and Metrics reuses that wrapper -- but a
+		// user middleware inserted between Tracer and Logging that type-asserts
+		// *StatusResponseWriter will see it on a sampled request and not on an
+		// unsampled one. That is a hard bug to find from the symptom, so it is worth
+		// knowing before inserting anything at that position.
 		if span.IsRecording() {
 			srw, ok := w.(*StatusResponseWriter)
 			if !ok {
