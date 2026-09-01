@@ -354,24 +354,35 @@ func (d *benchDiscardResponseWriter) Header() http.Header {
 func (*benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (d *benchDiscardResponseWriter) WriteHeader(c int)         { d.code = c }
 
-// buildBenchRouter reconstructs the same middleware chain that
-// gofr.New() / newHTTPServer + httpServer.run wire — Tracer, Logging,
-// CORS, Metrics, WSHandlerUpgrade — so we can measure end-to-end request
-// cost through the real chain without binding to a port.
+// useGoFrMiddleware applies the same middleware chain that gofr.New() /
+// newHTTPServer + httpServer.run wire — Tracer, Logging, CORS, Metrics,
+// WSHandlerUpgrade — so a benchmark can measure end-to-end request cost
+// through the real chain without binding to a port.
+//
+// This is the ONE definition of that chain for benchmarks. Every bench
+// router goes through it, because a second hand-rolled copy drifts: the
+// first one dropped WSHandlerUpgrade while still claiming to mirror what a
+// GoFr application serves.
 //
 // Keep this in sync with newHTTPServer in http_server.go. Any change to
 // GoFr's middleware composition needs a matching change here.
-func buildBenchRouter(c *container.Container) http.Handler {
-	r := gofrHTTP.NewRouter()
-	wsManager := websocket.New()
-
+func useGoFrMiddleware(r *gofrHTTP.Router, c *container.Container) {
 	r.Use(
 		middleware.Tracer,
 		middleware.Logging(middleware.LogProbes{}, c.Logger),
 		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),
-		middleware.WSHandlerUpgrade(c, wsManager),
+		middleware.WSHandlerUpgrade(c, websocket.New()),
 	)
+}
+
+// buildBenchRouter is the router BenchmarkRequest_FullChain measures: the
+// real chain in front of raw http.HandlerFunc routes, so it isolates the
+// middleware cost from GoFr's own handler wrapper.
+func buildBenchRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+
+	useGoFrMiddleware(r, c)
 
 	r.Add(http.MethodGet, "/plaintext", http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
