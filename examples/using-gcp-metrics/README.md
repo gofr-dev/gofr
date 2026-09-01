@@ -83,14 +83,35 @@ OTEL_RESOURCE_ATTRIBUTES=location=us-central1
 
 `location` also accepts `cloud.region` or `cloud.availability_zone`.
 
-`instance` is filled from `host.id`, which GoFr detects automatically. Some
-environments -- minimal containers and some CI runners -- have no machine ID, and
-there `instance` has no source either and points are dropped for the same reason.
-Supply one the same way:
+`instance` is filled from `host.id`, which GoFr detects automatically. **In a
+container it usually cannot be.** The OpenTelemetry SDK reads `/etc/machine-id`
+and `/var/lib/dbus/machine-id` from the container's own filesystem, and those come
+from the image, not from the node — nothing bind-mounts the host's copy in. So:
 
+| Base image | `/etc/machine-id` | `host.id` |
+|---|---|---|
+| `debian:12-slim`, `alpine` | absent | not detected |
+| `ubuntu:24.04` | present, **empty** | detected but blank |
+
+Either way `instance` has no source and every point is dropped, so on Kubernetes
+supply one explicitly. The pod name is unique per replica and available from the
+downward API:
+
+```yaml
+env:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: location=us-central1,service.instance.id=$(POD_NAME)
 ```
-OTEL_RESOURCE_ATTRIBUTES=location=us-central1,service.instance.id=${HOSTNAME}
-```
+
+`instance` also accepts `k8s.pod.name`. Cloud Run needs none of this: the GCP
+detector supplies `faas.instance` per revision instance, and the region for
+`location`, so both labels resolve with no configuration.
+
+The exporter warns separately at startup for whichever of the two is missing.
 
 ## Local run
 

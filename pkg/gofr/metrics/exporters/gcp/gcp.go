@@ -46,25 +46,29 @@ const (
 )
 
 // Google's OTLP ingest maps every point onto the prometheus_target monitored
-// resource, whose "location" label it fills from the first of these that is
-// present — and rejects the point outright when none is. "instance" has its own
-// chain, ending at host.id, which the core exporters package always detects.
+// resource. Both of these labels are documented "reject the point if empty", and
+// each is filled from the first attribute in its list that is present, so a
+// resource carrying none of them loses every point it describes.
 //
-//nolint:gochecknoglobals // static lookup table.
-var locationAttributes = []string{"location", "cloud.availability_zone", "cloud.region"}
+//nolint:gochecknoglobals // static lookup tables.
+var (
+	locationAttributes = []string{"location", "cloud.availability_zone", "cloud.region"}
+	instanceAttributes = []string{
+		"instance", "service.instance.id", "faas.instance",
+		"k8s.pod.name", "host.id",
+	}
+)
 
 //nolint:gochecknoinits // self-registration on blank import is the intended usage.
 func init() {
-	d := &cachingDetector{}
-
-	exporters.Register("gcp", d.buildReader)
-	exporters.RegisterResourceDetector("gcp", d)
+	exporters.Register("gcp", buildReader)
+	exporters.RegisterResourceDetector("gcp", &cachingDetector{})
 }
 
-// cachingDetector runs the GCP metadata detector once and keeps the result, so
-// that buildReader can report on what was resolved without a second round trip
-// to the metadata server. Build populates the resource before it builds the
-// reader, so the cache is always warm by the time buildReader reads it.
+// cachingDetector runs the GCP metadata detector at most once per process and
+// keeps the result. Build is called once per application, but a process may hold
+// more than one, and there is no reason for the second to make another round trip
+// to the metadata server for an answer that cannot have changed.
 type cachingDetector struct {
 	once sync.Once
 	res  *resource.Resource
@@ -83,20 +87,25 @@ func (d *cachingDetector) Detect(ctx context.Context) (*resource.Resource, error
 	return d.res, d.err
 }
 
-// hasLocation reports whether anything the detector found, or the environment
-// supplied, can populate the required prometheus_target "location" label.
+// resolves reports whether res, or the environment, can populate one of the
+// attributes a required prometheus_target label is derived from.
 //
-// env is parsed as W3C Baggage-style "k=v,k=v" rather than substring-matched: a
-// key such as "custom.location" ends in "location" and would otherwise be read
-// as supplying one.
-func hasLocation(res *resource.Resource, env string) bool {
+// An attribute set to the empty string counts as absent, because that is what
+// Google sees. It is a real case rather than a defensive one: the SDK's host
+// detector reads /etc/machine-id and returns success on an empty file, which is
+// exactly what ubuntu base images ship, so host.id arrives present and blank.
+//
+// env is parsed as "k=v,k=v" rather than substring-matched: a key such as
+// "custom.location" ends in "location" and would otherwise be read as supplying
+// one.
+func resolves(res *resource.Resource, env string, names []string) bool {
 	for _, pair := range strings.Split(env, ",") {
 		key, value, found := strings.Cut(pair, "=")
 		if !found {
 			continue
 		}
 
-		if slices.Contains(locationAttributes, strings.TrimSpace(key)) && strings.TrimSpace(value) != "" {
+		if slices.Contains(names, strings.TrimSpace(key)) && strings.TrimSpace(value) != "" {
 			return true
 		}
 	}
@@ -106,7 +115,7 @@ func hasLocation(res *resource.Resource, env string) bool {
 	}
 
 	for _, kv := range res.Attributes() {
-		if slices.Contains(locationAttributes, string(kv.Key)) && kv.Value.String() != "" {
+		if slices.Contains(names, string(kv.Key)) && kv.Value.AsString() != "" {
 			return true
 		}
 	}
@@ -120,23 +129,17 @@ func hasLocation(res *resource.Resource, env string) bool {
 // refreshes automatically, which Google's direct OTLP ingest requires
 // (~1h token lifetime). GMP ingests cumulative temporality, so this exporter
 // pins cumulative regardless of METRICS_TEMPORALITY.
-func (d *cachingDetector) buildReader(
-	ctx context.Context, cfg *exporters.Config, logger exporters.Logger,
-) (metricSdk.Reader, error) {
+func buildReader(ctx context.Context, cfg *exporters.Config, logger exporters.Logger) (metricSdk.Reader, error) {
 	if t := strings.ToLower(cfg.Temporality); t == temporalityDelta || t == temporalityLowMemory {
 		logger.Warnf("METRICS_TEMPORALITY=%s is ignored by the gcp exporter; "+
 			"Google Managed Prometheus requires cumulative", cfg.Temporality)
 	}
 
-	// A push that authenticates and connects but carries no location is accepted
+	// A push that authenticates and connects but carries neither label is accepted
 	// by the API and then discarded per-point, server-side, with nothing on the
 	// wire to notice. Saying so at startup is the only place an operator can be
 	// told before the data silently goes missing.
-	if res, _ := d.Detect(ctx); !hasLocation(res, os.Getenv(otelResourceAttrsEnv)) {
-		logger.Warnf("gcp metrics: no %q resource attribute could be resolved and this host is not on "+
-			"Google Cloud; Google's OTLP ingest rejects every point whose prometheus_target has no location. "+
-			"Set OTEL_RESOURCE_ATTRIBUTES=location=<region> (e.g. us-central1)", locationAttributes[0])
-	}
+	warnUnresolved(cfg, logger)
 
 	creds, err := google.FindDefaultCredentials(ctx, cloudPlatformScope)
 	if err != nil {
@@ -179,4 +182,28 @@ func (d *cachingDetector) buildReader(
 	logger.Infof("exporting metrics to Google Cloud at %s every %s via keyless ADC", endpoint, cfg.Interval)
 
 	return metricSdk.NewPeriodicReader(exporter, metricSdk.WithInterval(cfg.Interval)), nil
+}
+
+// warnUnresolved reports any required prometheus_target label the resource
+// cannot fill. cfg.Resource is the one the MeterProvider will actually export,
+// so this sees host.id and anything else the core package detected, not just
+// what this exporter's own detector found.
+func warnUnresolved(cfg *exporters.Config, logger exporters.Logger) {
+	env := os.Getenv(otelResourceAttrsEnv)
+
+	if !resolves(cfg.Resource, env, locationAttributes) {
+		logger.Warnf("gcp metrics: no location could be resolved and this host is not on Google Cloud; "+
+			"Google's OTLP ingest rejects every point whose prometheus_target has no location. "+
+			"Set %s=location=<region> (e.g. location=us-central1)", otelResourceAttrsEnv)
+	}
+
+	// Containers rarely carry a host id: the image supplies /etc/machine-id, not
+	// the node, and it is absent on debian and alpine and present-but-empty on
+	// ubuntu. On Kubernetes that leaves instance unfilled unless the pod name is
+	// passed in, so this is the common case there rather than an edge one.
+	if !resolves(cfg.Resource, env, instanceAttributes) {
+		logger.Warnf("gcp metrics: no instance could be resolved; Google's OTLP ingest rejects every point "+
+			"whose prometheus_target has no instance. Set %s=service.instance.id=<unique-per-process> "+
+			"(on Kubernetes, the pod name via the downward API)", otelResourceAttrsEnv)
+	}
 }

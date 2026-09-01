@@ -38,7 +38,11 @@ type ShutdownFunc func(ctx context.Context) error
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
 // (Prometheus-only, or no readers) rather than crashing app start.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
-	opts := []metricSdk.Option{metricSdk.WithResource(buildResource(ctx, cfg, logger))}
+	// Resolve the resource first and publish it on cfg: pushReader runs after this,
+	// and a builder needs to see the resource its backend will actually receive.
+	cfg.Resource = buildResource(ctx, cfg, logger)
+
+	opts := []metricSdk.Option{metricSdk.WithResource(cfg.Resource)}
 
 	if r := prometheusReader(logger); r != nil {
 		opts = append(opts, metricSdk.WithReader(r))
