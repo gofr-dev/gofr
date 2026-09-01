@@ -84,7 +84,8 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
 
-	res := buildResource(context.Background(), &Config{AppName: "app"}, logging.NewMockLogger(logging.INFO))
+	// host.id is only detected for push exporters, so select one.
+	res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "otlp"}, logging.NewMockLogger(logging.INFO))
 	if res == nil {
 		t.Fatal("expected a resource")
 	}
@@ -146,3 +147,34 @@ func TestBuildResource_detectorRunsOnlyForItsExporter(t *testing.T) {
 type detectorFunc func(context.Context) (*resource.Resource, error)
 
 func (f detectorFunc) Detect(ctx context.Context) (*resource.Resource, error) { return f(ctx) }
+
+// host.id detection is not free -- on darwin the SDK shells out to ioreg, which
+// measured ~10ms. The default configuration is prometheus-only and has no use
+// for the label, so it must not pay that cost at every application start.
+func TestBuildResource_prometheusOnlySkipsHostIDDetection(t *testing.T) {
+	for _, exporter := range []string{"", "prometheus"} {
+		t.Run("exporter="+exporter, func(t *testing.T) {
+			res := buildResource(context.Background(), &Config{AppName: "app", Exporter: exporter},
+				logging.NewMockLogger(logging.INFO))
+
+			for _, kv := range res.Attributes() {
+				if string(kv.Key) == "host.id" {
+					t.Errorf("host.id was detected for a pull-only exporter; that costs a subprocess on darwin")
+				}
+			}
+
+			// The attributes that matter to every app must still be present.
+			var gotServiceName bool
+
+			for _, kv := range res.Attributes() {
+				if string(kv.Key) == "service.name" {
+					gotServiceName = true
+				}
+			}
+
+			if !gotServiceName {
+				t.Error("service.name missing")
+			}
+		})
+	}
+}

@@ -69,20 +69,31 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 	}
 
 	opts := []resource.Option{
-		// OTEL_RESOURCE_ATTRIBUTES is the standard way to supply attributes a
-		// backend requires but the framework cannot know -- Google's OTLP ingest
-		// rejects any point whose prometheus_target has no "location", and only
-		// the operator knows the region.
+		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend requires but the
+		// framework cannot know -- Google fills prometheus_target.location from it,
+		// and only the operator knows the region.
+		//
+		// metricSdk.WithResource merges resource.Environment() in as well, so this
+		// is not what makes the variable work. It is here so buildResource returns a
+		// complete resource on its own rather than one that is only correct once a
+		// particular consumer merges it.
 		resource.WithFromEnv(),
-		// host.id is the last fallback Google accepts for the required "instance"
-		// label, so detecting it here is what keeps points from being dropped on
-		// hosts where nothing else supplies one.
-		resource.WithHostID(),
 		resource.WithAttributes(attrs...),
 	}
 
-	if d, ok := lookupDetector(strings.ToLower(strings.TrimSpace(cfg.Exporter))); ok {
-		opts = append(opts, resource.WithDetectors(d))
+	// Everything below is only meaningful to a push backend, and host.id is not
+	// free: on darwin the SDK shells out to ioreg, which costs ~10ms. A
+	// prometheus-only app -- the default -- must not pay that at every start for
+	// a label only OTLP ingest reads.
+	if name := strings.ToLower(strings.TrimSpace(cfg.Exporter)); name != "" && name != exporterPrometheus {
+		// host.id is the last fallback Google accepts for the required "instance"
+		// label, so detecting it keeps points from being dropped on hosts where
+		// nothing else supplies one.
+		opts = append(opts, resource.WithHostID())
+
+		if d, ok := lookupDetector(name); ok {
+			opts = append(opts, resource.WithDetectors(d))
+		}
 	}
 
 	// resource.New returns a usable resource alongside a non-nil error for
