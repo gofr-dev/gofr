@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -16,9 +19,11 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otelTrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/version"
 )
@@ -316,7 +321,538 @@ func TestTracer_EmitsOTelHTTPSemconvAttributes(t *testing.T) {
 	assert.Equal(t, int64(http.StatusCreated), attrs[attribute.Key("http.response.status_code")].AsInt64())
 }
 
-// ---------------------------------------------------------------------------
+// TestBuildSpanName pins the OTel HTTP semconv span-name format. The
+// construction changes; the content must not.
+func TestBuildSpanName(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		route  string
+		want   string
+	}{
+		{"templated route", http.MethodGet, "/users/{id}", "GET /users/{id}"},
+		{"root", http.MethodPost, "/", "POST /"},
+		{"unmatched falls back to path", http.MethodDelete, "/nope/deeper", "DELETE /nope/deeper"},
+		{"empty route", http.MethodGet, "", "GET "},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, buildSpanName(tc.method, tc.route))
+		})
+	}
+}
+
+// spanNameSink defeats dead-code elimination: without a consumed result the
+// compiler may delete the very call being measured, and the benchmark then
+// reports the cost of nothing.
+//
+//nolint:gochecknoglobals // standard Go benchmarking idiom; a local would be optimized away.
+var spanNameSink string
+
+// TestBuildSpanNameAllocs pins the win. fmt.Sprintf costs 3 allocations per
+// request (the result string plus two boxed interface arguments); plain
+// concatenation costs exactly the one unavoidable result string.
+func TestBuildSpanNameAllocs(t *testing.T) {
+	method, route := http.MethodGet, "/users/{id}"
+
+	got := testing.AllocsPerRun(1000, func() {
+		spanNameSink = buildSpanName(method, route)
+	})
+
+	require.LessOrEqual(t, got, 1.0,
+		"span name must cost at most the one unavoidable result-string allocation")
+}
+
+// TestTracerSpanNameEndToEnd proves the span actually emitted through the
+// middleware still carries the route-template name, not a concrete path.
+func TestTracerSpanNameEndToEnd(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/42", http.NoBody))
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "GET /users/{id}", spans[0].Name)
+
+	var route string
+
+	for _, a := range spans[0].Attributes {
+		if a.Key == "http.route" {
+			route = a.Value.AsString()
+		}
+	}
+
+	require.Equal(t, "/users/{id}", route, "http.route must stay the template, not the concrete path")
+}
+
+// BenchmarkBuildSpanName is the before/after evidence for this change.
+func BenchmarkBuildSpanName(b *testing.B) {
+	method, route := http.MethodGet, "/users/{id}"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		spanNameSink = buildSpanName(method, route)
+	}
+}
+
+// TestTracerStatusAttributeStillRecorded is the guard against "optimizing" by
+// silently dropping telemetry: a sampled span must still carry the status code.
+func TestTracerStatusAttributeStillRecorded(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/teapot").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/teapot", http.NoBody))
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	var found bool
+
+	for _, a := range spans[0].Attributes {
+		if a.Key == "http.response.status_code" {
+			require.Equal(t, int64(http.StatusTeapot), a.Value.AsInt64())
+
+			found = true
+		}
+	}
+
+	require.True(t, found, "a sampled span must still record http.response.status_code")
+}
+
+// TestTracerImplicit200StillRecorded pins the normalization PR #3431 established:
+// a handler that never calls WriteHeader still reports 200, not 0.
+func TestTracerImplicit200StillRecorded(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/silent").
+		HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {})
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/silent", http.NoBody))
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	for _, a := range spans[0].Attributes {
+		if a.Key == "http.response.status_code" {
+			require.Equal(t, int64(http.StatusOK), a.Value.AsInt64())
+		}
+	}
+}
+
+// TestSpanMetaCacheIsBounded is the safety property for the cache: a route
+// template must produce ONE entry no matter how many concrete paths hit it, and
+// an unmatched (attacker-controlled) path must produce none at all.
+func TestSpanMetaCacheIsBounded(t *testing.T) {
+	tracerSpanCache.reset()
+
+	for i := range 500 {
+		spanMetaFor(http.MethodGet, "/users/{id}", true)
+		spanMetaFor(http.MethodGet, "/attacker/"+strconv.Itoa(i), false)
+	}
+
+	require.Equal(t, int64(1), tracerSpanCache.len(),
+		"one template must yield one entry, and unmatched paths must never be cached")
+}
+
+// TestSpanMetaCacheRejectsUndefinedMethods is the regression test for a
+// remotely-triggerable unbounded-memory DoS.
+//
+// The cache's safety argument was "only bounded route templates are cached", and
+// that argument was dead in a real GoFr app. gofr.go registers a
+// PathPrefix("/") catch-all, so mux.CurrentRoute is set for every request and
+// GetPathTemplate() returns "/" even for a path nothing matched -- making the
+// templated guard true always. net/http then accepts any RFC 7230 token as a
+// method, so an unauthenticated client streaming M00001, M00002, ... minted a
+// permanent *spanMeta each and grew resident memory without bound. The
+// pre-cache fmt.Sprintf path retained no state at all, so this was introduced
+// by the cache, not inherited.
+func TestSpanMetaCacheRejectsUndefinedMethods(t *testing.T) {
+	tracerSpanCache.reset()
+
+	// The exact attack: distinct made-up methods against the catch-all template.
+	for i := range 5000 {
+		spanMetaFor("M"+strconv.Itoa(i), "/", true)
+	}
+
+	require.Zero(t, tracerSpanCache.len(),
+		"an undefined method must never mint a cache entry")
+
+	// The requests still work -- they just rebuild, as every request did before
+	// the cache existed.
+	meta := spanMetaFor("M00001", "/", true)
+	require.Equal(t, "M00001 /", meta.name)
+}
+
+// TestSpanMetaCacheStillCachesStandardMethods pins that the method filter did
+// not break the optimization it protects.
+func TestSpanMetaCacheStillCachesStandardMethods(t *testing.T) {
+	tracerSpanCache.reset()
+
+	for _, m := range []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace,
+	} {
+		first := spanMetaFor(m, "/users/{id}", true)
+		require.Same(t, first, spanMetaFor(m, "/users/{id}", true),
+			"a standard method must still be served from the cache")
+	}
+
+	require.Equal(t, int64(9), tracerSpanCache.len())
+}
+
+// TestRouteCacheStopsAtItsLimit pins the backstop. The method filter is the
+// primary bound, but it is an argument about reachability; the cap is a number,
+// and process memory should rest on the number too.
+func TestRouteCacheStopsAtItsLimit(t *testing.T) {
+	var c routeCache
+
+	for i := range routeCacheLimit + 500 {
+		c.store(routeKey{method: http.MethodGet, route: "/r/" + strconv.Itoa(i)}, i)
+	}
+
+	require.Equal(t, int64(routeCacheLimit), c.len(),
+		"the cache must refuse to grow past its limit")
+
+	// Past the cap, a miss is a miss -- the caller rebuilds rather than erroring.
+	_, ok := c.load(routeKey{method: http.MethodGet, route: "/r/" + strconv.Itoa(routeCacheLimit+100)})
+	require.False(t, ok)
+}
+
+// TestTracerNonRecordingPathSkipsTheWriterWrapper covers the branch this PR
+// optimizes, which had no test at all: with a non-recording provider the
+// StatusResponseWriter must not be allocated, and the handler must see the
+// writer the server handed in.
+func TestTracerNonRecordingPathSkipsTheWriterWrapper(t *testing.T) {
+	otel.SetTracerProvider(noop.NewTracerProvider())
+
+	var got http.ResponseWriter
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/x").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { got = w })
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody))
+
+	require.NotNil(t, got)
+	assert.IsType(t, &httptest.ResponseRecorder{}, got,
+		"a non-recording span must not pay for the status-capturing wrapper")
+}
+
+// TestSpanMetaContentIsCorrect pins that caching did not change what is emitted.
+func TestSpanMetaContentIsCorrect(t *testing.T) {
+	meta := spanMetaFor(http.MethodPost, "/orders/{id}", true)
+
+	require.Equal(t, "POST /orders/{id}", meta.name)
+
+	// Read the attributes back the way the SDK does, by resolving the start
+	// options, rather than from a field the middleware itself never consults.
+	cfg := otelTrace.NewSpanStartConfig(meta.startOpts...)
+	attrs := cfg.Attributes()
+	require.Len(t, attrs, 2)
+	require.Equal(t, attribute.Key("http.request.method"), attrs[0].Key)
+	require.Equal(t, "POST", attrs[0].Value.AsString())
+	require.Equal(t, attribute.Key("http.route"), attrs[1].Key)
+	require.Equal(t, "/orders/{id}", attrs[1].Value.AsString())
+
+	// A second call must return the identical cached instance.
+	require.Same(t, meta, spanMetaFor(http.MethodPost, "/orders/{id}", true))
+}
+
+// TestSpanMetaConcurrent runs the cache under contention; the race detector is
+// the point of this test.
+func TestSpanMetaConcurrent(t *testing.T) {
+	var (
+		wg  sync.WaitGroup
+		bad atomic.Int64
+	)
+
+	// require calls FailNow, which must only run on the test goroutine, so the
+	// workers record failures and the assertion happens after Wait.
+	for g := range 16 {
+		wg.Add(1)
+
+		go func(g int) {
+			defer wg.Done()
+
+			for range 100 {
+				m := spanMetaFor(http.MethodGet, "/c/"+strconv.Itoa(g%4)+"/{id}", true)
+				if m == nil || m.name == "" {
+					bad.Add(1)
+
+					continue
+				}
+
+				cfg := otelTrace.NewSpanStartConfig(m.startOpts...)
+				if len(cfg.Attributes()) != 2 {
+					bad.Add(1)
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	require.Zero(t, bad.Load(), "cache returned an incomplete spanMeta under contention")
+}
+
+// TestHeaderCarrierMatchesHeaderCarrier pins that the carrier resolves exactly
+// what propagation.HeaderCarrier resolves, for the propagation headers and for
+// an unrecognized key that must fall through to the ordinary lookup.
+func TestHeaderCarrierMatchesHeaderCarrier(t *testing.T) {
+	h := http.Header{}
+	// Set with the canonical spellings; the carrier is still queried with the
+	// lowercase names the propagators actually use, which is the point.
+	h.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	h.Set("Tracestate", "vendor=value")
+	h.Set("Baggage", "k=v")
+	h.Set("X-Custom-Propagator", "custom")
+
+	ours := headerCarrier(h)
+	theirs := propagation.HeaderCarrier(h)
+
+	for _, key := range []string{"traceparent", "tracestate", "baggage", "X-Custom-Propagator", "absent"} {
+		require.Equal(t, theirs.Get(key), ours.Get(key), "key %q must resolve identically", key)
+	}
+
+	require.ElementsMatch(t, theirs.Keys(), ours.Keys())
+}
+
+// TestTracerPropagatesIncomingTraceContext is the feature guard: an incoming
+// traceparent must still be adopted as the parent of the server span.
+func TestTracerPropagatesIncomingTraceContext(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	// Both globals are restored. Without this the recording provider and the
+	// Baggage-less propagator leak into every later test and benchmark in the
+	// package -- tests run before benchmarks, so BenchmarkTracer would measure
+	// the RECORDING path while documenting the non-recording one, and feed this
+	// exporter for the rest of the run.
+	t.Cleanup(func() {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{}))
+	})
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/x").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+	req.Header.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, w3cFixtureTraceID, spans[0].SpanContext.TraceID().String(),
+		"the incoming trace ID must be adopted")
+	require.Equal(t, w3cFixtureParentSpan, spans[0].Parent.SpanID().String(),
+		"the incoming span must become the parent")
+}
+
+// tracerBenchWriter keeps a header map and discards the rest, so the benchmark measures the
+// middleware rather than a recorder.
+type tracerBenchWriter struct{ h http.Header }
+
+func (w *tracerBenchWriter) Header() http.Header       { return w.h }
+func (*tracerBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*tracerBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkTracer measures the tracing middleware on the path every request takes.
+//
+// The default provider is non-recording, which is the common production case for a service that
+// samples: the span is still started on every request, so whatever the middleware builds up front is
+// paid for whether or not anything records it. Allocations are the metric that matters.
+func BenchmarkTracer(b *testing.B) {
+	// Pin the non-recording provider this benchmark is about. Package state is
+	// shared and tests run first, so inheriting whatever a previous test left
+	// installed would silently measure the recording path instead.
+	otel.SetTracerProvider(noop.NewTracerProvider())
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkTracer_Recording is the case the per-route cache targets: a provider that actually
+// records, so the span name and attributes built by the middleware are used rather than discarded.
+//
+// BenchmarkTracer above covers the opposite case, a non-recording provider, because a sampling
+// service runs both and the middleware must not be quietly worse in either.
+func BenchmarkTracer_Recording(b *testing.B) {
+	tp := trace.NewTracerProvider(
+		trace.WithResource(resource.Empty()),
+		trace.WithSampler(trace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(tp)
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}
+
+// TestHeaderCarrierIsAFaithfulValuesGetter is the regression test for silent
+// baggage loss.
+//
+// headerCarrier replaces propagation.HeaderCarrier to avoid canonicalizing the
+// lookup key on every request. The stdlib type it replaces satisfies
+// propagation.ValuesGetter, and propagation.Baggage.Extract type-asserts to that
+// interface to combine ALL values of the Baggage header. Implementing only
+// Get/Set/Keys failed the assertion, so Extract fell back to the single-value Get
+// and dropped every baggage member after the first -- silently, and only when a
+// request carried more than one Baggage header, which is legal per W3C and is
+// what proxies and service meshes commonly emit.
+//
+// The pre-existing equivalence test only compared Get and Keys, so it could not
+// catch this.
+func TestHeaderCarrierIsAFaithfulValuesGetter(t *testing.T) {
+	require.Implements(t, (*propagation.ValuesGetter)(nil), headerCarrier{},
+		"a carrier replacing propagation.HeaderCarrier must satisfy every interface it does")
+
+	tests := []struct {
+		name    string
+		values  []string
+		wantLen int
+	}{
+		{"multiple Baggage headers", []string{"k1=v1", "k2=v2", "k3=v3"}, 3},
+		{"two Baggage headers", []string{"a=1", "b=2"}, 2},
+		{"single header carrying several members", []string{"a=1,b=2"}, 2},
+		{"single header single member", []string{"only=1"}, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := http.Header{}
+			for _, v := range tt.values {
+				h.Add("Baggage", v)
+			}
+
+			prop := propagation.Baggage{}
+
+			std := baggage.FromContext(prop.Extract(t.Context(), propagation.HeaderCarrier(h)))
+			got := baggage.FromContext(prop.Extract(t.Context(), headerCarrier(h)))
+
+			require.Len(t, std.Members(), tt.wantLen, "sanity: the stdlib carrier must see every member")
+			assert.Len(t, got.Members(), tt.wantLen,
+				"headerCarrier must extract exactly what the stdlib carrier does")
+
+			// Compare member-by-member, since Baggage.String() ordering is not stable.
+			for _, m := range std.Members() {
+				assert.Equal(t, m.Value(), got.Member(m.Key()).Value(),
+					"member %q must survive extraction", m.Key())
+			}
+		})
+	}
+}
+
+// TestHeaderCarrierValuesMatchesStdlib pins Values itself across the key shapes
+// the propagators actually use, including the canonicalization fast path.
+func TestHeaderCarrierValuesMatchesStdlib(t *testing.T) {
+	h := http.Header{}
+	h.Add("Baggage", "a=1")
+	h.Add("Baggage", "b=2")
+	h.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	h.Add("X-Custom", "one")
+	h.Add("X-Custom", "two")
+
+	for _, key := range []string{headerBaggage, headerTraceparent, headerTracestate, "x-custom", "absent"} {
+		assert.Equal(t, propagation.HeaderCarrier(h).Values(key), headerCarrier(h).Values(key),
+			"Values(%q) must match the stdlib carrier", key)
+	}
+}
+
+// BenchmarkTracer_WithPropagationHeaders is the variant that actually exercises
+// headerCarrier.
+//
+// BenchmarkTracer and BenchmarkTracer_Recording send a bare request, so the
+// propagators find nothing and the canonicalization this PR avoids never runs --
+// their alloc delta comes from the per-route cache and the IsRecording gate
+// alone. A request carrying traceparent/tracestate/baggage is what a service
+// behind a mesh or an upstream GoFr service actually receives, and it is the only
+// shape where the carrier's saving is visible.
+func BenchmarkTracer_WithPropagationHeaders(b *testing.B) {
+	otel.SetTracerProvider(noop.NewTracerProvider())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{}))
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	req.Header.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	req.Header.Set("Tracestate", "vendor=value")
+	req.Header.Add("Baggage", "tenant=acme")
+	req.Header.Add("Baggage", "region=eu")
+
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}
+
 // Characterization suite for the Tracer HTTP middleware.
 //
 // Every identifier below is prefixed with `tracerChar` so this file can be
