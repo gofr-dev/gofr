@@ -6,6 +6,8 @@ on:
   push:
     tags:
       - "v*.*.*"
+    branches:
+      - "release/website"
 
 # Serialize deploys without ever cancelling one. `cancel-in-progress: false` is
 # deliberate and the opposite of go.yml: killing a run between `docker push` and
