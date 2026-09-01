@@ -175,6 +175,14 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	done := make(chan handlerOutcome, 1)
 	panicked := make(chan struct{})
 
+	// Snapshot the context to watch for cancellation before spawning the
+	// handler goroutine below. h.function may reassign c.Context while it
+	// runs (App.WebSocket does, to thread the connection through it) —
+	// reading c.Context in the select instead of here would race that
+	// write. watchCtx is a local copy this goroutine alone reads, so the
+	// write in the spawned goroutine and this read never overlap.
+	watchCtx := c.Context
+
 	go func() {
 		defer func() {
 			panicRecoveryHandler(recover(), h.container.Logger, panicked)
@@ -187,13 +195,13 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	}()
 
 	select {
-	case <-c.Context.Done():
+	case <-watchCtx.Done():
 		// Server-side timeout or client cancellation. Map to the matching
 		// gofrHTTP error so Respond emits 408 (timeout) or 499 (client
 		// closed).
 		err = gofrHTTP.ErrorRequestTimeout{}
 
-		if errors.Is(c.Context.Err(), context.Canceled) {
+		if errors.Is(watchCtx.Err(), context.Canceled) {
 			err = gofrHTTP.ErrorClientClosedRequest{}
 		}
 	case out := <-done:
