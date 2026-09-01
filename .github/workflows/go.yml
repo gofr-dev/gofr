@@ -22,12 +22,29 @@ on:
       - 'docs/**'  # Ignore changes to docs folder
       - '**/*.md'
 
+# One in-flight run per ref. Pushing twice to a PR branch otherwise starts a
+# second full 14-job matrix — including the Kafka/Redis/MySQL services and the
+# Zipkin/MinIO containers — while the first is still running, and only the
+# newer result is ever looked at.
+#
+# Cancellation is limited to pull_request on purpose. On `development` the runs
+# are serialized merges rather than rapid re-pushes, so there is little to save,
+# and `upload_coverage` publishes to qlty per push — cancelling that loses the
+# coverage data point for a commit that will not be built again.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Define the jobs that this workflow will run
 jobs:
   # Job for testing the examples directory
   Example-Unit-Testing:
     name: Example Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    # Bounds a hung job at 30m instead of GitHub's 6h default. The retry action
+    # below caps the test step itself (5m x 2 attempts), but `Get dependencies`,
+    # the MinIO readiness poll and the s3 example test are otherwise unbounded.
+    timeout-minutes: 30
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
@@ -38,6 +55,14 @@ jobs:
     # Define service containers that tests depend on
     services:
       # Kafka service
+      #
+      # NOTE: the `bitnamilegacy` namespace is a frozen archive — Bitnami state
+      # it receives no further updates and "may be removed in the future". This
+      # image therefore still needs to move (to apache/kafka, or a mirror under
+      # gofr-dev), which is tracked separately in #3868: that migration rewrites
+      # the whole KAFKA_CFG_* block below, since those names are a Bitnami
+      # convention, and it cannot be validated without a live CI run. Kept here
+      # deliberately so this PR stays reviewable.
       kafka:
         image: bitnamilegacy/kafka:3.4.1
         ports:
@@ -54,13 +79,30 @@ jobs:
           KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
+        # kafka-topics.sh is on PATH in this image (/opt/bitnami/kafka/bin) and
+        # returns non-zero until the broker accepts connections. The 10s
+        # timeout is deliberate — the check starts a JVM, so the 5s used for
+        # redis/mysql would risk timing out on a broker that is actually fine.
+        options: >-
+          --health-cmd "kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list"
+          --health-interval=10s
+          --health-timeout=10s
+          --health-retries=10
 
       # Redis service
       redis:
         image: redis:7.0.5
         ports:
           - "2002:6379"
-        options: "--entrypoint redis-server"
+        # Without a health check the runner waits for the container to start,
+        # not for the service inside it to accept connections. The health
+        # options are appended to the existing --entrypoint override.
+        options: >-
+          --entrypoint redis-server
+          --health-cmd "redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
       # MySQL service
       mysql:
@@ -70,6 +112,14 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
+        # MySQL is the one that takes meaningfully long to accept connections
+        # after the container starts, so it is the one most likely to have been
+        # racing the tests.
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     # Steps to execute for this job
     steps:
@@ -95,8 +145,22 @@ jobs:
         run: |
           go mod download
 
+      # Same treatment as the MinIO step below: pin the image and wait for the
+      # service, not for `docker run -d` to return. `:latest` also meant the
+      # image could change under the repo without any commit.
       - name: Start Zipkin
-        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+        run: |
+          docker run -d --name zipkin -p 2005:9411 \
+            openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:2005/health >/dev/null; then
+              echo "Zipkin is ready"; exit 0
+            fi
+            echo "waiting for Zipkin... ($i)"; sleep 2
+          done
+          echo "::error::Zipkin failed to become ready after 60s"
+          docker logs zipkin || true
+          exit 1
 
       # MinIO can't run as a GitHub Actions `services:` container because the
       # stock image needs a `server /data` command, which services can't set.
@@ -124,7 +188,7 @@ jobs:
 
       - name: Test
         id: test
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           # No retry. The example tests used to race their own server's boot — every one of them
@@ -174,6 +238,7 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         go-version: ['1.26','1.25', '1.24']
@@ -204,7 +269,7 @@ jobs:
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -261,6 +326,7 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # This job runs after both Example and PKG testing are complete
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
@@ -299,6 +365,7 @@ jobs:
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         go-version:  ['1.26','1.25', '1.24']
@@ -333,7 +400,7 @@ jobs:
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -370,9 +437,15 @@ jobs:
               # Extract module name (replace / with _)
               module_name=$(echo "$module" | tr "/" "_")
 
-              # Download dependencies for the submodule
+              # Download dependencies for the submodule. Deliberately no
+              # `go mod tidy` here: tidy rewrites go.mod/go.sum in place, so the
+              # tests would run against whatever tidy resolved at that moment
+              # rather than against what the repo actually declares. A submodule
+              # with an incomplete committed go.mod would be silently repaired
+              # in the runner and pass, then fail for anyone who clones it —
+              # CI quietly fixing the exact defect it exists to report. Tidiness
+              # is checked without mutation in the code_quality job instead.
               go mod download
-              go mod tidy
 
               # Run tests with a focus on failed tests first
               go test ./... -v -short -coverprofile="${module_name}.cov" -coverpkg=./...
@@ -395,6 +468,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
       QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
@@ -441,6 +515,9 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
+    # golangci-lint gets --timeout=5m below; this bounds checkout, module
+    # download and the changed-files scan around it.
+    timeout-minutes: 20
     outputs:
       modules: ${{ steps.changed-submodules.outputs.modules }}
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
@@ -459,10 +536,33 @@ jobs:
       - name: Get dependencies
         run: go mod download
 
+      # Replaces the signal the `go mod tidy` in Submodule-Unit-Testing was
+      # accidentally providing. `-diff` (Go 1.23+) reports what tidy would
+      # change and exits non-zero, without writing anything — so an untidy
+      # go.mod is now reported instead of silently repaired mid-test-run.
+      #
+      # Scoped to the pkg/ modules, which are the ones that ship. All of them
+      # are tidy as of this change; the examples are excluded because
+      # examples/using-gcp-metrics is currently untidy and settling that is a
+      # dependency bump, not a CI fix.
+      - name: Check submodule go.mod tidiness
+        run: |
+          rc=0
+          while read -r mod; do
+            dir=$(dirname "$mod")
+            if ! out=$(cd "$dir" && go mod tidy -diff 2>&1); then
+              echo "::error file=$mod::$dir has an untidy go.mod/go.sum — run 'go mod tidy' there"
+              echo "$out"
+              rc=1
+            fi
+          done < <(find pkg -name go.mod)
+          if [ "$rc" -eq 0 ]; then echo "✅ all pkg/ submodules are tidy"; fi
+          exit $rc
+
       # Use the official golangci-lint action for the root module
       # This action automatically detects changed files and only reports new issues
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           only-new-issues: true
@@ -472,7 +572,7 @@ jobs:
       # This implements a changed-files based approach as suggested by the maintainer
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@v47
+        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
         with:
           files: |
             pkg/**/*.go
@@ -534,6 +634,9 @@ jobs:
   lint_changed_submodules:
     name: Lint Submodules🔍
     runs-on: ubuntu-latest
+    # Must exceed the --timeout=9m passed to golangci-lint below, so a genuine
+    # lint timeout still reports as a lint failure rather than a killed job.
+    timeout-minutes: 20
     needs: code_quality
     if: needs.code_quality.outputs.has_modules == 'true'
     strategy:
@@ -558,7 +661,7 @@ jobs:
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: ${{ matrix.module }}
@@ -569,6 +672,7 @@ jobs:
   linting_party:
     name: Linting Party🥳
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out code
         uses: actions/checkout@v7

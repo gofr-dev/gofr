@@ -101,14 +101,9 @@ func TestGetLevelFromString(t *testing.T) {
 }
 
 func Test_changeLevel(t *testing.T) {
-	l := logger{
-		level:      INFO,
-		normalOut:  os.Stdout,
-		errorOut:   os.Stderr,
-		isTerminal: false,
-	}
+	l := newLoggerAt(INFO, os.Stdout, os.Stderr)
 
 	l.ChangeLevel(ERROR)
 
-	assert.Equal(t, ERROR, l.level, "Test_changeLevel failed! expected level to be error ")
+	assert.Equal(t, ERROR, Level(l.level.Load()), "Test_changeLevel failed! expected level to be error ")
 }

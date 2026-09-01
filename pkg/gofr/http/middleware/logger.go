@@ -135,9 +135,27 @@ func colorForStatusCode(status int) int {
 	return 0
 }
 
+// canonicalCorrelationID is the canonical spelling of the correlation-ID header
+// -- textproto.CanonicalMIMEHeaderKey("X-Correlation-ID") -- written out so no
+// request pays to build it and nothing can reassign it. The equivalence is
+// pinned by TestCorrelationIDHeaderSpellingUnchanged.
+const canonicalCorrelationID = "X-Correlation-Id"
+
 type logger interface {
 	Log(...any)
 	Error(...any)
+}
+
+// logEnabler is the optional fast-path interface. Building a request-log entry
+// costs a struct, a formatted timestamp and a client-IP lookup, all before the
+// logger gets to decide whether the entry is emitted at all. A logger that can
+// answer that question first lets the middleware skip the work entirely.
+//
+// It is deliberately expressed without the logging package's Level type so this
+// middleware keeps its minimal logger contract. An implementation that does not
+// provide it behaves exactly as before.
+type logEnabler interface {
+	LogEnabled() bool
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
@@ -179,16 +197,22 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// byte-identical values to the pre-PR-7 wire shape.
 			sc := trace.SpanFromContext(r.Context()).SpanContext()
 
-			var traceID, spanID string
+			// Only the trace ID is needed before the handler runs, for the
+			// X-Correlation-ID response header. The span ID is used solely
+			// inside the log entry, so it is resolved in handleRequestLog --
+			// after the level gate -- and costs nothing on a request whose
+			// entry is discarded.
+			traceID := zeroTraceID
 			if sc.IsValid() {
 				traceID = sc.TraceID().String()
-				spanID = sc.SpanID().String()
-			} else {
-				traceID = zeroTraceID
-				spanID = zeroSpanID
 			}
 
-			srw.Header().Set("X-Correlation-ID", traceID)
+			// Assigned rather than Set: Header.Set canonicalizes its key on
+			// every call, and "X-Correlation-ID" is not already in canonical
+			// form ("Id", not "ID"), so each request paid for building the
+			// canonical string. The wire format is unchanged -- net/http emits
+			// the canonical spelling either way.
+			srw.Header()[canonicalCorrelationID] = []string{traceID}
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
@@ -201,15 +225,30 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			defer handleRequestLog(srw, r, start, traceID, sc, logger)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
 }
 
-func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID string,
+	sc trace.SpanContext, logger logger) {
 	status := srw.Status()
+
+	// A server error is reported through Error, which survives every level below
+	// FATAL, so gating it on the informational level would be wrong. Only the
+	// informational path can be skipped.
+	if status < http.StatusInternalServerError {
+		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
+			return
+		}
+	}
+
+	spanID := zeroSpanID
+	if sc.IsValid() {
+		spanID = sc.SpanID().String()
+	}
 
 	l := &RequestLog{
 		TraceID:      traceID,
