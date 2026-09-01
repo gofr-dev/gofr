@@ -156,12 +156,12 @@ func TestRateLimiter_WellKnownPrefixIsRateLimited(t *testing.T) {
 	}))
 
 	// A path that only shares the well-known prefix is not exempt, so it consumes the bucket
-	req := httptest.NewRequest(http.MethodGet, "/.well-knownprivate", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-knownprivate", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code, "First request should succeed")
 
-	req = httptest.NewRequest(http.MethodGet, "/.well-knownprivate", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-knownprivate", http.NoBody)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Prefixed path should be rate limited")
@@ -170,7 +170,7 @@ func TestRateLimiter_WellKnownPrefixIsRateLimited(t *testing.T) {
 
 	// Genuine well-known endpoints stay exempt even once the bucket is empty
 	for i := 0; i < 5; i++ {
-		req = httptest.NewRequest(http.MethodGet, "/.well-known/alive", http.NoBody)
+		req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/alive", http.NoBody)
 		rr = httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code, "Well-known endpoint should not be rate limited")
