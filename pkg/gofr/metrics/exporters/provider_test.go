@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -74,3 +76,73 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 		t.Errorf("expected actionable 'blank import' guidance, got: %q", out)
 	}
 }
+
+// Google's OTLP ingest maps points onto prometheus_target and rejects any whose
+// "location" or "instance" label is empty, so the resource has to carry a source
+// for both. instance falls back to host.id, which is detected; location can only
+// come from the operator, via the standard OTel environment variable.
+func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
+
+	res := buildResource(context.Background(), &Config{AppName: "app"}, logging.NewMockLogger(logging.INFO))
+	if res == nil {
+		t.Fatal("expected a resource")
+	}
+
+	got := map[string]string{}
+	for _, kv := range res.Attributes() {
+		got[string(kv.Key)] = kv.Value.String()
+	}
+
+	if got["location"] != "us-central1" {
+		t.Errorf("location = %q, want %q (OTEL_RESOURCE_ATTRIBUTES must reach the resource)", got["location"], "us-central1")
+	}
+
+	if got["host.id"] == "" {
+		t.Error("host.id is empty; it is the last fallback Google accepts for the required instance label")
+	}
+
+	// The attributes that were already there must survive the merge.
+	if got["service.name"] != "app" {
+		t.Errorf("service.name = %q, want %q", got["service.name"], "app")
+	}
+
+	if got["framework_version"] == "" {
+		t.Error("framework_version was dropped")
+	}
+}
+
+// A registered detector must only run for the exporter it belongs to, so that a
+// Prometheus-only app never reaches for a cloud metadata server.
+func TestBuildResource_detectorRunsOnlyForItsExporter(t *testing.T) {
+	var called bool
+
+	RegisterResourceDetector("detector-probe", detectorFunc(func(context.Context) (*resource.Resource, error) {
+		called = true
+		return resource.NewWithAttributes("", attribute.String("probe", "yes")), nil
+	}))
+
+	buildResource(context.Background(), &Config{AppName: "app"}, logging.NewMockLogger(logging.INFO))
+
+	if called {
+		t.Error("detector ran for an unrelated exporter")
+	}
+
+	res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "detector-probe"}, logging.NewMockLogger(logging.INFO))
+
+	if !called {
+		t.Fatal("detector did not run for its own exporter")
+	}
+
+	for _, kv := range res.Attributes() {
+		if string(kv.Key) == "probe" {
+			return
+		}
+	}
+
+	t.Error("detector attributes did not reach the resource")
+}
+
+type detectorFunc func(context.Context) (*resource.Resource, error)
+
+func (f detectorFunc) Detect(ctx context.Context) (*resource.Resource, error) { return f(ctx) }

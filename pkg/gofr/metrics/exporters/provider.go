@@ -38,7 +38,7 @@ type ShutdownFunc func(ctx context.Context) error
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
 // (Prometheus-only, or no readers) rather than crashing app start.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
-	opts := []metricSdk.Option{metricSdk.WithResource(buildResource(cfg))}
+	opts := []metricSdk.Option{metricSdk.WithResource(buildResource(ctx, cfg, logger))}
 
 	if r := prometheusReader(logger); r != nil {
 		opts = append(opts, metricSdk.WithReader(r))
@@ -62,12 +62,43 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	return shutdown, meter
 }
 
-func buildResource(cfg *Config) *resource.Resource {
-	return resource.NewWithAttributes(
-		semconv.SchemaURL,
+func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Resource {
+	attrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(cfg.AppName),
 		attribute.String("framework_version", version.Framework),
-	)
+	}
+
+	opts := []resource.Option{
+		// OTEL_RESOURCE_ATTRIBUTES is the standard way to supply attributes a
+		// backend requires but the framework cannot know -- Google's OTLP ingest
+		// rejects any point whose prometheus_target has no "location", and only
+		// the operator knows the region.
+		resource.WithFromEnv(),
+		// host.id is the last fallback Google accepts for the required "instance"
+		// label, so detecting it here is what keeps points from being dropped on
+		// hosts where nothing else supplies one.
+		resource.WithHostID(),
+		resource.WithAttributes(attrs...),
+	}
+
+	if d, ok := lookupDetector(strings.ToLower(strings.TrimSpace(cfg.Exporter))); ok {
+		opts = append(opts, resource.WithDetectors(d))
+	}
+
+	// resource.New returns a usable resource alongside a non-nil error for
+	// partial failures (a detector that cannot reach a metadata server off-GCP,
+	// say). Degrade loudly but keep whatever was resolved rather than dropping
+	// the service name with it.
+	res, err := resource.New(ctx, opts...)
+	if err != nil {
+		logger.Warnf("metrics: resource detection was incomplete: %v", err)
+	}
+
+	if res == nil {
+		return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	}
+
+	return res
 }
 
 func prometheusReader(logger Logger) metricSdk.Reader {
