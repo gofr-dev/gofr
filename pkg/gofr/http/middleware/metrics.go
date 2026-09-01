@@ -202,11 +202,16 @@ func (o *optionRecorder) record(path, method string, status int, seconds float64
 	key := statusRouteKey{path: path, method: method, status: status}
 
 	if cacheable {
+		// The assertion's ok is honoured rather than discarded: a failed one would
+		// leave opts nil and record the measurement with NO attributes, which is a
+		// silently unlabelled time series rather than a visible failure. Falling
+		// through rebuilds instead.
 		if v, ok := o.cache.load(key); ok {
-			opts, _ := v.([]metric.RecordOption)
-			o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
+			if opts, ok := v.([]metric.RecordOption); ok {
+				o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
 
-			return
+				return
+			}
 		}
 	}
 
