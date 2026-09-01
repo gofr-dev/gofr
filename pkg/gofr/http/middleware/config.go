@@ -18,6 +18,10 @@ const (
 	keyAccessControlAllowCredentials = "ACCESS_CONTROL_ALLOW_CREDENTIALS"
 )
 
+// allowCredentialsTrue is the only value the Fetch standard recognizes for
+// Access-Control-Allow-Credentials.
+const allowCredentialsTrue = "true"
+
 type Config struct {
 	CorsHeaders map[string]string
 	LogProbes   LogProbes
@@ -100,7 +104,7 @@ func shouldEmitCORSHeader(key, val string, logger configLogger) bool {
 	case keyAccessControlAllowCredentials:
 		// The Fetch standard matches this header against the literal "true", so the other
 		// spellings strconv.ParseBool accepts (1, t, TRUE) are discarded by the browser.
-		if val == "true" {
+		if val == allowCredentialsTrue {
 			return true
 		}
 
