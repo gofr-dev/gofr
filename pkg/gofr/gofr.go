@@ -405,6 +405,10 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	a.httpRegistered = true
 
+	// Normalize the endpoint up front so every error log below reports the same
+	// '/endpoint' form (previously the getwd and os.Stat logs disagreed).
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
 	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
 		filePath = "./" + filePath
 	}
@@ -421,8 +425,6 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 		filePath = filepath.Join(currentWorkingDir, filePath)
 	}
-
-	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
 
 	if _, err := os.Stat(filePath); err != nil {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)

@@ -1326,8 +1326,7 @@ func TestStaticHandlerGetwdError(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "failed to get current working directory")
-	// The endpoint is logged before its leading "/" is added, so it appears as 'gofrTest'.
-	assert.Contains(t, logs, "error in registering 'gofrTest' static endpoint")
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
