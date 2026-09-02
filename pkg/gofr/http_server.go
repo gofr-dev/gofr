@@ -18,11 +18,20 @@ import (
 )
 
 type httpServer struct {
-	router      *gofrHTTP.Router
-	port        int
-	ws          *websocket.Manager
-	srvMu       sync.Mutex // guards srv, which run() writes on the serve goroutine and Shutdown() reads on the caller goroutine
-	srv         *http.Server
+	router *gofrHTTP.Router
+	port   int
+	ws     *websocket.Manager
+	// srvMu guards srv and stopped. run() writes them on the serve goroutine and
+	// Shutdown() on the caller goroutine, and the two decide between them — under
+	// this lock — whether the server ever comes up. See the note on stopped.
+	srvMu sync.Mutex
+	srv   *http.Server
+	// stopped records that Shutdown has been called. It is sticky: once set, run()
+	// will not bring a listener up. srv == nil means "not started", which is not
+	// the same as "will not start" — without this flag a Shutdown that lands before
+	// run() publishes srv reports success and stops nothing, and the listener that
+	// follows serves with no way left to stop it.
+	stopped     bool
 	certFile    string
 	keyFile     string
 	staticFiles map[string]string
@@ -90,6 +99,13 @@ func (s *httpServer) run(c *container.Container) {
 
 	s.srvMu.Lock()
 
+	if s.stopped {
+		s.srvMu.Unlock()
+		c.Logf("Server was shut down before it started on port: %d", s.port)
+
+		return
+	}
+
 	if s.srv != nil {
 		s.srvMu.Unlock()
 		c.Logf("Server already running on port: %d", s.port)
@@ -133,9 +149,12 @@ func (s *httpServer) run(c *container.Container) {
 
 func (s *httpServer) Shutdown(ctx context.Context) error {
 	s.srvMu.Lock()
+	s.stopped = true
 	srv := s.srv
 	s.srvMu.Unlock()
 
+	// Nothing has been published yet, so there is nothing to stop — and because
+	// stopped was set under the same lock, run() will not start one either.
 	if srv == nil {
 		return nil
 	}
