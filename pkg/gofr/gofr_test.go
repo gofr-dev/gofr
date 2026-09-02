@@ -1299,6 +1299,36 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+func TestStaticHandlerGetwdError(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	// Switch into a temporary directory and remove it so that os.Getwd()
+	// inside AddStaticFiles fails when resolving the relative "./" path.
+	// t.Chdir restores the original working directory at test cleanup.
+	tmpDir := t.TempDir()
+
+	t.Chdir(tmpDir)
+
+	require.NoError(t, os.Remove(tmpDir))
+
+	// On some platforms (e.g. macOS) the kernel still resolves the path of an
+	// unlinked working directory, so os.Getwd() does not fail. Skip there since
+	// the error branch cannot be exercised.
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("os.Getwd() does not fail for a removed working directory on this platform")
+	}
+
+	// The app (and its logger) must be created inside StderrOutputForFunc so the
+	// logger writes to the captured stderr rather than the real one.
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.AddStaticFiles("gofrTest", "./somedir")
+	})
+
+	assert.Contains(t, logs, "failed to get current working directory")
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
