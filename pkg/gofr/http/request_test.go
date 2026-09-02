@@ -1139,9 +1139,28 @@ func TestBind_EmptyBodyWithUnsupportedTypeIsNoOp(t *testing.T) {
 	}
 }
 
+// TestBindPredicate_SingleSource pins the invariant that isBindableMediaType
+// and Bind read from the same source: for every media type in
+// bindersByMediaType, the predicate returns true, and there is no accepted
+// media type Bind cannot dispatch on. Kills the drift class this PR opened —
+// a new binder must be added to the map, and both callers pick it up at once.
+func TestBindPredicate_SingleSource(t *testing.T) {
+	require.NotEmpty(t, bindersByMediaType, "bindersByMediaType must not be empty")
+
+	for ct, binder := range bindersByMediaType {
+		t.Run(ct, func(t *testing.T) {
+			require.True(t, isBindableMediaType(ct),
+				"isBindableMediaType must accept every media type in bindersByMediaType")
+			require.NotNil(t, binder,
+				"every entry in bindersByMediaType must have a non-nil binder")
+		})
+	}
+}
+
 // TestValidateQueryContentType pins RFC 10008: a QUERY request MUST carry a
 // Content-Type the server can interpret. A missing Content-Type is a 400 and a
-// present-but-unsupported one is a 415. The accepted set mirrors Bind exactly.
+// present-but-unsupported one is a 415. The accepted set is the same one Bind
+// dispatches on (see TestBindPredicate_SingleSource).
 func TestValidateQueryContentType(t *testing.T) {
 	tests := []struct {
 		name        string
