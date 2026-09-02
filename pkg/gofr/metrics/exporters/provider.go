@@ -85,6 +85,15 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		resource.WithAttributes(attrs...),
 	}
 
+	// Attributes resolved through the GoFr config layer are applied after
+	// WithFromEnv, so they win per key. WithFromEnv only sees the process
+	// environment; these also carry values from configs/.env and anywhere else
+	// config.Config reads from, which is where a GoFr deployment usually puts
+	// them.
+	if cfgAttrs := parseResourceAttributes(cfg.ResourceAttributes); len(cfgAttrs) > 0 {
+		opts = append(opts, resource.WithAttributes(cfgAttrs...))
+	}
+
 	// Everything below is only meaningful to a push backend, and host.id is not
 	// free: on darwin the SDK shells out to ioreg, which costs ~10ms. A
 	// prometheus-only app -- the default -- must not pay that at every start for

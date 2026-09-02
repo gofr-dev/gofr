@@ -105,7 +105,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  OTEL_RESOURCE_ATTRIBUTES
--  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1"). Read through the GoFr config layer, so a value in configs/.env works as well as one exported into the process.
+
+---
+
+-  METRICS_RESOURCE_ATTRIBUTES
+-  The GoFr-native spelling of the above, same comma-separated key=value format. Takes priority per key when both are set.
 
 ---
 

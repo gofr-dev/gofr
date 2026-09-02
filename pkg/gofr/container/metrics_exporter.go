@@ -57,6 +57,8 @@ func metricsExporterConfig(conf config.Config, appName, appVersion string, logge
 		Temporality: metricsTemporality(conf),
 		Headers:     headers,
 		Insecure:    insecure,
+
+		ResourceAttributes: metricsResourceAttributes(conf),
 	}
 }
 
@@ -99,6 +101,35 @@ func metricsTemporality(conf config.Config) string {
 	}
 
 	return defaultTemporality
+}
+
+// metricsResourceAttributes resolves the resource attributes describing this
+// deployment, in the OpenTelemetry "key1=value1,key2=value2" format.
+//
+// They are what identifies the time series to the backend, and some backends
+// reject points whose identifying labels resolve empty. GoFr detects what it can
+// from the environment (see exporters.buildResource); these are the override for
+// what detection cannot reach.
+//
+// Both the GoFr-native METRICS_RESOURCE_ATTRIBUTES and the OpenTelemetry
+// standard OTEL_RESOURCE_ATTRIBUTES are honored, and both are read via conf.Get
+// rather than by letting the SDK read the environment directly, so a value set
+// in a .env file works the same as one exported into the process. They are
+// concatenated with the GoFr-native value last, because attribute sets are
+// last-value-wins: GoFr config wins per key, without discarding the OTEL_ keys
+// it does not mention.
+func metricsResourceAttributes(conf config.Config) string {
+	otelAttrs := strings.TrimSpace(conf.Get("OTEL_RESOURCE_ATTRIBUTES"))
+	gofrAttrs := strings.TrimSpace(conf.Get("METRICS_RESOURCE_ATTRIBUTES"))
+
+	switch {
+	case otelAttrs == "":
+		return gofrAttrs
+	case gofrAttrs == "":
+		return otelAttrs
+	default:
+		return otelAttrs + "," + gofrAttrs
+	}
 }
 
 // metricsHeaders builds export headers from METRICS_HEADERS (OTEL "k=v,k=v"
