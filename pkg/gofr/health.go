@@ -22,8 +22,9 @@ func healthHandler(c *Context) (any, error) {
 // unreachable case where the aggregate key is missing or not a string.
 //
 // This stays unexported here rather than being a method on Container: Context embeds
-// *container.Container, so an exported method would be promoted onto every handler's ctx, and
-// Health does no caching — a per-request call would sweep every datasource in the hot path.
+// *container.Container, so an exported method would be promoted onto every handler's ctx, and a
+// per-request call sweeps every datasource unless HEALTH_CACHE_TTL is set, which it is not by
+// default.
 func aggregateStatus(c *Context) string {
 	const statusDown = "DOWN"
 
