@@ -3,8 +3,11 @@ package exporters
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -68,6 +71,60 @@ func Test_buildOTLPExporter(t *testing.T) {
 			}
 
 			_ = exp.Shutdown(context.Background())
+		})
+	}
+}
+
+// Test_buildOTLPExporter_httpPostsToSignalPath guards the otel v1.45.0
+// WithEndpointURL behavior change: a scheme-bearing HTTP endpoint with no path
+// must still POST to /v1/metrics, while an explicit path (including "/") is
+// used verbatim. Without the fix, "http://host:port" silently posts to "/".
+func Test_buildOTLPExporter_httpPostsToSignalPath(t *testing.T) {
+	tests := []struct {
+		name         string
+		endpointPath string
+		wantPath     string
+	}{
+		{"no path appends default signal path", "", "/v1/metrics"},
+		{"explicit path is used verbatim", "/custom/metrics", "/custom/metrics"},
+		{"root path is left alone", "/", "/"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotPath := make(chan string, 1)
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case gotPath <- r.URL.Path:
+				default:
+				}
+
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			cfg := Config{Endpoint: srv.URL + tc.endpointPath, Protocol: protocolHTTP}
+
+			exp, err := buildOTLPExporter(context.Background(), &cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			defer func() { _ = exp.Shutdown(context.Background()) }()
+
+			if err := exp.Export(context.Background(), &metricdata.ResourceMetrics{}); err != nil {
+				t.Fatalf("export failed: %v", err)
+			}
+
+			select {
+			case got := <-gotPath:
+				if got != tc.wantPath {
+					t.Errorf("posted path = %q, want %q", got, tc.wantPath)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("exporter did not POST to the test server")
+			}
 		})
 	}
 }
