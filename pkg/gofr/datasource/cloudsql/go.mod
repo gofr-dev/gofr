@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/cloudsql
 go 1.26.0
 
 require (
-	cloud.google.com/go/cloudsqlconn v1.25.1
+	cloud.google.com/go/cloudsqlconn v1.25.2
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/stretchr/testify v1.11.1
