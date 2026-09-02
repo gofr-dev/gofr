@@ -19,8 +19,14 @@ var (
 	// ErrCircuitOpen indicates that the circuit breaker is open.
 	ErrCircuitOpen                        = errors.New("unable to connect to server at host")
 	ErrUnexpectedCircuitBreakerResultType = errors.New("unexpected result type from circuit breaker")
-	// ErrUnsupportedMethod indicates that the circuit breaker was asked to route an HTTP method it does not handle.
-	ErrUnsupportedMethod = errors.New("unsupported HTTP method for circuit breaker")
+
+	// errUnsupportedMethod is returned by doRequest when it is asked to route
+	// an HTTP method it does not handle. Unexported because doRequest itself is
+	// unexported and all in-tree callers pass a known method constant, so the
+	// default branch is unreachable from outside the package — but the branch
+	// itself is worth keeping: an earlier revision returned (nil, nil) silently
+	// in that spot.
+	errUnsupportedMethod = errors.New("unsupported HTTP method for circuit breaker")
 )
 
 // CircuitBreakerConfig holds the configuration for the circuitBreaker.
@@ -263,7 +269,7 @@ func (cb *circuitBreaker) doRequest(ctx context.Context, method, path string, qu
 			return cb.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	default:
-		return nil, fmt.Errorf("%w: %q", ErrUnsupportedMethod, method)
+		return nil, fmt.Errorf("%w: %q", errUnsupportedMethod, method)
 	}
 
 	resp, err := cb.handleCircuitBreakerResult(result, err)

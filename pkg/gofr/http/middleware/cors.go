@@ -2,10 +2,7 @@ package middleware
 
 import (
 	"net/http"
-	"slices"
 	"strings"
-
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 const (
@@ -14,12 +11,6 @@ const (
 	headerAccessControlAllowOrigin  = "Access-Control-Allow-Origin"
 	headerAccessControlAllowMethods = "Access-Control-Allow-Methods"
 	headerAccessControlAllowHeaders = "Access-Control-Allow-Headers"
-
-	// headerAcceptQuery advertises QUERY (RFC 10008) support and the request
-	// media types a QUERY body may use, mirroring how Access-Control-Allow-Methods
-	// is derived from the registered routes.
-	headerAcceptQuery = "Accept-Query"
-	acceptQueryTypes  = "application/json"
 )
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
@@ -48,13 +39,14 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 	w http.ResponseWriter, origin string, allowedOrigins map[string]bool,
 ) {
-	// Advertise QUERY support (RFC 10008) via Accept-Query when a QUERY route is
-	// registered — the same registered-routes source that builds Allow-Methods.
-	// Read from the caller's routes slice without appending; joinAllowedMethods
-	// below handles OPTIONS suffixing safely.
-	if slices.Contains(routes, gofrHTTP.MethodQuery) {
-		w.Header().Set(headerAcceptQuery, acceptQueryTypes)
-	}
+	// RFC 10008 §3 Accept-Query is intentionally NOT emitted here. That header
+	// is path-scoped ("applies to every URI on the server that shares the same
+	// path"), but this function only knows the deduplicated *methods* list on
+	// the server and has no path/method map. Advertising a global Accept-Query
+	// from here would turn one QUERY route anywhere into a false positive on
+	// every other path. A truthful implementation needs a path-template →
+	// methods index built at registration and threaded through here — separate
+	// change.
 
 	// Handle Access-Control-Allow-Origin separately for dynamic matching.
 	if allowedOrigins["*"] {

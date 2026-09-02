@@ -32,6 +32,10 @@ func main() {
 	// request body. Read the body via ctx.Bind, the same as a POST.
 	a.QUERY("/search", SearchHandler)
 
+	// Outbound QUERY: same method available on the HTTP service client. Mirrors
+	// GET/POST/etc. — takes a body and returns the raw response for you to decode.
+	a.GET("/proxy-search", ProxySearchHandler)
+
 	// Run the application
 	a.Run()
 }
@@ -62,6 +66,37 @@ func SearchHandler(c *gofr.Context) (any, error) {
 	}
 
 	return map[string]string{"matched": criteria.Filter}, nil
+}
+
+// ProxySearchHandler demonstrates the outbound HTTP QUERY method: it forwards
+// a filter to the downstream `anotherService` at `/search` via svc.Query and
+// returns whatever the downstream matched. Mirrors the inbound SearchHandler
+// on the other side of the wire.
+func ProxySearchHandler(c *gofr.Context) (any, error) {
+	body := []byte(`{"filter":"golang"}`)
+
+	resp, err := c.GetHTTPService("anotherService").
+		QueryWithHeaders(c, "search", nil, body, map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	var out struct {
+		Data map[string]string `json:"data"`
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+
+	return out.Data, nil
 }
 
 func RedisHandler(c *gofr.Context) (any, error) {

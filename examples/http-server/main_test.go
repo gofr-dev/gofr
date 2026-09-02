@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
@@ -106,9 +105,9 @@ func TestIntegration_QueryHandler(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
-	req, _ := http.NewRequest("QUERY", host+"/search", strings.NewReader(`{"filter":"golang"}`))
+	req, _ := http.NewRequestWithContext(t.Context(), "QUERY", host+"/search", strings.NewReader(`{"filter":"golang"}`))
 	req.Header.Set("content-type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

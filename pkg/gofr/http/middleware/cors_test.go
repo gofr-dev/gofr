@@ -10,8 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 type MockHandlerForCORS struct {
@@ -101,7 +99,6 @@ func Test_CORS(t *testing.T) {
 
 func TestSetMiddlewareHeaders(t *testing.T) {
 	testCases := setMiddlewareHeadersTestCases()
-	testCases = append(testCases, queryAcceptHeaderTestCases()...)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -142,8 +139,6 @@ func setMiddlewareHeadersTestCases() []struct {
 				"Access-Control-Allow-Origin":  "*",
 				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
-				// no QUERY route registered -> Accept-Query must be absent.
-				headerAcceptQuery: "",
 			},
 		},
 		{
@@ -214,40 +209,6 @@ func setMiddlewareHeadersTestCases() []struct {
 				"Access-Control-Allow-Origin":  "",
 				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
-			},
-		},
-	}
-}
-
-// queryAcceptHeaderTestCases covers Accept-Query advertisement when the router
-// has a QUERY (RFC 10008) route registered. Kept separate from
-// setMiddlewareHeadersTestCases so the parent function stays under funlen.
-func queryAcceptHeaderTestCases() []struct {
-	name              string
-	environmentConfig map[string]string
-	registeredRoutes  []string
-	origin            string
-	allowedOrigins    map[string]bool
-	expectedHeaders   map[string]string
-} {
-	return []struct {
-		name              string
-		environmentConfig map[string]string
-		registeredRoutes  []string
-		origin            string
-		allowedOrigins    map[string]bool
-		expectedHeaders   map[string]string
-	}{
-		{
-			name:              "query route advertises accept-query",
-			environmentConfig: map[string]string{},
-			registeredRoutes:  []string{gofrHTTP.MethodQuery, "GET"},
-			allowedOrigins:    map[string]bool{"*": true},
-			expectedHeaders: map[string]string{
-				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Headers": allowedHeaders,
-				"Access-Control-Allow-Methods": "QUERY, GET, OPTIONS",
-				headerAcceptQuery:              acceptQueryTypes,
 			},
 		},
 	}

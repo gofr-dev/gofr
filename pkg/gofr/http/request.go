@@ -36,24 +36,46 @@ const (
 	MethodQuery = "QUERY"
 )
 
+// isBindableMediaType reports whether ct is a media type Bind can decode.
+// The single source of truth for which request bodies GoFr will interpret —
+// ValidateQueryContentType and Bind both read from it, so a new media type is
+// added in one place and the two paths cannot drift.
+//
+// Callers must pass the media type in canonical form (lowercase, no
+// parameters). Use mediaType() to normalize before calling.
+func isBindableMediaType(ct string) bool {
+	switch ct {
+	case contentTypeJSON, contentTypeMultipartForm, contentTypeFormURLEncoded,
+		contentTypeBinary, contentTypeOctetStream:
+		return true
+	default:
+		return false
+	}
+}
+
 // ValidateQueryContentType enforces RFC 10008's requirement that a QUERY request
 // carry a Content-Type the server can interpret. A missing Content-Type yields a
 // 400 (ErrorMissingParam); a present-but-unsupported one yields a 415
-// (ErrorUnsupportedMediaType). It mirrors Bind's supported set exactly, so a
-// QUERY body that Bind could not decode is rejected up front instead of silently
-// binding to a zero value. POST and the other verbs never call this.
+// (ErrorUnsupportedMediaType). The supported set is isBindableMediaType, the
+// same predicate Bind reads, so a QUERY body Bind could not decode is rejected
+// up front instead of silently binding to a zero value. POST and the other
+// verbs never call this.
+//
+// Normalization goes through mediaType() (mime.ParseMediaType), so casing and
+// parameter differences — Application/JSON, application/json; charset=utf-8 —
+// resolve to the same canonical form the predicate checks.
 func ValidateQueryContentType(r *http.Request) error {
-	ct := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])
-
-	switch ct {
-	case "":
+	raw := r.Header.Get("Content-Type")
+	if strings.TrimSpace(raw) == "" {
 		return ErrorMissingParam{Params: []string{"Content-Type"}}
-	case contentTypeJSON, contentTypeMultipartForm, contentTypeFormURLEncoded,
-		contentTypeBinary, contentTypeOctetStream:
-		return nil
-	default:
-		return ErrorUnsupportedMediaType{ContentType: ct}
 	}
+
+	ct := mediaType(raw)
+	if !isBindableMediaType(ct) {
+		return ErrorUnsupportedMediaType{ContentType: raw}
+	}
+
+	return nil
 }
 
 var (
@@ -115,6 +137,9 @@ func (r *Request) Bind(i any) error {
 
 	contentType := mediaType(r.req.Header.Get("Content-Type"))
 
+	// The switch below is the type→handler dispatch; the "is this a media type
+	// Bind knows how to decode" question is answered by isBindableMediaType,
+	// which ValidateQueryContentType also reads — one predicate, two callers.
 	switch contentType {
 	case contentTypeJSON:
 		body, err := r.body()

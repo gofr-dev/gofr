@@ -423,6 +423,29 @@ func TestResponder_RedirectResponse_Query(t *testing.T) {
 	assert.Empty(t, recorder.Body.String(), "Redirect response should not have a body")
 }
 
+// TestResponder_SuccessStatus_Query pins the successful-QUERY status code at
+// 200 OK. Today it reaches 200 via the default arm of handleSuccessStatusCode,
+// but nothing else says so — grouping QUERY with POST later would silently
+// promote it to 201/202. RFC 10008 §2 puts QUERY in the safe/idempotent class
+// (like GET) rather than resource-creating (POST); 200 is the right answer,
+// and this test locks it.
+func TestResponder_SuccessStatus_Query(t *testing.T) {
+	tests := []struct {
+		name string
+		data any
+	}{
+		{"non-nil data", map[string]string{"matched": "golang"}},
+		{"nil data", nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := handleSuccessStatusCode(MethodQuery, tc.data)
+			assert.Equal(t, http.StatusOK, got, "successful QUERY must be 200 OK")
+		})
+	}
+}
+
 func TestResponder_RedirectResponse_Head(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	r := NewResponder(recorder, http.MethodHead)

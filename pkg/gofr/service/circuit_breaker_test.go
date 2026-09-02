@@ -1260,14 +1260,14 @@ func TestHttpService_QueryWithHeaderSuccessRequests(t *testing.T) {
 }
 
 // TestCircuitBreaker_doRequest_UnsupportedMethod verifies the default case:
-// an unknown method must return ErrUnsupportedMethod instead of a nil response.
+// an unknown method must return errUnsupportedMethod instead of a nil response.
 func TestCircuitBreaker_doRequest_UnsupportedMethod(t *testing.T) {
 	cb := &circuitBreaker{state: ClosedState, interval: time.Second}
 
 	//nolint:bodyclose // the unsupported-method path returns a nil response, nothing to close
 	resp, err := cb.doRequest(t.Context(), "TRACE", "test", nil, nil, nil)
 
-	require.ErrorIs(t, err, ErrUnsupportedMethod)
+	require.ErrorIs(t, err, errUnsupportedMethod)
 	assert.Nil(t, resp)
 }
 

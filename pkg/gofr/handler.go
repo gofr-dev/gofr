@@ -65,17 +65,6 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newHTTPContext(w, r, h.container)
 
-	// RFC 10008: a QUERY request MUST carry a Content-Type the server can interpret.
-	// Reject a missing (400) or unsupported (415) one before the handler runs, so a
-	// search endpoint fails the request instead of binding an empty query. Only the
-	// QUERY verb enters this branch — POST and the rest are untouched.
-	if r.Method == gofrHTTP.MethodQuery {
-		if err := gofrHTTP.ValidateQueryContentType(r); err != nil {
-			c.responder.Respond(nil, err)
-			return
-		}
-	}
-
 	// Carry the SpanContext (a value type, no allocation) rather than eagerly
 	// formatting the trace ID. TraceID().String() allocates a 32-character
 	// string on every request, but the only consumer is logError, which runs
