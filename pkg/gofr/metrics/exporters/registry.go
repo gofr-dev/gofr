@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 // Builder constructs a metric Reader for a single push-export destination.
@@ -21,6 +22,7 @@ type Builder func(ctx context.Context, cfg *Config, logger Logger) (metricSdk.Re
 var (
 	registryMu sync.RWMutex
 	registry   = map[string]Builder{}
+	detectors  = map[string]resource.Detector{}
 )
 
 // Register adds a named exporter builder. It must be called before the
@@ -44,6 +46,27 @@ var knownExternalExporters = map[string]string{
 	exporterGCP: "gofr.dev/pkg/gofr/metrics/exporters/gcp",
 }
 
+// RegisterResourceDetector associates a resource.Detector with a named exporter.
+// Build runs it while assembling the MeterProvider's resource, but only when that
+// exporter is the selected one, so an unused detector never reaches for a
+// metadata server it cannot see.
+//
+// This exists because some backends reject points whose resource is missing
+// attributes the framework cannot supply: Google's OTLP ingest requires
+// "location" and "instance" on prometheus_target and drops every point without
+// them, server-side and silently. Only a vendor-specific detector can fill those
+// from the environment, and it must live in that vendor's submodule -- the core
+// module takes no dependency on any cloud SDK.
+//
+// Experimental: paired with Builder, whose shape may change in a future minor
+// release.
+func RegisterResourceDetector(name string, d resource.Detector) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
+	detectors[name] = d
+}
+
 func lookup(name string) (Builder, bool) {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
@@ -51,4 +74,13 @@ func lookup(name string) (Builder, bool) {
 	b, ok := registry[name]
 
 	return b, ok
+}
+
+func lookupDetector(name string) (resource.Detector, bool) {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+
+	d, ok := detectors[name]
+
+	return d, ok
 }
