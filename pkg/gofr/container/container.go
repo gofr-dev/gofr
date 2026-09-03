@@ -137,6 +137,7 @@ func (c *Container) Create(conf config.Config) {
 	shutdown, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
 	c.shutdownMetrics = shutdown
 	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
+	metrics.SetGlobal(c.metricsManager)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -397,6 +398,8 @@ func (c *Container) registerFrameworkMetrics() {
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
 		c.Metrics().NewCounter("app_http_retry_count", "Total number of retry events")
 		c.Metrics().NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
+		c.Metrics().NewCounter("app_server_error", "Total number of HTTP responses with a 5xx status code.")
+		c.Metrics().NewCounter("app_circuit_open_count", "Total number of times a service circuit breaker has opened.")
 	}
 
 	{ // Redis metrics

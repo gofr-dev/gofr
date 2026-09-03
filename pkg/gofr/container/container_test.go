@@ -480,6 +480,8 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_pubsub_subscribe_total_count",
 		"app_pubsub_subscribe_success_count",
 		"app_http_retry_count",
+		"app_server_error",
+		"app_circuit_open_count",
 	}
 	for _, counter := range counters {
 		mockMetrics.EXPECT().NewCounter(counter, gomock.Any()).Times(1)
