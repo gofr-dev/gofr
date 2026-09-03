@@ -148,17 +148,17 @@ func (r Responder) Respond(data any, err error) {
 	putRespBuf(re)
 }
 
-// getRespBuf takes a reset buffer from the pool, ready to encode into. It is the
-// counterpart to putRespBuf, keeping the pool's type assertion in one place. The
-// assertion is safe: respBufPool is private and only ever holds *respEncoder.
-// newRespEncoder builds an encoder bound to its own buffer. A json.Encoder is tied to the writer it
-// was constructed with, so the two are only ever created and pooled as a pair.
+// newRespEncoder builds an encoder bound to its own buffer. A json.Encoder is
+// tied to the writer it was constructed with, so the two are only ever created
+// and pooled as a pair.
 func newRespEncoder() *respEncoder {
 	buf := bytes.NewBuffer(make([]byte, 0, initialRespBufCap))
 
 	return &respEncoder{buf: buf, enc: json.NewEncoder(buf)}
 }
 
+// getRespBuf takes a reset encoder from the pool, ready to encode into. It is
+// the counterpart to putRespBuf, keeping the pool's type assertion in one place.
 func getRespBuf() *respEncoder {
 	// The pool is private and New only ever yields *respEncoder, so this cannot fail. It is written
 	// to recover rather than to discard the result: ignoring it would turn an impossible failure into
@@ -173,9 +173,10 @@ func getRespBuf() *respEncoder {
 	return re
 }
 
-// putRespBuf returns buf to the pool unless it has grown past maxRespPooledBuf,
-// so one oversized response cannot permanently inflate every pooled buffer. All
-// return-to-pool paths go through here to keep that cap invariant in one place.
+// putRespBuf returns re to the pool unless its buffer has grown past
+// maxRespPooledBuf, so one oversized response cannot permanently inflate every
+// pooled buffer. All return-to-pool paths go through here to keep that cap
+// invariant in one place.
 func putRespBuf(re *respEncoder) {
 	// Clear the envelope so a payload cannot outlive its response inside the
 	// pool, and so nothing it referenced is kept alive.

@@ -436,6 +436,13 @@ func BenchmarkRequest_FullChain(b *testing.B) {
 
 // BenchmarkRequest_FullChain_JSON runs the same chain against the /json
 // handler. Pairs with the /json endpoint in the wrk benchmarks.
+//
+// It does NOT exercise the response-envelope pooling in this PR, and should not
+// be cited as evidence for it: /json is registered as a raw http.HandlerFunc
+// that writes its bytes directly, so it never reaches Responder.Respond. The
+// responder-level benchmarks are what demonstrate that change. The writer reset
+// below is kept for symmetry with the sibling benchmarks, where it is load
+// bearing.
 func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)

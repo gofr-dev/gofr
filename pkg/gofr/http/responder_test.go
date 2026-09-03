@@ -1883,10 +1883,6 @@ func TestRespondEncoderConcurrent(t *testing.T) {
 // TestRespondEnvelopeDoesNotLeakMetadata is the isolation guard for reusing the
 // response envelope from the pool: a response carrying metadata must not leave
 // it behind for the next one, which sets no metadata at all.
-
-// TestRespondEnvelopeDoesNotLeakMetadata is the isolation guard for reusing the
-// response envelope from the pool: a response carrying metadata must not leave
-// it behind for the next one, which sets no metadata at all.
 func TestRespondEnvelopeDoesNotLeakMetadata(t *testing.T) {
 	withMeta := httptest.NewRecorder()
 	NewResponder(withMeta, http.MethodGet).Respond(
@@ -1904,8 +1900,6 @@ func TestRespondEnvelopeDoesNotLeakMetadata(t *testing.T) {
 		require.NotContains(t, plain.Body.String(), "metadata")
 	}
 }
-
-// TestRespondEnvelopeErrorDoesNotLeak covers the same hazard for the error field.
 
 // TestRespondEnvelopeErrorDoesNotLeak covers the same hazard for the error field.
 func TestRespondEnvelopeErrorDoesNotLeak(t *testing.T) {
