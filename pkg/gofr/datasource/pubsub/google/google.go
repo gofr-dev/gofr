@@ -230,6 +230,16 @@ func (g *googleClient) startTopicSubscriber(ctx context.Context, topic string, e
 	receiveChan = make(chan *pubsub.Message)
 
 	g.mu.Lock()
+
+	// Recheck under the write lock: if another goroutine started this topic between the RLock
+	// check and here, reuse its channel instead of starting a second receiver.
+	if _, ok := g.subStarted[topic]; ok {
+		receiveChan = g.receiveChan[topic]
+		g.mu.Unlock()
+
+		return receiveChan, nil
+	}
+
 	g.receiveChan[topic] = receiveChan
 	g.subStarted[topic] = struct{}{}
 	g.mu.Unlock()
