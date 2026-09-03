@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -120,7 +121,17 @@ func metricsPath(r *http.Request) (path string, templated bool) {
 		path, templated = r.URL.Path, false
 	}
 
-	return strings.TrimSuffix(path, "/"), templated
+	path = strings.TrimSuffix(path, "/")
+
+	// A non-UTF-8 path label fails the whole scrape -- Prometheus and OTLP both
+	// require valid UTF-8 -- so collapse any invalid path (e.g. an over-long
+	// encoding from a probe) to a fixed sentinel. It is not a real route
+	// template, so it must never become a cache key. (#3460)
+	if !utf8.ValidString(path) {
+		return "/<invalid_utf8>", false
+	}
+
+	return path, templated
 }
 
 // histogramName is the request-duration histogram this middleware records.
