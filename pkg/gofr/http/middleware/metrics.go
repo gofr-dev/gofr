@@ -194,7 +194,7 @@ func newStatusAttrCache() func(int) attribute.KeyValue {
 type optionRecorder struct {
 	rec        metricsOptRecorder
 	statusAttr func(int) attribute.KeyValue
-	cache      routeCache // statusRouteKey -> []metric.RecordOption
+	cache      routeCache[[]metric.RecordOption] // keyed on statusRouteKey
 }
 
 func (o *optionRecorder) record(path, method string, status int, seconds float64, templated bool) {
@@ -202,16 +202,10 @@ func (o *optionRecorder) record(path, method string, status int, seconds float64
 	key := statusRouteKey{path: path, method: method, status: status}
 
 	if cacheable {
-		// The assertion's ok is honored rather than discarded: a failed one would
-		// leave opts nil and record the measurement with NO attributes, which is a
-		// silently unlabeled time series rather than a visible failure. Falling
-		// through rebuilds instead.
-		if v, ok := o.cache.load(key); ok {
-			if opts, ok := v.([]metric.RecordOption); ok {
-				o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
+		if opts, ok := o.cache.load(key); ok {
+			o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
 
-				return
-			}
+			return
 		}
 	}
 
@@ -241,7 +235,7 @@ func (o *optionRecorder) record(path, method string, status int, seconds float64
 type attrsRecorder struct {
 	rec        metricsAttrer
 	statusAttr func(int) attribute.KeyValue
-	cache      routeCache // routeMethodKey -> []attribute.KeyValue
+	cache      routeCache[[]attribute.KeyValue] // keyed on routeMethodKey
 }
 
 func (a *attrsRecorder) record(path, method string, status int, seconds float64, templated bool) {
@@ -255,9 +249,7 @@ func (a *attrsRecorder) record(path, method string, status int, seconds float64,
 	// now go through routeCache under the same rules.
 	cacheable := templated && cacheableMethod(method)
 	if cacheable {
-		if v, ok := a.cache.load(key); ok {
-			b, _ = v.([]attribute.KeyValue)
-		}
+		b, _ = a.cache.load(key)
 	}
 
 	if b == nil {

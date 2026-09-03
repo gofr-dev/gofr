@@ -84,7 +84,7 @@ type spanMeta struct {
 // each time and never serve a second request.
 //
 //nolint:gochecknoglobals // rationale above: a per-closure cache would never be reused.
-var tracerSpanCache routeCache
+var tracerSpanCache routeCache[*spanMeta]
 
 // spanMetaFor returns the span name and attributes for a route, building them on
 // first use.
@@ -102,14 +102,8 @@ func spanMetaFor(method, route string, templated bool) *spanMeta {
 
 	key := routeKey{method: method, route: route}
 
-	// A failed assertion falls through to the rebuild below rather than returning
-	// the nil it would otherwise produce. Nothing else stores into this cache, so
-	// it cannot fail today; ignoring the result would turn any future change that
-	// broke that into a nil dereference on the request path.
-	if v, ok := tracerSpanCache.load(key); ok {
-		if meta, ok := v.(*spanMeta); ok {
-			return meta
-		}
+	if meta, ok := tracerSpanCache.load(key); ok {
+		return meta
 	}
 
 	meta := newSpanMeta(method, route)

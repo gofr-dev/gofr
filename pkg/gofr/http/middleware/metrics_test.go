@@ -249,6 +249,66 @@ func (m *mockOptRecorder) attrMap(i int) map[string]string {
 	return out
 }
 
+// capturedPath runs one request through a router that has the given routes
+// registered and returns what metricsPath resolved for it.
+//
+// It goes through mux rather than calling metricsPath on a bare request because
+// the templated half of the answer comes from the matched route, which only
+// exists once the router has run.
+func capturedPath(t *testing.T, target string, routes ...string) (path string, templated bool) {
+	t.Helper()
+
+	capture := func(_ http.ResponseWriter, r *http.Request) { path, templated = metricsPath(r) }
+
+	router := mux.NewRouter()
+	for _, route := range routes {
+		router.NewRoute().Methods(http.MethodGet).Path(route).HandlerFunc(capture)
+	}
+
+	router.NotFoundHandler = http.HandlerFunc(capture)
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
+
+	return path, templated
+}
+
+// TestMetricsPath pins the path label and the cacheability flag directly, rather
+// than only through the cache-growth tests that consume them.
+//
+// The second return value is the whole reason the caches are bounded: it must be
+// false for every branch that falls back to the raw, caller-controlled URL path,
+// and true only for a route template.
+func TestMetricsPath(t *testing.T) {
+	tests := []struct {
+		desc          string
+		target        string
+		routes        []string
+		wantPath      string
+		wantTemplated bool
+	}{
+		{"matched template", "/users/7", []string{"/users/{id}"}, "/users/{id}", true},
+		{"trailing slash trimmed off the template", "/users/7/", []string{"/users/{id}/"}, "/users/{id}", true},
+		{"unmatched route falls back to the raw path", "/nope/xyz", nil, "/nope/xyz", false},
+		{"root template is never cacheable", "/", []string{"/"}, "", false},
+		{"/static prefix is never cacheable", "/static/app/x", []string{"/static/{rest}"}, "/static/app/x", false},
+		// The two below MATCH a route, so the template would win were the
+		// extension not checked -- that is the branch they exist to pin.
+		{"static extension beats the template", "/assets/logo.css", []string{"/assets/{f}"}, "/assets/logo.css", false},
+		{"uppercase static extension too", "/assets/LOGO.CSS", []string{"/assets/{f}"}, "/assets/LOGO.CSS", false},
+		{"graphql is matched and templated", "/graphql", []string{"/graphql"}, "/graphql", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			path, templated := capturedPath(t, tc.target, tc.routes...)
+
+			assert.Equal(t, tc.wantPath, path, "path label")
+			assert.Equal(t, tc.wantTemplated, templated, "cacheable only for a route template")
+		})
+	}
+}
+
 // TestMetricsOptRecorderIsUsedAndStillRecords pins that the faster path is taken
 // and that every request is still observed exactly once.
 func TestMetricsOptRecorderIsUsedAndStillRecords(t *testing.T) {
