@@ -1,12 +1,15 @@
 package metrics
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
@@ -184,5 +187,70 @@ func BenchmarkAttrBuild_HTTP(b *testing.B) {
 			"method", "GET",
 			"status", "200",
 		)
+	}
+}
+
+// benchHistogramAttrs are the labels a request metric carries: for a given route, method and status
+// they are byte-identical on every single observation.
+func benchHistogramAttrs() []attribute.KeyValue {
+	return []attribute.KeyValue{
+		attribute.String("path", "/users/{id}"),
+		attribute.String("method", http.MethodGet),
+		attribute.String("status", "200"),
+	}
+}
+
+// benchManager returns the concrete manager, because the option-based recorder is a capability of
+// the implementation rather than part of the Manager interface -- callers reach it by assertion.
+func benchManager(b *testing.B) *metricsManager {
+	b.Helper()
+
+	cfg := exporters.Config{AppName: "bench-app", AppVersion: "v1.0.0"}
+	shutdown, meter := exporters.Build(b.Context(), &cfg, logging.NewMockLogger(logging.ERROR))
+
+	b.Cleanup(func() {
+		if shutdown != nil {
+			_ = shutdown(context.Background())
+		}
+	})
+
+	m, ok := NewMetricsManager(meter, logging.NewMockLogger(logging.ERROR)).(*metricsManager)
+	if !ok {
+		b.Fatal("NewMetricsManager did not return *metricsManager")
+	}
+
+	m.NewHistogram("bench-histogram", "histogram used by the benchmarks")
+
+	return m
+}
+
+// BenchmarkRecordHistogramAttrs is the cost of an observation when the measurement option is rebuilt
+// each time: metric.WithAttributes sorts and deduplicates the attributes into a new attribute.Set
+// and wraps it, on every single request.
+func BenchmarkRecordHistogramAttrs(b *testing.B) {
+	m := benchManager(b)
+	attrs := benchHistogramAttrs()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		m.RecordHistogramAttrs(b.Context(), "bench-histogram", 1, attrs...)
+	}
+}
+
+// BenchmarkRecordHistogramOpt is the same observation with the option built once by the caller and
+// reused, which is what a request metric can do because its label combinations come from a small
+// fixed set.
+func BenchmarkRecordHistogramOpt(b *testing.B) {
+	m := benchManager(b)
+
+	cached := []metric.RecordOption{metric.WithAttributes(benchHistogramAttrs()...)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		m.RecordHistogramOpt(b.Context(), "bench-histogram", 1, cached...)
 	}
 }
