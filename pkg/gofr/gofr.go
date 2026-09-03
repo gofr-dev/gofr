@@ -407,7 +407,7 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	// Normalize the endpoint up front so every error log below reports the same
 	// '/endpoint' form (previously the getwd and os.Stat logs disagreed).
-	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+	endpoint = "/" + strings.Trim(endpoint, "/")
 
 	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
 		filePath = "./" + filePath

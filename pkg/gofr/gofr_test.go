@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1327,6 +1328,40 @@ func TestStaticHandlerGetwdError(t *testing.T) {
 
 	assert.Contains(t, logs, "failed to get current working directory")
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
+// TestAddStaticFilesEndpointForms covers the endpoint forms a caller can pass to
+// App.AddStaticFiles. The normalization used to strip only a leading slash, so a
+// trailing slash survived into the stored endpoint and Router.AddStaticFiles registered
+// Path("/static/") + PathPrefix("/static//") — neither matches once ServeHTTP normalizes
+// the request with path.Clean, so every request under the endpoint 404'd.
+func TestAddStaticFilesEndpointForms(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	for _, endpoint := range []string{"static", "/static", "static/", "/static/"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app := New()
+			app.AddStaticFiles(endpoint, dir)
+
+			stored := app.httpServer.staticFiles[dir]
+			assert.Equal(t, "/static", stored, "endpoint %q should normalize to /static", endpoint)
+
+			// Wire the stored endpoint exactly as App.Run does and prove it serves.
+			router := gofrHTTP.NewRouter()
+			router.AddStaticFiles(app.Logger(), stored, dir)
+
+			for _, path := range []string{"/static", "/static/index.html"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", endpoint, path)
+			}
+		})
+	}
 }
 
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
