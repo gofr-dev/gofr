@@ -61,11 +61,13 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 
 	k.dialer = dialer
 	k.conn = multi
-	k.connMu.Unlock()
 
-	// writer and reader are not guarded by connMu — k.mu protects the
-	// reader map; writer is set once and never swapped.
+	// writer is published under connMu alongside conn: retryConnect calls
+	// initialize from its own goroutine, so this is a pointer swap that
+	// Publish, Close and Health can all be reading concurrently.
 	k.writer = writer
+
+	k.connMu.Unlock()
 
 	// retryConnect calls initialize from its own goroutine, so this swap can
 	// land while a Subscribe is reading or growing the map. Take k.mu for it,

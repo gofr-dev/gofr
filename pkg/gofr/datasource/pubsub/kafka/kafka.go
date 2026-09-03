@@ -130,12 +130,13 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
-	if k.writer == nil || topic == "" {
+	writer := k.snapshotWriter()
+	if writer == nil || topic == "" {
 		return errPublisherNotConfigured
 	}
 
 	start := time.Now()
-	err := k.writer.WriteMessages(ctx,
+	err := writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic:   topic,
 			Value:   message,
@@ -287,11 +288,12 @@ func (k *kafkaClient) Close() (err error) {
 		err = errors.Join(err, r.Close())
 	}
 
+	k.connMu.Lock()
+
 	if k.writer != nil {
 		err = errors.Join(err, k.writer.Close())
+		k.writer = nil
 	}
-
-	k.connMu.Lock()
 
 	if k.conn != nil {
 		err = errors.Join(err, k.conn.Close())
@@ -301,6 +303,17 @@ func (k *kafkaClient) Close() (err error) {
 	k.connMu.Unlock()
 
 	return err
+}
+
+// snapshotWriter reads k.writer under connMu, which initialize takes when it
+// publishes one. Callers use the returned value rather than k.writer so a
+// retryConnect swapping the pointer cannot race the read, and so no network
+// call is made while holding the lock.
+func (k *kafkaClient) snapshotWriter() Writer {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	return k.writer
 }
 
 // snapshotReaders copies the reader map under RLock so callers can work on the
