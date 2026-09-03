@@ -477,8 +477,11 @@ func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool 
 // trailing separator, and that is the path a request for the endpoint root resolves to. Comparing
 // against the directory as well lets the root be served without letting a sibling in.
 func (staticConfig staticFileConfig) isWithinDirectory(absPath string) bool {
-	return absPath == staticConfig.directoryName ||
-		strings.HasPrefix(absPath, staticConfig.directoryName+string(os.PathSeparator))
+	directory := filepath.ToSlash(filepath.Clean(staticConfig.directoryName))
+	path := filepath.ToSlash(filepath.Clean(absPath))
+
+	return path == directory ||
+		strings.HasPrefix(path, directory+"/")
 }
 
 // Validates file existence and permissions, and resolves a directory to the file that represents
