@@ -237,6 +237,18 @@ func TestHandler_catchAllHandler(t *testing.T) {
 	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
 }
 
+func TestHandler_methodNotAllowedHandler(t *testing.T) {
+	c := Context{
+		Context: t.Context(),
+	}
+
+	data, err := methodNotAllowedHandler(&c)
+
+	assert.Nil(t, data, "TEST Failed.\n")
+
+	assert.Equal(t, gofrHTTP.ErrorMethodNotAllowed{}, err, "TEST Failed.\n")
+}
+
 func TestHandler_livelinessHandler(t *testing.T) {
 	resp, err := liveHandler(&Context{})
 
@@ -1130,6 +1142,7 @@ func TestHandler_Char_ErrorLogging(t *testing.T) {
 		{"entity-not-found-is-INFO", gofrHTTP.ErrorEntityNotFound{}, "INFO", false},
 		{"already-exists-is-WARN", gofrHTTP.ErrorEntityAlreadyExist{}, "WARN", false},
 		{"invalid-route-is-INFO", gofrHTTP.ErrorInvalidRoute{}, "INFO", false},
+		{"method-not-allowed-is-INFO", gofrHTTP.ErrorMethodNotAllowed{}, "INFO", false},
 		{"panic-recovery-is-ERROR", gofrHTTP.ErrorPanicRecovery{}, "ERROR", true},
 		{"too-many-requests-is-WARN", gofrHTTP.ErrorTooManyRequests{}, "WARN", false},
 		{"client-closed-is-DEBUG", gofrHTTP.ErrorClientClosedRequest{}, "DEBUG", false},

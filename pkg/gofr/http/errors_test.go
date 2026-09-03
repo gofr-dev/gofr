@@ -105,6 +105,14 @@ func TestErrorInvalidRoute(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
 }
 
+func TestErrorMethodNotAllowed(t *testing.T) {
+	err := ErrorMethodNotAllowed{}
+
+	require.ErrorContainsf(t, err, "method not allowed", "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusMethodNotAllowed, err.StatusCode(), "TEST Failed.\n")
+}
+
 func Test_ErrorRequestTimeout(t *testing.T) {
 	err := ErrorRequestTimeout{}
 

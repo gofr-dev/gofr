@@ -230,6 +230,10 @@ func catchAllHandler(*Context) (any, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
 }
 
+func methodNotAllowedHandler(*Context) (any, error) {
+	return nil, gofrHTTP.ErrorMethodNotAllowed{}
+}
+
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	if re == nil {
 		return
