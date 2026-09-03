@@ -12,108 +12,92 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMatchEndpoint_ExactMatch(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+// TestConfig_resolve_Cases covers the resolution cases that used to be exercised through the
+// now-deleted matchEndpoint helper. They run against config.resolve, which is the single entry
+// point the middleware and GetEndpointPermission both use.
+func TestConfig_resolve_Cases(t *testing.T) {
+	testCases := []struct {
+		desc           string
+		endpoints      []EndpointMapping
+		method         string
+		path           string
+		expectedPath   string
+		expectedPublic bool
+	}{
+		{
+			desc:         "exact match",
+			endpoints:    []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users",
+			expectedPath: "/api/users",
+		},
+		{
+			desc:           "public endpoint",
+			endpoints:      []EndpointMapping{{Path: "/health", Methods: []string{"GET"}, Public: true}},
+			method:         http.MethodGet,
+			path:           "/health",
+			expectedPath:   "/health",
+			expectedPublic: true,
+		},
+		{
+			desc:      "declared method does not cover the request method",
+			endpoints: []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:    http.MethodPost,
+			path:      "/api/users",
+		},
+		{
+			desc:         "wildcard method",
+			endpoints:    []EndpointMapping{{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodPost,
+			path:         "/api",
+			expectedPath: "/api",
+		},
+		{
+			desc:         "omitted methods behaves as wildcard",
+			endpoints:    []EndpointMapping{{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodPost,
+			path:         "/api",
+			expectedPath: "/api",
+		},
+		{
+			desc:         "mux pattern path",
+			endpoints:    []EndpointMapping{{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users",
+			expectedPath: "/api/{resource}",
+		},
+		{
+			desc:         "mux pattern with constraint",
+			endpoints:    []EndpointMapping{{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users/123",
+			expectedPath: "/api/users/{id:[0-9]+}",
+		},
+		{
+			desc:      "no configured endpoint matches",
+			endpoints: []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:    http.MethodGet,
+			path:      "/api/posts",
 		},
 	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
 
-func TestMatchEndpoint_PublicEndpoint(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/health", Methods: []string{"GET"}, Public: true},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/health", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.True(t, isPublic)
-}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := newTestConfig(t, tc.endpoints, nil)
 
-func TestMatchEndpoint_DifferentMethod(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api/users", endpoints, config)
-	require.Nil(t, endpoint)
-	assert.False(t, isPublic)
-}
+			endpoint, isPublic := config.resolve(tc.method, tc.path)
 
-func TestMatchEndpoint_WildcardMethod(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
+			assert.Equal(t, tc.expectedPublic, isPublic)
 
-func TestMatchEndpoint_MuxPatternPath(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
+			if tc.expectedPath == "" {
+				assert.Nil(t, endpoint)
+				return
+			}
 
-func TestMatchEndpoint_MuxPatternWithConstraint(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
+			require.NotNil(t, endpoint)
+			assert.Equal(t, tc.expectedPath, endpoint.Path)
+		})
 	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users/123", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_NotFound(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/posts", endpoints, config)
-	require.Nil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_EmptyMethods(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:*"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
 }
 
 func TestMatchesHTTPMethod(t *testing.T) {
