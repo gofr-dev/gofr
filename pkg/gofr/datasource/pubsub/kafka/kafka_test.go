@@ -318,7 +318,6 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
-		mu:      &sync.RWMutex{},
 		metrics: mockMetrics,
 	}
 
@@ -415,7 +414,6 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
-		mu:      &sync.RWMutex{},
 		metrics: mockMetrics,
 	}
 
@@ -446,7 +444,7 @@ func TestKafkaClient_Close(t *testing.T) {
 	mockReader := NewMockReader(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
-	k := kafkaClient{mu: &sync.RWMutex{}, reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
 		conns: []Connection{
 			mockConn,
 		},
@@ -471,7 +469,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{mu: &sync.RWMutex{}, writer: mockWriter}
+	k := kafkaClient{writer: mockWriter}
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
@@ -564,9 +562,17 @@ func TestNewKafkaClient(t *testing.T) {
 			k := New(&tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
 			if tc.expectNil {
 				assert.Nil(t, k)
-			} else {
-				assert.NotNil(t, k)
+
+				return
 			}
+
+			assert.NotNil(t, k)
+
+			// These configs point at brokers that do not resolve, so New
+			// leaves a retryConnect goroutine behind. Close stops it; without
+			// that it outlives the test and races the connectToBrokers stub
+			// that reconnect_success_test.go restores in its own cleanup.
+			t.Cleanup(func() { _ = k.Close() })
 		})
 	}
 }
@@ -694,7 +700,6 @@ func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
 			},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 	}
 
 	// ensureConnected probes Controller in the unlocked fast path and
@@ -728,7 +733,6 @@ func TestEnsureConnected_ReconnectsAfterStaleAdminConn(t *testing.T) {
 			conns: []Connection{staleConn},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 	}
 
 	// Stale conn is detected, reconnect is attempted, but the unresolvable
@@ -763,7 +767,6 @@ func TestKafkaClient_Query_Failures(t *testing.T) {
 						conns: []Connection{mockConnection},
 					},
 					logger: logging.NewMockLogger(logging.DEBUG),
-					mu:     &sync.RWMutex{},
 				}
 			},
 			topic:       "test-topic",
@@ -979,7 +982,6 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 		logger:  logging.NewMockLogger(logging.DEBUG),
 		metrics: mockMetrics,
 		reader:  make(map[string]Reader),
-		mu:      &sync.RWMutex{},
 	}
 
 	// Create mock reader

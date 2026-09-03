@@ -19,4 +19,5 @@ var (
 	errClientCertLoad              = errors.New("failed to load client certificate")
 	errNotController               = errors.New("not a controller")
 	errUnreachable                 = errors.New("unreachable")
+	errClientClosed                = errors.New("kafka client is closed")
 )

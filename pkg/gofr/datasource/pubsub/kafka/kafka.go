@@ -60,8 +60,10 @@ type kafkaClient struct {
 	writer Writer
 	reader map[string]Reader
 
-	// mu guards the reader map.
-	mu *sync.RWMutex
+	// mu guards the reader map. A value, not a pointer, so the zero
+	// kafkaClient is usable: Health and Close take it, and a nil pointer
+	// here panicked on any client built without New.
+	mu sync.RWMutex
 	// connMu guards conn/dialer pointer swaps performed by reconnectAdmin.
 	// Read-lock holders use the admin connection concurrently; the
 	// write-lock holder swaps the pointer and closes the old multiConn.
@@ -78,6 +80,13 @@ type kafkaClient struct {
 	logger  pubsub.Logger
 	config  Config
 	metrics Metrics
+
+	// closed is shut by Close to stop the retryConnect goroutine New starts
+	// when the first connect attempt fails. Without it that goroutine runs
+	// for the life of the process on a context nobody can cancel, retrying
+	// every defaultRetryTimeout long after the client was closed.
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //nolint:revive // New allows
@@ -99,7 +108,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 		logger:  logger,
 		config:  *conf,
 		metrics: metrics,
-		mu:      &sync.RWMutex{},
+		closed:  make(chan struct{}),
 	}
 	ctx := context.Background()
 
@@ -266,16 +275,15 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 }
 
 func (k *kafkaClient) Close() (err error) {
-	k.mu.RLock()
+	// Stop the retryConnect goroutine first, so it cannot dial or swap the
+	// conn out from under the teardown below.
+	k.closeOnce.Do(func() {
+		if k.closed != nil {
+			close(k.closed)
+		}
+	})
 
-	readers := make([]Reader, 0, len(k.reader))
-	for _, r := range k.reader {
-		readers = append(readers, r)
-	}
-
-	k.mu.RUnlock()
-
-	for _, r := range readers {
+	for _, r := range k.snapshotReaders() {
 		err = errors.Join(err, r.Close())
 	}
 
@@ -293,4 +301,20 @@ func (k *kafkaClient) Close() (err error) {
 	k.connMu.Unlock()
 
 	return err
+}
+
+// snapshotReaders copies the reader map under RLock so callers can work on the
+// readers without holding it. Nothing that calls this may already hold connMu:
+// Subscribe takes k.mu and then connMu inside getNewReader, so acquiring them
+// the other way round is a lock-order inversion.
+func (k *kafkaClient) snapshotReaders() []Reader {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	readers := make([]Reader, 0, len(k.reader))
+	for _, r := range k.reader {
+		readers = append(readers, r)
+	}
+
+	return readers
 }
