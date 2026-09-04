@@ -185,8 +185,8 @@ github.com/redis/go-redis/extra/rediscmd/v9 v9.21.0 h1:jsV3tyMeJrEoc2f3EhNf7qoBW
 github.com/redis/go-redis/extra/rediscmd/v9 v9.21.0/go.mod h1:e5t17bY9cEpVV+xw2U7jsPOKkXBtL5IQmNVABShnHUk=
 github.com/redis/go-redis/extra/redisotel/v9 v9.21.0 h1:36qq3rbF2If2CP0zGHHF8o/4XDluErn6DD0c9/L2iNI=
 github.com/redis/go-redis/extra/redisotel/v9 v9.21.0/go.mod h1:7y2cVB/LXXLHqHOO2jCVzBqimIQk1w7Rp9WSpyVY/o8=
-github.com/redis/go-redis/v9 v9.21.0 h1:FPBE4hhbAke+TLmcY3WkpbDffJEomdqPn3HYiqAtL9E=
-github.com/redis/go-redis/v9 v9.21.0/go.mod h1:v/M13XI1PVCDcm01VtPFOADfZtHf8YW3baQf57KlIkA=
+github.com/redis/go-redis/v9 v9.22.0 h1:laDvpYXTJtZLloinw1fA5Kqd6HAEH2XKxOkG/PDq2F0=
+github.com/redis/go-redis/v9 v9.22.0/go.mod h1:y2g0Wj8rQvuK0ELM+oxSudcLtC09JScs98I/X9gRWY4=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
