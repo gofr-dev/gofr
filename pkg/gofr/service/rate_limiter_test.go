@@ -180,3 +180,33 @@ func TestRateLimiter_HTTPMethods(t *testing.T) {
 
 	_ = resp.Body.Close()
 }
+
+func TestRateLimiter_QueryMethods(t *testing.T) {
+	store := &mockStore{allowed: true}
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store: store,
+		HTTP:  &mockHTTP{},
+	}
+
+	ctx := context.Background()
+
+	resp, err := rl.Query(ctx, "foo", nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "rate limiter must delegate to Query, not another verb")
+
+	defer resp.Body.Close()
+
+	resp, err = rl.QueryWithHeaders(ctx, "foo", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"),
+		"rate limiter must delegate to QueryWithHeaders, not another verb")
+
+	_ = resp.Body.Close()
+}

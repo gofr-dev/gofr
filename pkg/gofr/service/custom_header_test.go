@@ -166,3 +166,32 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	require.NoError(t, err)
 }
+
+func TestCustomDomainProvider_Query(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	queryParams := map[string]any{"key": "value"}
+	body := []byte(`{"q":"x"}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "QUERY", r.Method)
+		assert.Equal(t, "test_value", r.Header.Get("Test_key"))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&DefaultHeaders{
+			Headers: map[string]string{
+				"TEST_KEY": "test_value",
+			}})
+
+	resp, err := customHeaderService.Query(t.Context(), "/path", queryParams, body)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}

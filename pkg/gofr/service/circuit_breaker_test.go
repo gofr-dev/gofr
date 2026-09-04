@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1205,4 +1206,189 @@ func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
 	state := cb.state
 	cb.mu.RUnlock()
 	assert.Equal(t, ClosedState, state, "circuit should be closed after successful recovery")
+}
+
+func TestHttpService_QuerySuccessRequests(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1,
+	})
+
+	resp, err := service.Query(t.Context(), "test", nil, []byte(`{"q":"x"}`))
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	_ = resp.Body.Close()
+}
+
+func TestHttpService_QueryWithHeaderSuccessRequests(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1,
+	})
+
+	resp, err := service.QueryWithHeaders(t.Context(), "test", nil, []byte(`{"q":"x"}`),
+		map[string]string{"content-type": "application/json"})
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	_ = resp.Body.Close()
+}
+
+// TestCircuitBreaker_doRequest_UnsupportedMethod verifies the default case:
+// an unknown method must return errUnsupportedMethod instead of a nil response.
+func TestCircuitBreaker_doRequest_UnsupportedMethod(t *testing.T) {
+	cb := &circuitBreaker{state: ClosedState, interval: time.Second}
+
+	//nolint:bodyclose // the unsupported-method path returns a nil response, nothing to close
+	resp, err := cb.doRequest(t.Context(), "TRACE", "test", nil, nil, nil)
+
+	require.ErrorIs(t, err, errUnsupportedMethod)
+	assert.Nil(t, resp)
+}
+
+// cbQueryServer is a controllable downstream for QUERY circuit-breaker integration
+// tests. When down is true, QUERY /search returns 503 (>500, trips the breaker). When
+// aliveMirrorsDown is true, the /.well-known/alive probe also fails while down, so the
+// breaker stays open until the service actually heals.
+func cbQueryServer(down *atomic.Bool, aliveMirrorsDown bool) *httptest.Server {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != methodQuery {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		if down.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		body, _ := io.ReadAll(r.Body)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	})
+
+	mux.HandleFunc("/.well-known/alive", func(w http.ResponseWriter, _ *http.Request) {
+		if aliveMirrorsDown && down.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	return httptest.NewServer(mux)
+}
+
+// cbQueryBreaker builds a circuitBreaker directly (not via NewCircuitBreaker) so it does NOT
+// start the background health-check goroutine — keeping the test deterministic and leak-free.
+// Its embedded HTTP is a plain httpService (no decorators) pointing at url.
+func cbQueryBreaker(t *testing.T, url string, threshold int, interval time.Duration) *circuitBreaker {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	m := NewMockMetrics(ctrl)
+	m.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	m.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	m.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	m.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	base := NewHTTPService(url, logging.NewMockLogger(logging.ERROR), m)
+
+	return &circuitBreaker{
+		state:     ClosedState,
+		threshold: threshold,
+		interval:  interval,
+		HTTP:      base,
+	}
+}
+
+// TestCircuitBreaker_Query_Trips verifies an outbound QUERY participates in circuit-breaker
+// failure accounting: repeated downstream 503s open the circuit and further QUERY calls are
+// short-circuited with ErrCircuitOpen without hitting the downstream.
+func TestCircuitBreaker_Query_Trips(t *testing.T) {
+	var down atomic.Bool
+
+	server := cbQueryServer(&down, false)
+	defer server.Close()
+
+	cb := cbQueryBreaker(t, server.URL, 2, time.Minute)
+
+	// Healthy: QUERY succeeds and body is echoed.
+	resp, err := cb.Query(t.Context(), "search", nil, []byte(`{"q":"ok"}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	_ = resp.Body.Close()
+
+	// Failing downstream: drive QUERY calls until the circuit opens.
+	down.Store(true)
+
+	var opened bool
+
+	for i := 0; i < 6; i++ {
+		resp, err = cb.Query(t.Context(), "search", nil, []byte(`{"q":"x"}`))
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+
+		if err != nil && err.Error() == ErrCircuitOpen.Error() {
+			opened = true
+			break
+		}
+	}
+
+	assert.True(t, opened, "QUERY calls should open the circuit after repeated downstream failures")
+}
+
+// TestCircuitBreaker_Query_Recovers verifies that when the circuit is open, an outbound QUERY
+// triggers recovery: once the interval has elapsed and the downstream health probe reports UP,
+// the breaker closes and the QUERY is served. Deterministic — no background goroutine, no sleeps.
+func TestCircuitBreaker_Query_Recovers(t *testing.T) {
+	var down atomic.Bool
+
+	server := cbQueryServer(&down, false) // /.well-known/alive stays UP => healthy
+	defer server.Close()
+
+	cb := cbQueryBreaker(t, server.URL, 2, 50*time.Millisecond)
+
+	// Force the breaker open with a stale lastChecked so the next QUERY attempts recovery.
+	cb.state = OpenState
+	cb.lastChecked = time.Now().Add(-time.Hour)
+
+	resp, err := cb.Query(t.Context(), "search", nil, []byte(`{"q":"ok"}`))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	_ = resp.Body.Close()
+
+	cb.mu.RLock()
+	state := cb.state
+	cb.mu.RUnlock()
+	assert.Equal(t, ClosedState, state, "circuit should be closed after a successful QUERY recovery")
 }

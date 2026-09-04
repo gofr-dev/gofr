@@ -18,11 +18,77 @@ import (
 const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 
-	contentTypeJSON = "application/json"
+	// The request media types Bind can decode; also the set a QUERY request may
+	// carry (see ValidateQueryContentType).
+	contentTypeJSON           = "application/json"
+	contentTypeMultipartForm  = "multipart/form-data"
+	contentTypeFormURLEncoded = "application/x-www-form-urlencoded"
 
+	// "binary/octet-stream" is GoFr's own spelling, kept for compatibility;
+	// "application/octet-stream" is the RFC 2046 one and is what clients
+	// actually send. Both are accepted by Bind and ValidateQueryContentType.
 	contentTypeBinary      = "binary/octet-stream"
 	contentTypeOctetStream = "application/octet-stream"
+
+	// MethodQuery is the HTTP QUERY method (RFC 10008). Go's net/http has no such
+	// constant yet, so GoFr exports it here for use in routing, middleware, RBAC
+	// method lists, and method comparisons.
+	MethodQuery = "QUERY"
 )
+
+// bindersByMediaType is the single source of truth for which request bodies
+// GoFr's Bind can decode, keyed by canonical media type. Bind's dispatch and
+// isBindableMediaType both derive from this map, so ValidateQueryContentType
+// and Bind cannot disagree on the supported set: a new media type is a new
+// map entry and both paths pick it up at once.
+//
+// The "binary/octet-stream" GoFr spelling and the RFC 2046 "application/
+// octet-stream" spelling both map to bindBinary — keeping the two spellings
+// live is a deliberate compatibility choice, not a drift.
+//
+//nolint:gochecknoglobals // process-wide, read-only dispatch table for Bind.
+var bindersByMediaType = map[string]func(*Request, any) error{
+	contentTypeJSON:           (*Request).bindJSON,
+	contentTypeMultipartForm:  (*Request).bindMultipart,
+	contentTypeFormURLEncoded: (*Request).bindFormURLEncoded,
+	contentTypeBinary:         (*Request).bindBinary,
+	contentTypeOctetStream:    (*Request).bindBinary,
+}
+
+// isBindableMediaType reports whether ct is a media type Bind can decode.
+// Reads from bindersByMediaType, so the answer is exactly the set Bind's
+// dispatch can dispatch on. Callers must pass the media type in canonical
+// form (lowercase, no parameters); use mediaType() to normalize before calling.
+func isBindableMediaType(ct string) bool {
+	_, ok := bindersByMediaType[ct]
+
+	return ok
+}
+
+// ValidateQueryContentType enforces RFC 10008's requirement that a QUERY request
+// carry a Content-Type the server can interpret. A missing Content-Type yields a
+// 400 (ErrorMissingParam); a present-but-unsupported one yields a 415
+// (ErrorUnsupportedMediaType). The supported set is isBindableMediaType, which
+// reads bindersByMediaType — the same map Bind's dispatch reads, so what the
+// guard accepts is exactly what Bind can decode. POST and the other verbs never
+// call this.
+//
+// Normalization goes through mediaType() (mime.ParseMediaType), so casing and
+// parameter differences — Application/JSON, application/json; charset=utf-8 —
+// resolve to the same canonical form the predicate checks.
+func ValidateQueryContentType(r *http.Request) error {
+	raw := r.Header.Get("Content-Type")
+	if strings.TrimSpace(raw) == "" {
+		return ErrorMissingParam{Params: []string{"Content-Type"}}
+	}
+
+	ct := mediaType(raw)
+	if !isBindableMediaType(ct) {
+		return ErrorUnsupportedMediaType{ContentType: raw}
+	}
+
+	return nil
+}
 
 var (
 	errNoFileFound    = errors.New("no files were bounded")
@@ -72,7 +138,10 @@ func (r *Request) PathParam(key string) string {
 	return r.pathParams[key]
 }
 
-// Bind parses the request body and binds it to the provided interface.
+// Bind parses the request body and binds it to the provided interface. The
+// media type → binder dispatch is bindersByMediaType, the same map
+// isBindableMediaType reads — the two paths share one source, not two
+// hand-maintained copies of the supported set.
 func (r *Request) Bind(i any) error {
 	// Binding into a non-pointer would unmarshal into a throwaway copy and leave
 	// the caller's value untouched, so reject it up front instead of silently
@@ -81,40 +150,35 @@ func (r *Request) Bind(i any) error {
 		return errNonPointerBind
 	}
 
-	contentType := mediaType(r.req.Header.Get("Content-Type"))
-
-	switch contentType {
-	case contentTypeJSON:
-		body, err := r.body()
-		if err != nil {
-			return err
-		}
-
-		return json.Unmarshal(body, &i)
-	case "multipart/form-data":
-		return r.bindMultipart(i)
-	case "application/x-www-form-urlencoded":
-		return r.bindFormURLEncoded(i)
-	// "binary/octet-stream" is GoFr's own spelling, kept for compatibility;
-	// "application/octet-stream" is the RFC 2046 one and is what clients
-	// actually send. Before Bind reported unsupported types, the RFC spelling
-	// fell through to a silent no-op; rejecting it instead of decoding it would
-	// have turned a naming gap into a hard error for the commoner spelling.
-	case contentTypeBinary, contentTypeOctetStream:
-		return r.bindBinary(i)
+	binder, ok := bindersByMediaType[mediaType(r.req.Header.Get("Content-Type"))]
+	if !ok {
+		// An unrecognized media type is a no-op: the target is left as it was
+		// and no error is reported.
+		//
+		// This silently discards a body the caller probably meant to bind, and
+		// an earlier revision of this PR rejected it with 415 for exactly that
+		// reason. That is a breaking change and it is not a quiet one:
+		// fetch(url, {method: "POST", body: str}) with no headers sends
+		// text/plain, so a handler that returns the Bind error would start
+		// answering 415 to a very common client shape. Those requests bind
+		// nothing today, but services that do not need the body work, and they
+		// would stop working. Left as it is deliberately.
+		return nil
 	}
 
-	// An unrecognized media type is a no-op: the target is left as it was and no
-	// error is reported.
-	//
-	// This silently discards a body the caller probably meant to bind, and an
-	// earlier revision of this PR rejected it with 415 for exactly that reason.
-	// That is a breaking change and it is not a quiet one: fetch(url, {method:
-	// "POST", body: str}) with no headers sends text/plain, so a handler that
-	// returns the Bind error would start answering 415 to a very common client
-	// shape. Those requests bind nothing today, but services that do not need
-	// the body work, and they would stop working. Left as it is deliberately.
-	return nil
+	return binder(r, i)
+}
+
+// bindJSON decodes a JSON request body into i. Extracted so JSON dispatch
+// matches the other binders in bindersByMediaType — every entry is a method
+// on *Request with the same signature.
+func (r *Request) bindJSON(i any) error {
+	body, err := r.body()
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(body, &i)
 }
 
 // mediaType extracts the bare media type from a Content-Type header value.

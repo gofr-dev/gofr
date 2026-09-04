@@ -12,7 +12,7 @@ GoFr promotes microservice architecture and to facilitate the same, it provides 
 at application level using `AddHTTPService()` method.
 
 Support for inter-service HTTP calls provide the following benefits:
-1. Access to the methods from container - GET, PUT, POST, PATCH, DELETE.
+1. Access to the methods from container - GET, PUT, POST, PATCH, DELETE, QUERY.
 2. Logs and traces for the request.
 3. {% new-tab-link newtab=false title="Circuit breaking" href="/docs/advanced-guide/circuit-breaker" /%} for enhanced resilience and fault tolerance.
 4. {% new-tab-link newtab=false title="Custom Health Check" href="/docs/advanced-guide/monitoring-service-health" /%} Endpoints
@@ -83,6 +83,9 @@ The HTTP service client provides methods for making requests to downstream servi
 
 - `Delete(ctx, path, body)`
 
+- `Query(ctx, path, queryParams, body)`
+
+
 **For scenarios requiring custom header propagation (authentication, multi-tenancy, user identity propagation), use the `WithHeaders` variants:**
 
 - `GetWithHeaders(ctx, path, queryParams, headers)`
@@ -94,6 +97,13 @@ The HTTP service client provides methods for making requests to downstream servi
 - `PatchWithHeaders(ctx, path, queryParams, body, headers)`
 
 - `DeleteWithHeaders(ctx, path, body, headers)`
+
+- `QueryWithHeaders(ctx, path, queryParams, body, headers)`
+
+> **QUERY** (RFC 10008) is a safe, idempotent method that carries the query in the
+> request body — bridging the gap between GET (no body) and POST (not safe/idempotent).
+> Like GET, QUERY calls are wrapped by the circuit-breaker and retry options when configured.
+
 
 ```go
 func Customer(ctx *gofr.Context) (any, error) {

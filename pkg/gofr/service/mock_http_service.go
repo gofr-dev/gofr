@@ -174,6 +174,36 @@ func (mr *MockHTTPMockRecorder) PostWithHeaders(ctx, path, queryParams, body, he
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostWithHeaders", reflect.TypeOf((*MockHTTP)(nil).PostWithHeaders), ctx, path, queryParams, body, headers)
 }
 
+// Query mocks base method.
+func (m *MockHTTP) Query(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, path, queryParams, body)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockHTTPMockRecorder) Query(ctx, path, queryParams, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockHTTP)(nil).Query), ctx, path, queryParams, body)
+}
+
+// QueryWithHeaders mocks base method.
+func (m *MockHTTP) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte, headers map[string]string) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithHeaders", ctx, path, queryParams, body, headers)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithHeaders indicates an expected call of QueryWithHeaders.
+func (mr *MockHTTPMockRecorder) QueryWithHeaders(ctx, path, queryParams, body, headers any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithHeaders", reflect.TypeOf((*MockHTTP)(nil).QueryWithHeaders), ctx, path, queryParams, body, headers)
+}
+
 // Put mocks base method.
 func (m *MockHTTP) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
 	m.ctrl.T.Helper()
@@ -389,4 +419,34 @@ func (m *MockhttpClient) PutWithHeaders(ctx context.Context, api string, queryPa
 func (mr *MockhttpClientMockRecorder) PutWithHeaders(ctx, api, queryParams, body, headers any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutWithHeaders", reflect.TypeOf((*MockhttpClient)(nil).PutWithHeaders), ctx, api, queryParams, body, headers)
+}
+
+// Query mocks base method.
+func (m *MockhttpClient) Query(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, path, queryParams, body)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockhttpClientMockRecorder) Query(ctx, path, queryParams, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockhttpClient)(nil).Query), ctx, path, queryParams, body)
+}
+
+// QueryWithHeaders mocks base method.
+func (m *MockhttpClient) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte, headers map[string]string) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithHeaders", ctx, path, queryParams, body, headers)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithHeaders indicates an expected call of QueryWithHeaders.
+func (mr *MockhttpClientMockRecorder) QueryWithHeaders(ctx, path, queryParams, body, headers any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithHeaders", reflect.TypeOf((*MockhttpClient)(nil).QueryWithHeaders), ctx, path, queryParams, body, headers)
 }

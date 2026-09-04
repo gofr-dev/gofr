@@ -216,3 +216,29 @@ func (rl *rateLimiter) DeleteWithHeaders(ctx context.Context, path string, body 
 
 	return rl.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
+
+// Query performs rate-limited HTTP QUERY request.
+func (rl *rateLimiter) Query(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, methodQuery, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.Query(ctx, path, queryParams, body)
+}
+
+// QueryWithHeaders performs rate-limited HTTP QUERY request with custom headers.
+func (rl *rateLimiter) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
+	headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, methodQuery, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+}

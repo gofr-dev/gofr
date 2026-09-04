@@ -143,6 +143,14 @@ type headerValue struct {
 // The method list is joined without appending to the caller's slice: that slice
 // is the router's RegisteredRoutes, and appending in place would write into it
 // whenever its capacity exceeded its length.
+//
+// RFC 10008 §3 Accept-Query is intentionally NOT emitted from here. That header
+// is path-scoped ("applies to every URI on the server that shares the same
+// path"), but this function only knows the deduplicated *methods* list on the
+// server and has no path/method map. Advertising a global Accept-Query from
+// here would turn one QUERY route anywhere into a false positive on every
+// other path. A truthful implementation needs a path-template → methods index
+// built at registration and threaded through here — separate change.
 func buildFixedHeaders(middlewareConfigs map[string]string, routes []string) (fixed []headerValue, methods []string) {
 	allowMethods := joinAllowedMethods(routes)
 	if custom, ok := middlewareConfigs[headerAccessControlAllowMethods]; ok && custom != "" {

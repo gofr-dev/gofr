@@ -60,7 +60,7 @@ func TestAuthProvider(t *testing.T) {
 		{authOption: validOAuthConfig, headers: map[string]string{AuthHeader: "auth-string"}, err: authHeaderExistsErr},
 	}
 
-	httpMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	httpMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, methodQuery}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
@@ -143,6 +143,8 @@ func callHTTPServiceWithHeaders(ctx context.Context, service HTTP, method string
 		return service.PatchWithHeaders(ctx, path, queryParams, body, headers)
 	case http.MethodDelete:
 		return service.DeleteWithHeaders(ctx, path, body, headers)
+	case methodQuery:
+		return service.QueryWithHeaders(ctx, path, queryParams, body, headers)
 	default:
 		return nil, AuthErr{Message: "unknown method"}
 	}
@@ -164,6 +166,8 @@ func callHTTPServiceWithoutHeaders(ctx context.Context, service HTTP, method str
 		return service.Patch(ctx, path, queryParams, body)
 	case http.MethodDelete:
 		return service.Delete(ctx, path, body)
+	case methodQuery:
+		return service.Query(ctx, path, queryParams, body)
 	default:
 		return nil, AuthErr{Message: "unknown method"}
 	}

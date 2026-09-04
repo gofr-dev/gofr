@@ -1138,3 +1138,68 @@ func TestBind_EmptyBodyWithUnsupportedTypeIsNoOp(t *testing.T) {
 		})
 	}
 }
+
+// TestBindPredicate_SingleSource pins the invariant that isBindableMediaType
+// and Bind read from the same source: for every media type in
+// bindersByMediaType, the predicate returns true, and there is no accepted
+// media type Bind cannot dispatch on. Kills the drift class this PR opened —
+// a new binder must be added to the map, and both callers pick it up at once.
+func TestBindPredicate_SingleSource(t *testing.T) {
+	require.NotEmpty(t, bindersByMediaType, "bindersByMediaType must not be empty")
+
+	for ct, binder := range bindersByMediaType {
+		t.Run(ct, func(t *testing.T) {
+			require.True(t, isBindableMediaType(ct),
+				"isBindableMediaType must accept every media type in bindersByMediaType")
+			require.NotNil(t, binder,
+				"every entry in bindersByMediaType must have a non-nil binder")
+		})
+	}
+}
+
+// TestValidateQueryContentType pins RFC 10008: a QUERY request MUST carry a
+// Content-Type the server can interpret. A missing Content-Type is a 400 and a
+// present-but-unsupported one is a 415. The accepted set is the same one Bind
+// dispatches on (see TestBindPredicate_SingleSource).
+func TestValidateQueryContentType(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantErr     error
+	}{
+		{"json is accepted", "application/json", nil},
+		{"json with charset is accepted", "application/json; charset=utf-8", nil},
+		{"form-urlencoded is accepted", "application/x-www-form-urlencoded", nil},
+		{"multipart is accepted", "multipart/form-data", nil},
+		{"binary is accepted", "binary/octet-stream", nil},
+		{"application/octet-stream is accepted", "application/octet-stream", nil},
+		{"missing content-type is 400", "", ErrorMissingParam{Params: []string{"Content-Type"}}},
+		{"xml is 415", "application/xml", ErrorUnsupportedMediaType{ContentType: "application/xml"}},
+		{"text/plain is 415", "text/plain", ErrorUnsupportedMediaType{ContentType: "text/plain"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequestWithContext(t.Context(), MethodQuery, "/search", http.NoBody)
+			if tc.contentType != "" {
+				r.Header.Set("Content-Type", tc.contentType)
+			}
+
+			err := ValidateQueryContentType(r)
+
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+func TestErrorUnsupportedMediaType(t *testing.T) {
+	assert.Equal(t, http.StatusUnsupportedMediaType, ErrorUnsupportedMediaType{}.StatusCode())
+	assert.Equal(t, "unsupported media type", ErrorUnsupportedMediaType{}.Error())
+	assert.Equal(t, "unsupported media type: application/xml",
+		ErrorUnsupportedMediaType{ContentType: "application/xml"}.Error())
+}

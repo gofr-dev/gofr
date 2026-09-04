@@ -28,6 +28,14 @@ func main() {
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
 
+	// QUERY (RFC 10008): a safe, idempotent method that carries the query in the
+	// request body. Read the body via ctx.Bind, the same as a POST.
+	a.QUERY("/search", SearchHandler)
+
+	// Outbound QUERY: same method available on the HTTP service client. Mirrors
+	// GET/POST/etc. — takes a body and returns the raw response for you to decode.
+	a.GET("/proxy-search", ProxySearchHandler)
+
 	// Run the application
 	a.Run()
 }
@@ -44,6 +52,51 @@ func HelloHandler(c *gofr.Context) (any, error) {
 
 func ErrorHandler(c *gofr.Context) (any, error) {
 	return nil, errors.New("some error occurred")
+}
+
+// SearchHandler demonstrates the HTTP QUERY method: the search criteria arrive in
+// the request body and are echoed back as the query result.
+func SearchHandler(c *gofr.Context) (any, error) {
+	criteria := struct {
+		Filter string `json:"filter"`
+	}{}
+
+	if err := c.Bind(&criteria); err != nil {
+		return nil, err
+	}
+
+	return map[string]string{"matched": criteria.Filter}, nil
+}
+
+// ProxySearchHandler demonstrates the outbound HTTP QUERY method: it forwards
+// a filter to the downstream `anotherService` at `/search` via svc.Query and
+// returns whatever the downstream matched. Mirrors the inbound SearchHandler
+// on the other side of the wire.
+func ProxySearchHandler(c *gofr.Context) (any, error) {
+	body := []byte(`{"filter":"golang"}`)
+
+	resp, err := c.GetHTTPService("anotherService").
+		QueryWithHeaders(c, "search", nil, body, map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	var out struct {
+		Data map[string]string `json:"data"`
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+
+	return out.Data, nil
 }
 
 func RedisHandler(c *gofr.Context) (any, error) {

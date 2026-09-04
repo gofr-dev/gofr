@@ -29,10 +29,12 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 	}
 }
 
-// EnableMCP exposes the app's read-only HTTP handlers (GET/HEAD/OPTIONS) as agent-callable tools over
-// an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Write
-// handlers are never exposed, so an agent cannot mutate state through this surface. The tools are also
-// reachable in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
+// EnableMCP exposes the app's safe HTTP handlers — read-only methods (GET/HEAD/OPTIONS) and QUERY
+// (RFC 10008, safe and idempotent, whose query payload is passed as a "body" tool argument) — as
+// agent-callable tools over an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables
+// the server). Write handlers (POST/PUT/PATCH/DELETE) are never exposed, so an agent cannot mutate
+// state through this surface. The tools are also reachable in handlers via ctx.LLM().Tools() regardless
+// of whether the server is enabled.
 func (a *App) EnableMCP(opts ...MCPOption) {
 	cfg := &mcpConfig{exclude: make(map[string]bool)}
 	for _, o := range opts {

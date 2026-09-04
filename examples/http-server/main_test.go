@@ -95,6 +95,38 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 }
 
+func TestIntegration_QueryHandler(t *testing.T) {
+	httpPort := testutil.GetFreePort(t)
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+	host := fmt.Sprintf("http://localhost:%d", httpPort)
+
+	go main()
+	testutil.WaitForHTTPServer(t, host)
+
+	req, _ := http.NewRequestWithContext(t.Context(), "QUERY", host+"/search", strings.NewReader(`{"filter":"golang"}`))
+	req.Header.Set("content-type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	data := struct {
+		Data map[string]string `json:"data"`
+	}{}
+	require.NoError(t, json.Unmarshal(b, &data))
+	assert.Equal(t, "golang", data.Data["matched"])
+}
+
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	httpPort := testutil.GetFreePort(t)
 	port := testutil.GetFreePort(t)

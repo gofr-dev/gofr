@@ -442,3 +442,65 @@ func newService(t *testing.T, server *httptest.Server) *httpService {
 		Logger: logging.NewMockLogger(logging.INFO),
 	}
 }
+
+func TestHTTPService_Query(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "QUERY", r.Method)
+		assert.Equal(t, "/search", r.URL.Path)
+		assert.Equal(t, "index=books", r.URL.RawQuery)
+		assert.JSONEq(t, `{"filter":"title"}`, string(body))
+		// Content-Type defaults to application/json when the caller sets none.
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	service := newService(t, server)
+	resp, err := service.Query(t.Context(), "search",
+		map[string]any{"index": "books"}, []byte(`{"filter":"title"}`))
+
+	validateResponse(t, resp, err, false)
+}
+
+func TestHTTPService_QueryWithHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "QUERY", r.Method)
+		assert.Equal(t, "/search", r.URL.Path)
+		assert.Equal(t, "application/sql", r.Header.Get("Content-Type"))
+		assert.Equal(t, "SELECT 1", string(body))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	service := newService(t, server)
+	resp, err := service.QueryWithHeaders(t.Context(), "search", nil, []byte("SELECT 1"),
+		map[string]string{"content-type": "application/sql"})
+
+	validateResponse(t, resp, err, false)
+}
+
+func TestHTTPService_Query_EmptyBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "QUERY", r.Method)
+		assert.Empty(t, string(body))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	service := newService(t, server)
+	resp, err := service.Query(t.Context(), "search", nil, nil)
+
+	validateResponse(t, resp, err, false)
+}
