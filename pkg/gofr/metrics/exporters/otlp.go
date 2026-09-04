@@ -3,6 +3,7 @@ package exporters
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -57,6 +58,10 @@ func buildOTLPExporter(ctx context.Context, cfg *Config) (metricSdk.Exporter, er
 	hasScheme := strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://")
 
 	if strings.EqualFold(cfg.Protocol, protocolHTTP) {
+		if hasScheme {
+			endpoint = httpEndpointWithSignalPath(endpoint)
+		}
+
 		opts := otlpOptions(cfg, endpoint, hasScheme, otlpOptionFuncs[otlpmetrichttp.Option]{
 			temporality: otlpmetrichttp.WithTemporalitySelector,
 			endpointURL: otlpmetrichttp.WithEndpointURL,
@@ -77,6 +82,27 @@ func buildOTLPExporter(ctx context.Context, cfg *Config) (metricSdk.Exporter, er
 	})
 
 	return otlpmetricgrpc.New(ctx, opts...)
+}
+
+// httpEndpointWithSignalPath appends the default OTLP/HTTP metrics signal path
+// (/v1/metrics) to a scheme-bearing endpoint that carries no path of its own.
+//
+// otlpmetrichttp's WithEndpointURL stopped appending the default signal path in
+// otel v1.45.0 (it now uses the root path "/" when the URL has none), so a
+// natural endpoint like "http://collector:4318" would silently POST to "/" and
+// 404 every export interval. Re-appending here restores the pre-1.45 behavior.
+// An explicitly-supplied path (including a bare "/") is left untouched, matching
+// how the exporter treated those before the change. A malformed endpoint is
+// returned as-is and left for the exporter to reject.
+func httpEndpointWithSignalPath(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Path != "" {
+		return endpoint
+	}
+
+	u.Path = "/v1/metrics"
+
+	return u.String()
 }
 
 // otlpOptionFuncs adapts the (structurally identical, but distinctly typed)
