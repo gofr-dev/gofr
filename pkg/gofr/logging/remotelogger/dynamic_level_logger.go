@@ -236,8 +236,24 @@ func (r *remoteLogger) UpdateLogLevel() {
 			r.currentLevel = newLevel
 			r.mu.Unlock()
 
-			logLevelChange(r, oldLevel, newLevel)
-			r.ChangeLevel(newLevel)
+			// Announce so the message always passes the gate. The gate is the
+			// level in force when the announcement is written (enabled: msg
+			// level >= current level), and the announcement is written at the
+			// level it is *about*.
+			//
+			// Lowering the level makes the gate more permissive, so announce
+			// AFTER ChangeLevel at the new (now-passing) level. Raising it makes
+			// the gate more restrictive, so announce BEFORE ChangeLevel while
+			// the old level still lets the message through. Either way the
+			// announced level is one the active gate admits, so no transition —
+			// including into or out of FATAL — is silently dropped.
+			if newLevel < oldLevel {
+				r.ChangeLevel(newLevel)
+				logLevelChange(r, oldLevel, newLevel, newLevel)
+			} else {
+				logLevelChange(r, oldLevel, newLevel, oldLevel)
+				r.ChangeLevel(newLevel)
+			}
 		} else {
 			r.mu.Unlock()
 		}
@@ -255,17 +271,16 @@ func (r *remoteLogger) UpdateLogLevel() {
 	}
 }
 
-// Helper function to log level changes at appropriate level.
-func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
-	// Use the higher level to ensure visibility
-	logLevel := oldLevel
-	if newLevel > oldLevel {
-		logLevel = newLevel
-	}
-
+// logLevelChange announces a remote level change. announceLevel is the level to
+// emit the announcement at, chosen by the caller so it passes the gate in force
+// at the moment of the call (see UpdateLogLevel). FATAL is never a valid
+// announceLevel here — the caller always picks the lower endpoint of the
+// transition — so it is mapped to WARN only as a defensive fallback and never
+// routed through Fatalf (which would exit the process).
+func logLevelChange(r *remoteLogger, oldLevel, newLevel, announceLevel logging.Level) {
 	message := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
 
-	switch logLevel {
+	switch announceLevel {
 	case logging.FATAL:
 		r.Warnf("%s", message)
 	case logging.ERROR:
