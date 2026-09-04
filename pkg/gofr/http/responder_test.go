@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1871,3 +1873,251 @@ func TestResponder_Char_MethodCaseSensitivity(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+// TestRespondEncoderIsReusedAcrossResponses pins that pooling the encoder with
+// its buffer does not leak one response into the next: each body must contain
+// only its own payload.
+func TestRespondEncoderIsReusedAcrossResponses(t *testing.T) {
+	for i := range 50 {
+		w := httptest.NewRecorder()
+		want := fmt.Sprintf("payload-%d", i)
+
+		NewResponder(w, http.MethodGet).Respond(map[string]string{"v": want}, nil)
+
+		body := w.Body.String()
+		require.Contains(t, body, want)
+		require.Equal(t, 1, strings.Count(body, "payload-"),
+			"a response must carry only its own payload, got %q", body)
+	}
+}
+
+// TestRespondEncoderConcurrent runs the pooled encoder under contention; the
+// race detector is the point of this test.
+
+// TestRespondEncoderConcurrent runs the pooled encoder under contention; the
+// race detector is the point of this test.
+func TestRespondEncoderConcurrent(t *testing.T) {
+	var wg sync.WaitGroup
+
+	for g := range 32 {
+		wg.Add(1)
+
+		go func(g int) {
+			defer wg.Done()
+
+			for i := range 25 {
+				w := httptest.NewRecorder()
+				want := fmt.Sprintf("g%d-i%d", g, i)
+
+				NewResponder(w, http.MethodGet).Respond(map[string]string{"v": want}, nil)
+
+				if !strings.Contains(w.Body.String(), want) {
+					t.Errorf("response lost its payload: %q", w.Body.String())
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+}
+
+// TestRespondEnvelopeDoesNotLeakMetadata is the isolation guard for reusing the
+// response envelope from the pool: a response carrying metadata must not leave
+// it behind for the next one, which sets no metadata at all.
+func TestRespondEnvelopeDoesNotLeakMetadata(t *testing.T) {
+	withMeta := httptest.NewRecorder()
+	NewResponder(withMeta, http.MethodGet).Respond(
+		resTypes.Response{Data: "first", Metadata: map[string]any{"secret": "classified"}}, nil)
+
+	require.Contains(t, withMeta.Body.String(), "classified")
+
+	// Drive enough follow-ups to make reuse of that pooled envelope certain.
+	for range 50 {
+		plain := httptest.NewRecorder()
+		NewResponder(plain, http.MethodGet).Respond(map[string]string{"v": "second"}, nil)
+
+		require.NotContains(t, plain.Body.String(), "classified",
+			"metadata from an earlier response leaked through the pool")
+		require.NotContains(t, plain.Body.String(), "metadata")
+	}
+}
+
+// TestRespondEnvelopeErrorDoesNotLeak covers the same hazard for the error field.
+func TestRespondEnvelopeErrorDoesNotLeak(t *testing.T) {
+	failed := httptest.NewRecorder()
+	NewResponder(failed, http.MethodGet).Respond(nil, errTestResponder)
+
+	require.Contains(t, failed.Body.String(), "error")
+
+	for range 50 {
+		ok := httptest.NewRecorder()
+		NewResponder(ok, http.MethodGet).Respond(map[string]string{"v": "fine"}, nil)
+
+		require.NotContains(t, ok.Body.String(), errTestResponder.Error(),
+			"an error from an earlier response leaked through the pool")
+	}
+}
+
+// TestContentTypeSharedValueSurvivesAdd is the safety proof for assigning the
+// shared Content-Type value slice: a later Header.Add must not mutate it.
+func TestContentTypeSharedValueSurvivesAdd(t *testing.T) {
+	before := append([]string(nil), jsonContentType...)
+
+	for range 3 {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond(map[string]string{"v": "x"}, nil)
+
+		w.Header().Add("Content-Type", "text/plain")
+	}
+
+	require.Equal(t, before, jsonContentType, "the shared Content-Type value must never be mutated")
+	require.Len(t, jsonContentType, 1)
+}
+
+// TestContentTypeNotOverriddenWhenAlreadySet pins that an already-set
+// Content-Type still wins, as it did with the previous Get/Set pair.
+
+// TestContentTypeNotOverriddenWhenAlreadySet pins that an already-set
+// Content-Type still wins, as it did with the previous Get/Set pair.
+func TestContentTypeNotOverriddenWhenAlreadySet(t *testing.T) {
+	w := httptest.NewRecorder()
+	w.Header().Set("Content-Type", "application/custom")
+
+	NewResponder(w, http.MethodGet).Respond(map[string]string{"v": "x"}, nil)
+
+	require.Equal(t, "application/custom", w.Header().Get("Content-Type"))
+}
+
+// responderBenchWriter keeps a header map and discards the body, so the benchmark measures the
+// responder rather than a recorder or the network.
+
+// BenchmarkResponder_Respond measures writing one successful JSON response, which is how the vast
+// majority of requests to a GoFr service end.
+//
+// Allocations are the metric. The envelope and its encoder have the same shape on every response and
+// the Content-Type is a constant, so anything allocated per response here is repeated work.
+func BenchmarkResponder_Respond(b *testing.B) {
+	payload := map[string]any{"id": "42", "name": "widget", "in_stock": true}
+	w := &responderBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		NewResponder(w, http.MethodGet).Respond(payload, nil)
+	}
+}
+
+// TestRespondContentTypeDefaultAppliesToPresentButEmpty pins that the default
+// applies when Content-Type is present with an empty value, not only when the
+// key is absent.
+//
+// The pre-pool guard was Header().Get("Content-Type") == "", which is a value
+// check: Get returns "" for an absent key AND for a key set to "". Replacing it
+// with a presence check silently changed that. A caller doing
+// header["Content-Type"] = []string{""} then shipped a JSON body with a blank
+// Content-Type, because the present-but-empty entry also suppresses net/http's
+// own content sniffing.
+
+// TestRespondContentTypeDefaultAppliesToPresentButEmpty pins that the default
+// applies when Content-Type is present with an empty value, not only when the
+// key is absent.
+//
+// The pre-pool guard was Header().Get("Content-Type") == "", which is a value
+// check: Get returns "" for an absent key AND for a key set to "". Replacing it
+// with a presence check silently changed that. A caller doing
+// header["Content-Type"] = []string{""} then shipped a JSON body with a blank
+// Content-Type, because the present-but-empty entry also suppresses net/http's
+// own content sniffing.
+func TestRespondContentTypeDefaultAppliesToPresentButEmpty(t *testing.T) {
+	tests := []struct {
+		name  string
+		seed  func(http.Header)
+		want  string
+		notes string
+	}{
+		{
+			name: "absent",
+			seed: func(http.Header) {},
+			want: "application/json",
+		},
+		{
+			name: "present but empty",
+			seed: func(h http.Header) { h["Content-Type"] = []string{""} },
+			want: "application/json",
+		},
+		{
+			name: "present but empty slice",
+			seed: func(h http.Header) { h["Content-Type"] = []string{} },
+			want: "application/json",
+		},
+		{
+			name: "already set is preserved",
+			seed: func(h http.Header) { h.Set("Content-Type", "application/vnd.api+json") },
+			want: "application/vnd.api+json",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			tc.seed(w.Header())
+
+			NewResponder(w, http.MethodGet).Respond(map[string]string{"a": "b"}, nil)
+
+			assert.Equal(t, tc.want, w.Header().Get("Content-Type"))
+		})
+	}
+}
+
+// TestPutRespBufClearsTheEnvelope is the real guard for the pooled envelope.
+//
+// The three "envelope does not leak" tests stay green even with putRespBuf's
+// `re.resp = response{}` deleted, because every JSON path fully reassigns re.resp
+// via a composite literal before encoding — so the clear is only load-bearing for
+// GC retention, which none of them assert. A future refactor that stopped fully
+// reassigning re.resp on some path would leak the previous response's metadata or
+// error into the next one, and those tests would not catch it.
+//
+// This one holds the pooled encoder and inspects it directly, so deleting the
+// clear fails.
+
+// TestPutRespBufClearsTheEnvelope is the real guard for the pooled envelope.
+//
+// The three "envelope does not leak" tests stay green even with putRespBuf's
+// `re.resp = response{}` deleted, because every JSON path fully reassigns re.resp
+// via a composite literal before encoding — so the clear is only load-bearing for
+// GC retention, which none of them assert. A future refactor that stopped fully
+// reassigning re.resp on some path would leak the previous response's metadata or
+// error into the next one, and those tests would not catch it.
+//
+// This one holds the pooled encoder and inspects it directly, so deleting the
+// clear fails.
+func TestPutRespBufClearsTheEnvelope(t *testing.T) {
+	re := getRespBuf()
+
+	// A fully populated envelope, so every field has something to leak.
+	re.resp = response{
+		Data:     map[string]string{"secret": "value"},
+		Metadata: map[string]any{"tenant": "acme"},
+		Error:    map[string]any{"message": "boom"},
+	}
+
+	putRespBuf(re)
+
+	assert.Nil(t, re.resp.Data, "a payload must not outlive its response inside the pool")
+	assert.Nil(t, re.resp.Metadata, "metadata must not outlive its response inside the pool")
+	assert.Nil(t, re.resp.Error, "an error must not outlive its response inside the pool")
+	assert.Equal(t, response{}, re.resp, "the whole envelope must be zeroed")
+}
+
+// errTestResponder is the stand-in error for the pooled-envelope guards; a
+// package-level static error keeps err113 satisfied.
+var errTestResponder = errors.New("responder pool guard")
+
+type responderBenchWriter struct{ h http.Header }
+
+func (w *responderBenchWriter) Header() http.Header       { return w.h }
+func (*responderBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*responderBenchWriter) WriteHeader(int)             {}

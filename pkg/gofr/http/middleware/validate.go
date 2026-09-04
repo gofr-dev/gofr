@@ -2,6 +2,8 @@ package middleware
 
 import "strings"
 
+const wellKnownPrefix = "/.well-known"
+
 func isWellKnown(path string) bool {
-	return strings.HasPrefix(path, "/.well-known")
+	return path == wellKnownPrefix || strings.HasPrefix(path, wellKnownPrefix+"/")
 }
