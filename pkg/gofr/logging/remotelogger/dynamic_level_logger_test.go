@@ -501,3 +501,51 @@ func TestRemoteLoggerLogEnabledAgreesWithLog(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteLogger_AllLevelTransitionsAnnounced(t *testing.T) {
+	levels := []logging.Level{
+		logging.DEBUG,
+		logging.INFO,
+		logging.NOTICE,
+		logging.WARN,
+		logging.ERROR,
+		logging.FATAL,
+	}
+
+	for _, oldLevel := range levels {
+		for _, newLevel := range levels {
+			if oldLevel == newLevel {
+				continue
+			}
+
+			t.Run(fmt.Sprintf("%s_to_%s", oldLevel, newLevel), func(t *testing.T) {
+				mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprintf(w, `{"data":{"serviceName":"test-service","logLevel":"%s"}}`, newLevel)
+				}))
+				defer mockServer.Close()
+
+				expectedMsg := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
+
+				var out string
+				stdout := testutil.StdoutOutputForFunc(func() {
+					stderr := testutil.StderrOutputForFunc(func() {
+						rl := New(oldLevel, mockServer.URL, 10*time.Millisecond)
+						time.Sleep(30 * time.Millisecond)
+
+						if r, ok := rl.(*remoteLogger); ok {
+							r.mu.RLock()
+							assert.Equal(t, newLevel, r.currentLevel)
+							r.mu.RUnlock()
+						}
+					})
+					out += stderr
+				})
+				out += stdout
+
+				assert.Contains(t, out, expectedMsg, "transition announcement must not be discarded")
+			})
+		}
+	}
+}
+
