@@ -103,7 +103,7 @@ func TestContainer_healthDuration(t *testing.T) {
 		{"surrounding whitespace", "  10s  ", 10 * time.Second},
 		{"a valid duration", "5s", 5 * time.Second},
 		{"sub-second", "250ms", 250 * time.Millisecond},
-		{"unparseable falls back to disabled", "soon", 0},
+		{"unparsable falls back to disabled", "soon", 0},
 		{"negative falls back to disabled", "-1s", 0},
 	}
 

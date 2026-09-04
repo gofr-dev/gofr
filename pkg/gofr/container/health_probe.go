@@ -30,6 +30,44 @@ type healthProbe struct {
 	mu       sync.RWMutex
 	result   map[string]any
 	storedAt time.Time
+	running  bool
+}
+
+// beginRound reports whether a fresh round of checks may start, and claims the round if so.
+//
+// It returns false only after a timeout: the leader abandons the outstanding checks rather than
+// canceling them — SQL, Redis and PubSub health methods take no context — and singleflight
+// releases its key as soon as that leader returns. Without this guard the next probe would start a
+// second set of goroutines against the same unanswering backend, and under Kubernetes probe traffic
+// that is one more leaked goroutine every probe interval, indefinitely.
+func (p *healthProbe) beginRound() bool {
+	if p == nil {
+		return true
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.running {
+		return false
+	}
+
+	p.running = true
+
+	return true
+}
+
+// endRound releases the claim taken by beginRound. After a timeout it must not be called until the
+// abandoned checks have actually finished, or the guard would let a second set start anyway.
+func (p *healthProbe) endRound() {
+	if p == nil {
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.running = false
 }
 
 // newHealthProbe returns a probe with the given cache TTL and per-round timeout. Zero disables

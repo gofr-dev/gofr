@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -32,6 +33,10 @@ const (
 // aggregateKeyCount is how many keys appHealth adds on top of the per-backend ones: name and
 // version. Only the snapshot buffer size depends on it.
 const aggregateKeyCount = 2
+
+// errorDetailKey is the key under which a health detail carries its failure reason, matching the
+// spelling datasources already use in their own Health details.
+const errorDetailKey = "error"
 
 // healthSingleflightKey names the single in-flight round of checks. There is only ever one, so the
 // key is a constant; it exists only because singleflight is keyed by design.
@@ -68,6 +73,12 @@ func (c *Container) Health(ctx context.Context) any {
 			return cached, nil
 		}
 
+		if !c.health.beginRound() {
+			// A previous round timed out and its checks are still running against a backend that
+			// has not answered. Report that rather than piling a second set of checks onto it.
+			return c.stalledHealth(), nil
+		}
+
 		healthMap, complete := c.runHealthChecks(context.WithoutCancel(ctx), c.health.timeout)
 
 		// A partial result is never cached: the backends that did not answer are unknown, not healthy.
@@ -86,6 +97,11 @@ func (c *Container) Health(ctx context.Context) any {
 // runHealthChecks fans out to every configured backend and waits for them. It reports whether every
 // check finished; a false means the timeout elapsed first and the map holds only what had been
 // recorded by then.
+//
+// It releases the round claim that Health took with beginRound — split deliberately, because only
+// this function knows when the abandoned checks are done, and releasing at the timeout is what the
+// guard exists to prevent. The one other caller, Health's no-probe path, has a nil probe, so the
+// release is a no-op there rather than a claim it never took.
 func (c *Container) runHealthChecks(ctx context.Context, timeout time.Duration) (healthMap map[string]any, complete bool) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -102,7 +118,20 @@ func (c *Container) runHealthChecks(ctx context.Context, timeout time.Duration) 
 	c.checkExternalDatasources(ctx, collector, &wg)
 	c.checkServices(ctx, collector, &wg)
 
-	complete = waitForChecks(ctx, &wg)
+	complete, finished := waitForChecks(ctx, &wg)
+
+	if complete {
+		c.health.endRound()
+	} else {
+		// The abandoned checks are still writing into the collector, so the round is not over even
+		// though this caller is done with it. Release it only once they finish, which is what keeps
+		// the next probe from starting a second set against the same hung backend. This rides the
+		// waiter waitForChecks already started rather than blocking on the same WaitGroup twice.
+		go func() {
+			<-finished
+			c.health.endRound()
+		}()
+	}
 
 	healthMap, downCount := collector.snapshot()
 
@@ -126,14 +155,17 @@ func (c *Container) runHealthChecks(ctx context.Context, timeout time.Duration) 
 // two happened. Checks still outstanding at a timeout are abandoned rather than canceled: the
 // health methods of SQL, Redis and PubSub take no context, so there is nothing to cancel them with.
 // They keep writing into the collector afterwards, which is why only a snapshot ever leaves it.
-func waitForChecks(ctx context.Context, wg *sync.WaitGroup) bool {
+// On a timeout it also returns a channel closed when those abandoned checks eventually do finish,
+// so the caller can release the round claim then rather than starting a second goroutine of its own
+// to wait for the same WaitGroup. It is nil whenever there is nothing left to wait for.
+func waitForChecks(ctx context.Context, wg *sync.WaitGroup) (complete bool, finished <-chan struct{}) {
 	if ctx.Done() == nil {
 		// Nothing can interrupt this round, which is the case whenever no timeout is configured —
 		// the default. Wait for it directly rather than making the common path pay for a goroutine
 		// and a channel that only the timeout path can use.
 		wg.Wait()
 
-		return true
+		return true, nil
 	}
 
 	done := make(chan struct{})
@@ -145,29 +177,29 @@ func waitForChecks(ctx context.Context, wg *sync.WaitGroup) bool {
 
 	select {
 	case <-done:
-		return true
+		return true, nil
 	case <-ctx.Done():
-		return false
+		return false, done
 	}
 }
 
 func (c *Container) checkPrimaryDatasources(ctx context.Context, collector *healthCollector, wg *sync.WaitGroup) {
 	if !isNil(c.SQL) {
-		runCheck(wg, func() {
+		runCheck(wg, collector, sqlKey, func() {
 			health := c.SQL.HealthCheck()
 			collector.record(sqlKey, health, health.Status == datasource.StatusDown)
 		})
 	}
 
 	if !isNil(c.Redis) {
-		runCheck(wg, func() {
+		runCheck(wg, collector, redisKey, func() {
 			health := c.Redis.HealthCheck()
 			collector.record(redisKey, health, health.Status == datasource.StatusDown)
 		})
 	}
 
 	if c.PubSub != nil {
-		runCheck(wg, func() {
+		runCheck(wg, collector, pubsubKey, func() {
 			health := c.PubSub.Health()
 			collector.record(pubsubKey, health, health.Status == datasource.StatusDown)
 		})
@@ -179,7 +211,7 @@ func (c *Container) checkPrimaryDatasources(ctx context.Context, collector *heal
 			key = llmKey + "_" + name
 		}
 
-		runCheck(wg, func() {
+		runCheck(wg, collector, key, func() {
 			health := model.HealthCheck(ctx)
 			collector.record(key, health, health.Status == datasource.StatusDown)
 		})
@@ -207,7 +239,7 @@ func (c *Container) checkExternalDatasources(ctx context.Context, collector *hea
 			continue
 		}
 
-		runCheck(wg, func() {
+		runCheck(wg, collector, name, func() {
 			health, err := ds.HealthCheck(ctx)
 			collector.record(name, health, err != nil)
 		})
@@ -216,7 +248,7 @@ func (c *Container) checkExternalDatasources(ctx context.Context, collector *hea
 
 func (c *Container) checkServices(ctx context.Context, collector *healthCollector, wg *sync.WaitGroup) {
 	for name, svc := range c.Services {
-		runCheck(wg, func() {
+		runCheck(wg, collector, name, func() {
 			health := svc.HealthCheck(ctx)
 			collector.record(name, health, health.Status == datasource.StatusDown)
 		})
@@ -224,11 +256,25 @@ func (c *Container) checkServices(ctx context.Context, collector *healthCollecto
 }
 
 // runCheck runs one backend check on its own goroutine, registered with wg.
-func runCheck(wg *sync.WaitGroup, check func()) {
+//
+// The recover is load-bearing, not defensive habit. When these checks ran inline they were under
+// the panic-recovery middleware of whichever handler called Health, so a driver that panicked cost
+// one request; from a goroutine of our own the same panic takes the process down with it. A backend
+// that panics is reported DOWN, which is what it is.
+func runCheck(wg *sync.WaitGroup, collector *healthCollector, name string, check func()) {
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
+
+		defer func() {
+			if r := recover(); r != nil {
+				collector.record(name, datasource.Health{
+					Status:  datasource.StatusDown,
+					Details: map[string]any{errorDetailKey: fmt.Sprintf("health check panicked: %v", r)},
+				}, true)
+			}
+		}()
 
 		check()
 	}()
@@ -302,4 +348,17 @@ func isNil(i any) bool {
 
 	// If the interface is not assigned or is nil, return true
 	return !val.IsValid() || val.IsNil()
+}
+
+// stalledHealth is the body returned while a previous round's checks are still outstanding. It
+// carries no per-backend keys: what those backends are doing is exactly what is unknown, and
+// reporting the last round's values would present stale results as fresh ones.
+func (c *Container) stalledHealth() map[string]any {
+	healthMap := make(map[string]any, aggregateKeyCount+1)
+
+	// downCount is 1 rather than 0 so the aggregate is DEGRADED: the app is serving, but at least
+	// one dependency has not answered within the timeout.
+	c.appHealth(healthMap, 1)
+
+	return healthMap
 }

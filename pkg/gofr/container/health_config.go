@@ -19,7 +19,7 @@ const (
 )
 
 // healthDuration reads one of the health duration settings. Both default to disabled, so anything
-// that is not a usable positive duration -- unset, "0", "disabled", unparseable, or negative --
+// that is not a usable positive duration -- unset, "0", "disabled", unparsable, or negative --
 // turns the feature off. The two malformed cases are logged, because they are almost always a typo
 // in a config file rather than an intent to disable.
 func (c *Container) healthDuration(conf config.Config, key string) time.Duration {

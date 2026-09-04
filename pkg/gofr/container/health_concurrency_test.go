@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -395,4 +396,185 @@ func TestContainer_Health_IncludesLLMModels(t *testing.T) {
 			assert.Equal(t, tc.expected, result["status"])
 		})
 	}
+}
+
+// panicHTTPService is a service.HTTP whose health check panics, standing in for a driver that
+// panics on a malformed response or a nil dependency.
+type panicHTTPService struct {
+	service.HTTP
+}
+
+func (*panicHTTPService) HealthCheck(context.Context) *service.Health {
+	panic("boom")
+}
+
+// A panicking backend used to be contained by the handler's panic-recovery middleware, because the
+// checks ran inline on the request goroutine. Running them concurrently moved them out from under
+// it, where the same panic takes the process down instead of one request.
+func TestContainer_Health_PanickingBackendIsReportedDown(t *testing.T) {
+	c := &Container{
+		Logger:     logging.NewMockLogger(logging.ERROR),
+		appName:    "test-app",
+		appVersion: "test",
+		health:     newHealthProbe(0, 0),
+		Services: map[string]service.HTTP{
+			"panicking-service": &panicHTTPService{},
+		},
+	}
+
+	// The assertion is as much that this line is reached at all: without the recover the panic
+	// unwinds a goroutine of ours and the test binary dies rather than failing.
+	result, ok := c.Health(t.Context()).(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, datasource.StatusDegraded, result["status"], "a panicking backend must not report UP")
+
+	reported, ok := result["panicking-service"].(datasource.Health)
+	require.True(t, ok, "the panicking backend must still appear in the body")
+	assert.Equal(t, datasource.StatusDown, reported.Status)
+	assert.Contains(t, reported.Details["error"], "panicked")
+}
+
+// After a timeout the outstanding checks are abandoned rather than canceled, so they are still
+// running when the next probe arrives. That probe must not start a second set against the same
+// unanswering backend: under Kubernetes probe traffic that is one more leaked goroutine every
+// probe interval, for as long as the backend stays hung.
+func TestContainer_Health_DoesNotStackRoundsAfterTimeout(t *testing.T) {
+	var started atomic.Int64
+
+	released := make(chan struct{})
+
+	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		started.Add(1)
+		<-released
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Cleanup(func() {
+		close(released)
+		hung.Close()
+	})
+
+	logger := logging.NewMockLogger(logging.ERROR)
+
+	c := &Container{
+		Logger:     logger,
+		appName:    "test-app",
+		appVersion: "test",
+		health:     newHealthProbe(0, 50*time.Millisecond),
+		Services: map[string]service.HTTP{
+			"hung-service": service.NewHTTPService(hung.URL, logger, nil),
+		},
+	}
+
+	// Several sequential probes, each of which times out. Sequential rather than concurrent on
+	// purpose: singleflight already collapses concurrent callers, so only separate rounds can
+	// expose the stacking.
+	const probes = 4
+
+	for range probes {
+		result, ok := c.Health(t.Context()).(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, datasource.StatusDegraded, result["status"])
+	}
+
+	assert.Equal(t, int64(1), started.Load(),
+		"each probe started another check against a backend that had not answered the first")
+}
+
+// The in-flight guard must not be a one-way door. Once the abandoned checks finally answer, the
+// claim is released and the next probe runs a fresh round — otherwise a single slow backend would
+// pin the endpoint to DEGRADED for the life of the process.
+func TestContainer_Health_RecoversAfterHungBackendAnswers(t *testing.T) {
+	release := make(chan struct{})
+
+	var calls atomic.Int64
+
+	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(hung.Close)
+
+	logger := logging.NewMockLogger(logging.ERROR)
+
+	c := &Container{
+		Logger:     logger,
+		appName:    "test-app",
+		appVersion: "test",
+		health:     newHealthProbe(0, 50*time.Millisecond),
+		Services: map[string]service.HTTP{
+			"hung": service.NewHTTPService(hung.URL, logger, nil),
+		},
+	}
+
+	for i := range 3 {
+		m, ok := c.Health(t.Context()).(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, datasource.StatusDegraded, m["status"], "probe %d while the backend hung", i)
+	}
+
+	require.Equal(t, int64(1), calls.Load(), "rounds stacked while the backend was hung")
+
+	close(release)
+
+	require.Eventually(t, func() bool {
+		m, ok := c.Health(t.Context()).(map[string]any)
+
+		return ok && m["status"] == datasource.StatusUp
+	}, 10*time.Second, 50*time.Millisecond,
+		"health never recovered after the hung backend answered — the round claim leaked")
+}
+
+// The point of the in-flight guard is that goroutines do not accumulate. Counting them directly is
+// the only assertion that actually proves it: the round count could stay at one while each timed-out
+// round still left a waiter behind.
+func TestContainer_Health_TimeoutsDoNotAccumulateGoroutines(t *testing.T) {
+	release := make(chan struct{})
+
+	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Cleanup(func() {
+		close(release)
+		hung.Close()
+	})
+
+	logger := logging.NewMockLogger(logging.ERROR)
+
+	c := &Container{
+		Logger:     logger,
+		appName:    "test-app",
+		appVersion: "test",
+		health:     newHealthProbe(0, 20*time.Millisecond),
+		Services: map[string]service.HTTP{
+			"hung": service.NewHTTPService(hung.URL, logger, nil),
+		},
+	}
+
+	// One probe first, so the goroutines a single timed-out round legitimately keeps — the
+	// abandoned check and the waiter that releases the claim — are already in the baseline.
+	_ = c.Health(t.Context())
+
+	time.Sleep(50 * time.Millisecond)
+
+	baseline := runtime.NumGoroutine()
+
+	for range 25 {
+		_ = c.Health(t.Context())
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	growth := runtime.NumGoroutine() - baseline
+
+	// Without the guard each probe leaves behind its own check plus a waiter, so 25 probes grow
+	// the count by roughly 50. A couple of goroutines of slack absorbs the runtime's own churn.
+	assert.LessOrEqual(t, growth, 5,
+		"25 timed-out probes grew the goroutine count by %d; rounds are accumulating", growth)
+
+	t.Logf("25 timed-out probes: goroutine growth %d (baseline %d)", growth, baseline)
 }
