@@ -121,6 +121,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  MCP_PORT
+-  Port on which the MCP server listens, bound to loopback. Only used when `app.EnableMCP()` is called; a port that cannot be claimed fails startup. Set to `0` to keep tools available in-process while serving no MCP transport. A non-numeric or out-of-range value is reported and falls back to the default. Note the default collides with Vault's — see [MCP](/docs/advanced-guide/mcp).
+-  8200
+
+---
+
 -  TRACE_EXPORTER
 -  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp.
 
