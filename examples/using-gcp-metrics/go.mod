@@ -3,7 +3,7 @@ module gofr.dev/examples/using-gcp-metrics
 go 1.26.0
 
 require (
-	gofr.dev v1.59.0
+	gofr.dev v1.60.1
 	gofr.dev/pkg/gofr/metrics/exporters/gcp v0.0.0
 )
 
