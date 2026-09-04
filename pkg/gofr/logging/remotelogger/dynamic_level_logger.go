@@ -236,8 +236,13 @@ func (r *remoteLogger) UpdateLogLevel() {
 			r.currentLevel = newLevel
 			r.mu.Unlock()
 
-			logLevelChange(r, oldLevel, newLevel)
-			r.ChangeLevel(newLevel)
+			if newLevel > oldLevel {
+				logLevelChange(r, oldLevel, newLevel)
+				r.ChangeLevel(newLevel)
+			} else {
+				r.ChangeLevel(newLevel)
+				logLevelChange(r, oldLevel, newLevel)
+			}
 		} else {
 			r.mu.Unlock()
 		}
@@ -257,27 +262,31 @@ func (r *remoteLogger) UpdateLogLevel() {
 
 // Helper function to log level changes at appropriate level.
 func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
-	// Use the higher level to ensure visibility
-	logLevel := oldLevel
-	if newLevel > oldLevel {
-		logLevel = newLevel
-	}
-
 	message := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
 
+	logLevel := newLevel
+	if newLevel > oldLevel {
+		logLevel = newLevel
+		if newLevel == logging.FATAL {
+			if oldLevel == logging.ERROR {
+				logLevel = logging.ERROR
+			} else {
+				logLevel = logging.WARN
+			}
+		}
+	}
+
 	switch logLevel {
-	case logging.FATAL:
-		r.Warnf("%s", message)
 	case logging.ERROR:
 		r.Errorf("%s", message)
 	case logging.WARN:
 		r.Warnf("%s", message)
 	case logging.NOTICE:
 		r.Noticef("%s", message)
-	case logging.INFO:
+	case logging.INFO, logging.DEBUG:
 		r.Infof("%s", message)
-	case logging.DEBUG:
-		r.Infof("%s", message) // Using Info for DEBUG to ensure visibility
+	default:
+		r.Infof("%s", message)
 	}
 }
 
