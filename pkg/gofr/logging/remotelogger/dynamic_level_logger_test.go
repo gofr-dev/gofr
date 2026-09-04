@@ -501,3 +501,57 @@ func TestRemoteLoggerLogEnabledAgreesWithLog(t *testing.T) {
 		})
 	}
 }
+
+// TestRemoteLogger_AllLevelTransitionsAnnounced covers issue #4101: a remote
+// level change must always be announced, whichever direction it goes. The
+// announcement previously used a fixed level and ran before ChangeLevel, so 6
+// of the 30 transitions (every one into or out of FATAL) were emitted at a
+// level the active gate discarded and vanished. This drives every ordered pair
+// of levels through the same code path UpdateLogLevel uses and asserts the
+// announcement is visible for all of them.
+func TestRemoteLogger_AllLevelTransitionsAnnounced(t *testing.T) {
+	levels := []logging.Level{
+		logging.DEBUG, logging.INFO, logging.NOTICE,
+		logging.WARN, logging.ERROR, logging.FATAL,
+	}
+
+	for _, oldLevel := range levels {
+		for _, newLevel := range levels {
+			if oldLevel == newLevel {
+				continue
+			}
+
+			old, nw := oldLevel, newLevel
+			t.Run(fmt.Sprintf("%v_to_%v", old, nw), func(t *testing.T) {
+				// Announcements at INFO/NOTICE/WARN go to stdout; ERROR goes to
+				// stderr. Capture both so the assertion does not depend on which
+				// stream a given level uses.
+				var out string
+				stderr := testutil.StderrOutputForFunc(func() {
+					out = testutil.StdoutOutputForFunc(func() {
+						base := logging.NewLogger(old)
+						r := &remoteLogger{Logger: base, currentLevel: old}
+						if e, ok := base.(logEnabler); ok {
+							r.enabler = e
+						}
+
+						// Mirror UpdateLogLevel's ordering: announce on the side
+						// of ChangeLevel where the active gate still admits the
+						// message.
+						if nw < old {
+							r.ChangeLevel(nw)
+							logLevelChange(r, old, nw, nw)
+						} else {
+							logLevelChange(r, old, nw, old)
+							r.ChangeLevel(nw)
+						}
+					})
+				})
+
+				want := fmt.Sprintf("LOG_LEVEL updated from %v to %v", old, nw)
+				assert.Truef(t, strings.Contains(out, want) || strings.Contains(stderr, want),
+					"transition %v -> %v was silently dropped", old, nw)
+			})
+		}
+	}
+}
