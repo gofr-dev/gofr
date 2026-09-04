@@ -62,20 +62,26 @@ func (a *App) Run() {
 }
 
 // handleStartupHooks runs the startup hooks and returns false if the application should exit.
+//
+// A hook that fails abandons the run the same way an unclaimable MCP port does, and for the same
+// reason has to release what startup has already opened: the container's datasources are live by
+// the time the hooks run, and Run returns normally from here rather than exiting.
 func (a *App) handleStartupHooks(ctx context.Context) bool {
-	if err := a.runOnStartHooks(ctx); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			a.Logger().Errorf("Startup failed: %v", err)
-
-			return false
-		}
-		// If the error is context.Canceled, do not exit; allow graceful shutdown.
-		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
-
-		return false
+	err := a.runOnStartHooks(ctx)
+	if err == nil {
+		return true
 	}
 
-	return true
+	if errors.Is(err, context.Canceled) {
+		// A canceled context is an operator stopping the process, not a broken hook.
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+	} else {
+		a.Logger().Errorf("Startup failed: %v", err)
+	}
+
+	a.shutdownAfterFailedStartup()
+
+	return false
 }
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
@@ -164,15 +170,20 @@ func (a *App) bindMCPServer(ctx context.Context) bool {
 }
 
 // shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned
-// before any server is up. Run returns normally afterwards, so without this the datasource
-// connections opened by the container would be left to process exit.
+// before any server is up — a failed startup hook, or an MCP port that cannot be claimed. Run
+// returns normally afterwards, so without this the datasource connections opened by the container
+// would be left to process exit.
+//
+// The timeout is deliberately taken from a fresh Background context rather than the run's own: the
+// run context may already be canceled (that is one of the ways startup is abandoned), and a
+// shutdown that inherited it would be dead on arrival.
 func (a *App) shutdownAfterFailedStartup() {
 	// The error is ignored deliberately: getShutdownTimeoutFromConfig returns the default timeout
 	// alongside it, and a malformed SHUTDOWN_GRACE_PERIOD has already been reported by the caller
 	// that reaches Run's normal path.
 	timeout, _ := getShutdownTimeoutFromConfig(a.Config)
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if err := a.Shutdown(ctx); err != nil {

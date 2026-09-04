@@ -604,3 +604,37 @@ func TestBindMCPServer_CanceledContextReportsGracefulShutdown(t *testing.T) {
 	assert.NotContains(t, logs, "Set MCP_PORT to a free port",
 		"a canceled bind is not a port conflict and must not suggest the port remedy")
 }
+
+// TestBindMCPServer_FailedBindReleasesDatasources pins the cleanup, which is otherwise invisible:
+// the run is abandoned before any server starts, but the startup hooks have already run and the
+// container's datasources are open, and Run returns normally rather than exiting. Without the
+// shutdown they would be left to process exit.
+//
+// "Application shutdown complete" is the last thing (*App).Shutdown logs, so its presence is what
+// distinguishes a cleaned-up abort from a bare return.
+func TestBindMCPServer_FailedBindReleasesDatasources(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	occupied, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = occupied.Close() })
+
+	t.Setenv("MCP_PORT", strconv.Itoa(occupied.Addr().(*net.TCPAddr).Port))
+
+	var proceed bool
+
+	// Shutdown logs at INFO, which goes to stdout — the bind error itself goes to stderr and is
+	// asserted by TestBindMCPServer_OccupiedPortAbortsStartup.
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+		app.EnableMCP()
+
+		proceed = app.bindMCPServer(t.Context())
+	})
+
+	require.False(t, proceed)
+	assert.Contains(t, logs, "Application shutdown complete",
+		"a failed bind must release what startup opened, not return and leave it to process exit")
+}

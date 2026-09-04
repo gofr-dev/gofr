@@ -1965,3 +1965,38 @@ func Test_HTTPMethods(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleStartupHooks_FailureReleasesDatasources covers the other half of the abandoned-startup
+// contract. The hooks run after the container has opened its datasources, and a failing hook returns
+// from Run normally, so the connections have to be released on the way out rather than left to
+// process exit.
+func TestHandleStartupHooks_FailureReleasesDatasources(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "hook error", err: errHookFailed},
+		{name: "context canceled", err: context.Canceled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			var proceed bool
+
+			// Shutdown logs its completion at INFO, on stdout.
+			logs := testutil.StdoutOutputForFunc(func() {
+				app := New()
+				app.OnStart(func(_ *Context) error { return tt.err })
+
+				proceed = app.handleStartupHooks(t.Context())
+			})
+
+			require.False(t, proceed)
+			assert.Contains(t, logs, "Application shutdown complete",
+				"a failed startup hook must release what the container opened")
+		})
+	}
+}
