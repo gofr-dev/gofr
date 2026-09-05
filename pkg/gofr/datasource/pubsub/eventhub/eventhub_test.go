@@ -627,3 +627,52 @@ func Test_Health_BoundsAProbeThatIgnoresContext(t *testing.T) {
 		"the caller must see the deadline, not a nil error")
 	require.NotContains(t, health.Details, "partitionCount", "an unanswered probe has no partition count")
 }
+
+// Test_Health_PartitionCountIsTheRealCount pins partitionCount to the length the probe reported.
+// The only other connected test uses four partitions, so a mutation replacing len(props.PartitionIDs)
+// with the constant 4 -- or wrapping the assignment in a len > 0 guard -- passed the whole suite.
+func Test_Health_PartitionCountIsTheRealCount(t *testing.T) {
+	for _, partitions := range [][]string{{}, {"0"}, {"0", "1", "2"}} {
+		client := newHealthTestClient(t, &mockConsumerClient{
+			getPropsFunc: func(context.Context,
+				*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+				return azeventhubs.EventHubProperties{PartitionIDs: partitions}, nil
+			},
+		})
+
+		health := client.Health()
+
+		require.Equal(t, datasource.StatusUp, health.Status)
+		require.Equal(t, len(partitions), health.Details["partitionCount"],
+			"partitionCount must be the reported count, including zero")
+	}
+}
+
+// Test_Health_ProbeDeadlineIsTwoSeconds pins the deadline itself. The elapsed-time assertion in
+// Test_HealthCheck is bounded by 2*eventHubPropsTimeout, so both the deadline and the bound move
+// together and raising the constant to 30s passes. This reads the deadline the probe was actually
+// given and compares it against a literal, so the constant cannot drift unnoticed -- and it costs
+// no wall clock.
+func Test_Health_ProbeDeadlineIsTwoSeconds(t *testing.T) {
+	var (
+		gotDeadline bool
+		remaining   time.Duration
+	)
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(ctx context.Context,
+			_ *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			deadline, ok := ctx.Deadline()
+			gotDeadline = ok
+			remaining = time.Until(deadline)
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	client.Health()
+
+	require.True(t, gotDeadline, "the probe must be given a deadline")
+	require.Greater(t, remaining, 1500*time.Millisecond, "deadline is shorter than expected, got %v", remaining)
+	require.LessOrEqual(t, remaining, 2*time.Second, "deadline is longer than expected, got %v", remaining)
+}
