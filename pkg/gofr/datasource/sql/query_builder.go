@@ -88,27 +88,36 @@ func DeleteByQuery(dialect, tableName, field string) string {
 		bindVar(dialect, 1))
 }
 
+// validateNotNull rejects a value that cannot satisfy a NOT NULL column.
+//
+// Dispatch is on reflect.Kind rather than on the concrete type. A type switch only matches the
+// predeclared types exactly, so a named type -- `type Count uint`, which is ordinary in an entity
+// struct -- misses every case and lands in the default path. On the kind, Count and uint are the
+// same thing and get the same answer.
+//
+//nolint:exhaustive // every remaining kind is deliberately handled by validateDefaultNotNull.
 func validateNotNull(fieldName string, value any, isNotNull bool) error {
 	if !isNotNull {
 		return nil
 	}
 
-	switch v := value.(type) {
-	case string:
-		return validateStringNotNull(fieldName, v)
-	case int, int8, int16, int32, int64:
-		return validateIntNotNull(fieldName, v)
-	case uint, uint8, uint16, uint32, uint64:
-		return validateUintNotNull(fieldName, v)
-	case float32, float64:
-		return validateFloatNotNull(fieldName, v)
+	switch reflect.ValueOf(value).Kind() {
+	case reflect.String:
+		return validateStringNotNull(fieldName, value)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return validateIntNotNull(fieldName, value)
+	// reflect.Value.Int panics on unsigned kinds, so these read through Uint instead.
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return validateUintNotNull(fieldName, value)
+	case reflect.Float32, reflect.Float64:
+		return validateFloatNotNull(fieldName, value)
 	default:
 		return validateDefaultNotNull(fieldName, value)
 	}
 }
 
-func validateStringNotNull(fieldName, value string) error {
-	if value == "" {
+func validateStringNotNull(fieldName string, value any) error {
+	if reflect.ValueOf(value).String() == "" {
 		return fmt.Errorf("%w: %s", errFieldCannotBeEmpty, fieldName)
 	}
 

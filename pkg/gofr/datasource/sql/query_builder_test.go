@@ -290,3 +290,52 @@ func Test_validateNotNull_NonNillableKinds(t *testing.T) {
 	require.EqualError(t, validateNotNull("meta", map[string]int(nil), true), "field cannot be null: meta")
 	require.EqualError(t, validateNotNull("value", nil, true), "field cannot be null: value")
 }
+
+// namedCount and namedName stand in for the named types an entity struct normally uses. A type
+// switch matches only the predeclared types, so before the dispatch moved to reflect.Kind these
+// missed every case and fell through to the default path -- where IsNil panicked on them.
+type (
+	namedCount uint
+	namedAge   int
+	namedName  string
+)
+
+func Test_validateNotNull_NamedTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   any
+		wantErr string
+	}{
+		{"named uint, zero", namedCount(0), "field cannot be zero: f"},
+		{"named uint, set", namedCount(7), ""},
+		{"named int, zero", namedAge(0), "field cannot be zero: f"},
+		{"named int, set", namedAge(30), ""},
+		{"named string, empty", namedName(""), "field cannot be empty: f"},
+		{"named string, set", namedName("gofr"), ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateNotNull("f", tc.value, true)
+
+			if tc.wantErr == "" {
+				require.NoError(t, err, "a named type must validate like its underlying kind")
+
+				return
+			}
+
+			require.EqualError(t, err, tc.wantErr, "a named type must validate like its underlying kind")
+		})
+	}
+}
+
+// Test_validateNotNull_Floats closes the non-zero float branch, which no other test reached.
+func Test_validateNotNull_Floats(t *testing.T) {
+	require.NoError(t, validateNotNull("price", float32(1.5), true))
+	require.NoError(t, validateNotNull("price", 1.5, true))
+	require.EqualError(t, validateNotNull("price", float32(0), true), "field cannot be zero: price")
+	require.EqualError(t, validateNotNull("price", 0.0, true), "field cannot be zero: price")
+
+	// isNotNull false short-circuits before any reflection, whatever the value.
+	require.NoError(t, validateNotNull("price", nil, false))
+}
