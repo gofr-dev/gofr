@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bufio"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -158,6 +159,19 @@ type logEnabler interface {
 	LogEnabled() bool
 }
 
+// entryLogger is the optional fast-path interface for logging one already-built
+// entry.
+//
+// The plain logger contract is Log(...any), so Log(l) allocates a one-element
+// []any on every request purely to be unwrapped again inside the logger. A
+// logger that can take the entry directly avoids it. An implementation without
+// these methods falls back to Log/Error and behaves exactly as before, so no
+// external logger is affected.
+type entryLogger interface {
+	LogEntry(any)
+	ErrorEntry(any)
+}
+
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
 //
 // The StatusResponseWriter wrapper allocated per request is pooled in a
@@ -188,24 +202,19 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 				pool.Put(srw)
 			}()
 
-			// Fetch SpanContext once and resolve trace/span IDs to strings only
-			// when they are valid. Under a noop tracer (the default after PR-1
-			// when no exporter is configured) the SpanContext is invalid and
-			// the IDs are all-zeros — calling .String() on those is wasted
-			// allocation. Substitute the precomputed zero-string constants so
-			// the log line and the X-Correlation-ID response header carry
-			// byte-identical values to the pre-PR-7 wire shape.
+			// Fetch the SpanContext once. GoFr installs an SDK provider with NeverSample
+			// when no exporter is configured, so the default deployment has a VALID span
+			// context and both IDs are real -- the zero-string constants below are for
+			// the genuinely absent case, not the common one.
 			sc := trace.SpanFromContext(r.Context()).SpanContext()
 
-			// Only the trace ID is needed before the handler runs, for the
-			// X-Correlation-ID response header. The span ID is used solely
-			// inside the log entry, so it is resolved in handleRequestLog --
-			// after the level gate -- and costs nothing on a request whose
-			// entry is discarded.
-			traceID := zeroTraceID
-			if sc.IsValid() {
-				traceID = sc.TraceID().String()
-			}
+			// Both IDs are resolved here, in one allocation. The trace ID is
+			// needed before the handler runs, for the X-Correlation-ID response
+			// header; the span ID is only used inside the log entry, so a request
+			// whose entry the level gate discards pays for 16 bytes it does not
+			// use. That costs no extra allocation -- one buffer covers both -- and
+			// saves one on every request that IS logged, which is the default.
+			traceID, spanID := traceSpanIDs(sc)
 
 			// Assigned rather than Set: Header.Set canonicalizes its key on
 			// every call, and "X-Correlation-ID" is not already in canonical
@@ -225,15 +234,15 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, sc, logger)
+			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
 }
 
-func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID string,
-	sc trace.SpanContext, logger logger) {
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time,
+	traceID, spanID string, logger logger) {
 	status := srw.Status()
 
 	// A server error is reported through Error, which survives every level below
@@ -243,11 +252,6 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
 			return
 		}
-	}
-
-	spanID := zeroSpanID
-	if sc.IsValid() {
-		spanID = sc.SpanID().String()
 	}
 
 	l := &RequestLog{
@@ -262,12 +266,24 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		Response:     status,
 	}
 
-	if logger != nil {
+	if logger == nil {
+		return
+	}
+
+	if e, ok := logger.(entryLogger); ok {
 		if status >= http.StatusInternalServerError {
-			logger.Error(l)
+			e.ErrorEntry(l)
 		} else {
-			logger.Log(l)
+			e.LogEntry(l)
 		}
+
+		return
+	}
+
+	if status >= http.StatusInternalServerError {
+		logger.Error(l)
+	} else {
+		logger.Log(l)
 	}
 }
 
@@ -343,4 +359,33 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 		envelopeMessageKey: "Some unexpected error has occurred",
 	}
 	_ = json.NewEncoder(w).Encode(res)
+}
+
+// traceSpanIDs renders both IDs into ONE allocation.
+//
+// otel's TraceID.String() and SpanID.String() are each a hex.EncodeToString, so
+// each costs its own string allocation, and a logged request always needs both --
+// the trace ID for the correlation header, both for the log entry. Encoding them
+// into a single buffer and slicing the result gives byte-identical strings for
+// one allocation instead of two.
+//
+// The span ID is now formatted before the level gate rather than after it, so a
+// request whose entry is discarded pays for 16 bytes it does not use. That costs
+// no extra allocation -- the one buffer covers both -- and it buys an allocation
+// on every request that IS logged, which is the default configuration.
+func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string) {
+	if !sc.IsValid() {
+		return zeroTraceID, zeroSpanID
+	}
+
+	tid, sid := sc.TraceID(), sc.SpanID()
+
+	var b [len(zeroTraceID) + len(zeroSpanID)]byte
+
+	hex.Encode(b[:len(zeroTraceID)], tid[:])
+	hex.Encode(b[len(zeroTraceID):], sid[:])
+
+	s := string(b[:])
+
+	return s[:len(zeroTraceID)], s[len(zeroTraceID):]
 }
