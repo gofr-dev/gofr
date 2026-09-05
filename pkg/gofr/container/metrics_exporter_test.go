@@ -266,3 +266,44 @@ func TestContainer_ShutdownMetrics(t *testing.T) {
 		t.Errorf("repeat call: expected nil error from idempotent shutdown, got %v", err)
 	}
 }
+
+func Test_metricsExporterConfig_resourceAttributes(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "unset when neither var is present",
+			env:  map[string]string{},
+			want: "",
+		},
+		{
+			name: "OTEL_RESOURCE_ATTRIBUTES is honored",
+			env:  map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "cloud.region=asia-south1"},
+			want: "cloud.region=asia-south1",
+		},
+		{
+			name: "METRICS_RESOURCE_ATTRIBUTES is honored",
+			env:  map[string]string{"METRICS_RESOURCE_ATTRIBUTES": "faas.instance=inst-1"},
+			want: "faas.instance=inst-1",
+		},
+		{
+			name: "both are concatenated with the GoFr-native value last",
+			env: map[string]string{
+				"OTEL_RESOURCE_ATTRIBUTES":    "cloud.region=asia-south1,k8s.pod.name=pod-1",
+				"METRICS_RESOURCE_ATTRIBUTES": "cloud.region=europe-west1",
+			},
+			want: "cloud.region=asia-south1,k8s.pod.name=pod-1,cloud.region=europe-west1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricsExporterConfig(config.NewMockConfig(tc.env), "app", "v1", logging.NewMockLogger(logging.ERROR))
+			if got.ResourceAttributes != tc.want {
+				t.Errorf("ResourceAttributes = %q, want %q", got.ResourceAttributes, tc.want)
+			}
+		})
+	}
+}
