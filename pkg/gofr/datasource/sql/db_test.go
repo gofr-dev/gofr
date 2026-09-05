@@ -772,14 +772,12 @@ func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
 	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
 
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), "app_sql_stats", float64(1500),
+		gomock.Any(), "app_sql_stats",
+		gomock.Cond(func(v float64) bool { return v >= 1500 && v < 1510 }),
 		"hostname", "host", "database", "db", "type", "SELECT",
 	)
 
 	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
-
-	duration := time.Since(start).Milliseconds()
-	assert.Equal(t, int64(1500), duration)
 }
 
 // --- Tx method tests ---
