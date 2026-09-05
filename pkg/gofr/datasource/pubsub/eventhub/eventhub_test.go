@@ -501,8 +501,9 @@ func TestConnect_ConsumerGroupProvided(t *testing.T) {
 }
 
 // mockConsumerClient is a hand-written stand-in for *azeventhubs.ConsumerClient, in the same
-// shape as the SQS client's mockSQSClient: only the call under test is scripted, the rest
-// return zero values.
+// shape as the SQS client's mockSQSClient: the call under test is scripted through a func field
+// and the others answer with a fixed value. Close reports success; NewPartitionClient reports an
+// error, for the reason given on it below.
 type mockConsumerClient struct {
 	getPropsFunc func(ctx context.Context,
 		options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
@@ -517,9 +518,10 @@ func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
 	return azeventhubs.EventHubProperties{}, nil
 }
 
-// NewPartitionClient returns an error rather than (nil, nil): the concrete return type cannot be
-// faked, and handing back a nil client would nil-deref on the deferred Close in the first test
-// that reached tryReadFromPartition.
+// NewPartitionClient returns an error rather than (nil, nil). The concrete return type can be
+// constructed -- &azeventhubs.PartitionClient{} compiles -- but not into anything usable: every
+// field is unexported, so ReceiveEvents nil-derefs on it. And handing back a nil client would
+// nil-deref on the deferred Close in the first test that reached tryReadFromPartition.
 func (*mockConsumerClient) NewPartitionClient(string,
 	*azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
 	return nil, errPartitionClientUnavailable
@@ -592,4 +594,36 @@ func Test_Health_NotConnectedDoesNotProbe(t *testing.T) {
 
 	require.Equal(t, datasource.StatusDown, health.Status)
 	require.Equal(t, errClientNotConnected.Error(), health.Details["error"])
+}
+
+// Test_Health_BoundsAProbeThatIgnoresContext is the case the Azure SDK actually creates.
+// GetEventHubProperties passes context.Background() to the AMQP round-trip, so handing our
+// deadline to the SDK does not bound it; only selecting on the deadline ourselves does. The fake
+// here blocks without ever reading ctx, which is what the SDK does once a management link exists
+// and the broker stops answering.
+//
+// Without probeWithin's select this test does not fail -- it hangs until the go test timeout.
+func Test_Health_BoundsAProbeThatIgnoresContext(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			<-release
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	start := time.Now()
+	health := client.Health()
+	elapsed := time.Since(start)
+
+	require.Less(t, elapsed, 2*eventHubPropsTimeout,
+		"Health must return on its own deadline even when the probe ignores the context, took %v", elapsed)
+	require.Equal(t, datasource.StatusDown, health.Status, "an unanswered probe must report down")
+	require.Equal(t, context.DeadlineExceeded.Error(), health.Details["error"],
+		"the caller must see the deadline, not a nil error")
+	require.NotContains(t, health.Details, "partitionCount", "an unanswered probe has no partition count")
 }
