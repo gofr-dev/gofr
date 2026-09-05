@@ -66,6 +66,31 @@ type Router struct {
 	// mode. All framework registration paths go through (*Router).Use, and the
 	// MiddlewareParity differential test guards the resulting behavior.
 	mws []mux.MiddlewareFunc
+
+	// chains memoises the composed middleware chain per matched route.
+	//
+	// composeMiddleware calls every middleware CONSTRUCTOR, and each one returns a
+	// fresh http.HandlerFunc closure. Doing that per request allocated one closure
+	// per middleware on every request -- five of them in a default GoFr app, which
+	// an allocation profile put at ~13% of all objects allocated while serving.
+	// The composed chain depends only on the middleware slice and the matched
+	// route's handler, and neither changes after startup, so it is built once per
+	// route and reused.
+	//
+	// Keyed on *mux.Route rather than on the handler: mux sets match.Handler from
+	// the route's own fixed handler field, so the route pointer identifies the
+	// chain exactly, and unlike a handler it is always comparable. A handler
+	// carrying func fields would panic as a map key.
+	//
+	// The same lifecycle assumption the trie index already makes applies here --
+	// every route and every middleware is registered during startup, before the
+	// first request. A middleware added afterwards would not appear in a chain
+	// already cached for a route that had been served.
+	chains sync.Map
+
+	// own records the routes registered through Add, whose handler is the one Add
+	// installed and never changes. Only those may use the chain cache.
+	own sync.Map
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -191,7 +216,17 @@ func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *m
 	// Reinstate what mux.Router.ServeHTTP would have populated so that mux.Vars(r) (used by
 	// request.go and user handlers) and the route template (used by the tracer/metrics middleware)
 	// keep working.
-	if match.Vars != nil {
+	// len, not nil. gorilla/mux allocates a Vars map on every successful match
+	// (route.go: "if match.Vars == nil { match.Vars = make(...) }"), so a route
+	// with no path parameters still arrives here with an empty non-nil map --
+	// and storing it cost a context node and a shallow Request copy on every
+	// request to every parameter-free route, to carry nothing.
+	//
+	// Skipping it leaves mux.Vars(r) returning nil rather than an empty map for
+	// those routes. Every read stays correct: indexing a nil map yields the zero
+	// value, len is 0, and ranging over it does nothing -- which is what
+	// Request.PathParam and user handlers do with it.
+	if len(match.Vars) > 0 {
 		r = mux.SetURLVars(r, match.Vars)
 	}
 
@@ -217,7 +252,49 @@ func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *m
 		return
 	}
 
-	composeMiddleware(rou.mws, match.Handler).ServeHTTP(w, r)
+	rou.chainFor(match.Route, match.Handler).ServeHTTP(w, r)
+}
+
+// chainFor returns the composed middleware chain for a route, building it on
+// first use. See the chains field for why this is memoized and why the route is
+// the key.
+func (rou *Router) chainFor(route *mux.Route, h http.Handler) http.Handler {
+	// No route to key on: compose per request, as before. Unreachable from the
+	// trie matcher, which only reaches here with a matched route.
+	if route == nil {
+		return composeMiddleware(rou.mws, h)
+	}
+
+	// Only routes GoFr registered itself are cached. A route reached any other way
+	// -- notably one under a PathPrefix(...).Subrouter(), since Router embeds
+	// mux.Router publicly -- can be matched with a handler mux built for THIS
+	// request: the subrouter wraps its handler in fresh middleware each time while
+	// match.Route still points at the inner route. Caching on the route alone would
+	// pin the first such wrapper forever and every later request would run it
+	// instead of its own.
+	if _, isOwn := rou.own.Load(route); !isOwn {
+		return composeMiddleware(rou.mws, h)
+	}
+
+	if v, ok := rou.chains.Load(route); ok {
+		if composed, isHandler := v.(http.Handler); isHandler {
+			return composed
+		}
+	}
+
+	composed := composeMiddleware(rou.mws, h)
+
+	// LoadOrStore, not Store: concurrent first requests to the same route would
+	// otherwise each compose a chain and the last write would win, so "built once
+	// per route" would be true of the cache but not of the work. Whichever chain
+	// lands first is the one everyone uses.
+	actual, _ := rou.chains.LoadOrStore(route, composed)
+
+	if h, ok := actual.(http.Handler); ok {
+		return h
+	}
+
+	return composed
 }
 
 // Use registers mux middlewares. It records them in GoFr's own chain — so the
@@ -323,7 +400,17 @@ func isDotSegment(p string, idx int) bool {
 // directly, avoiding the per-request child span and attribute slice grow
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler)
+	rou.markOwned(rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler))
+}
+
+// markOwned records a route whose handler is the one GoFr installed and never
+// changes, making it eligible for the middleware-chain cache.
+//
+// Every registration GoFr makes on its own router goes through here. A route
+// created directly on the embedded mux.Router does not, which is the point: see
+// chainFor for why such a route must not be cached.
+func (rou *Router) markOwned(route *mux.Route) {
+	rou.own.Store(route, struct{}{})
 }
 
 // UseMiddleware registers middlewares to the router.
@@ -368,7 +455,7 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	handler := cfg.staticHandler()
 
 	if endpoint == "/" {
-		rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, handler))
+		rou.markOwned(rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, handler)))
 
 		logger.Logf("registered static files at endpoint %v from directory %v", endpoint, absDir)
 
@@ -380,8 +467,8 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	// unrouted: ServeHTTP normalizes with path.Clean, which drops the trailing slash, so a request
 	// for "/static/" arrives as "/static" and matches neither the prefix nor anything else. Register
 	// the bare endpoint as an exact path to serve it.
-	rou.Router.NewRoute().Path(endpoint).Handler(http.StripPrefix(endpoint, handler))
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint+"/", handler))
+	rou.markOwned(rou.Router.NewRoute().Path(endpoint).Handler(http.StripPrefix(endpoint, handler)))
+	rou.markOwned(rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint+"/", handler)))
 
 	logger.Logf("registered static files at endpoint %v from directory %v", endpoint+"/", absDir)
 }

@@ -44,8 +44,11 @@ Two further caveats worth setting expectations against:
 - **Matching is a minority of a request.** The middleware chain — tracing, logging, metrics, CORS —
   dominates. So end-to-end throughput moves by less than the table above, approaching it only as the
   route count grows.
-- **The trie allocates slightly more.** Two extra allocations per matched request, for restoring the
-  path params and route template. This is a CPU and scaling win, not an allocation win.
+- **The trie also allocates less**, where it used to allocate more. On a 100-route table, per
+  matched request: a static route costs 536 B / 8 allocations against the default matcher's
+  960 B / 12, and a parameterised route 1208 B / 11 against 1264 B / 13. The middleware chain is
+  composed once per route instead of per request, and an empty path-parameter map is no longer
+  stored. This applies to routes registered through the framework (`app.GET`, `app.POST`, ...).
 
 ## What stays the same
 
@@ -56,7 +59,11 @@ ordering and path cleaning all behave exactly as they do by default. Anything th
 — `PathPrefix` routes, static file handlers, slash-spanning parameters like `{path:.*}` — is handled
 by `mux` directly. Requests that match nothing are handed to `mux` in full.
 
-Path parameters are unaffected: `ctx.PathParam("id")` and `mux.Vars(r)` work identically.
+Path parameters are unaffected: `ctx.PathParam("id")` returns the same values under either
+matcher. `mux.Vars(r)` returns the same values too, with one difference worth knowing: on a route
+that declares no path parameters the trie leaves it `nil` where `mux` returns an empty non-nil map.
+Every read behaves the same -- indexing gives the zero value, `len` is 0, and ranging does nothing --
+but an explicit `mux.Vars(r) != nil` check answers differently.
 
 ## The one thing to check in your own code
 
@@ -78,7 +85,8 @@ import gofrHTTP "gofr.dev/pkg/gofr/http"
 tmpl := gofrHTTP.RouteTemplate(r) // "/users/{id}", or "" if nothing matched
 ```
 
-`mux.Vars(r)` is **not** affected and needs no change.
+`mux.Vars(r)` keeps working and needs no change for any ordinary read. Only an explicit nil check
+against the map itself differs -- see the note above.
 
 ## Confirming which matcher is active
 
