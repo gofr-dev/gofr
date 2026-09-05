@@ -60,6 +60,17 @@ func parseSQLTag(inputTags reflect.StructTag) (sql.FieldConstraints, error) {
 	return constraints, nil
 }
 
+// toSnakeCase converts a Go identifier to the snake_case name used for a table or column.
+//
+// Only uppercase ASCII letters are special: they are lowercased, and separated from what comes
+// before with an underscore. Every other rune -- digits, underscores, punctuation, non-ASCII --
+// passes through untouched. The rule is stated positively on purpose. The earlier guard was
+// `char >= 'a'`, which relies on an ordering accident, and everything below 'a' fell into the
+// uppercase branch and had 32 added to it: "User1" became "user_Q", and "Field_1" became
+// "field_\x7fQ", with a DEL control character in a SQL identifier.
+//
+// Output matches the regex-based toSnakeCase in the Cassandra datasource for every identifier
+// shape tested, so an entity maps to the same column name on either backend.
 func toSnakeCase(str string) string {
 	diff := 'a' - 'A'
 	length := len(str)
@@ -67,16 +78,19 @@ func toSnakeCase(str string) string {
 	var builder strings.Builder
 
 	for i, char := range str {
-		// Only uppercase ASCII letters are lowercased (and possibly underscore-
-		// separated); all other runes, including digits, pass through unchanged.
-		// The earlier `char >= 'a'` guard mis-routed digits into the branch
-		// below, corrupting identifiers such as "User1" into "user_Q".
 		if char < 'A' || char > 'Z' {
 			builder.WriteRune(char)
 			continue
 		}
 
-		if (i != 0 || i == length-1) && ((i > 0 && rune(str[i-1]) >= 'a') || (i < length-1 && rune(str[i+1]) >= 'a')) {
+		// An underscore goes in when the uppercase letter starts a new word: after a lowercase
+		// letter or a digit ("user2Name", "x509Cert"), or before a lowercase letter, which is
+		// what separates the last capital of an acronym from the word it begins ("userID" stays
+		// whole, "IDCard" splits). A digit only counts on the left -- "AB2" is one word.
+		prevStartsWord := i > 0 && isLowerOrDigit(rune(str[i-1]))
+		nextStartsWord := i < length-1 && isLower(rune(str[i+1]))
+
+		if (i != 0 || i == length-1) && (prevStartsWord || nextStartsWord) {
 			builder.WriteRune('_')
 		}
 
@@ -85,3 +99,10 @@ func toSnakeCase(str string) string {
 
 	return builder.String()
 }
+
+// isLower reports whether r is a lowercase ASCII letter. Written out rather than reusing the
+// `>= 'a'` shorthand this function used to rely on: that is true for every rune above 'a',
+// including every non-ASCII one.
+func isLower(r rune) bool { return r >= 'a' && r <= 'z' }
+
+func isLowerOrDigit(r rune) bool { return isLower(r) || (r >= '0' && r <= '9') }

@@ -30,6 +30,24 @@ func Test_toSnakeCase(t *testing.T) {
 		{desc: "digit after leading acronym", input: "S3Bucket", expected: "s3_bucket"},
 		{desc: "digits within a word", input: "Base64Encoder", expected: "base64_encoder"},
 		{desc: "digit between words", input: "User2Name", expected: "user2_name"},
+		// The `char >= 'a'` guard corrupted every rune below 'a', not only digits: '_' (95)
+		// became DEL (127), putting a control character in a SQL identifier.
+		{desc: "underscore already present", input: "Field_1", expected: "field_1"},
+		{desc: "leading underscore", input: "_User", expected: "__user"},
+		// A digit ends a word, so an uppercase letter following one starts a new one. These are
+		// the cases where this implementation used to disagree with the Cassandra datasource's
+		// regex-based toSnakeCase; it now matches it.
+		{desc: "digit then acronym", input: "Order2FA", expected: "order2_fa"},
+		{desc: "digit between single capitals", input: "A2B", expected: "a2_b"},
+		{desc: "digit then lowercase word", input: "X509Cert", expected: "x509_cert"},
+		{desc: "acronym then digit", input: "HTTP2Server", expected: "http2_server"},
+		{desc: "mixed caps, digit, word", input: "OAuth2Client", expected: "o_auth2_client"},
+		// ...but only on the left. A trailing digit does not split a leading acronym.
+		{desc: "acronym with trailing digit", input: "AB2", expected: "ab2"},
+		{desc: "single capital then digit", input: "A1", expected: "a1"},
+		{desc: "acronym then digit, no word", input: "ID2", expected: "id2"},
+		// Non-ASCII passes through untouched; it is neither uppercase ASCII nor a word boundary.
+		{desc: "non-ASCII leading rune", input: "Ünicode", expected: "Ünicode"},
 	}
 
 	for _, tc := range tests {
