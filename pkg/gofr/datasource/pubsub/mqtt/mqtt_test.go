@@ -128,7 +128,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	ctx := t.Context()
 
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
 
 	mockClient.EXPECT().Disconnect(uint(1))
 
@@ -177,9 +177,9 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 		ctx := t.Context()
 
 		mockMetrics.EXPECT().
-			IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+			IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test/topic")
 		mockMetrics.EXPECT().
-			IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
+			IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test/topic")
 
 		mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).
 			Return(mockToken)
@@ -205,7 +205,7 @@ func TestMQTT_PublishFailure(t *testing.T) {
 	ctx := t.Context()
 	// case where the client has been disconnected, resulting in a Publishing failure
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test/topic")
 
 	mockClient.EXPECT().Disconnect(uint(1))
 	// Disconnect the client
@@ -227,6 +227,8 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	ctx := t.Context()
 
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
 	mockMetrics.EXPECT().
 		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
 	mockClient.EXPECT().IsConnected().Return(true)
@@ -525,41 +527,28 @@ func TestReconnectHandler(t *testing.T) {
 }
 
 func TestMQTT_createMqttHandler(t *testing.T) {
-	var (
-		out  string
-		msgs = make(chan *pubsub.Message)
-		wg   = sync.WaitGroup{}
-	)
+	// The handler now only converts an incoming MQTT message into a pubsub.Message and pushes it
+	// onto the channel. The span, the metrics and the "SUB" log moved to Subscribe — the point the
+	// message is handed to a caller, and so the point that belongs in the caller's trace — and are
+	// covered by TestMQTT_SubscribeSuccess and the tracing tests.
+	msgs := make(chan *pubsub.Message, 1)
 
-	wg.Add(1)
+	// createMqttHandler no longer reads any client state, so a bare *MQTT is enough here.
+	handler := (&MQTT{}).createMqttHandler(msgs)
 
-	go func() {
-		defer wg.Done()
-
-		out = testutil.StdoutOutputForFunc(func() {
-			ctrl, client, _, mockMetrics, _ := getMockMQTT(t, mockConfigs)
-			defer ctrl.Finish()
-
-			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
-
-			handler := client.createMqttHandler(t.Context(), "test/topic", msgs)
-
-			handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
-		})
-	}()
+	handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 
 	m := <-msgs
-	close(msgs)
 
-	assert.NotNil(t, m)
-	assert.Equal(t, m.Value, msg)
+	require.NotNil(t, m)
+	assert.Equal(t, "test/topic", m.Topic)
+	assert.Equal(t, msg, m.Value)
+	assert.NotNil(t, m.Committer)
 
-	// wait for the goroutine test to finish writing log to out
-	wg.Wait()
-	assert.Contains(t, out, "SUB")
-	assert.Contains(t, out, "hello world")
-	assert.Contains(t, out, "test/topic")
-	assert.Contains(t, out, "MQTT")
+	meta, ok := m.MetaData.(map[string]string)
+	require.True(t, ok, "MetaData should be a map[string]string")
+	assert.Equal(t, "123", meta["messageID"])
+	assert.Equal(t, "false", meta["retained"])
 }
 
 func getMockMQTT(t *testing.T, conf *Config) (*gomock.Controller, *MQTT, *MockClient, *MockMetrics, *MockToken) {
