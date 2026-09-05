@@ -527,14 +527,14 @@ func TestReconnectHandler(t *testing.T) {
 }
 
 func TestMQTT_createMqttHandler(t *testing.T) {
-	// The handler now only converts an incoming MQTT message into a pubsub.Message and pushes
-	// it onto the channel. Span, metrics and the "SUB" log were moved to Subscribe (the consume
-	// point, so links attach to the propagated trace context) and are covered by
-	// TestMQTT_SubscribeSuccess.
+	// The handler now only converts an incoming MQTT message into a pubsub.Message and pushes it
+	// onto the channel. The span, the metrics and the "SUB" log moved to Subscribe — the point the
+	// message is handed to a caller, and so the point that belongs in the caller's trace — and are
+	// covered by TestMQTT_SubscribeSuccess and the tracing tests.
 	msgs := make(chan *pubsub.Message, 1)
 
 	// createMqttHandler no longer reads any client state, so a bare *MQTT is enough here.
-	handler := (&MQTT{}).createMqttHandler(t.Context(), "test/topic", msgs)
+	handler := (&MQTT{}).createMqttHandler(msgs)
 
 	handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 

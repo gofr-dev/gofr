@@ -133,7 +133,11 @@ func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffe
 
 	return buffer, collected, nil
 }
-func (*MQTT) createMqttHandler(_ context.Context, _ string, msgs chan *pubsub.Message) mqtt.MessageHandler {
+
+// createMqttHandler builds the paho callback that converts an arriving MQTT message into a
+// pubsub.Message and queues it. Instrumentation lives in Subscribe, at the point the message is
+// actually handed to a caller, so nothing here needs the topic or a context.
+func (*MQTT) createMqttHandler(msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		ctx := context.Background()
 

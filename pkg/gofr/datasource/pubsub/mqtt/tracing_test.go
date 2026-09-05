@@ -7,185 +7,194 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func TestAttributeCarrier_GetSetKeys(t *testing.T) {
-	carrier := make(attributeCarrier)
+// recorder installs a tracer provider that keeps every finished span, and returns it.
+func recorder(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
 
-	// Test Set
-	carrier.Set("traceparent", "00-1234567890abcdef-fedcba0987654321-01")
-	carrier.Set("tracestate", "foo=bar")
+	rec := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
+	otel.SetTracerProvider(tp)
 
-	// Test Get
-	assert.Equal(t, "00-1234567890abcdef-fedcba0987654321-01", carrier.Get("traceparent"))
-	assert.Equal(t, "foo=bar", carrier.Get("tracestate"))
-	assert.Empty(t, carrier.Get("nonexistent"))
+	t.Cleanup(func() {
+		require.NoError(t, tp.Shutdown(context.Background()))
+	})
 
-	// Test Keys
-	keys := carrier.Keys()
-	assert.Contains(t, keys, "traceparent")
-	assert.Contains(t, keys, "tracestate")
-
-	// Test Set updates existing key
-	carrier.Set("traceparent", "00-updated-value")
-	assert.Equal(t, "00-updated-value", carrier.Get("traceparent"))
+	return rec
 }
 
-func TestInjectTraceContext(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+func attrOf(t *testing.T, s sdktrace.ReadOnlySpan, key string) string {
+	t.Helper()
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
-	defer span.End()
-
-	attrs := injectTraceContext(ctx, nil)
-
-	require.NotNil(t, attrs)
-
-	traceparent, ok := attrs["traceparent"]
-	require.True(t, ok, "traceparent attribute should be injected")
-	assert.Contains(t, traceparent, span.SpanContext().TraceID().String())
-}
-
-func TestInjectTraceContext_PreservesExistingAttributes(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
-	defer span.End()
-
-	existing := map[string]string{
-		"custom-attr": "custom-value",
-	}
-
-	attrs := injectTraceContext(ctx, existing)
-
-	assert.Equal(t, "custom-value", attrs["custom-attr"])
-
-	_, ok := attrs["traceparent"]
-	assert.True(t, ok, "traceparent should be injected alongside existing attributes")
-}
-
-func TestStartPublishSpan(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	ctx, span, attrs := startPublishSpan(context.Background(), "test-topic")
-	defer span.End()
-
-	require.NotNil(t, span)
-	assert.True(t, span.SpanContext().IsValid())
-	require.NotNil(t, ctx)
-
-	_, hasTraceparent := attrs["traceparent"]
-	assert.True(t, hasTraceparent, "attributes should contain traceparent")
-}
-
-func TestStartSubscribeSpan_WithLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	_, producerSpan, attrs := startPublishSpan(context.Background(), "test-topic")
-	producerSpan.End()
-
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", attrs)
-	subscribeSpan.End()
-
-	spans := exporter.GetSpans()
-	require.GreaterOrEqual(t, len(spans), 2)
-
-	var subSpan *tracetest.SpanStub
-
-	for i := range spans {
-		if spans[i].Name == "mqtt-subscribe" {
-			subSpan = &spans[i]
-			break
+	for _, kv := range s.Attributes() {
+		if kv.Key == attribute.Key(key) {
+			return kv.Value.AsString()
 		}
 	}
 
-	require.NotNil(t, subSpan, "subscribe span should exist")
-	require.Len(t, subSpan.Links, 1, "subscribe span should have one link")
-	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.Links[0].SpanContext.TraceID())
-	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Links[0].SpanContext.SpanID())
-
-	// Subscribe span must also be a CHILD of the producer span: same trace ID
-	// and parent span ID matches the producer's span ID.
-	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.SpanContext.TraceID(),
-		"subscribe span should share the producer's trace ID")
-	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Parent.SpanID(),
-		"subscribe span's parent should be the producer span")
-
-	// Subscribe span must inherit the producer's sampling decision via ParentBased
-	// — without this, head-based sampling (TRACER_RATIO) would drop halves of a trace.
-	assert.Equal(t, producerSpan.SpanContext().TraceFlags(), subSpan.SpanContext.TraceFlags(),
-		"subscribe span should inherit the producer's trace flags")
+	return ""
 }
 
-func TestStartSubscribeSpan_NoLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+func TestStartPublishSpan(t *testing.T) {
+	rec := recorder(t)
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	tracer := otel.GetTracerProvider().Tracer("caller")
+	callerCtx, caller := tracer.Start(context.Background(), "caller-request")
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", nil)
-	subscribeSpan.End()
+	ctx, span := startPublishSpan(callerCtx, "test-topic")
+	span.End()
+	caller.End()
 
-	spans := exporter.GetSpans()
-	require.Len(t, spans, 1)
+	require.NotNil(t, ctx)
 
-	assert.Empty(t, spans[0].Links, "orphan span should have no links")
+	spans := rec.Ended()
+	require.Len(t, spans, 2)
+
+	pub := spans[0]
+	assert.Equal(t, "mqtt-publish", pub.Name())
+	assert.Equal(t, trace.SpanKindProducer, pub.SpanKind())
+	assert.Equal(t, "mqtt", attrOf(t, pub, "messaging.system"))
+	assert.Equal(t, "test-topic", attrOf(t, pub, "messaging.destination.name"))
+	assert.Equal(t, "publish", attrOf(t, pub, "messaging.operation"))
+
+	// The producer span belongs to whatever request asked for the publish.
+	assert.Equal(t, caller.SpanContext().TraceID(), pub.SpanContext().TraceID())
+	assert.Equal(t, caller.SpanContext().SpanID(), pub.Parent().SpanID())
 }
 
-func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
-	// Non-empty attrs with a malformed traceparent must not produce a parent
-	// or a link — the code falls back to an orphan span.
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+func TestStartSubscribeSpan_JoinsCallersTrace(t *testing.T) {
+	rec := recorder(t)
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	tracer := otel.GetTracerProvider().Tracer("caller")
+	callerCtx, caller := tracer.Start(context.Background(), "consumer-request")
 
-	attrs := map[string]string{"traceparent": "not-a-valid-traceparent"}
+	_, span := startSubscribeSpan(callerCtx, "test-topic")
+	span.End()
+	caller.End()
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", attrs)
-	subscribeSpan.End()
+	spans := rec.Ended()
+	require.Len(t, spans, 2)
 
-	spans := exporter.GetSpans()
+	sub := spans[0]
+	assert.Equal(t, "mqtt-subscribe", sub.Name())
+	assert.Equal(t, trace.SpanKindConsumer, sub.SpanKind())
+	assert.Equal(t, "mqtt", attrOf(t, sub, "messaging.system"))
+	assert.Equal(t, "test-topic", attrOf(t, sub, "messaging.destination.name"))
+	assert.Equal(t, "receive", attrOf(t, sub, "messaging.operation"))
+
+	// GoFr's MQTT Subscribe is pull-style, so the consume belongs to the caller's trace.
+	assert.Equal(t, caller.SpanContext().TraceID(), sub.SpanContext().TraceID())
+	assert.Equal(t, caller.SpanContext().SpanID(), sub.Parent().SpanID())
+}
+
+func TestStartSubscribeSpan_WithoutCallerSpanIsRoot(t *testing.T) {
+	rec := recorder(t)
+
+	_, span := startSubscribeSpan(context.Background(), "test-topic")
+	span.End()
+
+	spans := rec.Ended()
 	require.Len(t, spans, 1)
-	assert.Empty(t, spans[0].Links, "invalid traceparent should produce no link")
-	assert.False(t, spans[0].Parent.IsValid(), "invalid traceparent should produce no parent")
+
+	assert.True(t, spans[0].SpanContext().IsValid())
+	assert.False(t, spans[0].Parent().IsValid())
+}
+
+// TestSubscribeSpan_HasNoProducerLink pins the documented limitation in tracing.go: an MQTT 3.1.1
+// PUBLISH has nowhere to carry traceparent, so there is no producer context to link to and the
+// consume span must not claim one. An earlier revision of this package extracted from
+// pubsub.Message.MetaData, which only ever holds qos, retained and messageID — the extract could
+// never succeed, and the tests passed only because they fed it attributes the broker never saw.
+//
+// If MQTT 5 user properties are added later this test should be replaced by one asserting the link
+// survives a real round trip, not deleted to make a green build.
+func TestSubscribeSpan_HasNoProducerLink(t *testing.T) {
+	rec := recorder(t)
+
+	tracer := otel.GetTracerProvider().Tracer("producer")
+	prodCtx, producer := tracer.Start(context.Background(), "producer-request")
+
+	_, pub := startPublishSpan(prodCtx, "test-topic")
+	pub.End()
+	producer.End()
+
+	// A consumer in a different trace, which is what a separate process is.
+	_, sub := startSubscribeSpan(context.Background(), "test-topic")
+	sub.End()
+
+	var subSpan sdktrace.ReadOnlySpan
+
+	for _, s := range rec.Ended() {
+		if s.Name() == "mqtt-subscribe" {
+			subSpan = s
+		}
+	}
+
+	require.NotNil(t, subSpan)
+	assert.Empty(t, subSpan.Links())
+	assert.NotEqual(t, producer.SpanContext().TraceID(), subSpan.SpanContext().TraceID())
+}
+
+// TestSpanAttributes_SkippedWhenNotRecording covers the NeverSample path that a GoFr app with no
+// TRACE_EXPORTER runs in: the span is real and carries a valid ID (correlation IDs depend on that),
+// but it records nothing, so the attributes are skipped rather than built and discarded.
+func TestSpanAttributes_SkippedWhenNotRecording(t *testing.T) {
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
+	otel.SetTracerProvider(tp)
+
+	t.Cleanup(func() {
+		require.NoError(t, tp.Shutdown(context.Background()))
+	})
+
+	for name, start := range map[string]func(context.Context, string) (context.Context, trace.Span){
+		"publish":   startPublishSpan,
+		"subscribe": startSubscribeSpan,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, span := start(context.Background(), "test-topic")
+			defer span.End()
+
+			assert.False(t, span.IsRecording())
+			assert.True(t, span.SpanContext().IsValid(), "correlation IDs depend on a valid span context")
+		})
+	}
+}
+
+// BenchmarkStartPublishSpan guards the allocation cost of instrumenting a publish.
+//
+// TracingOff is the default deployment — an SDK provider sampling NeverSample — and is the one that
+// matters: it is on the path of every published message whether or not the app traces anything.
+// Building the messaging attributes unconditionally costs 456 B and 5 allocations more per message
+// there, all of it discarded at the sampler, which is why setMessagingAttributes guards on
+// IsRecording. Against a live broker one publish is ~7.9 us at QoS 0, so this is invisible in
+// latency and shows up only as garbage.
+func BenchmarkStartPublishSpan(b *testing.B) {
+	for name, sampler := range map[string]sdktrace.Sampler{
+		"TracingOff": sdktrace.NeverSample(),
+		"TracingOn":  sdktrace.AlwaysSample(),
+	} {
+		b.Run(name, func(b *testing.B) {
+			tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sampler))
+			otel.SetTracerProvider(tp)
+
+			b.Cleanup(func() {
+				require.NoError(b, tp.Shutdown(context.Background()))
+			})
+
+			ctx := context.Background()
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for range b.N {
+				_, span := startPublishSpan(ctx, "bench-topic")
+				span.End()
+			}
+		})
+	}
 }

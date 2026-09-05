@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -110,7 +109,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	subs, ok := m.subscriptions[topic]
 	if !ok {
 		subs.msgs = make(chan *pubsub.Message, messageBuffer)
-		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
+		subs.handler = m.createMqttHandler(subs.msgs)
 		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
 
 		if token.Wait() && token.Error() != nil {
@@ -125,17 +124,15 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 	m.mu.Unlock()
 
-	var span trace.Span
-
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	select {
 	// blocks if there are no messages in the channel
 	case msg := <-subs.msgs:
-		ctx, span = startSubscribeSpan(ctx, topic, extractMessageAttrs(msg.MetaData))
+		spanCtx, span := startSubscribeSpan(ctx, topic)
 		defer span.End()
 
-		m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+		m.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", msg.Topic)
 
 		m.logger.Debug(&pubsub.Log{
 			Mode:          "SUB",
@@ -194,7 +191,7 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	ctx, span, _ := startPublishSpan(ctx, topic)
+	ctx, span := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -219,7 +216,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          m.config.Hostname,
-		PubSubBackend: "MQTT",
+		PubSubBackend: mqttBackend,
 		Time:          t.Microseconds(),
 	})
 

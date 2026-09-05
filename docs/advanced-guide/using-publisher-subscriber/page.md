@@ -823,7 +823,7 @@ func order(ctx *gofr.Context) (any, error) {
 
 ## Distributed Tracing
 
-GoFr automatically traces every publish and subscribe call across Kafka, NATS JetStream, Google Pub/Sub, and Amazon SQS. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
+GoFr automatically traces every publish and subscribe call across Kafka, NATS JetStream, Google Pub/Sub, Amazon SQS and MQTT. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
 
 ### How it works
 
@@ -847,6 +847,14 @@ The result is that an end-to-end flow such as `HTTP → publish → subscribe �
 [order-service        ] kafka-publish       child of order-service's subscribe
 [notification-service ] kafka-subscribe     child of order-service's publish [+1 link]
 ```
+
+### MQTT
+
+MQTT is traced too, but it cannot join the two ends into one trace, and the difference is worth knowing before you go looking for a broken exporter.
+
+The backends above all have a slot on the wire for the W3C `traceparent` — Kafka and NATS headers, SQS and Google Pub/Sub message attributes. An MQTT 3.1.1 PUBLISH packet has only a topic, a QoS, a retain flag and a payload, and `paho.mqtt.golang` (the client GoFr uses) does not implement MQTT 5 user properties. There is nowhere to put it. Carrying it in the payload instead would corrupt the message for every non-GoFr subscriber on the topic, so GoFr does not.
+
+So `mqtt-publish` and `mqtt-subscribe` each carry `SpanKind`, `messaging.system`, `messaging.destination.name` and `messaging.operation` exactly as the others do, and each sits in the trace of the request that called it — but the consumer span links to no producer, and the two are separate traces. To follow a message across an MQTT broker, correlate on your own message identifier at the application level.
 
 ### Sampling and scale
 
