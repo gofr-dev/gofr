@@ -263,7 +263,7 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	ctx := newContext(nil, r, a.container)
 
-	h, err := healthHandler(ctx)
+	h, err := a.healthHandler(ctx)
 
 	require.NoError(t, err)
 	require.NotNil(t, h)
@@ -317,6 +317,266 @@ func TestHandler_aggregateStatus(t *testing.T) {
 		// Only the aggregate string survives — never a per-dependency details map.
 		assert.Equal(t, tc.want, aggregateStatus(ctx), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+// downstream returns a dependency URL that makes GoFr's own dependency checks report DEGRADED
+// (500) or UP (200), so readiness can be exercised against both framework verdicts.
+func downstream(t *testing.T, healthy bool) string {
+	t.Helper()
+
+	code := http.StatusInternalServerError
+	if healthy {
+		code = http.StatusOK
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+	}))
+	t.Cleanup(srv.Close)
+
+	return srv.URL
+}
+
+// assertReadiness drives healthHandler and asserts the outcome. wantStatus is the status expected in
+// the redacted {name, status} body of a 200; an empty wantStatus expects a not-ready result instead —
+// no body and a 503 whose message is only "DOWN", the reason staying in the logs.
+func assertReadiness(t *testing.T, a *App, ctx *Context, wantStatus, msg string) {
+	t.Helper()
+
+	h, err := a.healthHandler(ctx)
+
+	if wantStatus != "" {
+		require.NoError(t, err, msg)
+
+		resp, ok := h.(healthResponse)
+		require.True(t, ok, "%s: expected healthResponse, got %T", msg, h)
+		assert.Equal(t, wantStatus, resp.Status, msg)
+
+		return
+	}
+
+	require.Nil(t, h, msg)
+
+	var sc interface{ StatusCode() int }
+
+	require.ErrorAs(t, err, &sc, msg)
+	assert.Equal(t, http.StatusServiceUnavailable, sc.StatusCode(), msg)
+	assert.Equal(t, statusDown, err.Error(), msg)
+}
+
+// errCheck is the failure a registered readiness check reports in these tests.
+var errCheck = errors.New("dependency unavailable")
+
+// readinessApp returns an app with one registered dependency, healthy or not, together with a
+// context to drive healthHandler with — so readiness is exercised against a real framework verdict.
+func readinessApp(t *testing.T, depHealthy bool) (*App, *Context) {
+	t.Helper()
+
+	testutil.NewServerConfigs(t)
+
+	a := New()
+	a.AddHTTPService("test-service", downstream(t, depHealthy))
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+
+	return a, newContext(nil, gofrHTTP.NewRequest(req), a.container)
+}
+
+// check returns a readiness check that always reports err.
+func check(err error) ReadinessCheck {
+	return func(*Context) error { return err }
+}
+
+func TestApp_AddReadinessCheck(t *testing.T) {
+	tests := []struct {
+		desc       string
+		depHealthy bool
+		register   func(a *App)
+		// wantStatus is the status reported with a 200; empty means a not-ready 503 is expected.
+		wantStatus string
+	}{
+		{"no check registered still answers 200 with the aggregate", false, nil, "DEGRADED"},
+		{"a nil check is ignored", false, func(a *App) { a.AddReadinessCheck(nil) }, "DEGRADED"},
+		{
+			"default check is ready when both sides pass", true,
+			func(a *App) { a.AddReadinessCheck(check(nil)) }, statusUp,
+		},
+		{
+			"default check fails on the framework verdict", false,
+			func(a *App) { a.AddReadinessCheck(check(nil)) }, "",
+		},
+		{
+			"default check fails on its own verdict", true,
+			func(a *App) { a.AddReadinessCheck(check(errCheck)) }, "",
+		},
+		{
+			"replacing check ignores a degraded framework", false,
+			func(a *App) { a.AddReadinessCheck(check(nil), ReplaceFrameworkChecks()) }, statusUp,
+		},
+		{
+			"replacing check still gates readiness", true,
+			func(a *App) { a.AddReadinessCheck(check(errCheck), ReplaceFrameworkChecks()) }, "",
+		},
+		{
+			"checks accumulate - all must pass", true,
+			func(a *App) { a.AddReadinessCheck(check(nil)); a.AddReadinessCheck(check(nil)) }, statusUp,
+		},
+		{
+			"checks accumulate - the second is not lost", true,
+			func(a *App) { a.AddReadinessCheck(check(nil)); a.AddReadinessCheck(check(errCheck)) }, "",
+		},
+		{
+			"the option on any one registration replaces the framework checks", false,
+			func(a *App) {
+				a.AddReadinessCheck(check(nil))
+				a.AddReadinessCheck(check(nil), ReplaceFrameworkChecks())
+			},
+			statusUp,
+		},
+	}
+
+	for i, tc := range tests {
+		a, ctx := readinessApp(t, tc.depHealthy)
+
+		if tc.register != nil {
+			tc.register(a)
+		}
+
+		assertReadiness(t, a, ctx, tc.wantStatus, fmt.Sprintf("TEST[%d], Failed.\n%s", i, tc.desc))
+	}
+}
+
+// TestApp_healthHandler_logsReason pins the only record of why a probe failed: the response body is
+// deliberately just "DOWN", so if this line regresses an operator has a 503 and no reason anywhere.
+func TestApp_healthHandler_logsReason(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		a, ctx := readinessApp(t, true)
+		a.AddReadinessCheck(check(errCheck), ReplaceFrameworkChecks())
+
+		_, err := a.healthHandler(ctx)
+		require.Error(t, err)
+	})
+
+	assert.Contains(t, logs, "readiness: not ready")
+	assert.Contains(t, logs, errCheck.Error())
+}
+
+// TestApp_errNotReady pins what a not-ready result reports: only "DOWN", a 503, and WARN — the
+// level #3857 asked for, since a 503 here is expected during startup and rolling deploys.
+func TestApp_errNotReady(t *testing.T) {
+	assert.Equal(t, statusDown, errNotReady{}.Error())
+	assert.Equal(t, http.StatusServiceUnavailable, errNotReady{}.StatusCode())
+	assert.Equal(t, logging.WARN, errNotReady{}.LogLevel())
+}
+
+func TestApp_FrameworkReadiness(t *testing.T) {
+	tests := []struct {
+		desc       string
+		depHealthy bool
+		wantErr    bool
+	}{
+		{"all dependencies healthy", true, false},
+		{"a dependency down", false, true},
+	}
+
+	for i, tc := range tests {
+		_, ctx := readinessApp(t, tc.depHealthy)
+
+		err := FrameworkReadiness(ctx)
+
+		if !tc.wantErr {
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			continue
+		}
+
+		require.ErrorIs(t, err, errFrameworkChecks, "TEST[%d], Failed.\n%s", i, tc.desc)
+		// The aggregate status may be reported, but never the per-dependency detail behind it.
+		assert.Contains(t, err.Error(), "DEGRADED", "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestApp_logReadiness(t *testing.T) {
+	tests := []struct {
+		desc     string
+		register func(a *App)
+		want     string
+	}{
+		{"nothing logged without an app check", nil, ""},
+		{
+			"the default mode says the framework checks still gate",
+			func(a *App) { a.AddReadinessCheck(check(nil)) },
+			"readiness: 1 app check(s) registered - framework checks: enabled",
+		},
+		{
+			"the replacing mode says so, rather than being inferred from a call site",
+			func(a *App) {
+				a.AddReadinessCheck(check(nil))
+				a.AddReadinessCheck(check(nil), ReplaceFrameworkChecks())
+			},
+			"readiness: 2 app check(s) registered - framework checks: replaced by the app checks",
+		},
+	}
+
+	for i, tc := range tests {
+		logs := testutil.StdoutOutputForFunc(func() {
+			testutil.NewServerConfigs(t)
+
+			a := New()
+			if tc.register != nil {
+				tc.register(a)
+			}
+
+			a.logReadiness()
+		})
+
+		if tc.want == "" {
+			assert.NotContains(t, logs, "readiness:", "TEST[%d], Failed.\n%s", i, tc.desc)
+			continue
+		}
+
+		assert.Contains(t, logs, tc.want, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+// TestApp_AddReadinessCheck_concurrent registers checks while probes are in flight. Registration is
+// documented as pre-Run, but nothing enforces it and the endpoint is probed at Kubernetes frequency,
+// so the field is guarded — this fails under -race if that guard is dropped.
+func TestApp_AddReadinessCheck_concurrent(t *testing.T) {
+	a, ctx := readinessApp(t, true)
+
+	var wg sync.WaitGroup
+
+	for range 10 {
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+
+			a.AddReadinessCheck(check(nil))
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			_, _ = a.healthHandler(ctx)
+		}()
+	}
+
+	wg.Wait()
+}
+
+// TestApp_httpServerSetup_logsReadiness tests the wiring, not the function: TestApp_logReadiness
+// calls the method directly, so it stays green if the call is dropped from httpServerSetup.
+func TestApp_httpServerSetup_logsReadiness(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddReadinessCheck(check(nil))
+		a.httpServerSetup()
+	})
+
+	assert.Contains(t, logs, "readiness: 1 app check(s) registered")
 }
 
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
