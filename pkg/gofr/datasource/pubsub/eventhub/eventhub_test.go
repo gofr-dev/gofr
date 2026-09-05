@@ -19,6 +19,10 @@ import (
 // errHealthProbe stands in for whatever the Event Hub SDK returns when the probe fails.
 var errHealthProbe = errors.New("event hub unreachable")
 
+// errPartitionClientUnavailable is what the fake consumer returns instead of a partition client,
+// which is a concrete type it cannot construct.
+var errPartitionClientUnavailable = errors.New("partition client unavailable in tests")
+
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -247,11 +251,13 @@ func Test_HealthCheck(t *testing.T) {
 
 	elapsed := time.Since(start)
 
-	// The connectivity probe must stay inside eventHubPropsTimeout. Without that bound a health
-	// endpoint backed by an unreachable namespace blocks on the SDK's own retry schedule, which
-	// is what makes a liveness probe time out instead of answering.
+	// The connectivity probe must stay bounded. Without that bound a health endpoint backed by an
+	// unreachable namespace blocks on the SDK's own retry schedule, which is what makes a liveness
+	// probe time out instead of answering. The assertion allows 2x eventHubPropsTimeout rather than
+	// the timeout itself: the point is that the probe returns on its own deadline instead of the
+	// SDK's, and a margin that tight would flake on a loaded runner. Measured, it returns in 1x.
 	require.Less(t, elapsed, 2*eventHubPropsTimeout,
-		"Health must return within eventHubPropsTimeout, took %v", elapsed)
+		"Health must return within 2x eventHubPropsTimeout (%v), took %v", 2*eventHubPropsTimeout, elapsed)
 
 	require.Equal(t, datasource.StatusDown, health.Status, "Event Hub health should be down when the namespace is unreachable")
 	require.Equal(t, "EVENT_HUB", health.Details["backend"])
@@ -511,9 +517,12 @@ func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
 	return azeventhubs.EventHubProperties{}, nil
 }
 
+// NewPartitionClient returns an error rather than (nil, nil): the concrete return type cannot be
+// faked, and handing back a nil client would nil-deref on the deferred Close in the first test
+// that reached tryReadFromPartition.
 func (*mockConsumerClient) NewPartitionClient(string,
 	*azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
-	return nil, nil
+	return nil, errPartitionClientUnavailable
 }
 
 func (*mockConsumerClient) Close(context.Context) error { return nil }
@@ -573,16 +582,11 @@ func Test_Health_ProbeError(t *testing.T) {
 // Test_Health_NotConnectedDoesNotProbe pins the short-circuit itself: an unconnected client must
 // report down without dialing, so a probe on a dead pod costs nothing and cannot block.
 func Test_Health_NotConnectedDoesNotProbe(t *testing.T) {
-	client := newHealthTestClient(t, &mockConsumerClient{
-		getPropsFunc: func(context.Context,
-			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
-			t.Error("Health must not probe once the consumer is gone")
-
-			return azeventhubs.EventHubProperties{}, nil
-		},
-	})
-
-	client.consumer = nil
+	// A nil consumer, not a scripted mock. There is no seam that can observe a call which must not
+	// happen -- a mock passed here is discarded by the nil assignment, so its t.Error could never
+	// fire. If the short-circuit is removed, Health calls GetEventHubProperties on a nil interface
+	// and this test panics; that is the failure signal.
+	client := newHealthTestClient(t, nil)
 
 	health := client.Health()
 

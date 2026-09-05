@@ -49,8 +49,10 @@ type Config struct {
 }
 
 // consumerClient is the part of *azeventhubs.ConsumerClient this package uses. It exists so the
-// health probe and the partition reads can be exercised without a live namespace -- the same seam
-// the SQS client uses for its own health tests.
+// health probe can be exercised without a live namespace -- the same seam the SQS client uses for
+// its own health tests. The partition reads cannot: NewPartitionClient hands back the concrete
+// *azeventhubs.PartitionClient, and ReceiveEvents is called on that, so a fake can only choose
+// which partition IDs come back.
 type consumerClient interface {
 	GetEventHubProperties(ctx context.Context, options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
 	NewPartitionClient(partitionID string, options *azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error)
@@ -185,7 +187,7 @@ func (c *Client) Connect() {
 	c.logger.Debug("Event Hub blobstore client setup success")
 
 	// create a consumer client using a connection string to the namespace and the event hub
-	consumerClient, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
+	consumer, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
 		c.cfg.ConsumerGroup, c.cfg.ConsumerOptions)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating consumer client %v", err)
@@ -196,7 +198,7 @@ func (c *Client) Connect() {
 	c.logger.Debug("Event Hub consumer client setup success")
 
 	// create a processor to receive and process events
-	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
+	processor, err := azeventhubs.NewProcessor(consumer, checkpointStore, nil)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating processor %v", err)
 
@@ -221,7 +223,7 @@ func (c *Client) Connect() {
 
 	c.processor = processor
 	c.producer = producerClient
-	c.consumer = consumerClient
+	c.consumer = consumer
 	c.checkPoint = checkpointStore
 
 	c.logger.Debug("Event Hub client initialization complete")
