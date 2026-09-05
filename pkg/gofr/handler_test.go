@@ -801,6 +801,7 @@ func BenchmarkRequest_RealHandlerPath(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
