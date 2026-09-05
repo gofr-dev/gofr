@@ -2,6 +2,7 @@ package eventhub
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -14,6 +15,13 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+// errHealthProbe stands in for whatever the Event Hub SDK returns when the probe fails.
+var errHealthProbe = errors.New("event hub unreachable")
+
+// errPartitionClientUnavailable is what the fake consumer returns instead of a partition client,
+// which is a concrete type it cannot construct.
+var errPartitionClientUnavailable = errors.New("partition client unavailable in tests")
 
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -228,16 +236,35 @@ func Test_HealthCheck(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
 	mockLogger.EXPECT().Debugf("Using default consumer group: %s", azeventhubs.DefaultConsumerGroup)
 	mockLogger.EXPECT().Debug("Event Hub client initialization complete")
-	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	_ = client.Health()
+	// getTestConfigs points at "<your-namespace>.servicebus.windows.net", which is not a legal
+	// hostname and so can never resolve -- the probe fails the same way on a runner with or
+	// without network access.
+	start := time.Now()
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Topic Deletion not allowed failed")
+	health := client.Health()
+
+	elapsed := time.Since(start)
+
+	// The connectivity probe must stay bounded. Without that bound a health endpoint backed by an
+	// unreachable namespace blocks on the SDK's own retry schedule, which is what makes a liveness
+	// probe time out instead of answering. The assertion allows 2x eventHubPropsTimeout rather than
+	// the timeout itself: the point is that the probe returns on its own deadline instead of the
+	// SDK's, and a margin that tight would flake on a loaded runner. Measured, it returns in 1x.
+	require.Less(t, elapsed, 2*eventHubPropsTimeout,
+		"Health must return within 2x eventHubPropsTimeout (%v), took %v", 2*eventHubPropsTimeout, elapsed)
+
+	require.Equal(t, datasource.StatusDown, health.Status, "Event Hub health should be down when the namespace is unreachable")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Contains(t, health.Details, "error", "an unreachable Event Hub should report the probe error")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Health Check Failed")
 }
 
 func getTestConfigs() Config {
@@ -393,11 +420,14 @@ func Test_Health(t *testing.T) {
 	client := New(getTestConfigs())
 	client.UseLogger(mockLogger)
 
-	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
-
+	// Without Connect() the consumer is nil, so the health check should short-circuit to down.
 	health := client.Health()
 
-	require.Equal(t, datasource.Health{}, health, "Health should return an empty datasource.Health struct")
+	require.Equal(t, datasource.StatusDown, health.Status, "Health should be down when the client is not connected")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Equal(t, errClientNotConnected.Error(), health.Details["error"])
+	require.NotContains(t, health.Details, "partitionCount", "an unconnected client has no partitions to report")
 }
 
 func TestCreateTopic_ForMigrations(t *testing.T) {
@@ -468,4 +498,181 @@ func TestConnect_ConsumerGroupProvided(t *testing.T) {
 	client.Connect()
 
 	require.Equal(t, expectedGroup, client.cfg.ConsumerGroup, "Client should respect the provided consumer group")
+}
+
+// mockConsumerClient is a hand-written stand-in for *azeventhubs.ConsumerClient, in the same
+// shape as the SQS client's mockSQSClient: the call under test is scripted through a func field
+// and the others answer with a fixed value. Close reports success; NewPartitionClient reports an
+// error, for the reason given on it below.
+type mockConsumerClient struct {
+	getPropsFunc func(ctx context.Context,
+		options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
+}
+
+func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
+	options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+	if m.getPropsFunc != nil {
+		return m.getPropsFunc(ctx, options)
+	}
+
+	return azeventhubs.EventHubProperties{}, nil
+}
+
+// NewPartitionClient returns an error rather than (nil, nil). The concrete return type can be
+// constructed -- &azeventhubs.PartitionClient{} compiles -- but not into anything usable: every
+// field is unexported, so ReceiveEvents nil-derefs on it. And handing back a nil client would
+// nil-deref on the deferred Close in the first test that reached tryReadFromPartition.
+func (*mockConsumerClient) NewPartitionClient(string,
+	*azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
+	return nil, errPartitionClientUnavailable
+}
+
+func (*mockConsumerClient) Close(context.Context) error { return nil }
+
+// newHealthTestClient returns a client that looks connected to Health without a live namespace.
+func newHealthTestClient(t *testing.T, consumer consumerClient) *Client {
+	t.Helper()
+
+	client := New(getTestConfigs())
+	client.UseLogger(NewMockLogger(gomock.NewController(t)))
+	client.consumer = consumer
+
+	return client
+}
+
+// Test_Health_Connected covers the only branch that reports the backend as usable. Nothing in
+// the down paths can reach it, so without a stubbed consumer StatusUp and partitionCount are
+// never executed by the suite at all.
+func Test_Health_Connected(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			return azeventhubs.EventHubProperties{
+				Name:         "event-hub-name",
+				PartitionIDs: []string{"0", "1", "2", "3"},
+			}, nil
+		},
+	})
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusUp, health.Status, "a reachable Event Hub must report up")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Equal(t, 4, health.Details["partitionCount"], "partitionCount must be the number of partitions reported")
+	require.NotContains(t, health.Details, "error", "a healthy Event Hub must not report an error")
+}
+
+// Test_Health_ProbeError pins the message an operator actually reads when the probe fails. The
+// live-namespace test below can only ever produce "context deadline exceeded", so the error is
+// passed through verbatim only here.
+func Test_Health_ProbeError(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			return azeventhubs.EventHubProperties{}, errHealthProbe
+		},
+	})
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusDown, health.Status, "a failing probe must report down")
+	require.Equal(t, errHealthProbe.Error(), health.Details["error"], "the probe error must reach the caller verbatim")
+	require.NotContains(t, health.Details, "partitionCount", "a failed probe has no partition count to report")
+}
+
+// Test_Health_NotConnectedDoesNotProbe pins the short-circuit itself: an unconnected client must
+// report down without dialing, so a probe on a dead pod costs nothing and cannot block.
+func Test_Health_NotConnectedDoesNotProbe(t *testing.T) {
+	// A nil consumer, not a scripted mock. There is no seam that can observe a call which must not
+	// happen -- a mock passed here is discarded by the nil assignment, so its t.Error could never
+	// fire. If the short-circuit is removed, Health calls GetEventHubProperties on a nil interface
+	// and this test panics; that is the failure signal.
+	client := newHealthTestClient(t, nil)
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusDown, health.Status)
+	require.Equal(t, errClientNotConnected.Error(), health.Details["error"])
+}
+
+// Test_Health_BoundsAProbeThatIgnoresContext is the case the Azure SDK actually creates.
+// GetEventHubProperties passes context.Background() to the AMQP round-trip, so handing our
+// deadline to the SDK does not bound it; only selecting on the deadline ourselves does. The fake
+// here blocks without ever reading ctx, which is what the SDK does once a management link exists
+// and the broker stops answering.
+//
+// Without probeWithin's select this test does not fail -- it hangs until the go test timeout.
+func Test_Health_BoundsAProbeThatIgnoresContext(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			<-release
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	start := time.Now()
+	health := client.Health()
+	elapsed := time.Since(start)
+
+	require.Less(t, elapsed, 2*eventHubPropsTimeout,
+		"Health must return on its own deadline even when the probe ignores the context, took %v", elapsed)
+	require.Equal(t, datasource.StatusDown, health.Status, "an unanswered probe must report down")
+	require.Equal(t, context.DeadlineExceeded.Error(), health.Details["error"],
+		"the caller must see the deadline, not a nil error")
+	require.NotContains(t, health.Details, "partitionCount", "an unanswered probe has no partition count")
+}
+
+// Test_Health_PartitionCountIsTheRealCount pins partitionCount to the length the probe reported.
+// The only other connected test uses four partitions, so a mutation replacing len(props.PartitionIDs)
+// with the constant 4 -- or wrapping the assignment in a len > 0 guard -- passed the whole suite.
+func Test_Health_PartitionCountIsTheRealCount(t *testing.T) {
+	for _, partitions := range [][]string{{}, {"0"}, {"0", "1", "2"}} {
+		client := newHealthTestClient(t, &mockConsumerClient{
+			getPropsFunc: func(context.Context,
+				*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+				return azeventhubs.EventHubProperties{PartitionIDs: partitions}, nil
+			},
+		})
+
+		health := client.Health()
+
+		require.Equal(t, datasource.StatusUp, health.Status)
+		require.Equal(t, len(partitions), health.Details["partitionCount"],
+			"partitionCount must be the reported count, including zero")
+	}
+}
+
+// Test_Health_ProbeDeadlineIsTwoSeconds pins the deadline itself. The elapsed-time assertion in
+// Test_HealthCheck is bounded by 2*eventHubPropsTimeout, so both the deadline and the bound move
+// together and raising the constant to 30s passes. This reads the deadline the probe was actually
+// given and compares it against a literal, so the constant cannot drift unnoticed -- and it costs
+// no wall clock.
+func Test_Health_ProbeDeadlineIsTwoSeconds(t *testing.T) {
+	var (
+		gotDeadline bool
+		remaining   time.Duration
+	)
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(ctx context.Context,
+			_ *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			deadline, ok := ctx.Deadline()
+			gotDeadline = ok
+			remaining = time.Until(deadline)
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	client.Health()
+
+	require.True(t, gotDeadline, "the probe must be given a deadline")
+	require.Greater(t, remaining, 1500*time.Millisecond, "deadline is shorter than expected, got %v", remaining)
+	require.LessOrEqual(t, remaining, 2*time.Second, "deadline is longer than expected, got %v", remaining)
 }
