@@ -48,9 +48,18 @@ type Config struct {
 	ProducerOptions  *azeventhubs.ProducerClientOptions
 }
 
+// consumerClient is the part of *azeventhubs.ConsumerClient this package uses. It exists so the
+// health probe and the partition reads can be exercised without a live namespace -- the same seam
+// the SQS client uses for its own health tests.
+type consumerClient interface {
+	GetEventHubProperties(ctx context.Context, options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
+	NewPartitionClient(partitionID string, options *azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error)
+	Close(ctx context.Context) error
+}
+
 type Client struct {
 	producer *azeventhubs.ProducerClient
-	consumer *azeventhubs.ConsumerClient
+	consumer consumerClient
 	// we are using a processor such that to keep consuming the events from all the different partitions.
 	processor *azeventhubs.Processor
 	// a checkpoint is being called while committing the event received from the event.
@@ -470,7 +479,7 @@ func (c *Client) Health() datasource.Health {
 	}
 
 	if c.consumer == nil {
-		health.Details["error"] = "client not connected"
+		health.Details["error"] = errClientNotConnected.Error()
 
 		return health
 	}

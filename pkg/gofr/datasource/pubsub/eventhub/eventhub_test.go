@@ -2,6 +2,7 @@ package eventhub
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -14,6 +15,9 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+// errHealthProbe stands in for whatever the Event Hub SDK returns when the probe fails.
+var errHealthProbe = errors.New("event hub unreachable")
 
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -234,10 +238,21 @@ func Test_HealthCheck(t *testing.T) {
 
 	client.Connect()
 
+	// getTestConfigs points at "<your-namespace>.servicebus.windows.net", which is not a legal
+	// hostname and so can never resolve -- the probe fails the same way on a runner with or
+	// without network access.
+	start := time.Now()
+
 	health := client.Health()
 
-	// The test connection string points to a non-existent namespace, so the connectivity
-	// probe fails and the health check must report the backend as down.
+	elapsed := time.Since(start)
+
+	// The connectivity probe must stay inside eventHubPropsTimeout. Without that bound a health
+	// endpoint backed by an unreachable namespace blocks on the SDK's own retry schedule, which
+	// is what makes a liveness probe time out instead of answering.
+	require.Less(t, elapsed, 2*eventHubPropsTimeout,
+		"Health must return within eventHubPropsTimeout, took %v", elapsed)
+
 	require.Equal(t, datasource.StatusDown, health.Status, "Event Hub health should be down when the namespace is unreachable")
 	require.Equal(t, "EVENT_HUB", health.Details["backend"])
 	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
@@ -404,7 +419,9 @@ func Test_Health(t *testing.T) {
 
 	require.Equal(t, datasource.StatusDown, health.Status, "Health should be down when the client is not connected")
 	require.Equal(t, "EVENT_HUB", health.Details["backend"])
-	require.Equal(t, "client not connected", health.Details["error"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Equal(t, errClientNotConnected.Error(), health.Details["error"])
+	require.NotContains(t, health.Details, "partitionCount", "an unconnected client has no partitions to report")
 }
 
 func TestCreateTopic_ForMigrations(t *testing.T) {
@@ -475,4 +492,100 @@ func TestConnect_ConsumerGroupProvided(t *testing.T) {
 	client.Connect()
 
 	require.Equal(t, expectedGroup, client.cfg.ConsumerGroup, "Client should respect the provided consumer group")
+}
+
+// mockConsumerClient is a hand-written stand-in for *azeventhubs.ConsumerClient, in the same
+// shape as the SQS client's mockSQSClient: only the call under test is scripted, the rest
+// return zero values.
+type mockConsumerClient struct {
+	getPropsFunc func(ctx context.Context,
+		options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
+}
+
+func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
+	options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+	if m.getPropsFunc != nil {
+		return m.getPropsFunc(ctx, options)
+	}
+
+	return azeventhubs.EventHubProperties{}, nil
+}
+
+func (*mockConsumerClient) NewPartitionClient(string,
+	*azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
+	return nil, nil
+}
+
+func (*mockConsumerClient) Close(context.Context) error { return nil }
+
+// newHealthTestClient returns a client that looks connected to Health without a live namespace.
+func newHealthTestClient(t *testing.T, consumer consumerClient) *Client {
+	t.Helper()
+
+	client := New(getTestConfigs())
+	client.UseLogger(NewMockLogger(gomock.NewController(t)))
+	client.consumer = consumer
+
+	return client
+}
+
+// Test_Health_Connected covers the only branch that reports the backend as usable. Nothing in
+// the down paths can reach it, so without a stubbed consumer StatusUp and partitionCount are
+// never executed by the suite at all.
+func Test_Health_Connected(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			return azeventhubs.EventHubProperties{
+				Name:         "event-hub-name",
+				PartitionIDs: []string{"0", "1", "2", "3"},
+			}, nil
+		},
+	})
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusUp, health.Status, "a reachable Event Hub must report up")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Equal(t, 4, health.Details["partitionCount"], "partitionCount must be the number of partitions reported")
+	require.NotContains(t, health.Details, "error", "a healthy Event Hub must not report an error")
+}
+
+// Test_Health_ProbeError pins the message an operator actually reads when the probe fails. The
+// live-namespace test below can only ever produce "context deadline exceeded", so the error is
+// passed through verbatim only here.
+func Test_Health_ProbeError(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			return azeventhubs.EventHubProperties{}, errHealthProbe
+		},
+	})
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusDown, health.Status, "a failing probe must report down")
+	require.Equal(t, errHealthProbe.Error(), health.Details["error"], "the probe error must reach the caller verbatim")
+	require.NotContains(t, health.Details, "partitionCount", "a failed probe has no partition count to report")
+}
+
+// Test_Health_NotConnectedDoesNotProbe pins the short-circuit itself: an unconnected client must
+// report down without dialing, so a probe on a dead pod costs nothing and cannot block.
+func Test_Health_NotConnectedDoesNotProbe(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			t.Error("Health must not probe once the consumer is gone")
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	client.consumer = nil
+
+	health := client.Health()
+
+	require.Equal(t, datasource.StatusDown, health.Status)
+	require.Equal(t, errClientNotConnected.Error(), health.Details["error"])
 }
