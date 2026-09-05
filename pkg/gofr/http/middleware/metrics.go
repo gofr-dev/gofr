@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
 )
@@ -46,38 +46,10 @@ const graphqlPath = "/graphql"
 
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
-	// Per-middleware-instance caches (closure-owned, not package globals):
-	//   * routeAttrs maps (path, method) → [path-kv, method-kv]. The slice is
-	//     built once per unique route-method combination and reused for every
-	//     subsequent request. Bounded by routes × methods (typically <100
-	//     entries even for large APIs).
-	//   * statusAttrs maps int → attribute.KeyValue for the http status code.
-	//     Bounded by ~20 distinct status codes seen in practice.
-	//   * attrer is the type-asserted fast-path receiver, captured once if
-	//     available.
-	var (
-		routeAttrs  sync.Map // map[routeMethodKey][]attribute.KeyValue
-		statusAttrs sync.Map // map[int]attribute.KeyValue
-	)
-
-	// Cache the status attribute with a string value (not Int) so the
-	// fast path matches the slow path's varargs label type.
-	// metricsManager.getAttributes emits status as a string for the slow
-	// path, and OTLP exporters distinguish KeyValue types — a mismatch
-	// would break user queries expecting the label to be a string across
-	// both code paths.
-	statusAttr := func(code int) attribute.KeyValue {
-		if v, ok := statusAttrs.Load(code); ok {
-			return v.(attribute.KeyValue)
-		}
-
-		kv := attribute.String("status", strconv.Itoa(code))
-		statusAttrs.Store(code, kv)
-
-		return kv
-	}
-
-	attrer, hasAttrer := metrics.(metricsAttrer)
+	// The recording strategy is selected once, here, from what the metrics
+	// backend supports. The per-request path then makes a single call and
+	// carries none of that branching itself.
+	recorder := newHistogramRecorder(metrics)
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,28 +62,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// Resolve the route template for the metric label via the
-			// router-agnostic accessor (it reads the trie router's context key
-			// or mux.CurrentRoute, whichever applies). It is "" for unmatched
-			// routes and for routes built without an explicit Path() (e.g.
-			// PathPrefix-only handlers), so fall back to r.URL.Path there to
-			// keep a usable path label rather than an empty key.
-			path := gofrhttp.RouteTemplate(r)
-			if path == "" {
-				path = r.URL.Path
-			}
-
-			ext := strings.ToLower(filepath.Ext(r.URL.Path))
-			switch ext {
-			case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
-				path = r.URL.Path
-			}
-
-			if path == "/" || strings.HasPrefix(path, "/static") {
-				path = r.URL.Path
-			}
-
-			path = strings.TrimSuffix(path, "/")
+			path, templated := metricsPath(r)
 
 			// Skip recording for /graphql — it has its own dedicated metrics
 			// (app_graphql_*). time.Now() (vDSO call) is deferred past this
@@ -126,41 +77,202 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			// this has to be called in the end so that status code is populated.
 			// res.Status() normalizes a zero internal status (handler wrote
 			// nothing, net/http implicit-200) to http.StatusOK so neither the
-			// histogram nor the statusAttrs cache gets poisoned with status=0.
+			// histogram nor any status cache is poisoned with status=0.
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				duration := time.Since(start)
-				status := res.Status()
-
-				if hasAttrer {
-					// Fast path: copy the cached (path, method) attribute pair
-					// into a fixed 3-element local array and add the
-					// per-request status KV in slot 2. Avoids the per-request
-					// append-and-grow that occurs when growing a cap=2 slice
-					// to length 3.
-					key := routeMethodKey{path: path, method: req.Method}
-
-					base, ok := routeAttrs.Load(key)
-					if !ok {
-						b := []attribute.KeyValue{
-							attribute.String("path", path),
-							attribute.String("method", req.Method),
-						}
-						base, _ = routeAttrs.LoadOrStore(key, b)
-					}
-
-					b := base.([]attribute.KeyValue)
-					attrs := [3]attribute.KeyValue{b[0], b[1], statusAttr(status)}
-					attrer.RecordHistogramAttrs(context.Background(), "app_http_response", duration.Seconds(), attrs[:]...)
-
-					return
-				}
-
-				// Slow path: external metrics implementation, no fast method.
-				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
-					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", status))
+				recorder.record(path, req.Method, res.Status(), time.Since(start).Seconds(), templated)
 			}(srw, r)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
+}
+
+// metricsPath resolves the path label and reports whether it is a bounded route
+// template.
+//
+// The label itself is unchanged. What is new is the second return value, which
+// decides whether the result may be used as a cache key. Every branch that falls
+// back to r.URL.Path yields a caller-controlled string: an unmatched route, a
+// static-asset extension, /static, and - crucially - the "/" template that
+// GoFr's PathPrefix("/") catch-all produces for every unmatched request. Without
+// this distinction a stream of unique unmatched paths filled the shared cache to
+// its ceiling, after which every first-seen LEGITIMATE route could never be
+// stored and rebuilt its measurement option per request forever. Memory stayed
+// bounded; the optimization silently reverted to baseline for real traffic.
+func metricsPath(r *http.Request) (path string, templated bool) {
+	path = gofrhttp.RouteTemplate(r)
+	templated = path != ""
+
+	// It is "" for unmatched routes and for routes built without an explicit
+	// Path() (e.g. PathPrefix-only handlers), so fall back to r.URL.Path there
+	// to keep a usable path label rather than an empty key.
+	if !templated {
+		path = r.URL.Path
+	}
+
+	ext := strings.ToLower(filepath.Ext(r.URL.Path))
+	switch ext {
+	case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
+		path, templated = r.URL.Path, false
+	}
+
+	if path == "/" || strings.HasPrefix(path, "/static") {
+		path, templated = r.URL.Path, false
+	}
+
+	return strings.TrimSuffix(path, "/"), templated
+}
+
+// histogramName is the request-duration histogram this middleware records.
+const histogramName = "app_http_response"
+
+// metricsOptRecorder is the fastest optional interface: an implementation that
+// accepts an already-built measurement option lets this middleware build each
+// (path, method, status) option once instead of on every request.
+type metricsOptRecorder interface {
+	RecordHistogramOpt(ctx context.Context, name string, value float64, opts ...metric.RecordOption)
+}
+
+// statusRouteKey identifies a (path, method, status) triple.
+type statusRouteKey struct {
+	path, method string
+	status       int
+}
+
+// histogramRecorder records one app_http_response observation.
+//
+// Three implementations exist because a metrics backend may support three
+// levels of pre-building. Choosing between them once, at construction, keeps
+// that decision out of the request path and keeps each strategy independently
+// readable and testable.
+type histogramRecorder interface {
+	// templated reports whether path is a bounded route template. Only a
+	// templated path may be used as a cache key -- see metricsPath.
+	record(path, method string, status int, seconds float64, templated bool)
+}
+
+// newHistogramRecorder selects the most capable strategy the backend supports.
+func newHistogramRecorder(m metrics) histogramRecorder {
+	statusAttr := newStatusAttrCache()
+
+	if r, ok := m.(metricsOptRecorder); ok {
+		return &optionRecorder{rec: r, statusAttr: statusAttr}
+	}
+
+	if a, ok := m.(metricsAttrer); ok {
+		return &attrsRecorder{rec: a, statusAttr: statusAttr}
+	}
+
+	return &labelsRecorder{rec: m}
+}
+
+// newStatusAttrCache returns a memoized status-attribute builder.
+//
+// The value is a string, not an Int: metricsManager's varargs path emits status
+// as a string and OTLP exporters distinguish KeyValue types, so a mismatch would
+// break user queries expecting a string across the two code paths.
+func newStatusAttrCache() func(int) attribute.KeyValue {
+	var cache sync.Map // map[int]attribute.KeyValue
+
+	return func(code int) attribute.KeyValue {
+		if v, ok := cache.Load(code); ok {
+			kv, _ := v.(attribute.KeyValue)
+
+			return kv
+		}
+
+		kv := attribute.String("status", strconv.Itoa(code))
+		cache.Store(code, kv)
+
+		return kv
+	}
+}
+
+// optionRecorder caches one fully built measurement option per
+// (path, method, status), so metric.WithAttributes -- which builds and sorts an
+// attribute.Set -- runs once per combination rather than once per request.
+type optionRecorder struct {
+	rec        metricsOptRecorder
+	statusAttr func(int) attribute.KeyValue
+	cache      routeCache[[]metric.RecordOption] // keyed on statusRouteKey
+}
+
+func (o *optionRecorder) record(path, method string, status int, seconds float64, templated bool) {
+	cacheable := templated && cacheableMethod(method)
+	key := statusRouteKey{path: path, method: method, status: status}
+
+	if cacheable {
+		if opts, ok := o.cache.load(key); ok {
+			o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
+
+			return
+		}
+	}
+
+	// Cache the option slice, not the option: passing a lone option into the
+	// variadic would allocate a one-element slice on every request.
+	//
+	// The status attribute is a String, not an Int: metricsManager's varargs
+	// path emits status as a string and OTLP exporters distinguish KeyValue
+	// types, so the two paths must agree or a dashboard breaks depending on
+	// which recorder the backend selected.
+	opts := []metric.RecordOption{metric.WithAttributes(
+		attribute.String("path", path),
+		attribute.String("method", method),
+		o.statusAttr(status),
+	)}
+
+	if cacheable {
+		o.cache.store(key, opts)
+	}
+
+	o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
+}
+
+// attrsRecorder caches the (path, method) attribute pair and copies it into a
+// fixed three-element array, avoiding the append-and-grow that appending status
+// to a cap=2 slice would cost.
+type attrsRecorder struct {
+	rec        metricsAttrer
+	statusAttr func(int) attribute.KeyValue
+	cache      routeCache[[]attribute.KeyValue] // keyed on routeMethodKey
+}
+
+func (a *attrsRecorder) record(path, method string, status int, seconds float64, templated bool) {
+	key := routeMethodKey{path: path, method: method}
+
+	var b []attribute.KeyValue
+
+	// This cache used to have no ceiling at all while its sibling above had one,
+	// which is exactly the inconsistency that makes a shared key space dangerous:
+	// one malicious request stream inflates whichever cache is unbounded. Both
+	// now go through routeCache under the same rules.
+	cacheable := templated && cacheableMethod(method)
+	if cacheable {
+		b, _ = a.cache.load(key)
+	}
+
+	if b == nil {
+		b = []attribute.KeyValue{
+			attribute.String("path", path),
+			attribute.String("method", method),
+		}
+
+		if cacheable {
+			a.cache.store(key, b)
+		}
+	}
+
+	attrs := [3]attribute.KeyValue{b[0], b[1], a.statusAttr(status)}
+
+	a.rec.RecordHistogramAttrs(context.Background(), histogramName, seconds, attrs[:]...)
+}
+
+// labelsRecorder is the fallback for an external metrics implementation that
+// offers neither fast-path interface.
+type labelsRecorder struct{ rec metrics }
+
+func (l *labelsRecorder) record(path, method string, status int, seconds float64, _ bool) {
+	l.rec.RecordHistogram(context.Background(), histogramName, seconds,
+		"path", path, "method", method, "status", strconv.Itoa(status))
 }

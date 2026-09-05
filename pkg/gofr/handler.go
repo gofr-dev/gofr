@@ -63,9 +63,13 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	c := newHTTPContext(w, r, h.container)
 
-	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+	// Carry the SpanContext (a value type, no allocation) rather than eagerly
+	// formatting the trace ID. TraceID().String() allocates a 32-character
+	// string on every request, but the only consumer is logError, which runs
+	// only when a handler returns an error.
+	spanCtx := trace.SpanFromContext(r.Context()).SpanContext()
 
 	isWebSocket := websocket.IsWebSocketUpgrade(r)
 
@@ -85,14 +89,20 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !isWebSocket && h.requestTimeout == 0 {
-		result, err = h.serveInline(c, traceID)
+		result, err = h.serveInline(c, spanCtx)
 	} else {
-		result, err = h.serveWithGoroutine(c, traceID, r)
+		result, err = h.serveWithGoroutine(c, spanCtx, r)
 	}
 
-	// Handle custom headers if 'result' is a 'Response'.
-	if resp, ok := result.(response.Response); ok {
+	// Handle custom headers if 'result' is a 'Response'. A pointer is handled
+	// equivalently to the value form, otherwise its Headers are silently dropped.
+	switch resp := result.(type) {
+	case response.Response:
 		resp.SetCustomHeaders(w)
+	case *response.Response:
+		if resp != nil {
+			resp.SetCustomHeaders(w)
+		}
 	}
 
 	c.responder.Respond(result, err)
@@ -111,7 +121,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // way (TCP connection is gone). Response wire shape is byte-identical to
 // serveWithGoroutine because the (result, err) pair feeds the same
 // Respond call.
-func (h handler) serveInline(c *Context, traceID string) (result any, err error) {
+func (h handler) serveInline(c *Context, spanCtx trace.SpanContext) (result any, err error) {
 	panicked := false
 
 	func() {
@@ -128,7 +138,7 @@ func (h handler) serveInline(c *Context, traceID string) (result any, err error)
 	}()
 
 	if !panicked {
-		h.logError(traceID, err)
+		h.logError(spanCtx, err)
 	}
 
 	// Map a canceled / deadline-exceeded ctx to the right error so the
@@ -161,7 +171,7 @@ func (h handler) serveInline(c *Context, traceID string) (result any, err error)
 // main goroutine reads — `go test -race` stays clean. Buffer size 1 lets
 // the handler goroutine finish writing and exit even after the main
 // goroutine has already taken the ctx.Done or panicked branch.
-func (h handler) serveWithGoroutine(c *Context, traceID string, r *http.Request) (result any, err error) {
+func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *http.Request) (result any, err error) {
 	done := make(chan handlerOutcome, 1)
 	panicked := make(chan struct{})
 
@@ -171,7 +181,7 @@ func (h handler) serveWithGoroutine(c *Context, traceID string, r *http.Request)
 		}()
 
 		res, e := h.function(c)
-		h.logError(traceID, e)
+		h.logError(spanCtx, e)
 
 		done <- handlerOutcome{res, e}
 	}()
@@ -240,10 +250,12 @@ func logPanic(log logging.Logger, re any) {
 	})
 }
 
-// Log the error(if any) with traceID and errorMessage.
-func (h handler) logError(traceID string, err error) {
+// logError logs the error (if any) with the trace ID and the error message.
+// The trace ID is formatted here, on the error path only, rather than on every
+// request.
+func (h handler) logError(spanCtx trace.SpanContext, err error) {
 	if err != nil {
-		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
+		errorLog := &ErrorLogEntry{TraceID: spanCtx.TraceID().String(), Error: err.Error()}
 
 		// define the default log level for error
 		loggerHelper := h.container.Logger.Error
