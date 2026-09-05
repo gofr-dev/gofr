@@ -169,13 +169,16 @@ func validateDefaultNotNull(fieldName string, value any) error {
 	return nil
 }
 
-// isNillableKind reports whether reflect.Value.IsNil is defined for k. Calling
-// IsNil on any other kind panics.
+// isNillableKind reports whether reflect.Value.IsNil is defined for k. Calling IsNil on any
+// other kind panics. reflect.Value.IsNil documents six kinds; the implementation accepts
+// UnsafePointer as well, so it is listed here too -- otherwise a nil unsafe.Pointer reaches
+// the default and is accepted for a NOT NULL column.
 //
 //nolint:exhaustive // every non-nillable kind is intentionally handled by the default.
 func isNillableKind(k reflect.Kind) bool {
 	switch k {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
+		reflect.UnsafePointer:
 		return true
 	default:
 		return false
