@@ -77,22 +77,25 @@ By default the endpoint always responds with HTTP `200` (existing probes keep wo
 To hold a pod out of service until it can actually serve traffic, register a readiness check:
 
 ```go
-func (a *App) SetReadinessCheck(check func(ctx *gofr.Context, framework error) error)
+type ReadinessCheck func(ctx *gofr.Context) error
+
+func (a *App) AddReadinessCheck(check ReadinessCheck, opts ...ReadinessOption)
+func ReplaceFrameworkChecks() ReadinessOption
 ```
 
 Return `nil` when ready, any error when not — in which case the endpoint answers `503` and
 Kubernetes stops routing traffic to the pod. The error is logged, never written to the response:
 the endpoint is unauthenticated and must not leak dependency details.
 
-`framework` is GoFr's own verdict on every registered datasource and service: `nil` when they are
-all up, non-nil when one or more are not. What the check does with it *is* the readiness policy —
-so the same single method covers both composing with GoFr's checks and replacing them.
+Checks accumulate, so two independent modules can each register one; they are evaluated in
+registration order and the first not-ready verdict wins.
 
 ##### Requiring GoFr's checks in addition to your own
 
-Propagate `framework` and the endpoint gates on both. Because the check is a closure it can also
-probe dependencies GoFr never registered — a datasource you opened yourself, a third-party SDK
-client, an in-process warm-up flag:
+This is the default: GoFr's own verdict on every registered datasource and service is evaluated
+first, and your check runs only if it passes. Because the check is a closure it can probe
+dependencies GoFr never registered — a datasource you opened yourself, a third-party SDK client, an
+in-process warm-up flag:
 
 ```go
 package main
@@ -115,20 +118,15 @@ var errCacheNotWarm = errors.New("cache not warm")
 func main() {
 	app := gofr.New()
 
-	// A downstream HTTP dependency — already covered by GoFr's own checks.
+	// A downstream HTTP dependency — already covered by GoFr's own checks, which gate readiness
+	// before the check below is called.
 	app.AddHTTPService("payment", "https://payment.internal")
 
 	// An external datasource the app connects to itself: GoFr's container has no handle on it,
 	// so readiness can only account for it through a check that captures it.
 	licenseDB := openLicenseStore(app)
 
-	app.SetReadinessCheck(func(ctx *gofr.Context, framework error) error {
-		// Every registered datasource and service must be up ...
-		if framework != nil {
-			return framework
-		}
-
-		// ... and so must the dependencies GoFr does not know about.
+	app.AddReadinessCheck(func(ctx *gofr.Context) error {
 		if err := licenseDB.PingContext(ctx); err != nil {
 			return err
 		}
@@ -156,49 +154,94 @@ func openLicenseStore(app *gofr.App) *sql.DB {
 
 ##### Replacing GoFr's verdict
 
-Ignore `framework` — writing `_`, so the override is visible at the call site — and readiness is
-exactly what your check says. This is what readiness that is a *relationship between* dependencies
-needs, which a set of independently-evaluated checks could not express. For example, when the
-service can serve from either backing store:
+Pass `gofr.ReplaceFrameworkChecks()` and readiness is exactly what your checks say. This is what
+readiness that is a *relationship between* dependencies needs, which a conjunction of independently
+evaluated checks cannot express. For example, when the service can serve from either backing store:
 
 ```go
-app.SetReadinessCheck(func(ctx *gofr.Context, _ error) error {
+app.AddReadinessCheck(func(ctx *gofr.Context) error {
 	if redisUp(ctx) || sqlUp(ctx) {
 		return nil
 	}
 
 	return errNoBackingStore
-})
+}, gofr.ReplaceFrameworkChecks())
 ```
 
 The same shape narrows readiness when only one of several registered datasources is critical:
 
 ```go
-app.SetReadinessCheck(func(ctx *gofr.Context, _ error) error {
+app.AddReadinessCheck(func(ctx *gofr.Context) error {
 	if h := ctx.SQL.HealthCheck(); h == nil || h.Status != "UP" {
 		return errors.New("postgres not reachable")
 	}
 
 	return nil
-})
+}, gofr.ReplaceFrameworkChecks())
 ```
 
-Note that GoFr's checks still *run* — `framework` is computed before your check is called — so a
-check that ignores the parameter pays for the datasource sweep without using its result. That
-matches the default path, which sweeps on every probe too.
+The option is a property of readiness as a whole, not of one registration: passing it on any single
+`AddReadinessCheck` call turns framework gating off for the endpoint, and GoFr says which mode is in
+force at startup rather than leaving it to be inferred from a call site.
+
+Because GoFr then knows its own checks no longer decide anything, it **skips the datasource sweep
+entirely** — a probe costs only what your checks cost. That matters when a dependency is slow or
+hanging, which is exactly when the sweep is expensive and the readiness probe earns its keep:
+`readinessProbe.timeoutSeconds` is small (the
+[Kubernetes guide](/docs/guides/deploying-to-kubernetes) ships `2`), so a check that disclaims those
+dependencies should not be timed out by them.
+
+A check that wants GoFr's verdict as one input among others — tolerating `DEGRADED` during a warm-up
+window, or requiring it only when its own dependency is also down — can ask for it explicitly:
+
+```go
+app.AddReadinessCheck(func(ctx *gofr.Context) error {
+	if err := gofr.FrameworkReadiness(ctx); err != nil && time.Since(started) > warmup {
+		return err
+	}
+
+	return nil
+}, gofr.ReplaceFrameworkChecks())
+```
+
+`gofr.FrameworkReadiness` returns `nil` when every registered datasource and service is up, and
+otherwise an error naming the aggregate status only — never the per-dependency detail behind it, so
+a check that returns it unchanged still cannot leak anything to the unauthenticated response. It
+runs a full datasource sweep, so call it at most once per probe.
 
 ##### What you see at startup and at runtime
 
-When a check is registered, GoFr says so at startup, so a `503` from this endpoint is never a
-surprise about where the verdict came from:
+When a check is registered, GoFr says so at startup — including which of the two policies is in
+force, so a `503` from this endpoint, or a `200` with a dependency down, is never a surprise about
+where the verdict came from:
 
 ```
-INFO  readiness: app check registered - framework checks: enabled, propagated to the app check
+INFO  readiness: 1 app check(s) registered - framework checks: enabled, evaluated before the app checks
+INFO  readiness: 2 app check(s) registered - framework checks: replaced by the app checks
 ```
 
 A not-ready result responds `503` with `{"error":{"message":"DOWN"}}`. The reason — the error your
 check returned — is logged at `WARN`, not `ERROR`: a `503` here is expected during startup and
 rolling deploys, and Kubernetes probes it repeatedly.
+
+The **request log** is a separate line and is keyed off the status code alone, so it reports every
+probe `503` at `ERROR`. During a rolling deploy that is a burst of `ERROR`-level lines for an
+expected condition, which a level-keyed alert will pick up. Set `LOG_DISABLE_PROBES=true` to silence
+the request log for `/.well-known/health` and `/.well-known/alive`; the `WARN` line carrying the
+reason is unaffected.
+
+##### Readiness does not propagate to GoFr callers
+
+`AddReadinessCheck` gates the load balancer, and nothing else. When another GoFr application depends
+on this one through `AddHTTPService`, its dependency check probes `/.well-known/alive`, not
+`/.well-known/health` — so a caller reports this service `UP` even while its readiness check is
+answering `503`.
+
+That is deliberate: `/.well-known/alive` answers immediately, whereas `/.well-known/health` runs the
+callee's own dependency sweep, which would make every caller re-run its downstream's sweep and
+report as down any downstream slower than the health-check timeout — while it is serving traffic
+normally. Readiness is a signal for the orchestrator routing traffic to this pod, not for
+application-level dependency checks.
 
 > **Note:** The detailed per-dependency health map is being moved to the metrics server
 > (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that

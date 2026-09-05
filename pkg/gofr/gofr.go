@@ -55,9 +55,10 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
 
-	// readinessCheck is the application-registered readiness check for /.well-known/health. It is
-	// handed GoFr's own verdict and returns the answer; nil means the endpoint keeps its default.
-	readinessCheck ReadinessCheck
+	// readinessChecks are the application-registered readiness checks for /.well-known/health,
+	// evaluated in registration order; empty means the endpoint keeps its default behavior.
+	// Guarded by mu: registration is documented as pre-Run, but probes run concurrently.
+	readinessChecks []readinessCheck
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
