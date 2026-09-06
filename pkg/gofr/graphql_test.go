@@ -1,3 +1,5 @@
+//go:build !gofr_nographql
+
 package gofr
 
 import (
@@ -36,6 +38,18 @@ func (*errWriter) Write([]byte) (int, error) { return 0, errWriteFailed }
 
 func (e *errWriter) WriteHeader(status int) { e.status = status }
 
+// gqlManager reaches the concrete manager for the tests that drive Handle
+// directly. App itself needs only the four methods on graphQLRunner, which is why
+// the field is that interface -- see graphql_runner.go.
+func gqlManager(t *testing.T, app *App) *graphQLManager {
+	t.Helper()
+
+	m, ok := app.graphqlManager.(*graphQLManager)
+	require.True(t, ok, "expected the real GraphQL manager")
+
+	return m
+}
+
 func setupSchema(t *testing.T, content string) string {
 	t.Helper()
 
@@ -70,7 +84,7 @@ func TestGraphQL_Query(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -115,7 +129,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -208,7 +222,7 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -262,7 +276,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -336,7 +350,7 @@ func TestGraphQL_Enums(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -371,7 +385,7 @@ func TestGraphQL_OperationName(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Data struct {
@@ -411,7 +425,7 @@ func TestGraphQL_Variables(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Data struct {
@@ -442,7 +456,7 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Errors []any `json:"errors"`

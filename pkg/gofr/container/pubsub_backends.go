@@ -26,6 +26,12 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 )
 
+// configTrue is the value a boolean config carries when set. It lives in this
+// file rather than beside the other container constants because only this file
+// uses it -- an untagged home would leave it unused, and so a lint failure, in a
+// build made with -tags gofr_nopubsub.
+const configTrue = "true"
+
 // pubsubBackendsLinked reports whether the concrete pub/sub clients are compiled
 // into this binary. Tests that assert on a real client consult it and skip when
 // they are not, so the suite stays meaningful in both build configurations
@@ -118,7 +124,7 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
 		KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
 		CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
-		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
+		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == configTrue,
 	}
 
 	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
