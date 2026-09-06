@@ -512,6 +512,44 @@ jobs:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
+
+  slim_build_tags:
+    name: Slim Build Tags🪶
+    runs-on: ubuntu-latest
+    # Only builds and runs the packages the tags touch, so it stays well inside
+    # the time the rest of the matrix takes.
+    timeout-minutes: 15
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v7
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+
+      # Half of the code the build tags add is compiled only when the tags are
+      # set, so without this job nothing ever builds it. A later edit to
+      # container.go that referenced kafka. or google. directly would compile and
+      # pass every other job while silently breaking the tagged build.
+      - name: Build and test with datasources omitted
+        run: |
+          set -euo pipefail
+          for tags in "gofr_nosqldrivers" "gofr_nopubsub" "gofr_nosqldrivers gofr_nopubsub"; do
+            echo "::group::-tags '$tags'"
+            go build -tags "$tags" ./...
+            go vet   -tags "$tags" ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
+            go test  -tags "$tags" -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
+            echo "::endgroup::"
+          done
+
+      # The tags are opt-in, so the default build must stay exactly as it was.
+      # This is the assertion that keeps that true.
+      - name: Default build links the same packages as before
+        run: |
+          set -euo pipefail
+          go build ./...
+          go test -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
