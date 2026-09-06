@@ -1,3 +1,5 @@
+//go:build !gofr_nodgraph
+
 package migration
 
 import (

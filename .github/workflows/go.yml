@@ -557,6 +557,17 @@ jobs:
           go vet   -tags gofr_nogrpc ./pkg/gofr/
           go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
 
+      # gofr_nodgraph drops the Dgraph migrator, the one place in GoFr that imports
+      # dgo. The stub has to keep implementing migrator, so a change to that
+      # interface must update both halves; without this step only the real one
+      # would ever be compiled.
+      - name: Build and test with the Dgraph migrator omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nodgraph ./...
+          go vet   -tags gofr_nodgraph ./pkg/gofr/migration/
+          go test  -tags gofr_nodgraph -count=1 ./pkg/gofr/migration/
+
       # The tags are opt-in, so the default build must stay exactly as it was.
       # This is the assertion that keeps that true.
       - name: Default build links the same packages as before
