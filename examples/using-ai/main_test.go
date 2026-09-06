@@ -24,15 +24,20 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// mockProvider is an in-test OpenAI-compatible server: it answers /models (health), returns a
-// streamed reply when the request asks for one, drives one agent turn (tool call then final answer)
-// when tools are present, and otherwise returns a plain completion.
+// mockProvider is an in-test OpenAI-compatible server: it answers /models (health) and /embeddings,
+// returns a streamed reply when the request asks for one, drives one agent turn (tool call then
+// final answer) when tools are present, and otherwise returns a plain completion.
 func mockProvider(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/models" {
 			_, _ = io.WriteString(w, `{"data":[]}`)
+			return
+		}
+
+		if r.URL.Path == "/embeddings" {
+			_, _ = io.WriteString(w, embeddingsJSON())
 			return
 		}
 
@@ -70,6 +75,17 @@ func chatJSON(content string) string {
 	return fmt.Sprintf(
 		`{"model":"mock","choices":[{"message":{"role":"assistant","content":%q}}],`+
 			`"usage":{"prompt_tokens":5,"completion_tokens":3}}`, content)
+}
+
+// embeddingsJSON answers with the two vectors deliberately out of order — index 1 before index 0.
+// The wire contract permits any order, which is exactly what the "index" field is for, so this is a
+// response a real OpenAI-compatible backend is allowed to send. The handler must still hand each
+// input the vector computed from it, which is what the assertion below pins.
+func embeddingsJSON() string {
+	return `{"model":"mock","data":[` +
+		`{"embedding":[0.3,0.4],"index":1},` +
+		`{"embedding":[0.1,0.2],"index":0}],` +
+		`"usage":{"prompt_tokens":5}}`
 }
 
 func toolCallJSON() string {
@@ -122,6 +138,13 @@ func TestIntegration_UsingAI(t *testing.T) {
 
 	t.Run("agent runs a tool loop", func(t *testing.T) {
 		assert.Contains(t, post(t, base+"/agent", `{"task":"stock?"}`), "final answer")
+	})
+
+	t.Run("embed returns one vector per input, in input order", func(t *testing.T) {
+		out := post(t, base+"/embed", `{"inputs":["the quick brown fox","a fast auburn fox"]}`)
+		// The provider answered index 1 first. Pairing by array position would return these
+		// swapped, and nothing downstream would notice — a wrong vector is still a valid vector.
+		assert.Contains(t, out, `[[0.1,0.2],[0.3,0.4]]`)
 	})
 
 	t.Run("no goroutine leak under repeated streaming", func(t *testing.T) {

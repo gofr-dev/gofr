@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -31,8 +33,34 @@ var (
 	errInvalidKeyFile         = errors.New("invalid key file")
 )
 
+// logRouterChoice reports the route matcher the router resolved to.
+//
+// It stays quiet for the default, which every service gets and nobody needs told
+// about. It speaks up for the two cases that are worth a line: the opt-in matcher
+// being active, and a GOFR_ROUTER value that was not understood — the latter
+// falls back to mux, which looks exactly like never having set the variable, so a
+// typo would otherwise cost the opt-in with nothing said.
+func logRouterChoice(logger logging.Logger, r *gofrHTTP.Router) {
+	requested := os.Getenv(gofrHTTP.RouterEnvVar)
+	if requested == "" {
+		return
+	}
+
+	if !strings.EqualFold(requested, r.Matcher()) {
+		logger.Warnf("unrecognized %s value %q, using the %q router; valid values are %q and %q",
+			gofrHTTP.RouterEnvVar, requested, r.Matcher(), gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie)
+
+		return
+	}
+
+	logger.Infof("HTTP route matcher: %s", r.Matcher())
+}
+
 func newHTTPServer(c *container.Container, port int, middlewareConfigs middleware.Config) *httpServer {
 	r := gofrHTTP.NewRouter()
+
+	logRouterChoice(c.Logger, r)
+
 	wsManager := websocket.New()
 
 	r.Use(

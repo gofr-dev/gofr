@@ -23,6 +23,7 @@ const (
 	opGenerate = "generate"
 	opChat     = "chat"
 	opStream   = "stream"
+	opEmbed    = "embed"
 
 	tokenTypePrompt     = "prompt"
 	tokenTypeCompletion = "completion"

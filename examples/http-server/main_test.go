@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
@@ -56,7 +55,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc string
@@ -106,7 +105,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc       string
@@ -171,7 +170,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc       string

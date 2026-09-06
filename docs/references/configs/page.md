@@ -104,6 +104,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  OTEL_RESOURCE_ATTRIBUTES
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
 -  HTTP_PORT
 -  Port on which the HTTP server listens
 -  8000
@@ -168,6 +173,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  GOFR_TELEMETRY
 -  Enable telemetry for GoFr framework usage
 -  true
+
+---
+
+-  GOFR_ROUTER
+-  Route matcher for the HTTP server. Set to `trie` to opt into the O(path length) trie index instead of the default linear scan — see [Routing Performance](/docs/advanced-guide/routing-performance). Any other value falls back to `mux`.
+-  mux
 
 ---
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +21,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	testMessage := "Hello! GoFr"
 	dialer := &websocket.Dialer{}

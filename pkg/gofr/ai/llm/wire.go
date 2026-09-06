@@ -94,6 +94,30 @@ type wireResponseFunc struct {
 	Arguments string `json:"arguments"`
 }
 
+// embeddingsRequest and embeddingsResponse are the OpenAI-compatible /embeddings wire shapes.
+type embeddingsRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+type embeddingsResponse struct {
+	Model string           `json:"model"`
+	Data  []embeddingDatum `json:"data"`
+	Usage json.RawMessage  `json:"usage"`
+	Error *wireError       `json:"error"`
+}
+
+// embeddingDatum is one entry of the /embeddings response data array. Index names the input the
+// vector belongs to; it exists in the OpenAI contract precisely so a provider may return the array
+// out of order, and this client talks to any OpenAI-compatible backend, so it is honored rather
+// than assumed to match the array position. It is a pointer because a minimal provider may omit
+// the field entirely — absent means "use my position", where a plain int would silently claim
+// index 0 for every entry.
+type embeddingDatum struct {
+	Embedding []float32 `json:"embedding"`
+	Index     *int      `json:"index"`
+}
+
 // Default JSON paths for token usage, matching the OpenAI Chat Completions shape used by every
 // built-in provider (OpenAI, Groq, DeepSeek, Together, Ollama). Cache-read and reasoning counts live
 // under the *_details objects; DeepSeek instead reports cache hits at the top level. A custom

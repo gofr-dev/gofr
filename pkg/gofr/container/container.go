@@ -323,6 +323,11 @@ func (c *Container) LLM(name ...string) ai.LLM {
 // are independent of any registered model.
 type notConfiguredLLM struct{ c *Container }
 
+// notConfiguredLLM must satisfy the whole ai.LLM interface, so a handler reaches every capability
+// whether or not a model is configured — the absence is reported as ai.ErrLLMNotConfigured from the
+// call itself rather than as a nil dereference.
+var _ ai.LLM = notConfiguredLLM{}
+
 func (notConfiguredLLM) Chat(context.Context, []ai.Message, ...ai.Option) (*ai.Response, error) {
 	return nil, ai.ErrLLMNotConfigured
 }
@@ -332,6 +337,10 @@ func (notConfiguredLLM) Generate(context.Context, string, ...ai.Option) (*ai.Res
 }
 
 func (notConfiguredLLM) Stream(context.Context, []ai.Message, ...ai.Option) (ai.Streamer, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Embed(context.Context, []string, ...ai.Option) (*ai.EmbeddingResponse, error) {
 	return nil, ai.ErrLLMNotConfigured
 }
 

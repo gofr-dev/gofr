@@ -422,3 +422,82 @@ func TestHTTPDebugMsg_PrettyPrint(t *testing.T) {
 		})
 	}
 }
+
+// noGateLogger is a logging.Logger that cannot answer LogEnabled. Embedding the
+// INTERFACE (not a concrete logger) is what hides the method: only the
+// interface's own methods are promoted.
+type noGateLogger struct{ logging.Logger }
+
+// TestRemoteLoggerLogEnabledMatchesLevel is the direct test of the implementation
+// production actually uses -- container.go always wires a remotelogger, so this
+// is the LogEnabled the request middleware calls on every request.
+//
+// It is written to fail if the body is replaced with a constant: the expected
+// value differs across the table.
+func TestRemoteLoggerLogEnabledMatchesLevel(t *testing.T) {
+	tests := []struct {
+		level logging.Level
+		want  bool
+	}{
+		{logging.DEBUG, true},
+		{logging.INFO, true},
+		{logging.NOTICE, false},
+		{logging.WARN, false},
+		{logging.ERROR, false},
+		{logging.FATAL, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			// An empty remote URL keeps the polling goroutine from starting.
+			r, ok := New(tt.level, "", time.Second).(*remoteLogger)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, r.LogEnabled())
+		})
+	}
+}
+
+// TestRemoteLoggerLogEnabledFollowsChangeLevel pins that the wrapper reports the
+// level currently in force, not the one it was built with -- the whole point of
+// delegating to the embedded logger rather than reading currentLevel.
+func TestRemoteLoggerLogEnabledFollowsChangeLevel(t *testing.T) {
+	r, ok := New(logging.INFO, "", time.Second).(*remoteLogger)
+	require.True(t, ok)
+	require.True(t, r.LogEnabled(), "INFO must start open")
+
+	r.ChangeLevel(logging.WARN)
+	assert.False(t, r.LogEnabled(), "a remote level raise must close the gate")
+
+	r.ChangeLevel(logging.DEBUG)
+	assert.True(t, r.LogEnabled(), "and lowering it must reopen it")
+}
+
+// TestRemoteLoggerLogEnabledFailsOpen covers the compatibility path: an embedded
+// logger that cannot answer must be treated as enabled, so a custom logger never
+// silently loses its request logs.
+func TestRemoteLoggerLogEnabledFailsOpen(t *testing.T) {
+	r := &remoteLogger{Logger: noGateLogger{logging.NewLogger(logging.FATAL)}}
+
+	assert.True(t, r.LogEnabled(),
+		"a logger without the optional interface must keep building entries")
+}
+
+// TestRemoteLoggerLogEnabledAgreesWithLog is the anti-drift guard, asserted
+// against real output rather than against the other implementation.
+func TestRemoteLoggerLogEnabledAgreesWithLog(t *testing.T) {
+	for _, level := range []logging.Level{logging.DEBUG, logging.INFO, logging.NOTICE, logging.WARN} {
+		t.Run(level.String(), func(t *testing.T) {
+			r, ok := New(level, "", time.Second).(*remoteLogger)
+			require.True(t, ok)
+
+			out := testutil.StdoutOutputForFunc(func() {
+				l, _ := New(level, "", time.Second).(*remoteLogger)
+				l.Log("entry")
+			})
+
+			assert.Equal(t, r.LogEnabled(), out != "",
+				"LogEnabled must predict whether Log emits")
+		})
+	}
+}

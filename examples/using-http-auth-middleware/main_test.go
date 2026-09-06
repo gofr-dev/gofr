@@ -14,8 +14,7 @@ func Test_setupAPIKeyAuthFailed(t *testing.T) {
 	// Run main() in a goroutine to avoid blocking
 	go main()
 
-	// Allow time for server to start
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, serverConfigs.HTTPHost)
 
 	client := &http.Client{Timeout: 200 * time.Millisecond}
 
@@ -41,8 +40,7 @@ func Test_setupAPIKeyAuthSuccess(t *testing.T) {
 	// Run main() in a goroutine to avoid blocking
 	go main()
 
-	// Allow time for server to start
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, serverConfigs.HTTPHost)
 
 	client := &http.Client{Timeout: 200 * time.Millisecond}
 

@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"testing"
-	"time"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -21,16 +19,14 @@ func TestMain(m *testing.M) {
 }
 
 func TestMainInitialization(t *testing.T) {
-	log := testutil.StdoutOutputForFunc(func() {
+	// The example registers no routes, only subscribers, so GoFr starts no HTTP server here and
+	// there is no liveness endpoint to poll. The Kafka connection log is the startup signal, and
+	// waiting for it is the assertion: the helper fails the test if it never arrives.
+	testutil.NewServerConfigs(t)
+
+	testutil.WaitForStdoutContains(t, "connected to 1 Kafka brokers", func() {
 		go main()
-
-		time.Sleep(200 * time.Millisecond)
 	})
-
-	expectedLog := "connected to 1 Kafka brokers"
-	if !strings.Contains(log, expectedLog) {
-		t.Errorf("Expected log to contain %q, but got: %s", expectedLog, log)
-	}
 }
 
 type errorRequest struct{}

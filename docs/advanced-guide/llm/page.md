@@ -98,7 +98,12 @@ named one) and its metrics carry the model's own `provider`/`model` labels.
 - `Generate(ctx, prompt, ...opts)` — a convenience over a single-message chat.
 - `Chat(ctx, messages, ...opts)` — a multi-turn conversation using `ai.Message` values.
 - `Stream(ctx, messages, ...opts)` — an incremental token stream (see below).
+- `Embed(ctx, inputs, ...opts)` — text as vectors (see [Embeddings](#embeddings)).
 - `Tools()` — the service's own handlers as agent-callable tools (see [Building AI Agents](/docs/advanced-guide/mcp)).
+
+Not every provider supports every method — a chat-only model cannot embed. That is reported by the
+call itself, as `ai.ErrEmbedNotSupported` or `ai.ErrStreamNotSupported`, so you handle it as an
+ordinary error rather than by checking the model up front.
 
 Options are applied per call: `ai.WithTemperature(0.2)`, `ai.WithMaxTokens(512)`, `ai.WithTools(...)`.
 
@@ -152,6 +157,62 @@ if tc, ok := stream.(ai.ToolCallStreamer); ok {
 }
 ```
 
+## Embeddings
+
+Embeddings turn text into vectors — the primitive behind semantic search and agent memory: embed text
+on write, embed a query on read, and rank stored vectors by similarity. They ride the same tracing and
+token metrics as `Chat`.
+
+Embed is a method on the LLM, like `Chat` and `Stream`:
+
+```go
+resp, err := c.LLM("embed").Embed(c, []string{"the quick brown fox", "a fast auburn fox"})
+if err != nil {
+	return nil, err
+}
+
+vectors := resp.Embeddings // one []float32 per input, in order; resp.Usage carries the prompt tokens
+```
+
+`vectors[i]` is the embedding of `input[i]`. That is guaranteed, not assumed: the client places each
+vector by the `index` the provider reports rather than by its position in the response, so an
+OpenAI-compatible backend that returns the array out of order cannot silently pair an input with
+someone else's vector. A response that cannot be mapped — a vector count that disagrees with the
+inputs sent, an index outside them, or one claimed twice — is returned as an error rather than
+half-mapped, so `len(resp.Embeddings) == len(input)` holds whenever `err` is nil.
+
+Embeddings are usually a *different* model from your chat model, so register one with a name and
+select it per call:
+
+```go
+app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "gpt-4o-mini"})                                     // chat (default)
+app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "text-embedding-3-small"}, gofr.WithName("embed")) // embeddings
+```
+
+Not every model can embed — a chat-only model has none. `Embed` reports that as
+`ai.ErrEmbedNotSupported`, mirroring how `Stream` returns `ai.ErrStreamNotSupported`, so a
+misconfiguration surfaces as an ordinary error. If no model is registered at all, `Embed` returns
+`ai.ErrLLMNotConfigured`.
+
+## Limiting concurrency
+
+By default the client sends every request straight to the provider. When many handlers call the model
+at once and the provider serializes internally (a single local model, or a tight rate-limit tier),
+that burst piles up and tail latency spikes. Set `MaxConcurrentRequests` to cap in-flight calls —
+excess `Chat`/`Embed`/`Stream` calls block (honoring their context deadline) until a slot frees:
+
+```go
+app.AddLLM(&llm.Client{
+	Provider:              llm.Ollama,
+	Model:                 "llama3.2:1b",
+	MaxConcurrentRequests: 4, // at most 4 requests in flight; 0 (the default) is unlimited
+})
+```
+
+This is backpressure, not parallelism — it keeps a burst from overwhelming the provider, but the
+provider's own throughput (and, for a hosted API, your rate-limit tier) still governs how fast
+requests complete.
+
 ## Built-in Observability
 
 Every call is observable the same way a normal GoFr request is, joined by the correlation ID.
@@ -173,9 +234,10 @@ metric labels.
 
 ### Traces
 
-A span per call (`llm.chat` / `llm.generate` / `llm.stream`) carrying provider, model and token
-attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request span and
-the parent of the provider's HTTP span.
+A span per call (`llm.chat` / `llm.generate` / `llm.stream` / `llm.embed`) carrying provider, model
+and token attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request
+span and the parent of the provider's HTTP span. On `llm.embed` only the prompt tokens are non-zero,
+since embeddings bill input alone.
 
 ### Logs
 

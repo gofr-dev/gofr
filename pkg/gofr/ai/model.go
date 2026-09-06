@@ -25,6 +25,26 @@ type StreamingModel interface {
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
 }
 
+// Embedder is the model-side optional capability a provider implements to turn text into embedding
+// vectors — the peer of StreamingModel for streaming. It is not every provider's capability (a
+// chat-only model has no embeddings, an embedding model has no chat), so callers do not implement it:
+// they call LLM.Embed, which reports ErrEmbedNotSupported when the provider does not implement
+// Embedder. Embeddings power semantic search and agent memory: embed text on write, embed a query on
+// read, and rank stored vectors by similarity.
+type Embedder interface {
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
+}
+
+// EmbeddingResponse is the result of an Embed call.
+type EmbeddingResponse struct {
+	// Embeddings holds one vector per input string, in the same order as the input.
+	Embeddings [][]float32
+	// Usage reports token consumption; embeddings bill input (prompt) tokens only.
+	Usage Usage
+	// Model is the resolved model that produced the vectors.
+	Model string
+}
+
 // Descriptor is an optional interface a provider implements to report distinct provider and model
 // labels for metrics and traces. Without it, Name() is used for both labels. The methods are named
 // ProviderName/ModelName (not Provider/Model) so a provider can expose Provider and Model as
@@ -34,19 +54,26 @@ type Descriptor interface {
 	ModelName() string
 }
 
-// LLM is what ctx.LLM() returns. Like Model it is frozen: new capabilities are added through new
-// optional interfaces retrieved by type assertion, never by adding methods here, so hand-written
-// fakes and third-party wrappers keep compiling across minor versions. Generate is a convenience
-// over a single-message Chat.
+// LLM is what ctx.LLM() returns. Generate is a convenience over a single-message Chat.
+//
+// Capabilities live here rather than on separate interfaces reached by type assertion. Embed is not
+// every provider's capability, but neither is Stream, and both report that at call time
+// (ErrEmbedNotSupported, ErrStreamNotSupported) rather than through an assertion the caller has to
+// make. An assertion on the LLM GoFr hands a handler can never fail anyway, since every LLM the
+// container returns implements the full interface, so it reads as a capability check while checking
+// nothing.
+//
+// Adding a method here does break a hand-written fake of LLM. That is the accepted cost of one
+// callable surface; use ai.NewMockLLM for test doubles and it keeps pace automatically.
 type LLM interface {
 	Model
 	Generate(ctx context.Context, prompt string, opts ...Option) (*Response, error)
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 	Tools() Tools
 }
 
-// Tools is the set of the service's own handlers exposed as agent-callable tools. It is frozen on
-// the same terms as LLM; grow it via new optional interfaces.
+// Tools is the set of the service's own handlers exposed as agent-callable tools.
 type Tools interface {
 	List() []ToolSpec
 	Only(names ...string) Tools

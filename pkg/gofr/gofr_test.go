@@ -1160,6 +1160,10 @@ func Test_AddCronJob_Fail(t *testing.T) {
 		})
 	})
 
+	// AddCronJob starts the scheduler even when the schedule itself is rejected;
+	// without this the ticker goroutine outlives the test.
+	a.cron.Stop()
+
 	assert.Contains(t, stderr, "error adding cron job")
 	assert.NotContains(t, stderr, "test-job-fail")
 }
@@ -1167,12 +1171,17 @@ func Test_AddCronJob_Fail(t *testing.T) {
 func Test_AddCronJob_Success(t *testing.T) {
 	pass := false
 	a := App{
-		container: &container.Container{},
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
 	}
 
 	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
 		ctx.Logger.Info("test-job-success")
 	})
+
+	// "* * * * *" fires at second 0 of every minute. Left running, this scheduler
+	// outlives the test and its job goroutine logs against a container the test
+	// no longer owns — the nil-logger panic seen in gofr-dev/gofr#3813.
+	defer a.cron.Stop()
 
 	assert.Len(t, a.cron.jobs, 1)
 
@@ -1324,6 +1333,36 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "no such file or directory")
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
+func TestStaticHandlerGetwdError(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	// Switch into a temporary directory and remove it so that os.Getwd()
+	// inside AddStaticFiles fails when resolving the relative "./" path.
+	// t.Chdir restores the original working directory at test cleanup.
+	tmpDir := t.TempDir()
+
+	t.Chdir(tmpDir)
+
+	require.NoError(t, os.Remove(tmpDir))
+
+	// On some platforms (e.g. macOS) the kernel still resolves the path of an
+	// unlinked working directory, so os.Getwd() does not fail. Skip there since
+	// the error branch cannot be exercised.
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("os.Getwd() does not fail for a removed working directory on this platform")
+	}
+
+	// The app (and its logger) must be created inside StderrOutputForFunc so the
+	// logger writes to the captured stderr rather than the real one.
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.AddStaticFiles("gofrTest", "./somedir")
+	})
+
+	assert.Contains(t, logs, "failed to get current working directory")
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
@@ -1898,8 +1937,10 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 	// Give it a moment to start then shut down
 	time.Sleep(50 * time.Millisecond)
 
-	if app.grpcServer != nil && app.grpcServer.server != nil {
-		app.grpcServer.server.Stop()
+	// Read through getServer rather than the field: createServer publishes it from the serve
+	// goroutine, so an unguarded read here races that write.
+	if app.grpcServer != nil {
+		app.grpcServer.forceStop()
 	}
 
 	wg.Wait()

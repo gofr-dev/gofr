@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -350,31 +352,69 @@ func Test_sqliteErrConnLogs(t *testing.T) {
 	}
 }
 
+// waitLogger is a datasource.Logger that closes seen once a message containing
+// want has been logged. It replaces capturing stdout and sleeping for a fixed
+// duration: the retry goroutine only logs after its first ping fails, and that
+// ping's cost is a DNS lookup on the CI host, not a constant.
+type waitLogger struct {
+	want string
+	seen chan struct{}
+	once sync.Once
+}
+
+func newWaitLogger(want string) *waitLogger {
+	return &waitLogger{want: want, seen: make(chan struct{})}
+}
+
+func (l *waitLogger) record(msg string) {
+	if strings.Contains(msg, l.want) {
+		l.once.Do(func() { close(l.seen) })
+	}
+}
+
+func (l *waitLogger) Debug(args ...any)            { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Debugf(f string, args ...any) { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Info(args ...any)             { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Infof(f string, args ...any)  { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Warn(args ...any)             { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Warnf(f string, args ...any)  { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Error(args ...any)            { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Errorf(f string, args ...any) { l.record(fmt.Sprintf(f, args...)) }
+
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {
-	logs := testutil.StdoutOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(t)
 
-		mockMetrics := NewMockMetrics(ctrl)
-		mockConfig := config.NewMockConfig(map[string]string{
-			"DB_DIALECT":  "postgres",
-			"DB_HOST":     "host",
-			"DB_USER":     "user",
-			"DB_PASSWORD": "password",
-			"DB_PORT":     "3201",
-			"DB_NAME":     "test",
-		})
-
-		mockLogger := logging.NewMockLogger(logging.DEBUG)
-
-		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
-		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))
-
-		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
-
-		time.Sleep(100 * time.Millisecond)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_DIALECT":  "postgres",
+		"DB_HOST":     "host",
+		"DB_USER":     "user",
+		"DB_PASSWORD": "password",
+		"DB_PORT":     "3201",
+		"DB_NAME":     "test",
 	})
 
-	assert.Contains(t, logs, "retrying SQL database connection")
+	logger := newWaitLogger("retrying SQL database connection")
+
+	// pushDBMetrics emits both gauges from its own goroutine and repeats every
+	// 10s, so neither the number of calls nor their timing relative to the end of
+	// this test is something the test controls. Pinning them to the default
+	// Times(1) is what made this flaky; the gauges are incidental here anyway.
+	mockMetrics.EXPECT().SetGauge("app_sql_open_connections", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", gomock.Any()).AnyTimes()
+
+	db := NewSQL(mockConfig, logger, mockMetrics)
+	require.NotNil(t, db)
+
+	// Close stops the retry and metrics goroutines, so neither can touch the
+	// gomock controller after the test has finished.
+	t.Cleanup(func() { _ = db.Close() })
+
+	select {
+	case <-logger.seen:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the retry connection log")
+	}
 }
 
 func TestNewSQL_CockroachDB(t *testing.T) {

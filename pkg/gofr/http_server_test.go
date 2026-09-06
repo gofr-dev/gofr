@@ -351,27 +351,50 @@ func (d *benchDiscardResponseWriter) Header() http.Header {
 	return d.h
 }
 
+// reset returns the writer to the state a FRESH request would find it in.
+//
+// Without it one writer is reused across every iteration, so a header written
+// only when absent -- Content-Type is exactly that -- is set on the first
+// iteration and measured as free on every one after. Any benchmark that reaches
+// Responder.Respond must call this, or it silently understates the response
+// path by one allocation.
+func (d *benchDiscardResponseWriter) reset() {
+	clear(d.Header())
+	d.code = 0
+}
+
 func (*benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (d *benchDiscardResponseWriter) WriteHeader(c int)         { d.code = c }
 
-// buildBenchRouter reconstructs the same middleware chain that
-// gofr.New() / newHTTPServer + httpServer.run wire — Tracer, Logging,
-// CORS, Metrics, WSHandlerUpgrade — so we can measure end-to-end request
-// cost through the real chain without binding to a port.
+// useGoFrMiddleware applies the same middleware chain that gofr.New() /
+// newHTTPServer + httpServer.run wire — Tracer, Logging, CORS, Metrics,
+// WSHandlerUpgrade — so a benchmark can measure end-to-end request cost
+// through the real chain without binding to a port.
+//
+// This is the ONE definition of that chain for benchmarks. Every bench
+// router goes through it, because a second hand-rolled copy drifts: the
+// first one dropped WSHandlerUpgrade while still claiming to mirror what a
+// GoFr application serves.
 //
 // Keep this in sync with newHTTPServer in http_server.go. Any change to
 // GoFr's middleware composition needs a matching change here.
-func buildBenchRouter(c *container.Container) http.Handler {
-	r := gofrHTTP.NewRouter()
-	wsManager := websocket.New()
-
+func useGoFrMiddleware(r *gofrHTTP.Router, c *container.Container) {
 	r.Use(
 		middleware.Tracer,
 		middleware.Logging(middleware.LogProbes{}, c.Logger),
 		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),
-		middleware.WSHandlerUpgrade(c, wsManager),
+		middleware.WSHandlerUpgrade(c, websocket.New()),
 	)
+}
+
+// buildBenchRouter is the router BenchmarkRequest_FullChain measures: the
+// real chain in front of raw http.HandlerFunc routes, so it isolates the
+// middleware cost from GoFr's own handler wrapper.
+func buildBenchRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+
+	useGoFrMiddleware(r, c)
 
 	r.Add(http.MethodGet, "/plaintext", http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
@@ -406,12 +429,20 @@ func BenchmarkRequest_FullChain(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
 
 // BenchmarkRequest_FullChain_JSON runs the same chain against the /json
 // handler. Pairs with the /json endpoint in the wrk benchmarks.
+//
+// It does NOT exercise the response-envelope pooling in this PR, and should not
+// be cited as evidence for it: /json is registered as a raw http.HandlerFunc
+// that writes its bytes directly, so it never reaches Responder.Respond. The
+// responder-level benchmarks are what demonstrate that change. The writer reset
+// below is kept for symmetry with the sibling benchmarks, where it is load
+// bearing.
 func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)
@@ -422,6 +453,7 @@ func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
@@ -453,6 +485,69 @@ func BenchmarkRequest_FullChain_SDK(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
+	}
+}
+
+// TestLogRouterChoice covers the three shapes GOFR_ROUTER can take at startup.
+// The unrecognized case is the one that earns the log: it falls back to mux,
+// which is indistinguishable from leaving the variable unset, so without a
+// warning a typo costs the opt-in silently.
+func TestLogRouterChoice(t *testing.T) {
+	// The logger emits JSON, so quotes inside a message come back escaped — want
+	// is a fragment chosen to survive that.
+	cases := []struct {
+		name      string
+		env       string
+		want      string
+		wantLevel string
+	}{
+		{"unset stays quiet", "", "", ""},
+		{"trie is announced", gofrHTTP.MatcherTrie, "HTTP route matcher: trie", "INFO"},
+		{"typo is warned about", "tri", "unrecognized GOFR_ROUTER value", "WARN"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Always set it, empty included: the suite itself may be run with
+			// GOFR_ROUTER exported, and the "unset" case has to mean unset.
+			t.Setenv(gofrHTTP.RouterEnvVar, tc.env)
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "INFO"}))
+				logRouterChoice(c.Logger, gofrHTTP.NewRouter())
+			})
+
+			if tc.wantLevel == "" {
+				assert.NotContains(t, logs, "route matcher")
+				assert.NotContains(t, logs, gofrHTTP.RouterEnvVar)
+
+				return
+			}
+
+			assert.Contains(t, logs, tc.want)
+			assert.Contains(t, logs, `"level":"`+tc.wantLevel+`"`)
+		})
+	}
+}
+
+// TestRouter_Matcher pins the accessor the startup log reads: it must report
+// what NewRouter actually resolved from the environment, including the fallback
+// to mux for a value that is not understood.
+func TestRouter_Matcher(t *testing.T) {
+	cases := map[string]string{
+		"":     gofrHTTP.MatcherMux,
+		"mux":  gofrHTTP.MatcherMux,
+		"trie": gofrHTTP.MatcherTrie,
+		"TRIE": gofrHTTP.MatcherTrie, // the lookup is case-insensitive
+		"tri":  gofrHTTP.MatcherMux,  // unrecognized falls back
+	}
+
+	for env, want := range cases {
+		t.Run("GOFR_ROUTER="+env, func(t *testing.T) {
+			t.Setenv(gofrHTTP.RouterEnvVar, env)
+			assert.Equal(t, want, gofrHTTP.NewRouter().Matcher())
+		})
 	}
 }

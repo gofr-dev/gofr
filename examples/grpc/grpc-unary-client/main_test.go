@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,15 +55,14 @@ func TestIntegration_UnaryClient(t *testing.T) {
 	}()
 	defer grpcServer.Stop()
 
-	// Give gRPC server time to start
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	// Set the gRPC server host for the client
 	t.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
 
 	// Start the HTTP server (unary client example)
 	go main()
-	time.Sleep(100 * time.Millisecond) // Give HTTP server time to start
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	// Test HTTP endpoints that use GoFr gRPC client internally
 	tests := []struct {
@@ -115,15 +113,14 @@ func TestIntegration_UnaryClient_Concurrent(t *testing.T) {
 	}()
 	defer grpcServer.Stop()
 
-	// Give gRPC server time to start
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	// Set the gRPC server host for the client
 	t.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
 
 	// Start the HTTP server (unary client example)
 	go main()
-	time.Sleep(100 * time.Millisecond) // Give HTTP server time to start
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	numClients := 5
 	done := make(chan bool, numClients)

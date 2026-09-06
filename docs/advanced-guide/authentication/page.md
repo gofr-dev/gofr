@@ -17,7 +17,7 @@ applies to both your HTTP and gRPC services.
 
 ## Exempted Paths
 
-By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check uses `strings.HasPrefix(path, "/.well-known")`). This includes:
+By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check requires a `/` separator after the prefix, so a path such as `/.well-knownprivate` is not exempt). This includes:
 
 - `/.well-known/alive` — liveness probe
 - `/.well-known/health` — readiness/health probe with the aggregate service status

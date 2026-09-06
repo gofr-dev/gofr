@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +35,7 @@ func Test_main(t *testing.T) {
 	c := &http.Client{}
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	testCases := []struct {
 		desc        string
