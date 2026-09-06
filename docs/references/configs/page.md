@@ -104,6 +104,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  OTEL_RESOURCE_ATTRIBUTES
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
 -  HTTP_PORT
 -  Port on which the HTTP server listens
 -  8000

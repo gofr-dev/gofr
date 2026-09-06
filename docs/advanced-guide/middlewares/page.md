@@ -31,6 +31,22 @@ The CORS middleware provides the following overridable configs:
 
 > Note: GoFr automatically interprets the registered route methods and based on that sets the value of `ACCESS_CONTROL_ALLOW_METHODS`
 
+Configuration is read only under the exact names listed above (plus
+`ACCESS_CONTROL_ALLOW_METHODS`) — a differently-spelled entry such as
+`access_control_allow_origin` is not read at all. Two rules govern how the values are applied:
+
+- `ACCESS_CONTROL_ALLOW_HEADERS` **extends** the headers GoFr already allows rather than
+  replacing them, so the framework's own required headers cannot be dropped by adding one of
+  your own.
+- `ACCESS_CONTROL_ALLOW_METHODS` **replaces** the value derived from your registered routes.
+- `Access-Control-Allow-Origin` is always decided by the allow-list above and cannot be
+  overridden by another entry. This keeps a stray key from replacing an origin that was
+  correctly negotiated against `ACCESS_CONTROL_ALLOW_ORIGIN`.
+
+If you construct the middleware yourself with `middleware.CORS(map[string]string{...}, ...)`,
+entries are matched by canonical HTTP header name — so the spelling you use there does not change
+which header an entry controls — and any additional entry is sent as a response header as-is.
+
 
 ## Adding Custom Middleware in GoFr
 

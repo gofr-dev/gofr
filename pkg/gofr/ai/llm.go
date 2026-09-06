@@ -67,9 +67,6 @@ func (l *llm) Stream(ctx context.Context, messages []Message, opts ...Option) (S
 // Embed turns text into embedding vectors, recording the call with the same observability as Chat
 // and Stream. It returns ErrEmbedNotSupported when the underlying provider does not implement the
 // Embedder capability (e.g. a chat-only model), mirroring how Stream reports ErrStreamNotSupported.
-//
-// Reached by asserting EmbeddingLLM on ctx.LLM() rather than through the LLM interface itself, so
-// that adding embeddings keeps LLM's compatibility freeze intact.
 func (l *llm) Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error) {
 	rec := StartCall(ctx, &CallInfo{Deps: l.deps, Provider: l.providerLabel, Model: l.modelLabel, Op: opEmbed})
 

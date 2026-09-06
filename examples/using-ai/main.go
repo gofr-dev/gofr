@@ -3,12 +3,10 @@
 //   - response.Stream   stream tokens to the client (POST /stream)
 //   - app.EnableMCP     expose the GET /inventory/{sku} handler as an agent tool
 //   - ctx.LLM().Tools() drive an agent loop over that tool (POST /agent)
-//   - ai.EmbeddingLLM   turn text into vectors (POST /embed)
+//   - ctx.LLM().Embed   turn text into vectors (POST /embed)
 package main
 
 import (
-	"errors"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/ai/llm"
@@ -16,8 +14,6 @@ import (
 )
 
 const maxTurns = 5
-
-var errEmbeddingsUnavailable = errors.New("embeddings unavailable")
 
 func main() {
 	app := gofr.New()
@@ -72,12 +68,10 @@ func stream(c *gofr.Context) (any, error) {
 	return response.Stream{Source: s}, nil
 }
 
-// embed turns text into vectors — the primitive behind semantic search and agent memory. Embeddings
+// embed turns text into vectors, the primitive behind semantic search and agent memory. Embeddings
 // are usually a different model from the chat one, so a real service registers a second LLM with
-// gofr.WithName("embed") and selects it per call; this example has a single model, so it asserts on
-// the default. Whether the model can actually embed is reported by Embed itself
-// (ai.ErrEmbedNotSupported), not by the assertion — the assertion only checks the LLM carries the
-// capability at all.
+// gofr.WithName("embed") and selects it per call; this example has a single model and uses the
+// default. A model that cannot embed reports ai.ErrEmbedNotSupported from the call itself.
 func embed(c *gofr.Context) (any, error) {
 	var in struct {
 		Inputs []string `json:"inputs"`
@@ -87,12 +81,7 @@ func embed(c *gofr.Context) (any, error) {
 		return nil, err
 	}
 
-	model, ok := c.LLM().(ai.EmbeddingLLM)
-	if !ok {
-		return nil, errEmbeddingsUnavailable
-	}
-
-	resp, err := model.Embed(c, in.Inputs)
+	resp, err := c.LLM().Embed(c, in.Inputs)
 	if err != nil {
 		return nil, err
 	}
