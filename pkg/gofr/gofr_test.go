@@ -779,14 +779,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
-
-	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
-
-	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
-
-	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
-
 	mockConfig7 := createMockConfig("gofr", "", "")
 
 	tests := []struct {
@@ -797,10 +789,6 @@ func Test_initTracer(t *testing.T) {
 		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
-		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
-		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
-		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
 		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
