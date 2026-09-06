@@ -19,7 +19,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -51,7 +50,7 @@ type App struct {
 	grpcRegistered      bool
 	httpRegistered      bool
 	subscriptionManager SubscriptionManager
-	graphqlManager      *graphQLManager
+	graphqlManager      graphQLRunner
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
 }
@@ -166,7 +165,7 @@ func (a *App) httpServerSetup() {
 	a.checkAndAddOpenAPIDocumentation()
 
 	// Register GraphQL Playground UI under /.well-known/ if GraphQL is enabled
-	if a.graphqlManager != nil {
+	if a.graphQLActive() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
@@ -271,7 +270,7 @@ func (a *App) GraphQLQuery(name string, handler Handler) {
 	a.mu.Lock()
 
 	if a.graphqlManager == nil {
-		a.graphqlManager = newGraphQLManager(a.container)
+		a.graphqlManager = newGraphQLRunner(a.container)
 	}
 
 	a.mu.Unlock()
@@ -291,7 +290,7 @@ func (a *App) GraphQLMutation(name string, handler Handler) {
 	a.mu.Lock()
 
 	if a.graphqlManager == nil {
-		a.graphqlManager = newGraphQLManager(a.container)
+		a.graphqlManager = newGraphQLRunner(a.container)
 	}
 
 	a.mu.Unlock()
@@ -456,8 +455,14 @@ func (a *App) OnStart(hook func(ctx *Context) error) {
 	a.onStartHooks = append(a.onStartHooks, hook)
 }
 
+// graphQLActive reports whether this app has GraphQL resolvers registered AND was
+// built with the engine linked in.
+func (a *App) graphQLActive() bool {
+	return a.graphqlManager != nil && a.graphqlManager.enabled()
+}
+
 func (a *App) setupGraphQL() {
-	if a.graphqlManager != nil {
+	if a.graphQLActive() {
 		err := a.graphqlManager.buildSchema()
 		if err != nil {
 			a.container.Logger.Fatalf("GraphQL build error: %v", err)
@@ -466,9 +471,4 @@ func (a *App) setupGraphQL() {
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
 		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
 	}
-}
-
-// playgroundHandler serves the GraphQL interactive playground UI.
-func playgroundHandler(_ *Context) (any, error) {
-	return response.File{Content: []byte(graphiqlHTML), ContentType: "text/html"}, nil
 }

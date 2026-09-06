@@ -532,16 +532,19 @@ jobs:
       # set, so without this job nothing ever builds it. A later edit to
       # container.go that referenced kafka. or google. directly would compile and
       # pass every other job while silently breaking the tagged build.
-      - name: Build and test with datasources omitted
+      - name: Build and test with optional subsystems omitted
         run: |
           set -euo pipefail
-          for tags in "gofr_nosqldrivers" "gofr_nopubsub" "gofr_nosqldrivers gofr_nopubsub"; do
+          for tags in "gofr_nosqldrivers" "gofr_nopubsub" "gofr_nographql" "gofr_nosqldrivers gofr_nopubsub gofr_nographql"; do
             echo "::group::-tags '$tags'"
             go build -tags "$tags" ./...
-            go vet   -tags "$tags" ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
+            go vet   -tags "$tags" ./pkg/gofr/ ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
             go test  -tags "$tags" -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
             echo "::endgroup::"
           done
+
+          # The GraphQL stubs have their own tests, which only exist under the tag.
+          go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
       # The tags are opt-in, so the default build must stay exactly as it was.
       # This is the assertion that keeps that true.
