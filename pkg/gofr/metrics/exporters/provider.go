@@ -20,6 +20,11 @@ import (
 // MeterProvider. It is safe to call more than once (later calls are no-ops).
 type ShutdownFunc func(ctx context.Context) error
 
+// datapointCardinalityLimit caps how many distinct attribute sets any one
+// instrument retains. It matches the SDK default it replaces, so this changes
+// no behavior today -- it fixes the value so a dependency bump cannot.
+const datapointCardinalityLimit = 2000
+
 // Build assembles the application MeterProvider from the always-on Prometheus
 // pull reader plus any push reader selected by cfg.Exporter, and returns a
 // ShutdownFunc so the caller can flush and shut it down on exit.
@@ -51,6 +56,18 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	if r := pushReader(ctx, cfg, logger); r != nil {
 		opts = append(opts, metricSdk.WithReader(r))
 	}
+
+	// Make the datapoint ceiling GoFr's own rather than an inherited default.
+	//
+	// A histogram retains one datapoint per distinct attribute set for the life
+	// of the process, so the ceiling is what stops a metric growing without
+	// bound. The SDK does supply one -- 2000, from cardinalityLimitFromEnv when
+	// OTEL_GO_X_CARDINALITY_LIMIT is unset -- but inheriting it silently means
+	// GoFr's memory behavior is defined by a constant in a dependency that can
+	// change under a version bump, and that nothing in GoFr documents or tests.
+	// Setting it explicitly costs nothing and makes the bound a property of the
+	// framework.
+	opts = append(opts, metricSdk.WithCardinalityLimit(datapointCardinalityLimit))
 
 	mp := metricSdk.NewMeterProvider(opts...)
 	meter := mp.Meter(cfg.AppName, metric.WithInstrumentationVersion(cfg.AppVersion))
