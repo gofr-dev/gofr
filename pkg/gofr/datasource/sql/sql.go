@@ -14,8 +14,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
-	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"

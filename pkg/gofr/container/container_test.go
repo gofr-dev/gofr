@@ -87,6 +87,10 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 }
 
 func TestContainer_MQTTInitialization_Default(t *testing.T) {
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the MQTT client is not linked")
+	}
+
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",
 	}
@@ -407,7 +411,14 @@ func TestWarnRedisPubSubSharedDB_NoWarnWhenPubSubDBDiffers(t *testing.T) {
 }
 
 func TestCreatePubSub_DispatchBranches(t *testing.T) {
+	// The skips below are per-subtest rather than on the parent: createRedisPubSub
+	// is NOT behind gofr_nopubsub, so skipping the whole function would drop
+	// coverage of a backend the tagged build still links.
 	t.Run("kafka branch with empty broker does nothing", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -417,6 +428,10 @@ func TestCreatePubSub_DispatchBranches(t *testing.T) {
 	})
 
 	t.Run("google branch with missing configs returns nil client", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Google Pub/Sub client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
