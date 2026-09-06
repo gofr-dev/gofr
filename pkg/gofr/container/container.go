@@ -137,7 +137,6 @@ func (c *Container) Create(conf config.Config) {
 	shutdown, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
 	c.shutdownMetrics = shutdown
 	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
-	metrics.SetGlobal(c.metricsManager)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
