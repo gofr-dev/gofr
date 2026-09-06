@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"reflect"
 	"strings"
@@ -18,6 +19,9 @@ const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 
 	contentTypeJSON = "application/json"
+
+	contentTypeBinary      = "binary/octet-stream"
+	contentTypeOctetStream = "application/octet-stream"
 )
 
 var (
@@ -35,7 +39,19 @@ type Request struct {
 
 // NewRequest creates a new GoFr Request instance from the given http.Request.
 func NewRequest(r *http.Request) *Request {
-	return &Request{
+	req := RequestFor(r)
+
+	return &req
+}
+
+// RequestFor returns a Request by value.
+//
+// The per-request construction site stores the Request inside the request
+// Context, which is itself heap allocated and has exactly the same lifetime.
+// Returning a value lets the caller place it in that same allocation instead of
+// taking a second one. Callers needing a pointer keep using NewRequest.
+func RequestFor(r *http.Request) Request {
+	return Request{
 		req:        r,
 		pathParams: mux.Vars(r),
 	}
@@ -58,8 +74,14 @@ func (r *Request) PathParam(key string) string {
 
 // Bind parses the request body and binds it to the provided interface.
 func (r *Request) Bind(i any) error {
-	v := r.req.Header.Get("Content-Type")
-	contentType := strings.Split(v, ";")[0]
+	// Binding into a non-pointer would unmarshal into a throwaway copy and leave
+	// the caller's value untouched, so reject it up front instead of silently
+	// doing nothing.
+	if rv := reflect.ValueOf(i); rv.Kind() != reflect.Pointer {
+		return errNonPointerBind
+	}
+
+	contentType := mediaType(r.req.Header.Get("Content-Type"))
 
 	switch contentType {
 	case contentTypeJSON:
@@ -73,11 +95,41 @@ func (r *Request) Bind(i any) error {
 		return r.bindMultipart(i)
 	case "application/x-www-form-urlencoded":
 		return r.bindFormURLEncoded(i)
-	case "binary/octet-stream":
+	// "binary/octet-stream" is GoFr's own spelling, kept for compatibility;
+	// "application/octet-stream" is the RFC 2046 one and is what clients
+	// actually send. Before Bind reported unsupported types, the RFC spelling
+	// fell through to a silent no-op; rejecting it instead of decoding it would
+	// have turned a naming gap into a hard error for the commoner spelling.
+	case contentTypeBinary, contentTypeOctetStream:
 		return r.bindBinary(i)
 	}
 
+	// An unrecognized media type is a no-op: the target is left as it was and no
+	// error is reported.
+	//
+	// This silently discards a body the caller probably meant to bind, and an
+	// earlier revision of this PR rejected it with 415 for exactly that reason.
+	// That is a breaking change and it is not a quiet one: fetch(url, {method:
+	// "POST", body: str}) with no headers sends text/plain, so a handler that
+	// returns the Bind error would start answering 415 to a very common client
+	// shape. Those requests bind nothing today, but services that do not need
+	// the body work, and they would stop working. Left as it is deliberately.
 	return nil
+}
+
+// mediaType extracts the bare media type from a Content-Type header value.
+// Per RFC 9110 the media type is case-insensitive and may be followed by
+// parameters and arbitrary optional whitespace, so `Application/JSON` and
+// `application/json ; charset=utf-8` must both resolve to `application/json`.
+func mediaType(header string) string {
+	parsed, _, err := mime.ParseMediaType(header)
+	if err != nil && parsed == "" {
+		// The header is malformed beyond a bad parameter list; fall back to a
+		// best-effort parse rather than losing an otherwise usable media type.
+		return strings.ToLower(strings.TrimSpace(strings.Split(header, ";")[0]))
+	}
+
+	return parsed
 }
 
 // HostName retrieves the hostname from the request.
@@ -112,6 +164,14 @@ func (r *Request) Params(key string) []string {
 }
 
 func (r *Request) body() ([]byte, error) {
+	// A server-received request always has a non-nil Body, but one built by
+	// hand — as in a handler unit test — may not, and io.ReadAll(nil) panics.
+	// Treat an absent body as an empty one so callers get an ordinary decode
+	// error (or, for a type with no decoder, a no-op) instead of a crash.
+	if r.req.Body == nil {
+		return nil, nil
+	}
+
 	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {
 		return nil, err
