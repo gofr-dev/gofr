@@ -12,36 +12,40 @@ import (
 // It is intended for use within request-scoped contexts where OpenTelemetry
 // trace information is available.
 type ContextLogger struct {
-	base    Logger
-	traceID string
-	// traceArg is the precomputed {"__trace_id__": traceID} marker map, built
-	// once when the ContextLogger is constructed (i.e. once per request) rather
-	// than on every log call. It is read-only downstream (the base logger only
-	// reads the key out and drops the map), so sharing the single instance
-	// across all log calls of this request is safe. nil when no valid trace ID
-	// is in scope.
-	traceArg map[string]any
+	base Logger
+	// spanCtx is the request's SpanContext, kept as a value (it allocates
+	// nothing) rather than a formatted trace ID.
+	//
+	// Formatting the trace ID costs a 32-character string, and wrapping it for
+	// the log args costs another allocation. Both were paid when the logger was
+	// built -- that is, on every request -- but they are only ever consumed by a
+	// log call. A handler that logs nothing, which is the common case on a hot
+	// endpoint, paid for both and used neither.
+	//
+	// They are now built in withTraceInfo, per log call. A handler logging once
+	// pays exactly what it did before; one logging repeatedly pays per call,
+	// which is the deliberate trade for making the silent path free.
+	spanCtx trace.SpanContext
 }
 
 // NewContextLogger creates a new ContextLogger that wraps the provided base logger
 // and automatically appends OpenTelemetry trace information (trace ID) to log output
 // when available in the context.
 func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
-	var traceID string
+	cl := ContextLoggerFor(ctx, base)
 
-	sc := trace.SpanFromContext(ctx).SpanContext()
+	return &cl
+}
 
-	if sc.IsValid() {
-		traceID = sc.TraceID().String()
-	}
-
-	cl := &ContextLogger{base: base, traceID: traceID}
-
-	if traceID != "" {
-		cl.traceArg = map[string]any{traceIDMarkerKey: traceID}
-	}
-
-	return cl
+// ContextLoggerFor returns a ContextLogger by value.
+//
+// It exists because the per-request construction site stores the logger in a
+// struct field, so the pointer returned by NewContextLogger is dereferenced and
+// copied immediately — the heap allocation backing it is then garbage. Callers
+// that need a pointer keep using NewContextLogger; callers that store a value
+// use this and allocate nothing for the wrapper itself.
+func ContextLoggerFor(ctx context.Context, base Logger) ContextLogger {
+	return ContextLogger{base: base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
 }
 
 // withTraceInfo appends the trace ID from the context (if available).
@@ -49,11 +53,11 @@ func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
 // The marker map is precomputed once per ContextLogger, so this only pays for
 // the slice append, not a fresh map allocation on every call.
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
-	if l.traceArg != nil {
-		return append(args, l.traceArg)
+	if !l.spanCtx.IsValid() {
+		return args
 	}
 
-	return args
+	return append(args, traceIDMarker(l.spanCtx.TraceID().String()))
 }
 
 func (l *ContextLogger) logWithTraceID(lf func(args ...any), args ...any) {

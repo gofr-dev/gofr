@@ -24,6 +24,8 @@ func TestAuthMiddleware(t *testing.T) {
 		{url: "/.well-known/health", statusCode: http.StatusOK, expectedBody: `OK`},
 		{url: "/", success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string", expectedBody: `OK`},
 		{url: "/", success: false, statusCode: http.StatusUnauthorized, expectedBody: errBody},
+		{url: "/.well-knownprivate", success: false, statusCode: http.StatusUnauthorized, expectedBody: errBody},
+		{url: "/.well-knownprivate", success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string", expectedBody: `OK`},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -44,7 +46,7 @@ func TestAuthMiddleware(t *testing.T) {
 			assert.Equal(t, tc.statusCode == http.StatusOK, mockHandler.handlerCalled)
 			assert.Equal(t, tc.expectedBody, strings.TrimSuffix(rr.Body.String(), "\n"))
 
-			if strings.HasPrefix(tc.url, "/.well-known") {
+			if strings.HasPrefix(tc.url, "/.well-known/") {
 				return
 			}
 
