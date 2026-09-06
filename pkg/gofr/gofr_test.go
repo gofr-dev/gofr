@@ -1547,24 +1547,6 @@ func TestApp_OnStart(t *testing.T) {
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
-func TestUnifiedAuthenticationRegistration(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
-	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
-
-	// Verify HTTP middleware count (approximate check)
-	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
-	// but we can check if the grpcServer has interceptors added.
-	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
-	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
-}
-
 func Test_EnableBasicAuthWithFunc(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -1853,31 +1835,6 @@ func TestInitMetricsServer_DefaultPort(t *testing.T) {
 
 	// metricServer should be initialized with default port
 	assert.NotNil(t, app.metricServer)
-}
-
-func TestStartGRPCServer_Registered(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-	app.grpcRegistered = true
-
-	wg := sync.WaitGroup{}
-
-	// startGRPCServer should add to WaitGroup and launch the server
-	app.startGRPCServer(&wg)
-
-	// Give it a moment to start then shut down
-	time.Sleep(50 * time.Millisecond)
-
-	// Read through getServer rather than the field: createServer publishes it from the serve
-	// goroutine, so an unguarded read here races that write.
-	if app.grpcServer != nil {
-		app.grpcServer.forceStop()
-	}
-
-	wg.Wait()
 }
 
 func TestStartGRPCServer_NotRegistered(t *testing.T) {

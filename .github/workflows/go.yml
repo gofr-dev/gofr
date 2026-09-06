@@ -546,6 +546,17 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
+      # gofr_nogrpc is scoped to ./pkg/... on purpose. Unlike the other tags it
+      # removes exported methods -- RegisterService and the AddGRPC* setters name
+      # grpc types and cannot exist without the import -- so the gRPC examples do
+      # not compile under it, which is the intended behaviour and not a failure.
+      - name: Build and test with the gRPC server omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nogrpc ./pkg/...
+          go vet   -tags gofr_nogrpc ./pkg/gofr/
+          go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
+
       # The tags are opt-in, so the default build must stay exactly as it was.
       # This is the assertion that keeps that true.
       - name: Default build links the same packages as before
