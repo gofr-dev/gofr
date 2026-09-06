@@ -130,12 +130,22 @@ func (cb *circuitBreaker) startHealthChecks() {
 
 // openCircuit transitions the circuit breaker to the open state.
 func (cb *circuitBreaker) openCircuit() {
+	wasOpen := cb.state == OpenState
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
 
 	if cb.metrics != nil {
 		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
-		cb.metrics.IncrementCounter(context.Background(), "app_circuit_open_count", "service", cb.serviceName)
+
+		// Only count a real Closed -> Open transition. openCircuit is reached
+		// from handleFailure whenever failureCount > threshold, and every
+		// concurrent request that passed the isOpen check before the trip
+		// falls through to handleFailure and re-enters here — without this
+		// guard, a burst of N concurrent failures records N-threshold
+		// "openings" for what is a single transition.
+		if !wasOpen {
+			cb.metrics.IncrementCounter(context.Background(), "app_circuit_open_count", "service", cb.serviceName)
+		}
 	}
 }
 
