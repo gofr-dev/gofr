@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -931,7 +932,7 @@ func Test_initTracer_RegistersShutdown_WithExporter(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 	a := App{
 		Config: config.NewMockConfig(map[string]string{
-			"TRACE_EXPORTER": "gofr",
+			"TRACE_EXPORTER": gofrTraceExporter,
 		}),
 		container: mockContainer,
 	}
@@ -1440,6 +1441,12 @@ func Test_Shutdown_DrainsTelemetry(t *testing.T) {
 
 	g := New()
 
+	// New must register both telemetry providers (metrics, tracer) — kills a
+	// mutation that drops either registration while every other assertion in
+	// this test stays green (the fake appended below would still be the only
+	// thing observed calling in).
+	require.Len(t, g.telemetryShutdown, 2, "New must register a shutdown func for both metrics and the tracer")
+
 	calls := 0
 
 	g.telemetryShutdown = append(g.telemetryShutdown, func(context.Context) error {
@@ -1447,14 +1454,50 @@ func Test_Shutdown_DrainsTelemetry(t *testing.T) {
 		return errFakeShutdown
 	})
 
-	go g.Run()
-
-	time.Sleep(10 * time.Millisecond)
-
+	// No running server here: Shutdown alone is what's under test, and a
+	// concurrent go g.Run() previously raced this direct call on calls (a
+	// plain int) whenever Run's own signal-driven shutdown handler fired
+	// first — flaky under go test -v (each test runs once) and caught by
+	// -race. Shutdown draining the registry doesn't need a live server to
+	// shut down.
 	err := g.Shutdown(t.Context())
 
 	assert.Equal(t, 1, calls, "expected the registered telemetry shutdown func to be invoked exactly once")
 	require.ErrorIs(t, err, errFakeShutdown)
+}
+
+// TestNewCMD_DrainsTelemetryExactlyOnce pins the CMD counterpart of
+// Test_Shutdown_DrainsTelemetry: NewCMD must register both telemetry
+// providers, and Run must drain them exactly once after the subcommand
+// returns. Two mutations survived without this — dropping drainTelemetry
+// from Run's CMD path, and dropping the metrics registration in NewCMD —
+// because TestNewCMD_ShutdownMetricsCalledAfterRun only asserts the handler
+// ran and Run returned, not that anything was actually drained.
+func TestNewCMD_DrainsTelemetryExactlyOnce(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{"", "test-drain"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	require.Len(t, a.telemetryShutdown, 2, "NewCMD must register a shutdown func for both metrics and the tracer")
+
+	var calls atomic.Int64
+
+	a.telemetryShutdown = append(a.telemetryShutdown, func(context.Context) error {
+		calls.Add(1)
+		return nil
+	})
+
+	a.SubCommand("test-drain", func(_ *Context) (any, error) {
+		return "ok", nil
+	})
+
+	a.Run()
+
+	assert.Equal(t, int64(1), calls.Load(),
+		"expected the registered telemetry shutdown func to be drained exactly once after Run")
 }
 
 func TestShutdown_StopsCron(t *testing.T) {
