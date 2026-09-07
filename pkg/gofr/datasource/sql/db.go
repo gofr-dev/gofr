@@ -54,20 +54,21 @@ func clean(query string) string {
 }
 
 func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start)
 
 	if logger != nil {
 		logger.Debug(&Log{
 			Type:     queryType,
 			Query:    query,
-			Duration: duration,
+			Duration: duration.Microseconds(),
 			Args:     args,
 		})
 	}
 
 	// This contains the fix for the nil pointer dereference
 	if metrics != nil {
-		metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", config.HostName,
+		metrics.RecordHistogram(context.Background(), "app_sql_stats",
+			float64(duration)/float64(time.Millisecond), "hostname", config.HostName,
 			"database", config.Database, "type", getOperationType(query))
 	}
 }
