@@ -330,7 +330,7 @@ func splitArgs(pathTemplate string, fields map[string]json.RawMessage,
 // isFrameworkRoute reports whether a route is registered by the framework itself (health/liveness
 // probes, the favicon) rather than the application, so it is never exposed as an agent tool.
 func isFrameworkRoute(pathTemplate string) bool {
-	return pathTemplate == "/favicon.ico" || strings.HasPrefix(pathTemplate, "/.well-known")
+	return pathTemplate == "/favicon.ico" || pathTemplate == "/.well-known" || strings.HasPrefix(pathTemplate, "/.well-known/")
 }
 
 // safePathSegment reports whether a value is a single path segment safe to substitute into a route:
