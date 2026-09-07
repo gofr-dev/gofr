@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
@@ -24,6 +25,7 @@ var (
 	ErrTopicMismatch      = errors.New("topic should be same as Event Hub name")
 	errClientNotConnected = errors.New("eventhub client not connected")
 	errEmptyTopic         = errors.New("topic name cannot be empty")
+	errProbeInFlight      = errors.New("eventhub health probe already in progress")
 )
 
 const (
@@ -78,6 +80,11 @@ type Client struct {
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
+	// probeMu caps in-flight health probes at one. A probe can outlive its deadline parked in the
+	// SDK (see probeWithin), so without this a broker that accepts a connection but never answers
+	// would strand a goroutine on every health poll -- an unbounded leak. Held for the lifetime of
+	// the parked probe and released by the goroutine that ran it.
+	probeMu sync.Mutex
 }
 
 // New Creates the client for Event Hub.
@@ -528,10 +535,22 @@ func (c *Client) Health() datasource.Health {
 // Running the call on its own goroutine and selecting here makes the deadline ours. The cost is
 // that an abandoned probe stays parked until the SDK returns; the channel is buffered so it can
 // always finish and exit rather than blocking forever on the send.
+//
+// probeMu caps that cost at a single parked goroutine. Without it, every poll against a broker
+// stuck in exactly this state would strand another goroutine -- an unbounded leak on the hot
+// health path. If a probe is already parked the broker is already unresponsive, so a poll that
+// finds the lock held reports that rather than piling on another abandoned goroutine. The lock is
+// released by the goroutine that ran the probe, once the SDK call finally returns.
 func (c *Client) probeWithin(ctx context.Context) (azeventhubs.EventHubProperties, error) {
+	if !c.probeMu.TryLock() {
+		return azeventhubs.EventHubProperties{}, errProbeInFlight
+	}
+
 	done := make(chan eventHubProps, 1)
 
 	go func() {
+		defer c.probeMu.Unlock()
+
 		props, err := c.consumer.GetEventHubProperties(ctx, nil)
 		done <- eventHubProps{props: props, err: err}
 	}()

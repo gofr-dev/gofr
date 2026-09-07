@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -675,4 +676,43 @@ func Test_Health_ProbeDeadlineIsTwoSeconds(t *testing.T) {
 	require.True(t, gotDeadline, "the probe must be given a deadline")
 	require.Greater(t, remaining, 1500*time.Millisecond, "deadline is shorter than expected, got %v", remaining)
 	require.LessOrEqual(t, remaining, 2*time.Second, "deadline is longer than expected, got %v", remaining)
+}
+
+// Test_Health_ParkedProbeIsCappedAtOne proves a broker that accepts the probe but never answers
+// cannot leak a goroutine per health poll. probeWithin returns on its own deadline while the SDK
+// call stays parked (see Test_Health_BoundsAProbeThatIgnoresContext); without a cap, every poll
+// would strand another goroutine on the hot health path. The fake blocks in GetEventHubProperties
+// without reading ctx -- what the SDK does once a management link exists -- so the first Health
+// parks a goroutine, and every poll while it is parked must report the in-flight probe rather than
+// spawn another. Revert the TryLock cap and callCount climbs with each poll: this goes red.
+func Test_Health_ParkedProbeIsCappedAtOne(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+
+	var callCount int32
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			atomic.AddInt32(&callCount, 1)
+			<-release
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	// The first poll parks a goroutine in the fake and returns down on the deadline.
+	first := client.Health()
+	require.Equal(t, datasource.StatusDown, first.Status)
+
+	// Every poll while that goroutine is still parked must short-circuit without entering the fake.
+	for range 5 {
+		h := client.Health()
+		require.Equal(t, datasource.StatusDown, h.Status)
+		require.Equal(t, errProbeInFlight.Error(), h.Details["error"],
+			"a poll while a probe is parked must report the in-flight probe, not spawn another")
+	}
+
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+		"the SDK probe must run at most once while one is still parked; more means a goroutine leaks per poll")
 }
