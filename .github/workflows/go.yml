@@ -399,11 +399,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # NOTE: a coverage threshold gate belongs here, and used to exist as a
-  # commented-out 92% check. It is deliberately not restored in this PR: this
-  # change moves the reported number for the first time in a long while, by
-  # folding in submodules that were never counted, and the correct floor can
-  # only be chosen once a run has published the post-merge figure. Pick the
-  # threshold from that number, then add the gate.
+  # commented-out 92% check. Whether to restore it and at what floor is
+  # tracked in #4155 — it cannot be decided until a run has published the
+  # post-merge figure.
 
   # Job for testing submodules inside the pkg directory
   Submodule-Unit-Testing:
