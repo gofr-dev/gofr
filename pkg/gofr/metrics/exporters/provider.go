@@ -38,7 +38,11 @@ type ShutdownFunc func(ctx context.Context) error
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
 // (Prometheus-only, or no readers) rather than crashing app start.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
-	opts := []metricSdk.Option{metricSdk.WithResource(buildResource(cfg))}
+	// Resolve the resource first and publish it on cfg: pushReader runs after this,
+	// and a builder needs to see the resource its backend will actually receive.
+	cfg.Resource = buildResource(ctx, cfg, logger)
+
+	opts := []metricSdk.Option{metricSdk.WithResource(cfg.Resource)}
 
 	if r := prometheusReader(logger); r != nil {
 		opts = append(opts, metricSdk.WithReader(r))
@@ -62,12 +66,65 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	return shutdown, meter
 }
 
-func buildResource(cfg *Config) *resource.Resource {
-	return resource.NewWithAttributes(
-		semconv.SchemaURL,
+func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Resource {
+	attrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(cfg.AppName),
 		attribute.String("framework_version", version.Framework),
-	)
+	}
+
+	opts := []resource.Option{
+		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend requires but the
+		// framework cannot know -- Google fills prometheus_target.location from it,
+		// and only the operator knows the region.
+		//
+		// metricSdk.WithResource merges resource.Environment() in as well, so this
+		// is not what makes the variable work. It is here so buildResource returns a
+		// complete resource on its own rather than one that is only correct once a
+		// particular consumer merges it.
+		resource.WithFromEnv(),
+		resource.WithAttributes(attrs...),
+	}
+
+	// Everything below is only meaningful to a push backend, and host.id is not
+	// free: on darwin the SDK shells out to ioreg, which costs ~10ms. A
+	// prometheus-only app -- the default -- must not pay that at every start for
+	// a label only OTLP ingest reads.
+	if name := strings.ToLower(strings.TrimSpace(cfg.Exporter)); name != "" && name != exporterPrometheus {
+		// host.id is the last fallback Google accepts for the required "instance"
+		// label, so detecting it keeps points from being dropped on hosts where
+		// nothing else supplies one.
+		opts = append(opts, resource.WithHostID())
+
+		if d, ok := lookupDetector(name); ok {
+			opts = append(opts, resource.WithDetectors(d))
+		}
+	}
+
+	// resource.New returns a usable resource alongside a non-nil error for
+	// partial failures (a detector that cannot reach a metadata server off-GCP,
+	// say). Degrade loudly but keep whatever was resolved rather than dropping
+	// the service name with it.
+	res, err := resource.New(ctx, opts...)
+
+	switch {
+	case err == nil:
+	// A vendor detector pinning an older semconv than the SDK's own is the normal
+	// case, not a fault: contrib/detectors/gcp v1.44.0 carries semconv 1.41.0
+	// while the SDK's host detector carries 1.43.0. Merge keeps every attribute
+	// and only drops the schema URL, so warning here would fire on every healthy
+	// boot on Google Cloud -- the one environment this exporter targets.
+	case errors.Is(err, resource.ErrSchemaURLConflict):
+		logger.Debug("metrics: resource schema URLs differ between detectors; " +
+			"attributes are unaffected, schema URL omitted")
+	default:
+		logger.Warnf("metrics: resource detection was incomplete: %v", err)
+	}
+
+	if res == nil {
+		return resource.NewWithAttributes(semconv.SchemaURL, attrs...)
+	}
+
+	return res
 }
 
 func prometheusReader(logger Logger) metricSdk.Reader {
