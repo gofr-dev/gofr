@@ -179,8 +179,10 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 
 	ctx := context.Background()
 
+	// isNil also rejects a typed-nil txn, which would satisfy the assertion but
+	// panic on Discard.
 	tx, ok := c.DGraph.NewTxn().(dgraphTxn)
-	if !ok {
+	if !ok || isNil(tx) {
 		return errInvalidDgraphTxn
 	}
 
@@ -190,15 +192,21 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 		}
 	}()
 
+	// The txn write bypasses Client.Mutate, so log duration and errors here to
+	// keep the migration record write observable.
+	start := time.Now()
+
 	if _, err = tx.Mutate(ctx, &api.Mutation{SetJson: jsonPayload}); err != nil {
+		c.Errorf("dgraph: migration %v mutation failed: %v", data.MigrationNumber, err)
 		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
+		c.Errorf("dgraph: migration %v commit failed: %v", data.MigrationNumber, err)
 		return err
 	}
 
-	c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+	c.Debugf("recorded migration %v in Dgraph in %v", data.MigrationNumber, time.Since(start))
 
 	return dm.migrator.commitMigration(c, data)
 }

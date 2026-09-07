@@ -168,6 +168,15 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		require.ErrorIs(t, err, errInvalidDgraphTxn)
 	})
 
+	t.Run("typed-nil transaction does not panic", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		mockDGraph.EXPECT().NewTxn().Return((*fakeDgraphTxn)(nil))
+
+		err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+		require.ErrorIs(t, err, errInvalidDgraphTxn)
+	})
+
 	t.Run("skips record when dgraph not used", func(t *testing.T) {
 		migratorWithDGraph, _, mockContainer := dgraphSetup(t)
 		unused := transactionData{StartTime: time.Now(), MigrationNumber: 10}
