@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to ArangoDB via env vars (HOST, USER, PASSWORD, PORT). Use the pluggable driver for documents, graphs, and AQL queries with full observability."
+nextjs:
+  metadata:
+    title: "ArangoDB in GoFr — Multi-Model Database Integration"
+    description: "Connect GoFr to ArangoDB via env vars (HOST, USER, PASSWORD, PORT). Use the pluggable driver for documents, graphs, and AQL queries with full observability."
+---
+
 # ArangoDB
 
 

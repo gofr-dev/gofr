@@ -47,6 +47,7 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 						"number_of_shards": 1,
 					},
 				}
+
 				err := d.Elasticsearch.CreateIndex(t.Context(), "test-index", settings)
 				if err != nil {
 					return err
@@ -57,6 +58,7 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 					"title":   "Test Document",
 					"content": "This is a test document",
 				}
+
 				err = d.Elasticsearch.IndexDocument(t.Context(), "test-index", "1", document)
 				if err != nil {
 					return err

@@ -40,6 +40,7 @@ type App struct {
 	grpcServer   *grpcServer
 	httpServer   *httpServer
 	metricServer *metricServer
+	mcpServer    *mcpServer
 
 	cmd  *cmd
 	cron *Crontab
@@ -103,12 +104,23 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
 	}
 
-	if a.container != nil {
-		err = errors.Join(err, a.container.Close())
+	if a.cron != nil {
+		// Joins the in-flight cron jobs, but only until the shutdown deadline —
+		// a job that outlives it must not hold the whole shutdown open.
+		a.cron.stop(ctx.Done())
 	}
 
 	if a.metricServer != nil {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	if a.mcpServer != nil {
+		err = errors.Join(err, a.mcpServer.Shutdown(ctx))
+	}
+
+	if a.container != nil {
+		err = errors.Join(err, a.container.ShutdownMetrics(ctx))
+		err = errors.Join(err, a.container.Close())
 	}
 
 	a.container.Logger.Info("Application shutdown complete")
@@ -393,17 +405,26 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	a.httpRegistered = true
 
+	// Normalize the endpoint up front so every error log below reports the same
+	// '/endpoint' form (previously the getwd and os.Stat logs disagreed).
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
 	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
 		filePath = "./" + filePath
 	}
 
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
-		currentWorkingDir, _ := os.Getwd()
+		currentWorkingDir, err := os.Getwd()
+		if err != nil {
+			a.container.Logger.Errorf("error in registering '%s' static endpoint, "+
+				"failed to get current working directory: %v", endpoint, err)
+
+			return
+		}
+
 		filePath = filepath.Join(currentWorkingDir, filePath)
 	}
-
-	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
 
 	if _, err := os.Stat(filePath); err != nil {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)

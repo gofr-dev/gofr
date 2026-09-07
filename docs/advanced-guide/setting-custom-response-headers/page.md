@@ -1,3 +1,11 @@
+---
+description: "Attach custom HTTP response headers and metadata to GoFr API replies via the Response struct. Keep payload data clean while adding context for clients."
+nextjs:
+  metadata:
+    title: "Custom Response Headers in GoFr — Metadata on API Replies"
+    description: "Attach custom HTTP response headers and metadata to GoFr API replies via the Response struct. Keep payload data clean while adding context for clients."
+---
+
 # Custom Response Headers and Metadata in GoFr
 
 GoFr simplifies the process of adding custom HTTP response headers and metadata to API responses using the `Response` struct. This feature allows you to include additional information such as custom headers or metadata to enhance client-server communication while keeping your data payload clean and structured.

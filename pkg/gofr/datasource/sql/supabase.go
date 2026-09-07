@@ -16,6 +16,10 @@ const (
 	sessionPoolerPort        = "5432"
 	transactionPoolerPort    = "6543"
 	minConnectionStringParts = 2
+
+	connTypeDirect      = "direct"
+	connTypeSession     = "session"
+	connTypeTransaction = "transaction"
 )
 
 // SupabaseConfig extends DBConfig to include Supabase-specific configuration.
@@ -38,7 +42,7 @@ func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 
 	dbConfig.SSLMode = requireSSLMode // Enforce SSL mode for Supabase
 
-	connectionType := strings.ToLower(configs.GetOrDefault("SUPABASE_CONNECTION_TYPE", "direct"))
+	connectionType := strings.ToLower(configs.GetOrDefault("SUPABASE_CONNECTION_TYPE", connTypeDirect))
 	projectRef := configs.Get("SUPABASE_PROJECT_REF")
 	region := configs.GetOrDefault("SUPABASE_REGION", "")
 
@@ -88,20 +92,20 @@ func configureSupabaseConnection(supaConfig *SupabaseConfig, logger datasource.L
 	}
 
 	switch supaConfig.ConnectionType {
-	case "direct":
+	case connTypeDirect:
 		// Format: db.[PROJECT_REF].supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabaseDirectHost, supaConfig.ProjectRef)
 		supaConfig.Port = directPort
 		logger.Debugf("Configured direct connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case "session":
+	case connTypeSession:
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
 		supaConfig.Port = sessionPoolerPort
 		logger.Debugf("Configured session pooler connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case "transaction":
+	case connTypeTransaction:
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
@@ -115,7 +119,7 @@ func configureSupabaseConnection(supaConfig *SupabaseConfig, logger datasource.L
 	}
 
 	if supaConfig.Database == "" {
-		supaConfig.Database = "postgres"
+		supaConfig.Database = dialectPostgres
 	}
 }
 

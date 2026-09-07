@@ -1,3 +1,11 @@
+---
+description: "Adjust GoFr log levels at runtime via the remote log level service. Bump verbosity in production to debug an incident without redeploying the application."
+nextjs:
+  metadata:
+    title: "Remote Log Level Change in GoFr — Live Log Tuning"
+    description: "Adjust GoFr log levels at runtime via the remote log level service. Bump verbosity in production to debug an incident without redeploying the application."
+---
+
 # Remote Log Level Change
 
 GoFr makes it easy to adjust the details captured in the application's logs, even while it's running!
@@ -45,3 +53,7 @@ The remote log level endpoint should return a JSON response in the following for
 - **logLevel:** The new log level user want to set for the specified service.
 
 GoFr parses this response and adjusts log levels based on the provided configurations.
+
+## Related production guides
+
+- **Production Logging**: [Levels, sampling, redaction, and shipping](/docs/guides/production-logging) — operate logs in production alongside remote level changes.

@@ -19,9 +19,29 @@ type QueryLog struct {
 	Duration   int64  `json:"duration"`
 	Database   string `json:"database,omitempty"`
 	Collection string `json:"collection,omitempty"`
+	Graph      string `json:"graph,omitempty"`
 	Filter     any    `json:"filter,omitempty"`
 	ID         any    `json:"id,omitempty"`
 	Operation  string `json:"operation,omitempty"`
+}
+
+// traceAttrs returns a map of non-empty trace attributes from the QueryLog.
+func (ql *QueryLog) traceAttrs() map[string]string {
+	attrs := map[string]string{}
+
+	if ql.Database != "" {
+		attrs["DB"] = ql.Database
+	}
+
+	if ql.Collection != "" {
+		attrs["collection"] = ql.Collection
+	}
+
+	if ql.Graph != "" {
+		attrs["graph"] = ql.Graph
+	}
+
+	return attrs
 }
 
 // PrettyPrint formats the QueryLog for output.

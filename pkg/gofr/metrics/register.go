@@ -228,6 +228,54 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
+// RecordHistogramAttrs records a histogram observation with pre-built
+// attribute.KeyValue slices, skipping the string→KeyValue conversion that
+// RecordHistogram performs from its label varargs. Hot-path callers that
+// can cache the attribute slice per dimension combination (e.g. the
+// middleware caching one slice per (route, method)) get to avoid the
+// per-request allocation.
+//
+// Not part of the public metrics.Manager interface — middleware that
+// wants the fast path type-asserts on this concrete method. External
+// implementers of metrics.Manager are unaffected; they keep using
+// RecordHistogram.
+func (m *metricsManager) RecordHistogramAttrs(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
+	histogram, err := m.store.getHistogram(name)
+	if err != nil {
+		m.logger.Error(err)
+
+		return
+	}
+
+	histogram.Record(ctx, value, metric.WithAttributes(attrs...))
+}
+
+// RecordHistogramOpt records a histogram observation using a caller-supplied,
+// already-built measurement option.
+//
+// RecordHistogramAttrs has to call metric.WithAttributes on every observation,
+// which builds an attribute.Set (sorting and deduplicating the attributes) and
+// an option wrapper. For a caller whose attribute combinations are drawn from a
+// small fixed set -- a request metric keyed by route, method and status -- that
+// work produces the same option over and over, so the option is better built
+// once by the caller and reused.
+//
+// The options are taken as a slice rather than a single value so a caller can
+// hand over one it already holds: passing a cached slice through with opts...
+// reuses it, whereas passing a lone option would allocate a fresh one-element
+// slice for the variadic on every observation.
+func (m *metricsManager) RecordHistogramOpt(ctx context.Context, name string, value float64,
+	opts ...metric.RecordOption) {
+	histogram, err := m.store.getHistogram(name)
+	if err != nil {
+		m.logger.Error(err)
+
+		return
+	}
+
+	histogram.Record(ctx, value, opts...)
+}
+
 // SetGauge gets the value and sets the metric to the specified value.
 // Unlike counters, gauges do not track the last value for the metric. This method allows us to
 // directly set the value of the gauge to the specified value.

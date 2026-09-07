@@ -1,3 +1,11 @@
+---
+description: "Manage Elasticsearch index schemas, mappings, and settings in GoFr with version-controlled migrations. Apply, track, and roll changes through envs safely."
+nextjs:
+  metadata:
+    title: "Elasticsearch Migrations in GoFr — Versioned Index Schemas"
+    description: "Manage Elasticsearch index schemas, mappings, and settings in GoFr with version-controlled migrations. Apply, track, and roll changes through envs safely."
+---
+
 # Elasticsearch Migrations
 
 Elasticsearch migrations in **GoFr** let you manage index schemas, mappings, settings and data in a *version-controlled* manner.

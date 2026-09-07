@@ -50,9 +50,11 @@ func TestGoFrHealthServer_Methods(t *testing.T) {
 	ctx := createTestContext()
 
 	t.Run("CheckMethodExists", func(t *testing.T) {
-		// Test that GoFr's Check method exists and accepts correct parameters
+		// The health server is a process-wide singleton, so this name must be one no other test
+		// registers — TestGoFrHealthServer_SetServingStatus registers "test-service", which made
+		// this sub-test fail on the second and later iterations of `go test -count=N`.
 		req := &healthpb.HealthCheckRequest{
-			Service: "test-service",
+			Service: "never-registered-service",
 		}
 
 		// Test GoFr's Check method signature - this will fail with "unknown service" which is expected

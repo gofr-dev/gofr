@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -18,6 +21,7 @@ type httpServer struct {
 	router      *gofrHTTP.Router
 	port        int
 	ws          *websocket.Manager
+	srvMu       sync.Mutex // guards srv, which run() writes on the serve goroutine and Shutdown() reads on the caller goroutine
 	srv         *http.Server
 	certFile    string
 	keyFile     string
@@ -29,8 +33,34 @@ var (
 	errInvalidKeyFile         = errors.New("invalid key file")
 )
 
+// logRouterChoice reports the route matcher the router resolved to.
+//
+// It stays quiet for the default, which every service gets and nobody needs told
+// about. It speaks up for the two cases that are worth a line: the opt-in matcher
+// being active, and a GOFR_ROUTER value that was not understood — the latter
+// falls back to mux, which looks exactly like never having set the variable, so a
+// typo would otherwise cost the opt-in with nothing said.
+func logRouterChoice(logger logging.Logger, r *gofrHTTP.Router) {
+	requested := os.Getenv(gofrHTTP.RouterEnvVar)
+	if requested == "" {
+		return
+	}
+
+	if !strings.EqualFold(requested, r.Matcher()) {
+		logger.Warnf("unrecognized %s value %q, using the %q router; valid values are %q and %q",
+			gofrHTTP.RouterEnvVar, requested, r.Matcher(), gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie)
+
+		return
+	}
+
+	logger.Infof("HTTP route matcher: %s", r.Matcher())
+}
+
 func newHTTPServer(c *container.Container, port int, middlewareConfigs middleware.Config) *httpServer {
 	r := gofrHTTP.NewRouter()
+
+	logRouterChoice(c.Logger, r)
+
 	wsManager := websocket.New()
 
 	r.Use(
@@ -58,18 +88,27 @@ func (s *httpServer) run(c *container.Container) {
 		middleware.WSHandlerUpgrade(c, s.ws),
 	)
 
+	s.srvMu.Lock()
+
 	if s.srv != nil {
+		s.srvMu.Unlock()
 		c.Logf("Server already running on port: %d", s.port)
+
 		return
 	}
 
 	c.Logf("Starting server on port: %d", s.port)
 
-	s.srv = &http.Server{
+	// Assign under the lock, then operate on the local copy so the blocking
+	// ListenAndServe call below never holds it. Shutdown reads srv under the
+	// same lock, so the two goroutines no longer race on the field.
+	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
 		Handler:           s.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	s.srv = srv
+	s.srvMu.Unlock()
 
 	// If both certFile and keyFile are provided, validate and run HTTPS server
 	if s.certFile != "" && s.keyFile != "" {
@@ -79,7 +118,7 @@ func (s *httpServer) run(c *container.Container) {
 		}
 
 		// Start HTTPS server with TLS
-		if err := s.srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Errorf("error while listening to https server, err: %v", err)
 		}
 
@@ -87,24 +126,24 @@ func (s *httpServer) run(c *container.Container) {
 	}
 
 	// If no certFile/keyFile is provided, run the HTTP server
-	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		c.Errorf("error while listening to http server, err: %v", err)
 	}
 }
 
 func (s *httpServer) Shutdown(ctx context.Context) error {
-	if s.srv == nil {
+	s.srvMu.Lock()
+	srv := s.srv
+	s.srvMu.Unlock()
+
+	if srv == nil {
 		return nil
 	}
 
 	return ShutdownWithContext(ctx, func(ctx context.Context) error {
-		return s.srv.Shutdown(ctx)
+		return srv.Shutdown(ctx)
 	}, func() error {
-		if err := s.srv.Close(); err != nil {
-			return err
-		}
-
-		return nil
+		return srv.Close()
 	})
 }
 

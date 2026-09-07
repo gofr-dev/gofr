@@ -6,6 +6,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -26,6 +27,11 @@ type DB struct {
 	metrics    Metrics
 	stopSignal chan struct{}
 	closeOnce  sync.Once
+	// cleanup, when non-nil, tears down resources owned by the datasource that
+	// database/sql does not close itself — e.g. the Cloud SQL connector's dialer
+	// and its background credential refresh. It is set by NewSQLFromConnector and
+	// run once on Close.
+	cleanup func() error
 }
 
 type Log struct {
@@ -48,20 +54,21 @@ func clean(query string) string {
 }
 
 func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start)
 
 	if logger != nil {
 		logger.Debug(&Log{
 			Type:     queryType,
 			Query:    query,
-			Duration: duration,
+			Duration: duration.Microseconds(),
 			Args:     args,
 		})
 	}
 
 	// This contains the fix for the nil pointer dereference
 	if metrics != nil {
-		metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", config.HostName,
+		metrics.RecordHistogram(context.Background(), "app_sql_stats",
+			float64(duration)/float64(time.Millisecond), "hostname", config.HostName,
 			"database", config.Database, "type", getOperationType(query))
 	}
 }
@@ -130,11 +137,21 @@ func (d *DB) Close() error {
 		close(d.stopSignal)
 	})
 
+	var err error
+
 	if d.DB != nil {
-		return d.DB.Close()
+		err = d.DB.Close()
 	}
 
-	return nil
+	// Run any datasource-owned teardown (e.g. the Cloud SQL connector's dialer)
+	// after closing the pool, joining its error so neither is masked.
+	if d.cleanup != nil {
+		cleanup := d.cleanup
+		d.cleanup = nil
+		err = errors.Join(err, cleanup())
+	}
+
+	return err
 }
 
 type Tx struct {
@@ -225,7 +242,7 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		d.logger.Error("we did not get a pointer. data is not settable.")
 		return
 	}
@@ -298,7 +315,7 @@ func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv refl
 
 func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 

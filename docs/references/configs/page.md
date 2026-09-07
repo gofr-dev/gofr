@@ -1,3 +1,11 @@
+---
+description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+nextjs:
+  metadata:
+    title: "GoFr Configuration Reference — Env Vars and Defaults"
+    description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+---
+
 # GoFr Configuration Options
 
 This document lists all the configuration options supported by the GoFr framework. The configurations are grouped by category for better organization.
@@ -47,8 +55,57 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_PORT
--  Port on which the application exposes metrics
+-  Port on which the application exposes the Prometheus pull endpoint. Set to 0 to disable it (e.g. push-only serverless).
 -  2121
+
+---
+
+-  METRICS_EXPORTER
+-  Enables push-based metrics export alongside the pull endpoint. Supported values: otlp, gcp. Unset (or prometheus) keeps pull-only behavior.
+
+---
+
+-  METRICS_URL
+-  Endpoint of the OTLP metrics collector/backend. host:port for gRPC, full URL for HTTP. Required when METRICS_EXPORTER is otlp (gcp defaults to telemetry.googleapis.com:443).
+
+---
+
+-  METRICS_PROTOCOL
+-  OTLP transport for pushed metrics. Supported values: grpc, http.
+-  grpc
+
+---
+
+-  METRICS_EXPORT_INTERVAL
+-  Interval (in seconds) at which metrics are pushed to the collector/backend.
+-  30
+
+---
+
+-  METRICS_TEMPORALITY
+-  OTLP temporality preference. Supported values: cumulative, delta, lowmemory. Use delta for Datadog; cumulative for Prometheus/GMP/Grafana.
+-  cumulative
+
+---
+
+-  METRICS_HEADERS
+-  Custom headers for metric export requests in comma-separated key=value format (e.g., "dd-api-key=secret"). Takes priority over METRICS_AUTH_KEY.
+
+---
+
+-  METRICS_AUTH_KEY
+-  Authorization header value for metric export requests. Used when METRICS_HEADERS is unset.
+
+---
+
+-  METRICS_INSECURE
+-  Disables transport security for the OTLP metrics connection. Set to false for managed backends over TLS. Ignored by the gcp exporter (always TLS).
+-  true
+
+---
+
+-  OTEL_RESOURCE_ATTRIBUTES
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
 
 ---
 
@@ -116,6 +173,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  GOFR_TELEMETRY
 -  Enable telemetry for GoFr framework usage
 -  true
+
+---
+
+-  GOFR_ROUTER
+-  Route matcher for the HTTP server. Set to `trie` to opt into the O(path length) trie index instead of the default linear scan — see [Routing Performance](/docs/advanced-guide/routing-performance). Any other value falls back to `mux`.
+-  mux
 
 ---
 
@@ -294,7 +357,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
-- DB_REPLICA_PASSWORDS_
+- DB_REPLICA_PASSWORDS
 - Comma-separated list of replica database passwords. Used for read replicas.
 - None
 
@@ -494,8 +557,8 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  PUBSUB_BACKEND
--  Pub/Sub message broker backend
--  kafka, google, mqtt, nats, redis
+-  Pub/Sub message broker backend wired automatically by `gofr.New()`. Accepted values: `kafka`, `google`, `mqtt`, `redis` (case-insensitive). Other backends (NATS JetStream, AWS SQS, Azure Event Hub) are wired explicitly via `app.AddPubSub(...)`.
+-  
 
 {% /table %}
 
@@ -697,7 +760,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  NATS_SERVER
--  URL of the NATS server
+-  URL of the NATS server. The NATS driver is wired explicitly via `app.AddPubSub(...)`; this row is a convention only — the actual env-var name is whatever you read from `app.Config.Get(...)` and pass into `nats.Config.Server`.
 -  nats://localhost:4222
 
 ---
@@ -709,3 +772,7 @@ This document lists all the configuration options supported by the GoFr framewor
 {% /table %}
 
 
+
+## Related production guides
+
+- **12-Factor Configuration**: [Env-driven config, secrets, and environment parity](/docs/guides/twelve-factor-config) — apply 12-factor methodology to the configs documented above.

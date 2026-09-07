@@ -12,10 +12,25 @@ import (
 	"time"
 )
 
+// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
+// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
+// on an unreachable metrics collector.
+const metricsFlushTimeout = 10 * time.Second
+
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
+
+		if a.container != nil {
+			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
+
+			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+				a.Logger().Errorf("failed to flush metrics: %v", err)
+			}
+
+			cancel()
+		}
 
 		if closer, ok := a.container.Logger.(io.Closer); ok {
 			closer.Close()
@@ -94,11 +109,27 @@ func (a *App) startAllServers(ctx context.Context) {
 	wg := sync.WaitGroup{}
 
 	a.startMetricsServer(&wg)
+	a.startMCPServer(&wg)
 	a.startHTTPServer(&wg)
 	a.startGRPCServer(&wg)
 	a.startSubscriptionManager(ctx, &wg)
 
 	wg.Wait()
+}
+
+// startMCPServer starts the MCP server if app.EnableMCP was called.
+func (a *App) startMCPServer(wg *sync.WaitGroup) {
+	if a.mcpServer == nil {
+		return
+	}
+
+	wg.Add(1)
+
+	go func(m *mcpServer) {
+		defer wg.Done()
+
+		m.Run(a.container)
+	}(a.mcpServer)
 }
 
 // startMetricsServer starts the metrics server if configured.

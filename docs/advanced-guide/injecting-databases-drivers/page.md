@@ -1,3 +1,11 @@
+---
+description: "Inject any database driver into GoFr that satisfies the framework's interface. Keep build size small by including only the datasources your service needs."
+nextjs:
+  metadata:
+    title: "Injecting Database Drivers in GoFr — Pluggable Datasources"
+    description: "Inject any database driver into GoFr that satisfies the framework's interface. Keep build size small by including only the datasources your service needs."
+---
+
 # Injecting Database Drivers
 Keeping in mind the size of the framework in the final build, it felt counter-productive to keep all the database drivers within
 the framework itself. Keeping only the most used MySQL and Redis within the framework, users can now inject databases

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +23,7 @@ func TestMain_BindError(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	c := http.Client{}
 

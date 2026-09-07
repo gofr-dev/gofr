@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -12,8 +13,9 @@ import (
 )
 
 type metricServer struct {
-	port int
-	srv  *http.Server
+	port  int
+	srvMu sync.Mutex // guards srv, written by Run on the serve goroutine and read by Shutdown on the caller goroutine
+	srv   *http.Server
 }
 
 func newMetricServer(port int) *metricServer {
@@ -24,13 +26,19 @@ func (m *metricServer) Run(c *container.Container) {
 	if m != nil {
 		c.Logf("Starting metrics server on port: %d", m.port)
 
-		m.srv = &http.Server{
+		// Assign under the lock, then serve on the local copy so the blocking
+		// ListenAndServe call never holds it while Shutdown reads srv.
+		srv := &http.Server{
 			Addr:              fmt.Sprintf(":%d", m.port),
 			Handler:           metrics.GetHandler(c.Metrics()),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
-		err := m.srv.ListenAndServe()
+		m.srvMu.Lock()
+		m.srv = srv
+		m.srvMu.Unlock()
+
+		err := srv.ListenAndServe()
 
 		if !errors.Is(err, http.ErrServerClosed) {
 			c.Errorf("error while listening to metrics server, err: %v", err)
@@ -39,11 +47,15 @@ func (m *metricServer) Run(c *container.Container) {
 }
 
 func (m *metricServer) Shutdown(ctx context.Context) error {
-	if m.srv == nil {
+	m.srvMu.Lock()
+	srv := m.srv
+	m.srvMu.Unlock()
+
+	if srv == nil {
 		return nil
 	}
 
 	return ShutdownWithContext(ctx, func(ctx context.Context) error {
-		return m.srv.Shutdown(ctx)
+		return srv.Shutdown(ctx)
 	}, nil)
 }

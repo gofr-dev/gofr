@@ -196,6 +196,7 @@ func TestExtractRole(t *testing.T) {
 			request: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "admin")
+
 				return req
 			}(),
 			expectedRole: "admin",
@@ -210,8 +211,10 @@ func TestExtractRole(t *testing.T) {
 			request: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "viewer")
+
 				claims := jwt.MapClaims{"role": "admin"}
 				ctx := context.WithValue(req.Context(), middleware.JWTClaim, claims)
+
 				return req.WithContext(ctx)
 			}(),
 			expectedRole: "admin",

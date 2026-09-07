@@ -110,9 +110,11 @@ func TestHelloRequestWrapper_Bind(t *testing.T) {
 			HelloRequest: &HelloRequest{Name: "test"},
 		}
 
-		// Test Bind method with non-pointer (should fail)
-		var target HelloRequest
-		err := req.Bind(target)
+		// Test Bind method with non-pointer (should fail).
+		// Pass a string instead of a HelloRequest value to avoid copying
+		// HelloRequest's embedded sync.Mutex (which Go 1.26 vet flags); Bind
+		// only checks reflect.Kind != Ptr, so any non-pointer triggers the error.
+		err := req.Bind("not a pointer")
 
 		assert.Error(t, err, "Bind should fail with non-pointer")
 		assert.Contains(t, err.Error(), "expected a pointer", "Error message should indicate pointer expected")

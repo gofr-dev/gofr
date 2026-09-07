@@ -15,6 +15,18 @@ func (k *kafkaClient) Health() datasource.Health {
 		Details: make(map[string]any),
 	}
 
+	// Snapshot the readers *before* taking connMu. Subscribe holds k.mu and
+	// then takes connMu inside getNewReader, so taking k.mu while holding
+	// connMu here would be a lock-order inversion: a pending connMu writer
+	// parks Subscribe's RLock, Subscribe still holds k.mu, and this probe
+	// waits on k.mu while holding the connMu read the writer needs.
+	readers := k.snapshotReaders()
+
+	// Hold connMu across the rest of the health probe so reconnectAdmin
+	// cannot swap and close the conn we are reading from underneath us.
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
 	if k.conn == nil {
 		health.Details["error"] = "invalid connection type"
 		return health
@@ -32,7 +44,7 @@ func (k *kafkaClient) Health() datasource.Health {
 	health.Details["brokers"] = brokerStatus
 	health.Details["backend"] = "KAFKA"
 	health.Details["writer"] = k.getWriterStatsAsMap()
-	health.Details["readers"] = k.getReaderStatsAsMap()
+	health.Details["readers"] = k.getReaderStatsAsMap(readers)
 
 	return health
 }
@@ -92,10 +104,10 @@ func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 	return status
 }
 
-func (k *kafkaClient) getReaderStatsAsMap() []any {
-	readerStats := make([]any, 0)
+func (k *kafkaClient) getReaderStatsAsMap(readers []Reader) []any {
+	readerStats := make([]any, 0, len(readers))
 
-	for _, reader := range k.reader {
+	for _, reader := range readers {
 		var readerStat map[string]any
 		if err := convertStructToMap(reader.Stats(), &readerStat); err != nil {
 			k.logger.Errorf("kafka Reader Stats processing failed: %v", err)

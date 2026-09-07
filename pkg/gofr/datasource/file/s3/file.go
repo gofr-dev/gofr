@@ -38,6 +38,11 @@ func (*S3File) Sys() any {
 
 var (
 	ErrNilResponse = errors.New("response retrieved is nil ")
+	// ErrRangeNotHonored is returned when a byte-range read was requested but the
+	// backend answered with the whole object (no Content-Range header). Filling the
+	// caller's buffer from byte 0 in that case would silently serve the wrong bytes,
+	// so the read is refused instead.
+	ErrRangeNotHonored = errors.New("s3 backend did not honor the requested byte range")
 )
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
@@ -55,6 +60,39 @@ func (f *S3File) Close() error {
 	return nil
 }
 
+// closeBody closes a previously opened response body (if any) before it is
+// replaced by a fresh read, so a re-read on the same handle does not leak the
+// earlier HTTP connection.
+func (f *S3File) closeBody() {
+	if f.body != nil {
+		_ = f.body.Close()
+	}
+}
+
+// relativeKey returns the object key relative to the bucket, i.e. f.name with the
+// leading "<bucket>/" stripped. It is the shared path-resolution step used by the
+// read/write methods.
+func (f *S3File) relativeKey() string {
+	index := strings.Index(f.name, string(filepath.Separator))
+	if index != -1 {
+		return f.name[index+1:]
+	}
+
+	return ""
+}
+
+// normalizeReadFull fills p from r and folds a short fill (io.ErrUnexpectedEOF or
+// io.EOF) into io.EOF, so callers see the real byte count alongside io.EOF instead
+// of a partially filled buffer reported as a full read.
+func normalizeReadFull(r io.Reader, p []byte) (int, error) {
+	n, err := io.ReadFull(r, p)
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		return n, io.EOF
+	}
+
+	return n, err
+}
+
 // Read reads data into the provided byte slice.
 //
 // It attempts to fill the entire slice with data from the file. If the number of bytes read is less than the length of the slice,
@@ -62,15 +100,10 @@ func (f *S3File) Close() error {
 //
 // Additionally, this method updates the file offset to reflect the next position that will be used for subsequent read or write operations.
 func (f *S3File) Read(p []byte) (n int, err error) {
-	var fileName, msg string
+	var msg string
 
 	bucketName := getBucketName(f.name)
-
-	// get path relative to current bucketName
-	index := strings.Index(f.name, string(filepath.Separator))
-	if index != -1 {
-		fileName = f.name[index+1:]
-	}
+	fileName := f.relativeKey()
 
 	st := statusErr
 
@@ -81,14 +114,38 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 		Message:   &msg,
 	}, time.Now())
 
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+	// Once the offset has reached (or passed) a known object size there is
+	// nothing left to read. Returning io.EOF here also keeps io.Copy from
+	// issuing an unsatisfiable Range request when the object size is an exact
+	// multiple of the caller's buffer.
+	if f.size > 0 && f.offset >= f.size {
+		st = statusSuccess
+		return 0, io.EOF
+	}
+
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
-	})
+	}
+
+	// Ask S3 for only the bytes from the current offset onward instead of
+	// downloading the whole object and discarding the prefix on every call.
+	// That keeps a full-file read linear in the object size rather than
+	// quadratic. A zero offset fetches the whole object (no Range header), so
+	// empty objects and backends that reject "bytes=0-" behave as before.
+	if f.offset > 0 {
+		input.Range = aws.String(fmt.Sprintf("bytes=%d-", f.offset))
+	}
+
+	res, err := f.conn.GetObject(context.TODO(), input)
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve %q: %v", fileName, err)
 		return 0, err
 	}
+
+	// Close the body from any previous read before replacing it, otherwise the
+	// earlier HTTP connection leaks.
+	f.closeBody()
 
 	f.body = res.Body
 	if f.body == nil {
@@ -96,25 +153,33 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 		return 0, fmt.Errorf("%w: S3 file is empty", ErrNilResponse)
 	}
 
-	buffer := make([]byte, len(p)+int(f.offset))
+	// If a byte range was requested (offset > 0) but the backend replied with the
+	// whole object (no Content-Range), io.ReadFull would fill p from byte 0 and
+	// silently serve the wrong bytes. Refuse rather than corrupt the read.
+	if f.offset > 0 && res.ContentRange == nil {
+		f.closeBody()
+		f.body = nil
+		msg = fmt.Sprintf("Range request for %q not honored by backend", fileName)
 
-	n, err = f.body.Read(buffer)
+		return 0, ErrRangeNotHonored
+	}
+
+	// normalizeReadFull fills p completely unless the object ends first, reporting
+	// a short fill as io.EOF along with the real byte count — honoring the io.Reader
+	// contract that n reflects the number of bytes actually read.
+	n, err = normalizeReadFull(f.body, p)
 	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("Error reading file %q: %v", fileName, err)
 		return n, err
 	}
 
-	buffer = buffer[f.offset:]
-	copy(p, buffer)
-
-	f.offset += int64(len(buffer))
+	f.offset += int64(n)
 
 	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file at path %q in bucket %q", n, fileName, bucketName)
 
-	f.logger.Logf("%v bytes read successfully)", len(p))
+	f.logger.Logf("%v bytes read successfully", n)
 
-	return len(p), err
+	return n, err
 }
 
 // ReadAt reads data from the file at a specified offset into the provided byte slice.
@@ -123,8 +188,9 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 // used for other read or write operations. The number of bytes read is returned, along with any error encountered.
 func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 	bucketName := getBucketName(f.name)
+	fileName := f.relativeKey()
 
-	var fileName, msg string
+	var msg string
 
 	st := statusErr
 
@@ -135,22 +201,46 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 		Message:   &msg,
 	}, time.Now())
 
-	// get path relative to current bucketName
-	index := strings.Index(f.name, string(filepath.Separator))
-	if index != -1 {
-		fileName = f.name[index+1:]
+	// A negative offset is never valid. Reject it before spending a request.
+	if offset < 0 {
+		msg = fmt.Sprintf("Negative offset %v", offset)
+		return 0, fmt.Errorf("%w: negative offset %d", ErrOutOfRange, offset)
+	}
+
+	// An empty destination reads nothing; return without a request.
+	if len(p) == 0 {
+		st = statusSuccess
+		return 0, nil
+	}
+
+	// A read that starts at or past EOF has nothing to return. Guard here so it
+	// costs no request and, importantly, so io.ReaderAt callers see io.EOF rather
+	// than an unsatisfiable Range (bytes=<size>-...) turning into an HTTP 416.
+	// A read that merely straddles EOF (offset < size <= offset+len(p)) is valid:
+	// S3 returns the available bytes and io.ReadFull below surfaces the short fill
+	// as io.EOF along with the real count, honoring the io.ReaderAt contract.
+	if offset >= f.size {
+		st = statusSuccess
+		return 0, io.EOF
 	}
 
 	var res *s3.GetObjectOutput
 
+	// Request exactly the [offset, offset+len(p)-1] byte range instead of the
+	// whole object, so ReadAt is linear in len(p) rather than in the object size.
 	res, err = f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
+		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset+int64(len(p))-1)),
 	})
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
+
+	// Close the body from any previous read before replacing it to avoid leaking
+	// the earlier HTTP connection.
+	f.closeBody()
 
 	f.body = res.Body
 	if f.body == nil {
@@ -158,27 +248,30 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	if int64(len(p))+offset+1 > f.size {
-		msg = fmt.Sprintf("Offset %v out of range", f.offset)
-		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
+	// ReadAt always sends a Range header. If the backend ignored it and returned
+	// the whole object (no Content-Range), io.ReadFull would serve bytes from 0
+	// instead of from offset. Refuse rather than silently return the wrong bytes.
+	if res.ContentRange == nil {
+		f.closeBody()
+		f.body = nil
+		msg = fmt.Sprintf("Range request for %q not honored by backend", fileName)
+
+		return 0, ErrRangeNotHonored
 	}
 
-	buffer := make([]byte, len(p)+int(offset)+1)
-
-	n, err = f.body.Read(buffer)
+	// normalizeReadFull reports the count actually read; a short fill (a read that
+	// straddles EOF) surfaces as io.EOF instead of silently claiming len(p) bytes.
+	n, err = normalizeReadFull(f.body, p)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return n, err
 	}
 
-	buffer = buffer[offset:]
-	copy(p, buffer)
-
 	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes at an offset of %v from file at path %q in bucket %q", n, offset, fileName, bucketName)
 
-	f.logger.Logf("%v bytes read successfully.")
+	f.logger.Logf("%v bytes read successfully.", n)
 
-	return len(p), nil
+	return n, err
 }
 
 // Write writes data to the file at the current offset and updates the file offset.
@@ -199,11 +292,7 @@ func (f *S3File) Write(p []byte) (n int, err error) {
 		Message:   &msg,
 	}, time.Now())
 
-	// extracting file name
-	index := strings.Index(f.name, string(filepath.Separator))
-	if index != -1 {
-		fileName = f.name[index+1:]
-	}
+	fileName = f.relativeKey()
 
 	buffer := p
 
@@ -279,10 +368,7 @@ func (f *S3File) WriteAt(p []byte, offset int64) (n int, err error) {
 
 	defer f.sendOperationStats(&FileLog{Operation: "WRITEAT", Location: getLocation(bucketName), Status: &st, Message: &msg}, time.Now())
 
-	index := strings.Index(f.name, string(filepath.Separator))
-	if index != -1 {
-		fileName = f.name[index+1:]
-	}
+	fileName = f.relativeKey()
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),

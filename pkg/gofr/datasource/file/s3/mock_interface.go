@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -21,6 +22,7 @@ import (
 type MockLogger struct {
 	ctrl     *gomock.Controller
 	recorder *MockLoggerMockRecorder
+	isgomock struct{}
 }
 
 // MockLoggerMockRecorder is the mock recorder for MockLogger.
@@ -107,10 +109,28 @@ func (mr *MockLoggerMockRecorder) Logf(pattern any, args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logf", reflect.TypeOf((*MockLogger)(nil).Logf), varargs...)
 }
 
+// Warnf mocks base method.
+func (m *MockLogger) Warnf(pattern string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{pattern}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Warnf", varargs...)
+}
+
+// Warnf indicates an expected call of Warnf.
+func (mr *MockLoggerMockRecorder) Warnf(pattern any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{pattern}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Warnf", reflect.TypeOf((*MockLogger)(nil).Warnf), varargs...)
+}
+
 // Mocks3Client is a mock of s3Client interface.
 type Mocks3Client struct {
 	ctrl     *gomock.Controller
 	recorder *Mocks3ClientMockRecorder
+	isgomock struct{}
 }
 
 // Mocks3ClientMockRecorder is the mock recorder for Mocks3Client.
@@ -250,10 +270,55 @@ func (mr *Mocks3ClientMockRecorder) PutObject(ctx, params any, optFns ...any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutObject", reflect.TypeOf((*Mocks3Client)(nil).PutObject), varargs...)
 }
 
+// Mocks3Presigner is a mock of s3Presigner interface.
+type Mocks3Presigner struct {
+	ctrl     *gomock.Controller
+	recorder *Mocks3PresignerMockRecorder
+	isgomock struct{}
+}
+
+// Mocks3PresignerMockRecorder is the mock recorder for Mocks3Presigner.
+type Mocks3PresignerMockRecorder struct {
+	mock *Mocks3Presigner
+}
+
+// NewMocks3Presigner creates a new mock instance.
+func NewMocks3Presigner(ctrl *gomock.Controller) *Mocks3Presigner {
+	mock := &Mocks3Presigner{ctrl: ctrl}
+	mock.recorder = &Mocks3PresignerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocks3Presigner) EXPECT() *Mocks3PresignerMockRecorder {
+	return m.recorder
+}
+
+// PresignGetObject mocks base method.
+func (m *Mocks3Presigner) PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PresignGetObject", varargs...)
+	ret0, _ := ret[0].(*v4.PresignedHTTPRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PresignGetObject indicates an expected call of PresignGetObject.
+func (mr *Mocks3PresignerMockRecorder) PresignGetObject(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PresignGetObject", reflect.TypeOf((*Mocks3Presigner)(nil).PresignGetObject), varargs...)
+}
+
 // MockMetrics is a mock of Metrics interface.
 type MockMetrics struct {
 	ctrl     *gomock.Controller
 	recorder *MockMetricsMockRecorder
+	isgomock struct{}
 }
 
 // MockMetricsMockRecorder is the mock recorder for MockMetrics.

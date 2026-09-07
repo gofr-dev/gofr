@@ -59,7 +59,7 @@ func (c *CommonFileSystem) Connect(ctx context.Context) error {
 
 	c.registerHistogram.Do(func() {
 		if c.Metrics != nil {
-			c.Metrics.NewHistogram(AppFileStats, "App File Stats - duration of file operations",
+			c.Metrics.NewHistogram(AppFileStats, "App File Stats - duration of file operations in microseconds",
 				DefaultHistogramBuckets()...)
 		}
 	})

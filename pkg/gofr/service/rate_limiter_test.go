@@ -73,7 +73,9 @@ func TestRateLimiter_checkRateLimit_Denied(t *testing.T) {
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	err := rl.checkRateLimit(req)
 
-	assert.IsType(t, &RateLimitError{}, err)
+	var target *RateLimitError
+
+	assert.ErrorAs(t, err, &target)
 }
 
 func TestRateLimiter_checkRateLimit_Allowed(t *testing.T) {

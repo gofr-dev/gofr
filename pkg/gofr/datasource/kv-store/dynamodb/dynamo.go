@@ -71,7 +71,10 @@ func New(configs Configs) *Client {
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to DynamoDB table %v in region %v", c.configs.Table, c.configs.Region)
 
-	dynamoBuckets := []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}
+	dynamoBuckets := []float64{
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+	}
 	c.metrics.NewHistogram("app_dynamodb_duration_ms", "Response time of DynamoDB queries in milliseconds.", dynamoBuckets...)
 
 	awsCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(c.configs.Region))

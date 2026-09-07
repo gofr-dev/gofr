@@ -18,7 +18,7 @@ func setupDB(t *testing.T) *Client {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
-	mockMetrics.EXPECT().NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", gomock.Any())
+	mockMetrics.EXPECT().NewHistogram("app_badger_stats", "Response time of Badger queries in microseconds.", gomock.Any())
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_badger_stats", gomock.Any(), "database", cl.configs.DirPath,
 		"type", gomock.Any()).AnyTimes()

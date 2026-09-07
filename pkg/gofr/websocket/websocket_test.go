@@ -338,6 +338,7 @@ func TestWSUpgrader_NewWSUpgrader(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, 2048, actualUpgrader.ReadBufferSize)
 				assert.Equal(t, 2048, actualUpgrader.WriteBufferSize)
@@ -372,6 +373,7 @@ func TestWSUpgrader_BufferOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, []string{"protocol1", "protocol2", "protocol3"}, actualUpgrader.Subprotocols)
 			},
@@ -384,6 +386,7 @@ func TestWSUpgrader_BufferOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, 0, actualUpgrader.ReadBufferSize)
 				assert.Equal(t, 0, actualUpgrader.WriteBufferSize)
@@ -397,6 +400,7 @@ func TestWSUpgrader_BufferOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, -1, actualUpgrader.ReadBufferSize)
 				assert.Equal(t, -1, actualUpgrader.WriteBufferSize)
@@ -410,6 +414,7 @@ func TestWSUpgrader_BufferOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, 1024*1024, actualUpgrader.ReadBufferSize)
 				assert.Equal(t, 1024*1024, actualUpgrader.WriteBufferSize)
@@ -439,6 +444,7 @@ func TestWSUpgrader_TimeoutOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, time.Duration(0), actualUpgrader.HandshakeTimeout)
 			},
@@ -450,6 +456,7 @@ func TestWSUpgrader_TimeoutOptions(t *testing.T) {
 			},
 			validate: func(t *testing.T, upgrader *WSUpgrader) {
 				t.Helper()
+
 				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
 				assert.Equal(t, 24*time.Hour, actualUpgrader.HandshakeTimeout)
 			},
@@ -797,8 +804,8 @@ func TestManager_ConcurrentOperations(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			conn := &Connection{Conn: nil} // Use nil to avoid close issues
-			manager.AddWebsocketConnection("conn"+string(rune(i)), conn)
+			conn := &Connection{Conn: nil}                               // Use nil to avoid close issues
+			manager.AddWebsocketConnection("conn"+string(rune(i)), conn) //nolint:gosec // test value is within rune range
 		}(i)
 	}
 
@@ -815,7 +822,7 @@ func TestManager_ConcurrentOperations(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			conn := manager.GetWebsocketConnection("conn" + string(rune(i)))
+			conn := manager.GetWebsocketConnection("conn" + string(rune(i))) //nolint:gosec // test value is within rune range
 			assert.NotNil(t, conn)
 		}(i)
 	}
@@ -829,7 +836,7 @@ func TestManager_ConcurrentOperations(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			manager.CloseConnection("conn" + string(rune(i)))
+			manager.CloseConnection("conn" + string(rune(i))) //nolint:gosec // test value is within rune range
 		}(i)
 	}
 
@@ -1245,6 +1252,7 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 				wsConn.Close()
 
 				var data string
+
 				err := wsConn.Bind(&data)
 				assert.Error(t, err, "Expected error for closed connection")
 			},
@@ -1263,6 +1271,7 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 
 				var data string
+
 				err = wsConn.Bind(&data)
 				require.Error(t, err, "Expected timeout error")
 			},
@@ -1279,6 +1288,7 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 				require.NoError(t, err)
 
 				var data string
+
 				err = wsConn.Bind(&data)
 				// This should still work as we're reading the message
 				assert.NoError(t, err, "Should handle binary messages")
@@ -1295,6 +1305,7 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 				wsConn.Close()
 
 				var data string
+
 				err := wsConn.Bind(&data)
 				assert.Error(t, err, "Expected error for interrupted connection")
 			},

@@ -62,7 +62,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...an
 	expectedArgs := m.queryWithArgs[0].arguments
 
 	valueType := reflect.TypeOf(value)
-	if valueType.Kind() != reflect.Ptr {
+	if valueType.Kind() != reflect.Pointer {
 		m.logger.Errorf("expected a pointer type: %q", value)
 		return
 	}
@@ -74,7 +74,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...an
 
 	v := reflect.ValueOf(value)
 
-	if v.Kind() == reflect.Ptr && !v.IsNil() {
+	if v.Kind() == reflect.Pointer && !v.IsNil() {
 		tobechanged := v.Elem()
 		tobechanged.Set(reflect.ValueOf(m.queryWithArgs[0].value))
 	}
@@ -145,7 +145,7 @@ func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args 
 	qr := queryWithArgs{queryText: query, arguments: args}
 
 	fieldType := reflect.TypeOf(value)
-	if fieldType.Kind() == reflect.Ptr {
+	if fieldType.Kind() == reflect.Pointer {
 		qr.value = value
 	}
 

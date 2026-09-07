@@ -10,12 +10,22 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 )
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
+
+// JSON envelope keys for the panic-recovery error response written by
+// panicRecovery. Defined as constants so the same spellings stay
+// consistent across the package and the goconst linter is satisfied.
+const (
+	envelopeCodeKey    = "code"
+	envelopeStatusKey  = "status"
+	envelopeMessageKey = "message"
+)
 
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
@@ -35,6 +45,39 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.wroteHeader = true
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// Write implements http.ResponseWriter. When a handler calls Write without
+// first calling WriteHeader, net/http implicitly sends StatusOK on the
+// wire — record that explicitly here so logs / metrics / tracing see 200
+// instead of 0 for the common "just write the body" pattern.
+func (w *StatusResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.status = http.StatusOK
+		w.wroteHeader = true
+	}
+
+	return w.ResponseWriter.Write(b)
+}
+
+// Status returns the response status code as it would actually appear on
+// the wire. If the handler called neither WriteHeader nor Write, the
+// internal field is still zero but net/http emits an implicit 200 once
+// the handler returns — Status() reports 200 in that case so logs,
+// metrics, and tracing all see a valid HTTP status instead of a
+// poisoned 0.
+func (w *StatusResponseWriter) Status() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+
+	return w.status
+}
+
+// Unwrap returns the wrapped ResponseWriter so http.NewResponseController can reach the underlying
+// connection for Flush and SetWriteDeadline — needed for streaming responses.
+func (w *StatusResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
@@ -60,6 +103,14 @@ type RequestLog struct {
 	Response     int    `json:"response,omitempty"`
 }
 
+// zeroTraceID is the canonical 32-zero string the W3C trace-context
+// invalid TraceID prints to. We use it for the X-Correlation-ID
+// response header AND for the request-log field when no SpanContext
+// is in scope, so the wire shape is byte-for-byte identical to what
+// GoFr emitted before PR-7's internal optimization.
+const zeroTraceID = "00000000000000000000000000000000"
+const zeroSpanID = "0000000000000000"
+
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
 		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.TraceID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
@@ -84,38 +135,121 @@ func colorForStatusCode(status int) int {
 	return 0
 }
 
+// canonicalCorrelationID is the canonical spelling of the correlation-ID header
+// -- textproto.CanonicalMIMEHeaderKey("X-Correlation-ID") -- written out so no
+// request pays to build it and nothing can reassign it. The equivalence is
+// pinned by TestCorrelationIDHeaderSpellingUnchanged.
+const canonicalCorrelationID = "X-Correlation-Id"
+
 type logger interface {
 	Log(...any)
 	Error(...any)
 }
 
+// logEnabler is the optional fast-path interface. Building a request-log entry
+// costs a struct, a formatted timestamp and a client-IP lookup, all before the
+// logger gets to decide whether the entry is emitted at all. A logger that can
+// answer that question first lets the middleware skip the work entirely.
+//
+// It is deliberately expressed without the logging package's Level type so this
+// middleware keeps its minimal logger contract. An implementation that does not
+// provide it behaves exactly as before.
+type logEnabler interface {
+	LogEnabled() bool
+}
+
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
+//
+// The StatusResponseWriter wrapper allocated per request is pooled in a
+// closure-owned sync.Pool — the pool is constructed once per Logging()
+// invocation (typically once per app) and tied to this middleware's
+// lifetime, not the package, so we avoid a shared global. Reset() zeros
+// the writer fields before Put so a stale ResponseWriter pointer can
+// never leak across requests.
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
+	pool := sync.Pool{
+		New: func() any { return &StatusResponseWriter{} },
+	}
+
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+			srw := pool.Get().(*StatusResponseWriter)
+			srw.ResponseWriter = w
+			srw.status = 0
+			srw.wroteHeader = false
 
-			srw.Header().Set("X-Correlation-ID", traceID)
+			// Only the ResponseWriter pointer is cleared on Put — leaving it
+			// dangling would keep the previous request's writer (and its
+			// underlying *http.response, headers, etc.) alive until the pool
+			// entry is next claimed. status/wroteHeader are reset on the next
+			// Get above; resetting them here too is redundant.
+			defer func() {
+				srw.ResponseWriter = nil
+				pool.Put(srw)
+			}()
+
+			// Fetch SpanContext once and resolve trace/span IDs to strings only
+			// when they are valid. Under a noop tracer (the default after PR-1
+			// when no exporter is configured) the SpanContext is invalid and
+			// the IDs are all-zeros — calling .String() on those is wasted
+			// allocation. Substitute the precomputed zero-string constants so
+			// the log line and the X-Correlation-ID response header carry
+			// byte-identical values to the pre-PR-7 wire shape.
+			sc := trace.SpanFromContext(r.Context()).SpanContext()
+
+			// Only the trace ID is needed before the handler runs, for the
+			// X-Correlation-ID response header. The span ID is used solely
+			// inside the log entry, so it is resolved in handleRequestLog --
+			// after the level gate -- and costs nothing on a request whose
+			// entry is discarded.
+			traceID := zeroTraceID
+			if sc.IsValid() {
+				traceID = sc.TraceID().String()
+			}
+
+			// Assigned rather than Set: Header.Set canonicalizes its key on
+			// every call, and "X-Correlation-ID" is not already in canonical
+			// form ("Id", not "ID"), so each request paid for building the
+			// canonical string. The wire format is unchanged -- net/http emits
+			// the canonical spelling either way.
+			srw.Header()[canonicalCorrelationID] = []string{traceID}
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
-			// Skip logging for default probe paths if log probes are disabled
+			// Skip logging for default probe paths if log probes are disabled.
+			// time.Now() (vDSO call) is deferred past this so probe paths do
+			// not pay for a timestamp that is then thrown away.
 			if isLogProbeDisabled(probes, r.URL.Path) {
 				inner.ServeHTTP(w, r)
 				return
 			}
 
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			start := time.Now()
+			defer handleRequestLog(srw, r, start, traceID, sc, logger)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
 }
 
-func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID string,
+	sc trace.SpanContext, logger logger) {
+	status := srw.Status()
+
+	// A server error is reported through Error, which survives every level below
+	// FATAL, so gating it on the informational level would be wrong. Only the
+	// informational path can be skipped.
+	if status < http.StatusInternalServerError {
+		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
+			return
+		}
+	}
+
+	spanID := zeroSpanID
+	if sc.IsValid() {
+		spanID = sc.SpanID().String()
+	}
+
 	l := &RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
@@ -125,11 +259,11 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		UserAgent:    r.UserAgent(),
 		IP:           getIPAddress(r),
 		URI:          r.RequestURI,
-		Response:     srw.status,
+		Response:     status,
 	}
 
 	if logger != nil {
-		if srw.status >= http.StatusInternalServerError {
+		if status >= http.StatusInternalServerError {
 			logger.Error(l)
 		} else {
 			logger.Log(l)
@@ -156,11 +290,17 @@ func isLogProbeDisabled(probes LogProbes, urlPath string) bool {
 }
 
 func getIPAddress(r *http.Request) string {
-	ips := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-
 	// According to GCLB Documentation (https://cloud.google.com/load-balancing/docs/https/), IPs are added in following sequence.
 	// X-Forwarded-For: <unverified IP(s)>, <immediate client IP>, <global forwarding rule external IP>, <proxies running in GCP>
-	ipAddress := ips[0]
+	//
+	// We only need the first entry, so take it with IndexByte instead of
+	// strings.Split, which would allocate a []string on every request.
+	xff := r.Header.Get("X-Forwarded-For")
+
+	ipAddress := xff
+	if i := strings.IndexByte(xff, ','); i >= 0 {
+		ipAddress = xff[:i]
+	}
 
 	if ipAddress == "" {
 		ipAddress = r.RemoteAddr
@@ -180,6 +320,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t
@@ -196,6 +337,10 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 
-	res := map[string]any{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
+	res := map[string]any{
+		envelopeCodeKey:    http.StatusInternalServerError,
+		envelopeStatusKey:  "ERROR",
+		envelopeMessageKey: "Some unexpected error has occurred",
+	}
 	_ = json.NewEncoder(w).Encode(res)
 }

@@ -1,259 +1,323 @@
 package gofr
 
 import (
+	"database/sql/driver"
+	"reflect"
+
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/sql"
 )
 
+// tracerName returns the OpenTelemetry tracer name for a datasource,
+// or an empty string if tracing is not applicable for the type.
+func tracerName(ds any) string {
+	matchers := []struct {
+		match func(any) bool
+		name  string
+	}{
+		{func(d any) bool { _, ok := d.(container.Mongo); return ok }, "gofr-mongo"},
+		{func(d any) bool { _, ok := d.(container.ArangoDB); return ok }, "gofr-arangodb"},
+		{func(d any) bool { _, ok := d.(container.Clickhouse); return ok }, "gofr-clickhouse"},
+		{func(d any) bool { _, ok := d.(container.OracleDB); return ok }, "gofr-oracle"},
+		{func(d any) bool { _, ok := d.(container.CassandraWithContext); return ok }, "gofr-cassandra"},
+		{func(d any) bool { _, ok := d.(container.KVStore); return ok }, "gofr-kvstore"},
+		{func(d any) bool { _, ok := d.(container.Solr); return ok }, "gofr-solr"},
+		{func(d any) bool { _, ok := d.(container.Dgraph); return ok }, "gofr-dgraph"},
+		{func(d any) bool { _, ok := d.(container.OpenTSDB); return ok }, "gofr-opentsdb"},
+		{func(d any) bool { _, ok := d.(container.ScyllaDB); return ok }, "gofr-scylladb"},
+		{func(d any) bool { _, ok := d.(container.SurrealDB); return ok }, "gofr-surrealdb"},
+		{func(d any) bool { _, ok := d.(container.Elasticsearch); return ok }, "gofr-elasticsearch"},
+		{func(d any) bool { _, ok := d.(container.Couchbase); return ok }, "gofr-couchbase"},
+		{func(d any) bool { _, ok := d.(container.InfluxDB); return ok }, "gofr-influxdb"},
+		{func(d any) bool { _, ok := d.(container.DBResolverProvider); return ok }, "gofr-dbresolver"},
+	}
+
+	for _, m := range matchers {
+		if m.match(ds) {
+			return m.name
+		}
+	}
+
+	return ""
+}
+
+// instrumentDatasource sets up logging, metrics, tracing, and connection for a datasource
+// using duck typing. Each datasource only needs to implement the methods it supports.
+func (a *App) instrumentDatasource(ds any) {
+	if l, ok := ds.(interface{ UseLogger(any) }); ok {
+		l.UseLogger(a.Logger())
+	}
+
+	if m, ok := ds.(interface{ UseMetrics(any) }); ok {
+		m.UseMetrics(a.Metrics())
+	}
+
+	if t, ok := ds.(interface{ UseTracer(any) }); ok {
+		if name := tracerName(ds); name != "" {
+			t.UseTracer(otel.GetTracerProvider().Tracer(name))
+		} else {
+			// Log only the type (never the datasource value, which may hold secrets) so tracing gaps
+			// are visible without risking sensitive fields in logs.
+			a.Logger().Warnf("datasource %s implements UseTracer but has no tracer name registered in "+
+				"tracerName(); tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go",
+				reflect.TypeOf(ds))
+		}
+	}
+
+	if cfg, ok := ds.(interface{ UseConfig(any) }); ok {
+		cfg.UseConfig(a.Config)
+	}
+
+	if c, ok := ds.(interface{ Connect() }); ok {
+		c.Connect()
+	}
+}
+
 // AddMongo sets the Mongo datasource in the app's container.
-func (a *App) AddMongo(db container.MongoProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-mongo")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddMongo(db container.Mongo) {
+	a.instrumentDatasource(db)
 	a.container.Mongo = db
 }
 
+// LLMOption configures how a model is registered.
+type LLMOption func(*llmOptions)
+
+type llmOptions struct{ name string }
+
+// WithName registers the model under a name so a handler can select it via ctx.LLM(name).
+// Without it, the model is the default one, returned by ctx.LLM().
+func WithName(name string) LLMOption {
+	return func(o *llmOptions) { o.name = name }
+}
+
+// AddLLM registers an LLM model on the app. The model becomes reachable in handlers via
+// ctx.LLM() (or ctx.LLM(name) when registered with WithName), its reachability is reported on
+// the health endpoint, and its request and token metrics are registered on first use. A nil or
+// typed-nil model is ignored.
+func (a *App) AddLLM(m ai.Model, opts ...LLMOption) {
+	if m == nil {
+		return
+	}
+
+	if v := reflect.ValueOf(m); v.Kind() == reflect.Pointer && v.IsNil() {
+		return
+	}
+
+	var o llmOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	// LLM metrics are opt-in and registered here (like GraphQL/gRPC/cron), only when the first
+	// model is added. AddLLM can run more than once (env auto-wire, an explicit override, or
+	// additional named models), so guard on the first registration to avoid a duplicate-metric
+	// warning; this runs in the single-threaded setup phase, so no synchronization is needed.
+	if !a.container.HasLLM() {
+		ai.RegisterMetrics(a.Metrics())
+	}
+
+	a.instrumentDatasource(m)
+	a.container.SetLLM(m, o.name)
+}
+
 // AddFTP sets the FTP datasource in the app's container.
-// Deprecated: Use the AddFile method instead.
+//
+// Deprecated: Use the AddFileStore method instead.
 func (a *App) AddFTP(fs file.FileSystemProvider) {
-	fs.UseLogger(a.Logger())
-	fs.UseMetrics(a.Metrics())
-
-	fs.Connect()
-
+	a.instrumentDatasource(fs)
 	a.container.File = fs
 }
 
 // AddPubSub sets the PubSub client in the app's container.
-func (a *App) AddPubSub(pubsub container.PubSubProvider) {
-	pubsub.UseLogger(a.Logger())
-	pubsub.UseMetrics(a.Metrics())
-
-	pubsub.Connect()
-
-	a.container.PubSub = pubsub
+func (a *App) AddPubSub(ps pubsub.Client) {
+	a.instrumentDatasource(ps)
+	a.container.PubSub = ps
 }
 
 // AddFileStore sets the FTP, SFTP, S3, GCS, or Azure File Storage datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
-	fs.UseLogger(a.Logger())
-	fs.UseMetrics(a.Metrics())
-
-	fs.Connect()
-
+	a.instrumentDatasource(fs)
 	a.container.File = fs
 }
 
 // AddClickhouse initializes the clickhouse client.
-// Official implementation is available in the package : gofr.dev/pkg/gofr/datasource/clickhouse .
-func (a *App) AddClickhouse(db container.ClickhouseProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-clickhouse")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+// Official implementation is available in the package: gofr.dev/pkg/gofr/datasource/clickhouse.
+func (a *App) AddClickhouse(db container.Clickhouse) {
+	a.instrumentDatasource(db)
 	a.container.Clickhouse = db
 }
 
 // AddOracle initializes the OracleDB client.
 // Official implementation is available in the package: gofr.dev/pkg/gofr/datasource/oracle.
-func (a *App) AddOracle(db container.OracleProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-oracle")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddOracle(db container.OracleDB) {
+	a.instrumentDatasource(db)
 	a.container.Oracle = db
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
+//
 // Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
 	a.container.Mongo = db
 }
 
 // AddCassandra sets the Cassandra datasource in the app's container.
-func (a *App) AddCassandra(db container.CassandraProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-cassandra")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddCassandra(db container.CassandraWithContext) {
+	a.instrumentDatasource(db)
 	a.container.Cassandra = db
 }
 
 // AddKVStore sets the KV-Store datasource in the app's container.
-func (a *App) AddKVStore(db container.KVStoreProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-kvstore")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddKVStore(db container.KVStore) {
+	a.instrumentDatasource(db)
 	a.container.KVStore = db
 }
 
 // AddSolr sets the Solr datasource in the app's container.
-func (a *App) AddSolr(db container.SolrProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-solr")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddSolr(db container.Solr) {
+	a.instrumentDatasource(db)
 	a.container.Solr = db
 }
 
 // AddDgraph sets the Dgraph datasource in the app's container.
-func (a *App) AddDgraph(db container.DgraphProvider) {
-	// Create the Dgraph client with the provided configuration
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-dgraph")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddDgraph(db container.Dgraph) {
+	a.instrumentDatasource(db)
 	a.container.DGraph = db
 }
 
 // AddOpenTSDB sets the OpenTSDB datasource in the app's container.
-func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
-	// Create the Opentsdb client with the provided configuration
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
-
-	db.UseTracer(tracer)
-
-	db.Connect()
-
+func (a *App) AddOpenTSDB(db container.OpenTSDB) {
+	a.instrumentDatasource(db)
 	a.container.OpenTSDB = db
 }
 
 // AddScyllaDB sets the ScyllaDB datasource in the app's container.
-func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
-	// Create the ScyllaDB client with the provided configuration
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-scylladb")
-	db.UseTracer(tracer)
-	db.Connect()
+func (a *App) AddScyllaDB(db container.ScyllaDB) {
+	a.instrumentDatasource(db)
 	a.container.ScyllaDB = db
 }
 
 // AddArangoDB sets the ArangoDB datasource in the app's container.
-func (a *App) AddArangoDB(db container.ArangoDBProvider) {
-	// Set up logger, metrics, and tracer
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	// Get tracer from OpenTelemetry
-	tracer := otel.GetTracerProvider().Tracer("gofr-arangodb")
-	db.UseTracer(tracer)
-
-	// Connect to ArangoDB
-	db.Connect()
-
-	// Add the ArangoDB provider to the container
+func (a *App) AddArangoDB(db container.ArangoDB) {
+	a.instrumentDatasource(db)
 	a.container.ArangoDB = db
 }
 
-func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-surrealdb")
-	db.UseTracer(tracer)
-	db.Connect()
+// AddSurrealDB sets the SurrealDB datasource in the app's container.
+func (a *App) AddSurrealDB(db container.SurrealDB) {
+	a.instrumentDatasource(db)
 	a.container.SurrealDB = db
 }
 
-func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-elasticsearch")
-	db.UseTracer(tracer)
-	db.Connect()
-
+// AddElasticsearch sets the Elasticsearch datasource in the app's container.
+func (a *App) AddElasticsearch(db container.Elasticsearch) {
+	a.instrumentDatasource(db)
 	a.container.Elasticsearch = db
 }
 
-func (a *App) AddCouchbase(db container.CouchbaseProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-couchbase")
-	db.UseTracer(tracer)
-	db.Connect()
-
+// AddCouchbase sets the Couchbase datasource in the app's container.
+func (a *App) AddCouchbase(db container.Couchbase) {
+	a.instrumentDatasource(db)
 	a.container.Couchbase = db
 }
 
 // AddDBResolver sets up database resolver with read/write splitting.
 func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
-	// Validate primary SQL exists
 	if a.container.SQL == nil {
 		a.Logger().Fatal("Primary SQL connection must be configured before adding DBResolver")
 		return
 	}
 
-	resolver.UseLogger(a.Logger())
-	resolver.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-dbresolver")
-	resolver.UseTracer(tracer)
-
-	resolver.Connect()
-
-	// Replace the SQL connection with the resolver
+	a.instrumentDatasource(resolver)
 	a.container.SQL = resolver.GetResolver()
 
 	a.Logger().Logf("DB Resolver initialized successfully")
 }
 
-func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
-	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Metrics())
-
-	tracer := otel.GetTracerProvider().Tracer("gofr-influxdb")
-	db.UseTracer(tracer)
-	db.Connect()
-
+// AddInfluxDB sets the InfluxDB datasource in the app's container.
+func (a *App) AddInfluxDB(db container.InfluxDB) {
+	a.instrumentDatasource(db)
 	a.container.InfluxDB = db
 }
 
+// SQLConnector is implemented by pluggable SQL datasource providers (for example
+// GCP Cloud SQL with IAM auth, in module gofr.dev/pkg/gofr/datasource/cloudsql).
+// It constructs only a driver.Connector from configuration, keeping its cloud SDK
+// out of core; AddSQLDB does the SQL wrapping so logging, metrics, health checks
+// and transactions behave identically to a normal gofr SQL connection.
+type SQLConnector interface {
+	// Connect returns the driver.Connector to open, a cleanup to run on Close, and
+	// an error. A nil connector with a nil error means the provider defers to the
+	// standard environment-configured SQL connection (which container.Create has
+	// already opened from the DB_* config), so AddSQLDB leaves that in place.
+	Connect() (driver.Connector, func() error, error)
+}
+
+// AddSQLDB installs a pluggable SQL datasource built from c, opening it through
+// gofr's standard SQL datasource (gofrSQL.NewSQLFromConnector) so ctx.SQL and all
+// of gofr's SQL logging, metrics, health checks and transactions behave identically
+// to an env-configured connection. Official implementations live in published
+// modules such as gofr.dev/pkg/gofr/datasource/cloudsql:
+//
+//	app.AddSQLDB(cloudsql.New(app.Config))
+//
+// container.Create eagerly opens an env-configured SQL connection whenever
+// DB_DIALECT is set, so the existing one is closed before being replaced —
+// otherwise its pool and the background retry/metrics goroutines leak. When the
+// provider defers (nil connector), that env-configured connection is kept as-is.
+func (a *App) AddSQLDB(c SQLConnector) {
+	connector, cleanup, err := c.Connect()
+	if err != nil {
+		// Connector setup failed. Tear down the env-configured SQL the container
+		// opened (on the IAM path it is dialing the instance-connection-name as a
+		// literal host and would retry forever) and leave SQL unset, so health
+		// reports down rather than using a broken connection.
+		a.closeExistingSQL()
+		a.container.SQL = nil
+		a.Logger().Errorf("failed to initialize SQL connector: %v", err)
+
+		return
+	}
+
+	if connector == nil {
+		// Provider defers to the standard env-configured SQL connection; keep it.
+		return
+	}
+
+	a.closeExistingSQL()
+	a.container.SQL = sql.NewSQLFromConnector(connector, a.Config, a.Logger(), a.Metrics(), cleanup)
+}
+
+// closeExistingSQL closes the container's current SQL datasource if one is set, so
+// AddSQLDB never leaks the env-configured pool and its background goroutines when
+// it replaces or discards the connection.
+func (a *App) closeExistingSQL() {
+	if old := a.container.SQL; !isNilDatasource(old) {
+		if err := old.Close(); err != nil {
+			a.Logger().Errorf("failed to close the existing SQL datasource: %v", err)
+		}
+	}
+}
+
+// isNilDatasource reports whether a container datasource interface is nil or holds
+// a typed-nil pointer (as container.Create can leave SQL when the dialect is unset),
+// so AddSQLDB never calls Close on a nil value.
+func isNilDatasource(i any) bool {
+	if i == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(i)
+
+	return val.Kind() == reflect.Pointer && val.IsNil()
+}
+
+// GetSQL returns the SQL datasource from the container.
 func (a *App) GetSQL() container.DB {
 	return a.container.SQL
 }

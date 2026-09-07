@@ -1,63 +1,29 @@
 package exporters
 
 import (
-	"github.com/prometheus/otlptranslator"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/metric"
-	metricSdk "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"context"
 
-	"gofr.dev/pkg/gofr/version"
+	"go.opentelemetry.io/otel/metric"
 )
 
+// Prometheus builds a MeterProvider with a Prometheus pull exporter and returns
+// its Meter.
+//
+// Deprecated: use Build, which also returns the *MeterProvider handle required
+// to flush and shut down push exporters gracefully. Retained for backward
+// compatibility with external callers.
 func Prometheus(appName, appVersion string) metric.Meter {
-	exporter, err := prometheus.New(
-		prometheus.WithoutTargetInfo(),
-		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
-	if err != nil {
-		return nil
-	}
+	cfg := Config{AppName: appName, AppVersion: appVersion}
 
-	meter := metricSdk.NewMeterProvider(
-		metricSdk.WithReader(exporter),
-		metricSdk.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(appName),
-			attribute.String("framework_version", version.Framework),
-		))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
+	_, meter := Build(context.Background(), &cfg, noopLogger{})
 
 	return meter
 }
 
-// TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be modified such that user can decide the exporter.
+// noopLogger satisfies Logger for callers that do not supply one.
+type noopLogger struct{}
 
-// func OTLPStdOut(appName, appVersion string) metric.Meter {
-// 	exporter, err := stdoutmetric.New()
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	meter := metricSdk.NewMeterProvider(
-// 		metricSdk.WithResource(resource.NewSchemaless(semconv.ServiceName(appName))),
-// 		metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
-// 			metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
-//
-// 	return meter
-// }
-//
-// func OTLPMetricHTTP(appName, appVersion string) metric.Meter {
-// 	exporter, err := otlpmetrichttp.New(nil,
-// 		otlpmetrichttp.WithInsecure(),
-// 		otlpmetrichttp.WithURLPath("/metrics"),
-// 		otlpmetrichttp.WithEndpoint("localhost:8000"))
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	meter := metricSdk.NewMeterProvider(metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
-// 		metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
-//
-// 	return meter
-// }
+func (noopLogger) Debug(...any)          {}
+func (noopLogger) Infof(string, ...any)  {}
+func (noopLogger) Warnf(string, ...any)  {}
+func (noopLogger) Errorf(string, ...any) {}

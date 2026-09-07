@@ -46,7 +46,7 @@ func (m *Message) PathParam(p string) string {
 
 // Bind binds the message value to the input variable. The input should be a pointer to a variable.
 func (m *Message) Bind(i any) error {
-	if reflect.ValueOf(i).Kind() != reflect.Ptr {
+	if reflect.ValueOf(i).Kind() != reflect.Pointer {
 		return errNotPointer
 	}
 

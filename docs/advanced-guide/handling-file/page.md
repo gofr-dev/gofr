@@ -1,3 +1,11 @@
+---
+description: "Read and write files across S3, GCS, Azure Blob, FTP, SFTP, and the local disk through GoFr's unified file store API — one interface, many storage backends."
+nextjs:
+  metadata:
+    title: "Handling Files in GoFr — Unified File Store API"
+    description: "Read and write files across S3, GCS, Azure Blob, FTP, SFTP, and the local disk through GoFr's unified file store API — one interface, many storage backends."
+---
+
 # Handling File
 
 GoFr simplifies the complexity of working with different file stores by offering a uniform API. This allows developers to interact with different storage systems using the same set of methods, without needing to understand the underlying implementation details of each file store.
@@ -82,7 +90,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	// Note that currently we do not handle connections through session token.
+	// For temporary credentials (AWS STS), set Config.SessionToken.
 	// BaseEndpoint is not necessary while connecting to AWS as it automatically resolves it on the basis of region.
 	// However, in case we are using any other AWS compatible service, such like running or testing locally, then this needs to be set.
 	// Note that locally, AccessKeyID & SecretAccessKey is not checked if we use localstack.
@@ -100,6 +108,59 @@ func main() {
 
 > Note: The current implementation supports handling only one bucket at a time,
 > as shown in the example with `gofr-bucket-2`. Bucket switching mid-operation is not supported.
+
+#### S3-Compatible Providers (Cloudflare R2, MinIO, and more)
+
+The same `s3` file store works with any S3-compatible object storage. These providers differ from AWS in a few details that matter for connecting and for signed URLs: the addressing style (path-style vs virtual-hosted), the region used to sign requests, and whether they accept the integrity checksums that the AWS SDK adds to uploads by default.
+
+Set `Config.Flavor` to apply the right defaults for your provider:
+
+| Flavor | Provider | Notes |
+|--------|----------|-------|
+| `s3.FlavorAWS` (default, empty) | Amazon S3 | Path-style addressing (unchanged from earlier releases). |
+| `s3.FlavorR2` | Cloudflare R2 | Signs with region `auto`; disables the SDK's upload checksum. |
+| `s3.FlavorMinIO` | MinIO | Path-style; disables the SDK's upload checksum. |
+| `s3.FlavorSpaces` | DigitalOcean Spaces | Virtual-hosted addressing. |
+| `s3.FlavorB2` | Backblaze B2 | Path-style; disables the SDK's upload checksum. |
+| `s3.FlavorGeneric` | Any other S3-compatible endpoint | Path-style; combine with explicit `Config` overrides. |
+
+Example — Cloudflare R2:
+
+```go
+app.AddFileStore(s3.New(&s3.Config{
+	Flavor:          s3.FlavorR2,
+	EndPoint:        "https://<accountid>.r2.cloudflarestorage.com",
+	BucketName:      "my-bucket",
+	AccessKeyID:     app.Config.Get("R2_ACCESS_KEY_ID"),
+	SecretAccessKey: app.Config.Get("R2_SECRET_ACCESS_KEY"),
+}))
+```
+
+For a provider not listed above, use `s3.FlavorGeneric` together with the relevant overrides:
+
+```go
+usePathStyle := true
+
+app.AddFileStore(s3.New(&s3.Config{
+	Flavor:          s3.FlavorGeneric,
+	EndPoint:        "https://storage.example.com",
+	BucketName:      "my-bucket",
+	Region:          "us-east-1",
+	UsePathStyle:    &usePathStyle, // overrides the flavor's addressing-style default
+	AccessKeyID:     app.Config.Get("S3_ACCESS_KEY_ID"),
+	SecretAccessKey: app.Config.Get("S3_SECRET_ACCESS_KEY"),
+}))
+```
+
+> **Notes:**
+> - `Config.SessionToken` is available for temporary credentials (AWS STS or scoped R2 API tokens).
+> - `Config.UsePathStyle` (a `*bool`) overrides the flavor's addressing default when set; leave it `nil` to use the flavor default.
+> - Signed URLs (see [Cloud-Specific Operations](#cloud-specific-operations)) work across all flavors — the URL host follows the resolved addressing style so links resolve correctly.
+
+> **S3 semantics to be aware of:**
+> - **`Create` does not require a parent "directory".** S3 has no real directories — a prefix comes into existence with the first object stored under it — so `Create("uploads/2026/report.txt")` succeeds even when nothing else exists under `uploads/`. Unlike the local filesystem, no parent-directory check is performed and no `ErrOperationNotPermitted` is returned for a missing parent.
+> - **A file handle is for streaming reads _or_ `ReadAll()`, not both.** `Read`/`ReadAt` stream bytes from the object, while `ReadAll()` decodes the whole object as CSV/JSON/text. Mixing them on the same handle — e.g. a `Read` followed by `ReadAll()` — is not supported, because `ReadAll()` consumes from wherever the last `Read` left off. Open a fresh handle for each mode.
+> - **Backends that omit `Content-Length`.** Some S3-compatible responses (notably certain Cloudflare R2 responses) omit the object size. Such a handle streams fine via `Read`, but offset-bounded operations (`ReadAt`, `Seek`) treat it as empty because the size is unknown; a warning is logged when this happens.
 
 ### Google Cloud Storage (GCS) Bucket as File-Store
 
@@ -220,7 +281,7 @@ func main() {
 
 Beyond the standard filesystem interface, some cloud storage providers support richer capabilities — setting file metadata on upload and generating secure, time-limited download URLs. These are available through the `CloudFileSystem` interface.
 
-> **Note:** These operations are currently supported only for **Google Cloud Storage (GCS)**. Other cloud providers may gain support in future releases.
+> **Note:** These operations are currently supported by **Google Cloud Storage (GCS)** and **AWS S3** (including S3-compatible providers such as Cloudflare R2, MinIO, DigitalOcean Spaces, and Backblaze B2 — see [S3-Compatible Providers](#s3-compatible-providers-cloudflare-r2-minio-and-more)). Other cloud providers may gain support in future releases.
 
 ### Checking Cloud Support
 
@@ -256,11 +317,11 @@ defer f.Close()
 _, err = f.Write(csvData)
 ```
 
-Setting `ContentDisposition` ensures browsers download the file as an attachment rather than attempting to render it inline. Custom `Metadata` fields are stored on the GCS object and visible in the GCS console and `gsutil` output.
+Setting `ContentDisposition` ensures browsers download the file as an attachment rather than attempting to render it inline. Custom `Metadata` fields are stored on the object as user metadata (visible in the GCS console/`gsutil` output, or as `x-amz-meta-*` headers on S3 and S3-compatible providers).
 
 ### Generating a Signed URL
 
-`GenerateSignedURL` creates a time-limited, pre-authenticated URL that allows anyone with the link to download the file — no GCS credentials required on the client side:
+`GenerateSignedURL` creates a time-limited, pre-authenticated URL that allows anyone with the link to download the file — no cloud credentials required on the client side:
 
 ```go
 url, err := cfs.GenerateSignedURL(c, "reports/q1.csv", 15*time.Minute, nil)
@@ -280,7 +341,8 @@ url, err := cfs.GenerateSignedURL(c, "reports/q1.csv", 1*time.Hour, &file.FileOp
 ```
 
 > **Note:**
-> - Signed URLs require the GCS service account to have the `iam.serviceAccounts.signBlob` IAM permission.
+> - On **GCS**, signed URLs use the parsed service-account key when `CredentialsJSON` is set, otherwise they fall back to IAM-based signing (which requires the `iam.serviceAccounts.signBlob` permission).
+> - On **S3** and S3-compatible providers, the URL is signed locally with AWS Signature Version 4 using the configured access key — no extra permission is needed.
 > - The URL is pre-authenticated — anyone who has it can download the file until it expires.
 > - Expiry is measured from the moment `GenerateSignedURL` is called.
 > - `file.AsCloud` returns `(nil, false)` for local, FTP, and SFTP file stores — always check the `ok` result.

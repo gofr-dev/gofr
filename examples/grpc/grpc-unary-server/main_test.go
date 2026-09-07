@@ -29,7 +29,7 @@ func TestIntegration_UnaryServer(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	// Create gRPC client connection
 	conn, err := grpc.Dial(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -64,7 +64,7 @@ func TestIntegration_UnaryServer_Concurrent(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	// Create gRPC client connection
 	conn, err := grpc.Dial(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -97,7 +97,7 @@ func TestIntegration_UnaryServer_ErrorHandling(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	// Create gRPC client connection
 	conn, err := grpc.Dial(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -164,7 +164,7 @@ func TestIntegration_UnaryServer_RateLimited(t *testing.T) {
 		app.Run()
 	}()
 
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitForGRPCServer(t, configs.GRPCHost)
 
 	conn, err := grpc.NewClient(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Failed to connect to rate-limited server")

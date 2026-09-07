@@ -10,6 +10,16 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+const (
+	msgClientIDMandatory     = "client id is mandatory"
+	msgClientSecretMandatory = "client secret is mandatory" // #nosec G101
+	msgTokenURLMandatory     = "token url is mandatory"     // #nosec G101
+	msgEmptyHost             = "empty host"
+	msgInvalidHostDotDot     = "invalid host pattern, contains `..`"
+	msgInvalidHostEndsDot    = "invalid host pattern, ends with `.`"
+	msgInvalidScheme         = "invalid scheme, allowed http and https only"
+)
+
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
 // client application information and the server's endpoint URLs.
 type OAuthConfig struct {
@@ -40,11 +50,11 @@ func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
 
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, "client id is mandatory"}
+		return nil, AuthErr{nil, msgClientIDMandatory}
 	}
 
 	if secret == "" {
-		return nil, AuthErr{nil, "client secret is mandatory"}
+		return nil, AuthErr{nil, msgClientSecretMandatory}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -65,7 +75,7 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return AuthErr{nil, "token url is mandatory"}
+		return AuthErr{nil, msgTokenURLMandatory}
 	}
 
 	u, err := url.Parse(tokenURL)
@@ -74,13 +84,13 @@ func validateTokenURL(tokenURL string) error {
 	case err != nil:
 		return AuthErr{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return AuthErr{err, "empty host"}
+		return AuthErr{err, msgEmptyHost}
 	case strings.Contains(u.Host, ".."):
-		return AuthErr{nil, "invalid host pattern, contains `..`"}
+		return AuthErr{nil, msgInvalidHostDotDot}
 	case strings.HasSuffix(u.Host, "."):
-		return AuthErr{nil, "invalid host pattern, ends with `.`"}
+		return AuthErr{nil, msgInvalidHostEndsDot}
 	case u.Scheme != methodHTTP && u.Scheme != methodHTTPS:
-		return AuthErr{nil, "invalid scheme, allowed http and https only"}
+		return AuthErr{nil, msgInvalidScheme}
 	default:
 		return nil
 	}

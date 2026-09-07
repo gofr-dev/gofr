@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,11 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -72,6 +76,43 @@ func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
 
 	err = closer.Close()
 	assert.ErrorIs(t, err, os.ErrClosed)
+}
+
+// TestNewCMD_ShutdownMetricsCalledAfterRun pins the CMD flush path in
+// Run(): after a.cmd.Run returns, Run() must flush and shut down the
+// metrics provider (via Container.ShutdownMetrics) before the process
+// exits, so a short-lived CLI invocation does not lose buffered metrics.
+// It also exercises the bounded flush context added to guard against an
+// unreachable collector hanging a CLI invocation indefinitely.
+func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{"", "test-flush"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	handlerCalled := false
+
+	a.SubCommand("test-flush", func(_ *Context) (any, error) {
+		handlerCalled = true
+		return "ok", nil
+	})
+
+	done := make(chan struct{})
+
+	go func() {
+		a.Run()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(metricsFlushTimeout + 5*time.Second):
+		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
+	}
+
+	assert.True(t, handlerCalled, "expected the subcommand handler to run")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -815,6 +856,56 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	}
 }
 
+// Test_initTracer_NoSamplingButValidIDs asserts that initTracer installs a
+// non-recording SDK provider (NeverSample) when no TRACE_EXPORTER is
+// configured. Spans must NOT record, but their SpanContext must be valid
+// and carry a unique TraceID/SpanID per call. That guarantee keeps the
+// X-Correlation-ID response header and the request-log trace_id field
+// unique per request even on a deployment with tracing turned off.
+func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config:    config.NewMockConfig(nil),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+
+	tr := otel.Tracer("gofr-test")
+	_, span1 := tr.Start(context.Background(), "probe-1")
+	_, span2 := tr.Start(context.Background(), "probe-2")
+
+	defer span1.End()
+	defer span2.End()
+
+	sc1, sc2 := span1.SpanContext(), span2.SpanContext()
+
+	require.False(t, span1.IsRecording(), "spans must be non-recording when no exporter is configured")
+	require.True(t, sc1.IsValid(), "SpanContext must be valid so trace_id / correlation IDs stay unique")
+	require.NotEqual(t, sc1.TraceID(), sc2.TraceID(), "TraceIDs must differ across spans for correlation")
+}
+
+// Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
+// SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoSamplingButValidIDs.
+func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config: config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER": "gofr",
+		}),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	_, span := otel.Tracer("gofr-test").Start(context.Background(), "probe")
+	defer span.End()
+
+	require.True(t, span.IsRecording(),
+		"expected recording span when TRACE_EXPORTER=gofr; SDK provider should be installed")
+}
+
 func Test_UseMiddleware(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -1032,6 +1123,10 @@ func Test_AddCronJob_Fail(t *testing.T) {
 		})
 	})
 
+	// AddCronJob starts the scheduler even when the schedule itself is rejected;
+	// without this the ticker goroutine outlives the test.
+	a.cron.Stop()
+
 	assert.Contains(t, stderr, "error adding cron job")
 	assert.NotContains(t, stderr, "test-job-fail")
 }
@@ -1039,12 +1134,17 @@ func Test_AddCronJob_Fail(t *testing.T) {
 func Test_AddCronJob_Success(t *testing.T) {
 	pass := false
 	a := App{
-		container: &container.Container{},
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
 	}
 
 	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
 		ctx.Logger.Info("test-job-success")
 	})
+
+	// "* * * * *" fires at second 0 of every minute. Left running, this scheduler
+	// outlives the test and its job goroutine logs against a container the test
+	// no longer owns — the nil-logger panic seen in gofr-dev/gofr#3813.
+	defer a.cron.Stop()
 
 	assert.Len(t, a.cron.jobs, 1)
 
@@ -1069,9 +1169,17 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 
 	createPublicDirectory(t, "testdir", htmlContent)
 
+	// A directory the test owns end to end, so that the endpoint-root case does not depend on the
+	// swagger-ui index.html checked in under pkg/gofr/static.
+	indexDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(indexDir, "index.html"), htmlContent, 0600); err != nil {
+		t.Fatalf("Couldn't create index.html in %s, error: %s", indexDir, err)
+	}
+
 	app := New()
 
 	app.AddStaticFiles("gofrTest", "testdir")
+	app.AddStaticFiles("gofrTestIndex", indexDir)
 
 	app.httpServer.port = configs.HTTPPort
 
@@ -1107,8 +1215,17 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// The endpoint root serves the directory's index.html. It answered 404 before the
+			// endpoint root was routable at all. This one depends on the checked-in
+			// pkg/gofr/static/index.html (the bundled swagger-ui page); the case below covers
+			// the same behavior with a directory the test writes itself.
 			desc: "check public endpoint", method: http.MethodGet,
-			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusOK,
+		},
+		{
+			desc: "check endpoint root of a directory with an index file", method: http.MethodGet,
+			path: "/" + "gofrTestIndex", statusCode: http.StatusOK,
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
 			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,
@@ -1116,6 +1233,8 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// "testdir" has no index.html, so its root stays a 404 rather than becoming a
+			// listing of the directory's contents.
 			desc: "check public endpoint in custom dir", method: http.MethodGet, path: "/" + "gofrTest",
 			statusCode: http.StatusNotFound,
 		},
@@ -1180,6 +1299,36 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+func TestStaticHandlerGetwdError(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	// Switch into a temporary directory and remove it so that os.Getwd()
+	// inside AddStaticFiles fails when resolving the relative "./" path.
+	// t.Chdir restores the original working directory at test cleanup.
+	tmpDir := t.TempDir()
+
+	t.Chdir(tmpDir)
+
+	require.NoError(t, os.Remove(tmpDir))
+
+	// On some platforms (e.g. macOS) the kernel still resolves the path of an
+	// unlinked working directory, so os.Getwd() does not fail. Skip there since
+	// the error branch cannot be exercised.
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("os.Getwd() does not fail for a removed working directory on this platform")
+	}
+
+	// The app (and its logger) must be created inside StderrOutputForFunc so the
+	// logger writes to the captured stderr rather than the real one.
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.AddStaticFiles("gofrTest", "./somedir")
+	})
+
+	assert.Contains(t, logs, "failed to get current working directory")
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -1240,6 +1389,36 @@ func Test_Shutdown(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
+}
+
+func TestShutdown_StopsCron(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	// Track whether the cron goroutine has exited via the done channel.
+	jobRan := make(chan struct{}, 1)
+
+	app.AddCronJob("* * * * * *", "shutdown-test-job", func(_ *Context) {
+		select {
+		case jobRan <- struct{}{}:
+		default:
+		}
+	})
+
+	require.NotNil(t, app.cron, "cron should be initialized after AddCronJob")
+
+	doneCh := app.cron.done
+
+	err := app.Shutdown(t.Context())
+	require.NoError(t, err, "Shutdown should not return an error")
+
+	select {
+	case _, ok := <-doneCh:
+		assert.False(t, ok, "cron done channel should be closed after Shutdown")
+	case <-time.After(time.Second):
+		t.Fatal("cron done channel was not closed within timeout — goroutine leak")
+	}
 }
 
 func TestApp_SubscriberInitialize(t *testing.T) {
@@ -1384,4 +1563,405 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	// but we can check if the grpcServer has interceptors added.
 	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
 	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
+}
+
+func Test_EnableBasicAuthWithFunc(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		passedCredentials  string
+		expectedStatusCode int
+	}{
+		{
+			"No Authorization header passed",
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Correct credentials",
+			"user:password",
+			http.StatusOK,
+		},
+		{
+			"Wrong credentials",
+			"user:wrongpassword",
+			http.StatusUnauthorized,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+			}
+
+			a.EnableBasicAuthWithFunc(func(username, password string) bool {
+				return username == "user" && password == "password"
+			})
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
+}
+
+func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		apiKey             string
+		expectedStatusCode int
+	}{
+		{
+			"No API key header passed",
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Valid API key",
+			"valid-key",
+			http.StatusOK,
+		},
+		{
+			"Invalid API key",
+			"wrong-key",
+			http.StatusUnauthorized,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+			}
+
+			a.EnableAPIKeyAuthWithFunc(func(apiKey string) bool {
+				return apiKey == "valid-key"
+			})
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			if tt.apiKey != "" {
+				req.Header.Set("X-Api-Key", tt.apiKey)
+			}
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
+}
+
+func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Should log error but not panic
+	app.EnableBasicAuth()
+
+	// No middleware should be added — handler responds without auth
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestHandleStartupHooks(t *testing.T) {
+	tests := []struct {
+		name     string
+		hooks    []func(ctx *Context) error
+		expected bool
+	}{
+		{
+			name:     "No hooks returns true",
+			hooks:    nil,
+			expected: true,
+		},
+		{
+			name: "Successful hook returns true",
+			hooks: []func(ctx *Context) error{
+				func(_ *Context) error { return nil },
+			},
+			expected: true,
+		},
+		{
+			name: "Failed hook returns false",
+			hooks: []func(ctx *Context) error{
+				func(_ *Context) error { return errHookFailed },
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			app := New()
+
+			for _, hook := range tt.hooks {
+				app.OnStart(hook)
+			}
+
+			result := app.handleStartupHooks(t.Context())
+
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHandleStartupHooks_ContextCanceled(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	app.OnStart(func(_ *Context) error {
+		return context.Canceled
+	})
+
+	result := app.handleStartupHooks(t.Context())
+
+	assert.False(t, result, "should return false on context.Canceled")
+}
+
+func Test_add_RequestTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		configTimeout  string
+		expectedRoutes bool
+	}{
+		{
+			name:           "Valid REQUEST_TIMEOUT",
+			configTimeout:  "10",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Empty REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Invalid REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "invalid",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Negative REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "-5",
+			expectedRoutes: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+				Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": tt.configTimeout}),
+			}
+
+			a.GET("/test", func(_ *Context) (any, error) {
+				return "ok", nil
+			})
+
+			assert.Equal(t, tt.expectedRoutes, a.httpRegistered)
+		})
+	}
+}
+
+func TestNew_InvalidGRPCPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", "-1")
+
+	app := New()
+
+	// gRPC server creation should fail gracefully, app should still be usable
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestNew_InvalidHTTPPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", "invalid")
+
+	app := New()
+
+	// Should fall back to default HTTP port
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestInitMetricsServer_DefaultPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// metricServer should be initialized with default port
+	assert.NotNil(t, app.metricServer)
+}
+
+func TestStartGRPCServer_Registered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = true
+
+	wg := sync.WaitGroup{}
+
+	// startGRPCServer should add to WaitGroup and launch the server
+	app.startGRPCServer(&wg)
+
+	// Give it a moment to start then shut down
+	time.Sleep(50 * time.Millisecond)
+
+	// Read through getServer rather than the field: createServer publishes it from the serve
+	// goroutine, so an unguarded read here races that write.
+	if app.grpcServer != nil {
+		app.grpcServer.forceStop()
+	}
+
+	wg.Wait()
+}
+
+func TestStartGRPCServer_NotRegistered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = false
+
+	wg := sync.WaitGroup{}
+
+	// Should not add to WaitGroup when not registered
+	app.startGRPCServer(&wg)
+
+	// wg.Wait() should return immediately since nothing was added
+	wg.Wait()
+}
+
+func TestStartSubscriptionManager_NoSubscriptions(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	wg := sync.WaitGroup{}
+
+	app.startSubscriptionManager(t.Context(), &wg)
+
+	wg.Wait()
+}
+
+func Test_HTTPMethods(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		setup  func(a *App)
+	}{
+		{
+			name:   "PUT registers route",
+			method: http.MethodPut,
+			setup: func(a *App) {
+				a.PUT("/put", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "POST registers route",
+			method: http.MethodPost,
+			setup: func(a *App) {
+				a.POST("/post", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "DELETE registers route",
+			method: http.MethodDelete,
+			setup: func(a *App) {
+				a.DELETE("/delete", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "PATCH registers route",
+			method: http.MethodPatch,
+			setup: func(a *App) {
+				a.PATCH("/patch", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+				Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+			}
+
+			tt.setup(a)
+
+			assert.True(t, a.httpRegistered)
+		})
+	}
 }

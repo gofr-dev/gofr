@@ -12,6 +12,16 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+var errInvalidDgraphTxn = errors.New("invalid Dgraph transaction")
+
+// dgraphTxn is the subset of the Dgraph transaction used to record migrations.
+// The value returned by Dgraph.NewTxn satisfies it at runtime.
+type dgraphTxn interface {
+	Mutate(ctx context.Context, mu *api.Mutation) (*api.Response, error)
+	Commit(ctx context.Context) error
+	Discard(ctx context.Context) error
+}
+
 // dgraphDS is the adapter struct that implements migration operations.
 type dgraphDS struct {
 	client DGraph
@@ -21,12 +31,6 @@ type dgraphDS struct {
 type dgraphMigrator struct {
 	dgraphDS
 	migrator
-}
-
-type dgraphTxn interface {
-	Mutate(ctx context.Context, mu *api.Mutation) (*api.Response, error)
-	Commit(ctx context.Context) error
-	Discard(ctx context.Context) error
 }
 
 const (
@@ -45,17 +49,15 @@ const (
 	`
 
 	// getLastMigrationQuery fetches the most recent migration version.
+	// The version predicate is aliased to "version" so it decodes into the
+	// response struct below.
 	getLastMigrationQuery = `
 		{
 			migrations(func: type(Migration), orderdesc: migrations.version, first: 1) {
-				migrations.version
+				version: migrations.version
 			}
 		}
 	`
-)
-
-var (
-	errInvalidDgraphTxn = errors.New("invalid dgraph transaction type")
 )
 
 // apply creates a new dgraphMigrator.
@@ -117,16 +119,9 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error)
 		return -1, fmt.Errorf("dgraph: %w", err)
 	}
 
-	if resp != nil {
-		var b []byte
-
-		b, err = json.Marshal(resp)
-		if err != nil {
-			return 0, fmt.Errorf("dgraph: %w", err)
-		}
-
-		err = json.Unmarshal(b, &response)
-		if err != nil {
+	// Query returns an *api.Response whose Json field holds the actual result.
+	if r, ok := resp.(*api.Response); ok && len(r.Json) > 0 {
+		if err = json.Unmarshal(r.Json, &response); err != nil {
 			return 0, fmt.Errorf("dgraph: %w", err)
 		}
 	}
@@ -153,55 +148,60 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-// commitMigration commits the migration and records its metadata.
+// commitMigration records the migration metadata in a Dgraph transaction, then
+// chains to the next migrator.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
-ctx := context.Background()
+	if data.UsedDatasources[dsDGraph] {
+		if err := recordDgraphMigration(c, data); err != nil {
+			return err
+		}
 
-// Build the JSON payload for the migration record.
-payload := map[string]any{
-	"migrations": []map[string]any{
-		{
-			"migrations.version":    data.MigrationNumber,
-			"migrations.method":     "UP",
-			"migrations.start_time": data.StartTime.Format(time.RFC3339),
-			"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
-		},
-	},
-}
-
-jsonPayload, err := json.Marshal(payload)
-if err != nil {
-	return err
-}
-
-tx, ok := c.DGraph.NewTxn().(dgraphTxn)
-if !ok {
-	return errInvalidDgraphTxn
-}
-
-defer func() {
-	if err = tx.Discard(ctx); err != nil {
-		c.Error("dgraph: transaction discard failed", err)
+		c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
 	}
-}()
 
-c.Debugf("Executing Dgraph migration mutation for version %v", data.MigrationNumber)
-
-_, err = tx.Mutate(ctx, &api.Mutation{
-	SetJson: jsonPayload,
-})
-if err != nil {
-	return err
+	return dm.migrator.commitMigration(c, data)
 }
 
-err = tx.Commit(ctx)
-if err != nil {
-	return err
-}
+// recordDgraphMigration writes a single migration record inside a transaction,
+// committing on success and discarding on any failure so the record is atomic.
+func recordDgraphMigration(c *container.Container, data transactionData) error {
+	payload := map[string]any{
+		"migrations": []map[string]any{
+			{
+				// dgraph.type must match the schema type so getLastMigration
+				// (func: type(Migration)) can find this record on later runs.
+				"dgraph.type":           "Migration",
+				"migrations.version":    data.MigrationNumber,
+				"migrations.method":     "UP",
+				"migrations.start_time": data.StartTime.Format(time.RFC3339),
+				"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
+			},
+		},
+	}
 
-c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 
-return dm.migrator.commitMigration(c, data)
+	ctx := context.Background()
+
+	tx, ok := c.DGraph.NewTxn().(dgraphTxn)
+	if !ok {
+		return errInvalidDgraphTxn
+	}
+
+	defer func() {
+		if discardErr := tx.Discard(ctx); discardErr != nil {
+			c.Errorf("dgraph: migration transaction discard failed: %v", discardErr)
+		}
+	}()
+
+	if _, err = tx.Mutate(ctx, &api.Mutation{SetJson: jsonPayload}); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // rollback handles migration failure and rollback.

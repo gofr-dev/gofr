@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,7 +32,7 @@ func TestExamplePublisherError(t *testing.T) {
 	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
 	go main()
-	time.Sleep(200 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, host)
 
 	testCases := []struct {
 		desc               string

@@ -415,7 +415,10 @@ func (c *Client) Connect() {
 	c.influx.query = c.influx.client.QueryAPI("")
 
 	if c.metrics != nil {
-		influxBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		influxBuckets := []float64{
+			.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+			25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+		}
 		c.metrics.NewHistogram(
 			"app_influxdb_stats",
 			"Response time of InfluxDB operations in milliseconds.",

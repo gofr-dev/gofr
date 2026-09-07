@@ -2,12 +2,17 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"runtime/debug"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// errSubscriberHandlerPanic marks a recovered panic in a subscription handler.
+// panicRecovery already logs the panic, so this must not be Errorf-logged again.
+var errSubscriberHandlerPanic = errors.New("subscriber handler panicked")
 
 type SubscribeFunc func(c *Context) error
 
@@ -38,7 +43,11 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
 
 				delay = time.Second * 2
+
+				continue
 			}
+
+			delay = 0
 		}
 	}
 }
@@ -58,18 +67,25 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	// newContext creates a new context from the msg.Context()
 	msgCtx := newContext(nil, msg, s.container)
 
-	err = func(ctx *Context) error {
+	err = func(ctx *Context) (err error) {
 		// TODO : Move panic recovery at central location which will manage for all the different cases.
 		defer func() {
-			panicRecovery(recover(), ctx.Logger)
+			if r := recover(); r != nil {
+				panicRecovery(r, ctx.Logger)
+
+				err = errSubscriberHandlerPanic
+			}
 		}()
 
 		return handler(ctx)
 	}(msgCtx)
+	if errors.Is(err, errSubscriberHandlerPanic) {
+		return nil
+	}
+
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-
-		return nil
+		return err
 	}
 
 	if msg.Committer != nil {
@@ -91,6 +107,7 @@ func panicRecovery(re any, log logging.Logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t

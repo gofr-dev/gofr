@@ -52,7 +52,7 @@ func (ps *PubSub) Health() datasource.Health {
 	res := datasource.Health{
 		Status: datasource.StatusDown,
 		Details: map[string]any{
-			"backend": "REDIS",
+			"backend": redisBackend,
 		},
 	}
 

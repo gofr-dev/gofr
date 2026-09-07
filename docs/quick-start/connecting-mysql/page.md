@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to MySQL, MariaDB, PostgreSQL, or Supabase via env vars. GoFr auto-initializes the SQL client and exposes it on ctx.SQL with traces and metrics."
+nextjs:
+  metadata:
+    title: "Connecting MySQL in GoFr — Quick-Start SQL Setup"
+    description: "Connect GoFr to MySQL, MariaDB, PostgreSQL, or Supabase via env vars. GoFr auto-initializes the SQL client and exposes it on ctx.SQL with traces and metrics."
+---
+
 # Connecting to MySQL
 
 Just like Redis, GoFr supports connection to various SQL-compatible databases (MySQL, MariaDB, PostgreSQL, and Supabase) based on configuration variables.
@@ -12,10 +20,16 @@ Users can run MySQL/MariaDB and create a database locally using the following Do
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
 ```
 
-Access the `test_db` database and create a table customer with columns `id` and `name`. Change MySQL to MariaDB as needed: 
+MySQL takes ~10–15 seconds to bootstrap. Wait for it to be ready before running the next command:
 
 ```bash
-docker exec -it gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
+until docker exec gofr-mysql mysqladmin ping -uroot -proot123 --silent; do sleep 2; done
+```
+
+Access the `test_db` database and create a table customer with columns `id` and `name`. Change MySQL to MariaDB as needed:
+
+```bash
+docker exec gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
 Now that the database with the table is ready, we can connect our GoFr server to MySQL/MariaDB. 
@@ -27,10 +41,11 @@ After adding MySQL/MariaDB configs `.env` will be updated to the following. Use 
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=root
@@ -103,7 +118,7 @@ docker run --name gofr-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tes
 Access `test_db` database and create a table customer with columns `id` and `name`:
 
 ```bash
-docker exec -it gofr-postgres psql -U postgres test_db -c "CREATE TABLE customers (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);"
+docker exec gofr-postgres psql -U postgres test_db -c "CREATE TABLE customers (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
 ### Configuration & Usage
@@ -113,10 +128,11 @@ After adding PostgreSQL configs, `.env` will be updated to the following:
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=postgres
@@ -155,7 +171,7 @@ Add Supabase configuration to your `.env` file:
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 # Supabase configuration
 DB_DIALECT=supabase

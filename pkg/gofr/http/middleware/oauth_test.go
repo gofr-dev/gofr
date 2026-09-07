@@ -234,13 +234,14 @@ func Test_getPublicKeys(t *testing.T) {
 	testCases := []struct {
 		path           string
 		responseLength int
-		err            error
+		err            error // sentinel expected error, checked with ErrorIs
+		errAs          any   // pointer-to-typed-error target, checked with ErrorAs
 	}{
 		{path: "/empty-body", err: errEmptyResponseBody},
-		{path: "/dns-error", err: &net.DNSError{}},
+		{path: "/dns-error", errAs: new(*net.DNSError)},
 		{path: "/wrong-path", err: errInvalidURL},
-		{path: "/.well-known/unparseable-json", err: &json.SyntaxError{}},
-		{path: "/.well-known/format-error", err: &json.UnmarshalTypeError{}},
+		{path: "/.well-known/unparseable-json", errAs: new(*json.SyntaxError)},
+		{path: "/.well-known/format-error", errAs: new(*json.UnmarshalTypeError)},
 		{path: "/empty-list"},
 		{path: "", responseLength: 2},
 	}
@@ -248,7 +249,15 @@ func Test_getPublicKeys(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			response, err := getPublicKeys(t.Context(), MockJWKSProvider{}, tc.path)
 			assert.Len(t, response.Keys, tc.responseLength)
-			assert.IsType(t, tc.err, err)
+
+			switch {
+			case tc.errAs != nil:
+				require.ErrorAs(t, err, tc.errAs)
+			case tc.err != nil:
+				require.ErrorIs(t, err, tc.err)
+			default:
+				require.NoError(t, err)
+			}
 		})
 	}
 }

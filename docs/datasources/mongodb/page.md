@@ -1,3 +1,11 @@
+---
+description: "Use MongoDB with GoFr through the framework's pluggable datasource interface. Insert, find, update, and aggregate documents with traces and metrics."
+nextjs:
+  metadata:
+    title: "MongoDB in GoFr — Document Database Integration"
+    description: "Use MongoDB with GoFr through the framework's pluggable datasource interface. Insert, find, update, and aggregate documents with traces and metrics."
+---
+
 # MongoDB
 
 ## Configuration

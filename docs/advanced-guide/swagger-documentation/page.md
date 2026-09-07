@@ -1,3 +1,11 @@
+---
+description: "Render OpenAPI / Swagger documentation automatically in GoFr. Drop an openapi.json into static/ and serve interactive API docs to your team and consumers."
+nextjs:
+  metadata:
+    title: "OpenAPI Swagger Docs in GoFr — Interactive API Reference"
+    description: "Render OpenAPI / Swagger documentation automatically in GoFr. Drop an openapi.json into static/ and serve interactive API docs to your team and consumers."
+---
+
 # Rendering OpenAPI Documentation in GoFr
 
 GoFr supports automatic rendering of OpenAPI (also known as Swagger) documentation. This feature allows you to

@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to Apache Solr via the framework's datasource interface. Index documents and run search queries with built-in tracing and metrics."
+nextjs:
+  metadata:
+    title: "Solr in GoFr — Search Engine Datasource Integration"
+    description: "Connect GoFr to Apache Solr via the framework's datasource interface. Index documents and run search queries with built-in tracing and metrics."
+---
+
 # Solr
 
 ## Configuration

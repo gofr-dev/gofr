@@ -1,0 +1,20 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC (METRICS_URL target)
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # collector's own Prometheus endpoint (received metrics)
+
+  # Optional: scrape the collector's re-exposed metrics for a full local view.
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector

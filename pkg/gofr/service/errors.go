@@ -21,3 +21,8 @@ func (o AuthErr) Error() string {
 		return fmt.Sprintf("%v: %v", o.Message, o.Err)
 	}
 }
+
+// Unwrap exposes the wrapped error so errors.Is/errors.As can traverse the chain.
+func (o AuthErr) Unwrap() error {
+	return o.Err
+}

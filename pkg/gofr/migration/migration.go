@@ -386,7 +386,7 @@ func isNil(i any) bool {
 	val := reflect.ValueOf(i)
 	k := val.Kind()
 
-	if k == reflect.Ptr || k == reflect.Interface || k == reflect.Slice || k == reflect.Map || k == reflect.Chan || k == reflect.Func {
+	if k == reflect.Pointer || k == reflect.Interface || k == reflect.Slice || k == reflect.Map || k == reflect.Chan || k == reflect.Func {
 		return val.IsNil()
 	}
 

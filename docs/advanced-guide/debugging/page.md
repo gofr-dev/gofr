@@ -1,3 +1,11 @@
+---
+description: "GoFr enables Go pprof profiling automatically on the metrics port. Capture CPU, heap, goroutine, and block profiles to diagnose production performance issues."
+nextjs:
+  metadata:
+    title: "Debugging GoFr with pprof — CPU and Heap Profiling"
+    description: "GoFr enables Go pprof profiling automatically on the metrics port. Capture CPU, heap, goroutine, and block profiles to diagnose production performance issues."
+---
+
 # Using `pprof` in GoFr Applications
 
 In GoFr applications, `pprof` profiling is automatically enabled. The profiling endpoints are served on the `METRICS_PORT`, which defaults to `2121` if not specified.

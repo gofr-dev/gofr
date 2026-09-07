@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -373,4 +374,64 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		expected := "00000000000000000000000000000000"
 		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
 	})
+}
+
+// BenchmarkContext_New measures the cost of constructing a fresh
+// *gofr.Context per request via newContext. Today this allocates the
+// Context struct itself plus a ContextLogger that re-extracts the
+// traceID from the request context via trace.SpanFromContext.
+//
+// Future targets that move this number:
+//   - PR-7 (cache traceID once on Context) — avoids re-extraction.
+//   - Pool *gofr.Context (deferred — see FIXES.md Open Question).
+func BenchmarkContext_New(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/bench", http.NoBody)
+	r := gofrHTTP.NewRequest(req)
+	w := gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = newContext(w, r, c)
+	}
+}
+
+// TestNewHTTPContextMatchesNewContext pins that co-allocating the Context with
+// its Request and Responder changes nothing observable: the same path params,
+// query params and context are reachable either way.
+func TestNewHTTPContextMatchesNewContext(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+	newReq := func() *http.Request {
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/42?q=x", http.NoBody)
+
+		return mux.SetURLVars(r, map[string]string{"id": "42"})
+	}
+
+	viaOld := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet),
+		gofrHTTP.NewRequest(newReq()), c)
+	viaNew := newHTTPContext(httptest.NewRecorder(), newReq(), c)
+
+	require.Equal(t, viaOld.PathParam("id"), viaNew.PathParam("id"))
+	require.Equal(t, "42", viaNew.PathParam("id"))
+	require.Equal(t, viaOld.Param("q"), viaNew.Param("q"))
+	require.Equal(t, "x", viaNew.Param("q"))
+	require.NotNil(t, viaNew.Context)
+	require.NotNil(t, viaNew.Container)
+}
+
+// TestNewHTTPContextResponderWired proves the private responder is reachable and
+// writes through to the recorder it was built from.
+func TestNewHTTPContextResponderWired(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	rec := httptest.NewRecorder()
+
+	ctx := newHTTPContext(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody), c)
+	ctx.responder.Respond("hello", nil)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), "hello")
 }

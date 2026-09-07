@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -214,7 +215,15 @@ func TestCronTab_AddJob(t *testing.T) {
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
+	// Stop() now joins the job goroutines a tick already dispatched, so a job can
+	// no longer reach the metrics mock after the test returns. These AnyTimes()
+	// expectations remain because the "* * * * *" job can legitimately fire at
+	// second 0 of a minute *during* the test, and the count is timing-dependent.
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 	c := NewCron(mockContainer)
+	defer c.Stop()
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -253,6 +262,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
 
 	c := NewCron(mockContainer)
+	defer c.Stop()
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -700,6 +710,8 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 				var c *Crontab
 				if tc.expectMetricsCalls {
 					c = NewCron(cntnr)
+					defer c.Stop()
+
 					c.jobs = []*job{j}
 				} else {
 					c = &Crontab{
@@ -717,4 +729,197 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 			assert.Contains(t, logs, tc.panicMessage)
 		})
 	}
+}
+
+func TestCronTab_runScheduled_NilLoggerAndContainer(t *testing.T) {
+	tests := []struct {
+		desc  string
+		cntnr *container.Container
+	}{
+		{"nil container", nil},
+		{"container without logger", &container.Container{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ran := make(chan struct{}, 1)
+
+			c := &Crontab{
+				ticker:    time.NewTicker(time.Second),
+				container: tc.cntnr,
+				done:      make(chan struct{}),
+				jobs: []*job{{
+					sec:       map[int]struct{}{1: {}},
+					min:       map[int]struct{}{1: {}},
+					hour:      map[int]struct{}{1: {}},
+					day:       map[int]struct{}{1: {}},
+					month:     map[int]struct{}{1: {}},
+					dayOfWeek: map[int]struct{}{1: {}},
+					name:      "nil-logger-job",
+					fn:        func(*Context) { ran <- struct{}{} },
+				}},
+			}
+
+			// A panic here happens on the job's own goroutine and kills the test
+			// binary, so reaching Stop at all is the assertion.
+			c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+			c.Stop()
+
+			assert.Empty(t, ran, "job must be skipped when it cannot log")
+		})
+	}
+}
+
+func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
+	release := make(chan struct{})
+
+	var runs atomic.Int64
+
+	c := &Crontab{
+		ticker:    time.NewTicker(time.Second),
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+		done:      make(chan struct{}),
+		jobs: []*job{{
+			sec:       map[int]struct{}{1: {}},
+			min:       map[int]struct{}{1: {}},
+			hour:      map[int]struct{}{1: {}},
+			day:       map[int]struct{}{1: {}},
+			month:     map[int]struct{}{1: {}},
+			dayOfWeek: map[int]struct{}{1: {}},
+			name:      "slow-job",
+			fn: func(*Context) {
+				runs.Add(1)
+				<-release
+			},
+		}},
+	}
+
+	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+
+	stopped := make(chan struct{})
+
+	go func() {
+		c.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while a job was still running")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not return after the job finished")
+	}
+
+	require.Equal(t, int64(1), runs.Load(), "Stop must return only after the dispatched job has run")
+
+	// A tick that lands after Stop must not dispatch anything more. The second Stop joins
+	// whatever that tick dispatched, so the count below is read after any such job has finished.
+	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+	c.Stop()
+
+	require.Equal(t, int64(1), runs.Load(), "a tick after Stop must not dispatch a job")
+}
+
+func TestCrontab_Stop(t *testing.T) {
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	c := NewCron(mockContainer)
+
+	c.Stop()
+
+	select {
+	case _, ok := <-c.done:
+		assert.False(t, ok, "done channel should be closed")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("done channel is not closed")
+	}
+}
+
+func TestErrParsing_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      errParsing
+		expected string
+	}{
+		{
+			name:     "With base",
+			err:      errParsing{invalidPart: "abc", base: "abc/5"},
+			expected: "unable to parse abc part in abc/5",
+		},
+		{
+			name:     "Without base",
+			err:      errParsing{invalidPart: "xyz"},
+			expected: "unable to parse xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.err.Error())
+		})
+	}
+}
+
+func TestErrOutOfRange_Error(t *testing.T) {
+	err := errOutOfRange{rangeVal: "65", input: "65-70", min: 0, max: 59}
+
+	expected := "out of range for 65 in 65-70. 65 must be in range 0-59"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestJob_tick_SecNilAndNonZeroSec(t *testing.T) {
+	// When sec is nil, tick should only match when t.sec == 0
+	j := &job{
+		min:       map[int]struct{}{30: {}},
+		hour:      map[int]struct{}{12: {}},
+		day:       map[int]struct{}{15: {}},
+		month:     map[int]struct{}{6: {}},
+		dayOfWeek: map[int]struct{}{},
+	}
+
+	tests := []struct {
+		name     string
+		tick     *tick
+		expected bool
+	}{
+		{
+			name:     "sec is nil and tick sec is 0 matches",
+			tick:     &tick{sec: 0, min: 30, hour: 12, day: 15, month: 6, dayOfWeek: 3},
+			expected: true,
+		},
+		{
+			name:     "sec is nil and tick sec is non-zero does not match",
+			tick:     &tick{sec: 15, min: 30, hour: 12, day: 15, month: 6, dayOfWeek: 3},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, j.tick(tt.tick))
+		})
+	}
+}
+
+func TestNoopRequest(t *testing.T) {
+	n := noopRequest{}
+
+	assert.Equal(t, "gofr", n.HostName())
+	assert.Empty(t, n.Param("key"))
+	assert.Empty(t, n.PathParam("key"))
+	assert.Nil(t, n.Params("key"))
+	require.NoError(t, n.Bind(nil))
+	assert.NotNil(t, n.Context())
 }

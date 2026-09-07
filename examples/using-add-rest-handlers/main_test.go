@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +21,9 @@ func TestIntegration_AddRESTHandlers(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	// On a datastore that has not seen this example before, the migration runs at startup, which a
+	// fixed sleep would not reliably cover.
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	tests := []struct {
 		desc       string

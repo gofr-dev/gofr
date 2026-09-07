@@ -15,6 +15,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Metric label names used for the app_http_service_response histogram.
+// Defined as constants so each emit-site uses the same spelling.
+const (
+	metricLabelPath    = "path"
+	metricLabelMethod  = "method"
+	metricLabelStatus  = "status"
+	metricLabelService = "service"
+)
+
 type httpService struct {
 	*http.Client
 	trace.Tracer
@@ -85,8 +94,16 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 
 	svc = h
 
-	// if options are given, then add them to the httpService struct
+	// if options are given, then add them to the httpService struct.
+	// Options that implement Observable receive the logger and metrics
+	// before AddOption so they can wire up out-of-band observability
+	// (e.g. background goroutines) without taking these from the caller.
 	for _, o := range options {
+		if obs, ok := o.(Observable); ok {
+			obs.SetLogger(logger)
+			obs.SetMetrics(metrics)
+		}
+
 		svc = o.AddOption(svc)
 	}
 
@@ -147,8 +164,16 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	ctx, span := h.Tracer.Start(ctx, uri)
 	defer span.End()
 
-	// Attach client-side trace handling for HTTP request.
-	clientTraceCtx := httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+	// Attach client-side trace handling for HTTP request, but only when
+	// the span is actually recording. otelhttptrace.NewClientTrace builds
+	// a httptrace.ClientTrace with many event callbacks (DNS, connect,
+	// TLS, etc.) — under a noop tracer (post PR-1, the default when no
+	// exporter is configured) those events are discarded, so the
+	// allocation is pure waste.
+	clientTraceCtx := ctx
+	if span.IsRecording() {
+		clientTraceCtx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+	}
 
 	// Create the HTTP request with the tracing context.
 	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
@@ -210,10 +235,14 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
-		labels := []string{"path", h.url, "method", method, "status", fmt.Sprintf("%v", statusCode)}
+		labels := []string{
+			metricLabelPath, h.url,
+			metricLabelMethod, method,
+			metricLabelStatus, fmt.Sprintf("%v", statusCode),
+		}
 
 		if h.name != "" {
-			labels = append(labels, "service", h.name)
+			labels = append(labels, metricLabelService, h.name)
 		}
 
 		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, labels...)

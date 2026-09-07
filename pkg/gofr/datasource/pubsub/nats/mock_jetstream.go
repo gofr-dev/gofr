@@ -577,6 +577,36 @@ func (mr *MockJetStreamMockRecorder) PushConsumer(ctx, stream, consumer any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushConsumer", reflect.TypeOf((*MockJetStream)(nil).PushConsumer), ctx, stream, consumer)
 }
 
+// ResetConsumer mocks base method.
+func (m *MockJetStream) ResetConsumer(ctx context.Context, stream, consumer string) (*jetstream.ConsumerResetResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetConsumer", ctx, stream, consumer)
+	ret0, _ := ret[0].(*jetstream.ConsumerResetResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetConsumer indicates an expected call of ResetConsumer.
+func (mr *MockJetStreamMockRecorder) ResetConsumer(ctx, stream, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetConsumer", reflect.TypeOf((*MockJetStream)(nil).ResetConsumer), ctx, stream, consumer)
+}
+
+// ResetConsumerToSequence mocks base method.
+func (m *MockJetStream) ResetConsumerToSequence(ctx context.Context, stream, consumer string, seq uint64) (*jetstream.ConsumerResetResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetConsumerToSequence", ctx, stream, consumer, seq)
+	ret0, _ := ret[0].(*jetstream.ConsumerResetResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetConsumerToSequence indicates an expected call of ResetConsumerToSequence.
+func (mr *MockJetStreamMockRecorder) ResetConsumerToSequence(ctx, stream, consumer, seq any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetConsumerToSequence", reflect.TypeOf((*MockJetStream)(nil).ResetConsumerToSequence), ctx, stream, consumer, seq)
+}
+
 // ResumeConsumer mocks base method.
 func (m *MockJetStream) ResumeConsumer(ctx context.Context, stream, consumer string) (*jetstream.ConsumerPauseResponse, error) {
 	m.ctrl.T.Helper()
@@ -1002,6 +1032,36 @@ func (m *MockStream) PushConsumer(ctx context.Context, consumer string) (jetstre
 func (mr *MockStreamMockRecorder) PushConsumer(ctx, consumer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushConsumer", reflect.TypeOf((*MockStream)(nil).PushConsumer), ctx, consumer)
+}
+
+// ResetConsumer mocks base method.
+func (m *MockStream) ResetConsumer(ctx context.Context, consumer string) (*jetstream.ConsumerResetResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetConsumer", ctx, consumer)
+	ret0, _ := ret[0].(*jetstream.ConsumerResetResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetConsumer indicates an expected call of ResetConsumer.
+func (mr *MockStreamMockRecorder) ResetConsumer(ctx, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetConsumer", reflect.TypeOf((*MockStream)(nil).ResetConsumer), ctx, consumer)
+}
+
+// ResetConsumerToSequence mocks base method.
+func (m *MockStream) ResetConsumerToSequence(ctx context.Context, consumer string, seq uint64) (*jetstream.ConsumerResetResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetConsumerToSequence", ctx, consumer, seq)
+	ret0, _ := ret[0].(*jetstream.ConsumerResetResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetConsumerToSequence indicates an expected call of ResetConsumerToSequence.
+func (mr *MockStreamMockRecorder) ResetConsumerToSequence(ctx, consumer, seq any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetConsumerToSequence", reflect.TypeOf((*MockStream)(nil).ResetConsumerToSequence), ctx, consumer, seq)
 }
 
 // ResumeConsumer mocks base method.

@@ -21,9 +21,30 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-// TestCMDRunWithNoArg checks that if no subcommand is found then error comes on stderr.
+// setArgs replaces os.Args for the duration of the test and restores it
+// afterwards.
+//
+// The CMD app reads os.Args directly, so a test that does not set it inherits
+// the test binary's own flags — under CI the coverage run appends
+// -test.testlogfile=..., which the CMD router then reports as an unknown
+// subcommand. Tests must therefore own os.Args rather than whatever the
+// harness was invoked with.
+func setArgs(t *testing.T, args ...string) {
+	t.Helper()
+
+	original := os.Args
+	t.Cleanup(func() { os.Args = original })
+
+	os.Args = args
+}
+
+// TestCMDRunWithNoArg checks that if no subcommand is given then the
+// framework's "not a valid command" error (with an empty command name) is
+// written to stderr.
 func TestCMDRunWithNoArg(t *testing.T) {
-	expErr := "No Command Found!\n"
+	setArgs(t, "command")
+
+	expErr := "'' is not a valid command.\n"
 	output := testutil.StderrOutputForFunc(main)
 
 	assert.Equal(t, expErr, output, "TEST Failed.\n")
@@ -31,7 +52,7 @@ func TestCMDRunWithNoArg(t *testing.T) {
 
 func TestCMDRunWithProperArg(t *testing.T) {
 	expResp := "Hello World!\n"
-	os.Args = []string{"command", "hello"}
+	setArgs(t, "command", "hello")
 
 	output := testutil.StdoutOutputForFunc(main)
 
@@ -49,7 +70,7 @@ func TestCMDRunWithParams(t *testing.T) {
 	}
 
 	for i, command := range commands {
-		os.Args = strings.Split(command, " ")
+		setArgs(t, strings.Split(command, " ")...)
 		output := testutil.StdoutOutputForFunc(main)
 
 		assert.Contains(t, output, expResp, "TEST[%d], Failed.\n", i)
@@ -57,7 +78,7 @@ func TestCMDRunWithParams(t *testing.T) {
 }
 
 func TestCMDRun_Spinner(t *testing.T) {
-	os.Args = []string{"command", "spinner"}
+	setArgs(t, "command", "spinner")
 	output := testutil.StdoutOutputForFunc(main)
 
 	// contains the spinner in the correct order
@@ -83,7 +104,7 @@ func TestCMDRun_SpinnerContextCancelled(t *testing.T) {
 }
 
 func TestCMDRun_Progress(t *testing.T) {
-	os.Args = []string{"command", "progress"}
+	setArgs(t, "command", "progress")
 
 	output := testutil.StdoutOutputForFunc(main)
 
@@ -102,7 +123,7 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 	container := &container.Container{
 		Logger: logging.NewMockLogger(logging.ERROR),
 	}
-	
+
 	res, err := progress(&gofr.Context{
 		Context:       ctx,
 		Request:       cmd.NewRequest([]string{"command", "progress"}),
@@ -117,8 +138,9 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 
 // TestCMDRunWithInvalidCommand tests that invalid commands return appropriate error
 func TestCMDRunWithInvalidCommand(t *testing.T) {
-	expErr := "No Command Found!\n"
-	os.Args = []string{"command", "invalid"}
+	setArgs(t, "command", "invalid")
+
+	expErr := "'invalid' is not a valid command.\n"
 	output := testutil.StderrOutputForFunc(main)
 
 	assert.Equal(t, expErr, output, "TEST Failed.\n")
@@ -127,7 +149,7 @@ func TestCMDRunWithInvalidCommand(t *testing.T) {
 // TestCMDRunWithEmptyParams tests the params command with empty name parameter
 func TestCMDRunWithEmptyParams(t *testing.T) {
 	expResp := "Hello !\n"
-	os.Args = []string{"command", "params", "-name="}
+	setArgs(t, "command", "params", "-name=")
 	output := testutil.StdoutOutputForFunc(main)
 
 	assert.Contains(t, output, expResp, "TEST Failed.\n")
@@ -145,7 +167,7 @@ func TestCMDRunHelpCommand(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		os.Args = tc.args
+		setArgs(t, tc.args...)
 		output := testutil.StdoutOutputForFunc(main)
 
 		for _, expected := range tc.expected {
@@ -165,7 +187,7 @@ func TestCMDRunHelpForSpecificCommand(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		os.Args = tc.args
+		setArgs(t, tc.args...)
 		output := testutil.StdoutOutputForFunc(main)
 
 		assert.Contains(t, output, tc.expected, "TEST[%d] Failed.\n", i)

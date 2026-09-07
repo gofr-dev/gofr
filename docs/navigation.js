@@ -80,6 +80,11 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
+                title: 'Routing Performance',
+                href: '/docs/advanced-guide/routing-performance',
+                desc: "Opt into the trie router with GOFR_ROUTER=trie to keep route matching flat as your route table grows, instead of scaling with the number of routes."
+            },
+            {
                 title: 'Authentication',
                 href: '/docs/advanced-guide/authentication',
                 desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
@@ -155,6 +160,21 @@ export const navigation = [
                 desc: "Explore how GoFr eases the process of WebSocket communication in your Golang application for real-time data exchange."
             },
             {
+                title: 'Streaming Responses',
+                href: '/docs/advanced-guide/streaming',
+                desc: "Stream data to clients incrementally as Server-Sent Events or NDJSON with response.Stream — for progress, log tailing or LLM tokens — with backpressure and heartbeats."
+            },
+            {
+                title: 'Calling LLMs',
+                href: '/docs/advanced-guide/llm',
+                desc: "Call large language models from a handler with app.AddLLM and ctx.LLM(), getting tracing, token metrics, health checks and streaming for free."
+            },
+            {
+                title: 'Building AI Agents',
+                href: '/docs/advanced-guide/mcp',
+                desc: "Expose your handlers to AI agents with app.EnableMCP and drive an agent loop with ctx.LLM().Tools(), dispatched through the router so auth and validation run."
+            },
+            {
                 title: 'GraphQL',
                 href: '/docs/advanced-guide/graphql',
                 desc: 'Learn how to build native GraphQL APIs in GoFr using a schema-first approach with a ./configs/schema.graphqls file and an interactive playground.'
@@ -173,6 +193,102 @@ export const navigation = [
                 title: 'Building CLI Applications',
                 href: '/docs/advanced-guide/building-cli-applications',
                 desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
+            },
+        ],
+    },
+    {
+        title: 'Production Guides',
+        desc: "Production-grade how-to guides: deployment, observability, reliability, and security recipes for running GoFr services in real environments.",
+        links: [
+            {
+                title: 'Dockerizing GoFr Services',
+                href: '/docs/guides/dockerizing-gofr-services',
+                desc: "Build slim, production-ready container images for GoFr services with multi-stage Dockerfiles and sensible defaults."
+            },
+            {
+                title: 'Deploying to Kubernetes',
+                href: '/docs/guides/deploying-to-kubernetes',
+                desc: "Step-by-step recipes for shipping GoFr services to Kubernetes, including Deployments, Services, probes, and config wiring."
+            },
+            {
+                title: 'Helm Chart Starter',
+                href: '/docs/guides/helm-chart-starter',
+                desc: "A starter Helm chart for GoFr services with values for image, env, probes, resources, and ingress."
+            },
+            {
+                title: 'Multi-Environment Deployment',
+                href: '/docs/guides/multi-environment-deployment',
+                desc: "Promote a GoFr service across dev, staging, and prod with environment-scoped configs and overlays."
+            },
+            {
+                title: 'Cloud Deployment (EKS/GKE/AKS)',
+                href: '/docs/guides/cloud-deployment',
+                desc: "Deploy GoFr services to managed Kubernetes on AWS EKS, GCP GKE, and Azure AKS, with cloud-specific gotchas."
+            },
+            {
+                title: 'CI/CD Recipes',
+                href: '/docs/guides/cicd-recipes',
+                desc: "GitHub Actions, GitLab CI, and other pipeline templates for building, testing, and deploying GoFr services."
+            },
+            {
+                title: 'DB Migrations in CI/CD',
+                href: '/docs/guides/db-migrations-in-cicd',
+                desc: "Run GoFr's data migrations safely from CI/CD with ordering, rollback, and pre-deploy gates."
+            },
+            {
+                title: 'Production Tracing',
+                href: '/docs/guides/production-tracing',
+                desc: "Configure OpenTelemetry tracing for GoFr in production: exporters, samplers, and trace context propagation."
+            },
+            {
+                title: 'Distributed Tracing',
+                href: '/docs/guides/distributed-tracing',
+                desc: "Trace requests across multiple GoFr services and downstream systems for end-to-end visibility."
+            },
+            {
+                title: 'Production Prometheus on Kubernetes',
+                href: '/docs/guides/production-prometheus-kubernetes',
+                desc: "Wire GoFr's metrics endpoint to Prometheus on Kubernetes with ServiceMonitors and recording rules."
+            },
+            {
+                title: 'Production Logging',
+                href: '/docs/guides/production-logging',
+                desc: "Structured logging best practices for GoFr in production: levels, sampling, redaction, and shipping."
+            },
+            {
+                title: 'Graceful Shutdown',
+                href: '/docs/guides/graceful-shutdown',
+                desc: "Drain traffic, finish in-flight requests, and close datasource connections cleanly on pod termination."
+            },
+            {
+                title: 'Horizontal Pod Autoscaler',
+                href: '/docs/guides/horizontal-pod-autoscaler',
+                desc: "Scale GoFr services horizontally on CPU, memory, or custom metrics from Prometheus."
+            },
+            {
+                title: 'Connection Pooling',
+                href: '/docs/guides/connection-pooling',
+                desc: "Tune SQL, Redis, and HTTP client connection pools for GoFr services under production load."
+            },
+            {
+                title: 'Load Testing',
+                href: '/docs/guides/load-testing',
+                desc: "Load-test GoFr services with k6/vegeta, interpret results, and identify bottlenecks before production."
+            },
+            {
+                title: '12-Factor Configuration',
+                href: '/docs/guides/twelve-factor-config',
+                desc: "Apply the 12-factor app methodology to GoFr configuration: env-driven config, secrets, and parity across environments."
+            },
+            {
+                title: 'Auth in Kubernetes',
+                href: '/docs/guides/auth-in-kubernetes',
+                desc: "Run authentication for GoFr services on Kubernetes: managing JWT keys, OIDC, and secrets."
+            },
+            {
+                title: 'Service Mesh Integration',
+                href: '/docs/guides/service-mesh-integration',
+                desc: "Run GoFr services behind Istio, Linkerd, or other service meshes for mTLS, retries, and traffic policy."
             },
         ],
     },
@@ -198,6 +314,11 @@ export const navigation = [
                 title: "ClickHouse",
                 href: "/docs/datasources/clickhouse",
                 desc: "Learn how to connect to and interact with clickhouse database in GoFr."
+            },
+            {
+                title: "Cloud SQL",
+                href: "/docs/datasources/cloudsql",
+                desc: "Connect to Google Cloud SQL (Postgres & MySQL) with IAM database authentication — the same code works locally and on GCP."
             },
             {
                 title: "CockroachDB",

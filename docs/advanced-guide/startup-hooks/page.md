@@ -1,3 +1,11 @@
+---
+description: "Register synchronous startup hooks in GoFr to seed databases, warm caches, or run setup tasks before the HTTP, gRPC, and pub/sub servers begin handling traffic."
+nextjs:
+  metadata:
+    title: "Startup Hooks in GoFr — Run Jobs Before Server Starts"
+    description: "Register synchronous startup hooks in GoFr to seed databases, warm caches, or run setup tasks before the HTTP, gRPC, and pub/sub servers begin handling traffic."
+---
+
 # Startup Hooks
 
 GoFr provides a way to run synchronous jobs when your application starts, before any servers begin handling requests. This is useful for tasks like seeding a database, warming up a cache, or performing other critical setup procedures.
@@ -57,3 +65,7 @@ func main() {
 
 This ensures that critical startup tasks are completed successfully before the application begins accepting traffic.
 
+
+## Related production guides
+
+- **Graceful Shutdown**: [Mirror your startup work on the way down](/docs/guides/graceful-shutdown) — close pools, drain queues, and finish in-flight requests cleanly.

@@ -46,9 +46,13 @@ type StorageMetrics interface {
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
-// DefaultHistogramBuckets returns the standard bucket sizes for file operations.
+// DefaultHistogramBuckets returns the standard bucket sizes for file operations, in microseconds.
+// File operation duration is recorded in microseconds (see ObserveOperation); buckets span 50µs-3min.
 func DefaultHistogramBuckets() []float64 {
-	return []float64{0.1, 1, 10, 100, 1000}
+	return []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
 }
 
 // OperationObservability contains all parameters needed for logging and metrics collection.

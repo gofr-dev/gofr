@@ -15,19 +15,24 @@ import (
 )
 
 const (
-	DefaultBatchSize       = 100
-	DefaultBatchBytes      = 1048576
-	DefaultBatchTimeout    = 1000
-	defaultMaxBytes        = 10e6 // 10MB
-	defaultMinBytes        = 10e3
-	defaultRetryTimeout    = 10 * time.Second
-	defaultReadTimeout     = 30 * time.Second
-	protocolPlainText      = "PLAINTEXT"
-	protocolSASL           = "SASL_PLAINTEXT"
-	protocolSSL            = "SSL"
-	protocolSASLSSL        = "SASL_SSL"
-	messageMultipleBrokers = "MULTIPLE_BROKERS"
-	brokerStatusUp         = "UP"
+	DefaultBatchSize    = 100
+	DefaultBatchBytes   = 1048576
+	DefaultBatchTimeout = 1000
+	defaultMaxBytes     = 10e6 // 10MB
+	defaultMinBytes     = 10e3
+	defaultRetryTimeout = 10 * time.Second
+	defaultReadTimeout  = 30 * time.Second
+	// reconnectErrLogInterval throttles error-level logs emitted when
+	// ensureConnected repeatedly fails to re-dial the broker. Repeated
+	// failures within this window are logged at debug level instead, so a
+	// long unreachable cluster does not spam stderr at request rate.
+	reconnectErrLogInterval = 60 * time.Second
+	protocolPlainText       = "PLAINTEXT"
+	protocolSASL            = "SASL_PLAINTEXT"
+	protocolSSL             = "SSL"
+	protocolSASLSSL         = "SASL_SSL"
+	messageMultipleBrokers  = "MULTIPLE_BROKERS"
+	brokerStatusUp          = "UP"
 )
 
 var errEmptyTopicName = errors.New("topic name cannot be empty")
@@ -55,11 +60,33 @@ type kafkaClient struct {
 	writer Writer
 	reader map[string]Reader
 
-	mu *sync.RWMutex
+	// mu guards the reader map. A value, not a pointer, so the zero
+	// kafkaClient is usable: Health and Close take it, and a nil pointer
+	// here panicked on any client built without New.
+	mu sync.RWMutex
+	// connMu guards conn/dialer pointer swaps performed by reconnectAdmin.
+	// Read-lock holders use the admin connection concurrently; the
+	// write-lock holder swaps the pointer and closes the old multiConn.
+	// It is intentionally separate from mu so a stuck network probe inside
+	// ensureConnected cannot starve subscribers that hold mu for the
+	// reader map.
+	connMu sync.RWMutex
+	// reconnectErrLogAt is the earliest time at which the next reconnect
+	// failure may be logged at error level. Updated under connMu write lock
+	// in ensureConnected to throttle log spam when the cluster is
+	// unreachable for a sustained period.
+	reconnectErrLogAt time.Time
 
 	logger  pubsub.Logger
 	config  Config
 	metrics Metrics
+
+	// closed is shut by Close to stop the retryConnect goroutine New starts
+	// when the first connect attempt fails. Without it that goroutine runs
+	// for the life of the process on a context nobody can cancel, retrying
+	// every defaultRetryTimeout long after the client was closed.
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //nolint:revive // New allows
@@ -81,7 +108,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 		logger:  logger,
 		config:  *conf,
 		metrics: metrics,
-		mu:      &sync.RWMutex{},
+		closed:  make(chan struct{}),
 	}
 	ctx := context.Background()
 
@@ -103,12 +130,13 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
-	if k.writer == nil || topic == "" {
+	writer := k.snapshotWriter()
+	if writer == nil || topic == "" {
 		return errPublisherNotConfigured
 	}
 
 	start := time.Now()
-	err := k.writer.WriteMessages(ctx,
+	err := writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic:   topic,
 			Value:   message,
@@ -147,12 +175,14 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	if !k.isConnected() {
-		return nil, errClientNotConnected
-	}
-
+	// Validate input before touching the network — no point re-dialing the
+	// broker for an obviously bad call.
 	if query == "" {
 		return nil, errEmptyTopicName
+	}
+
+	if !k.ensureConnected(ctx) {
+		return nil, errClientNotConnected
 	}
 
 	offset, limit := k.parseQueryArgs(args...)
@@ -169,7 +199,7 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if !k.isConnected() {
+	if !k.ensureConnected(ctx) {
 		time.Sleep(defaultRetryTimeout)
 
 		return nil, errClientNotConnected
@@ -218,7 +248,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	m := pubsub.NewMessage(ctx)
 	m.Value = msg.Value
 	m.Topic = topic
-	m.Committer = newKafkaMessage(&msg, k.reader[topic], k.logger)
+	m.Committer = newKafkaMessage(&msg, reader, k.logger)
 
 	end := time.Since(start)
 
@@ -246,17 +276,58 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 }
 
 func (k *kafkaClient) Close() (err error) {
-	for _, r := range k.reader {
+	// Stop the retryConnect goroutine first, so it cannot dial or swap the
+	// conn out from under the teardown below.
+	k.closeOnce.Do(func() {
+		if k.closed != nil {
+			close(k.closed)
+		}
+	})
+
+	for _, r := range k.snapshotReaders() {
 		err = errors.Join(err, r.Close())
 	}
 
+	k.connMu.Lock()
+
 	if k.writer != nil {
 		err = errors.Join(err, k.writer.Close())
+		k.writer = nil
 	}
 
 	if k.conn != nil {
-		err = errors.Join(k.conn.Close())
+		err = errors.Join(err, k.conn.Close())
+		k.conn = nil
 	}
 
+	k.connMu.Unlock()
+
 	return err
+}
+
+// snapshotWriter reads k.writer under connMu, which initialize takes when it
+// publishes one. Callers use the returned value rather than k.writer so a
+// retryConnect swapping the pointer cannot race the read, and so no network
+// call is made while holding the lock.
+func (k *kafkaClient) snapshotWriter() Writer {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	return k.writer
+}
+
+// snapshotReaders copies the reader map under RLock so callers can work on the
+// readers without holding it. Nothing that calls this may already hold connMu:
+// Subscribe takes k.mu and then connMu inside getNewReader, so acquiring them
+// the other way round is a lock-order inversion.
+func (k *kafkaClient) snapshotReaders() []Reader {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	readers := make([]Reader, 0, len(k.reader))
+	for _, r := range k.reader {
+		readers = append(readers, r)
+	}
+
+	return readers
 }

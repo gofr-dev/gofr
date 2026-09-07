@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -350,31 +352,69 @@ func Test_sqliteErrConnLogs(t *testing.T) {
 	}
 }
 
+// waitLogger is a datasource.Logger that closes seen once a message containing
+// want has been logged. It replaces capturing stdout and sleeping for a fixed
+// duration: the retry goroutine only logs after its first ping fails, and that
+// ping's cost is a DNS lookup on the CI host, not a constant.
+type waitLogger struct {
+	want string
+	seen chan struct{}
+	once sync.Once
+}
+
+func newWaitLogger(want string) *waitLogger {
+	return &waitLogger{want: want, seen: make(chan struct{})}
+}
+
+func (l *waitLogger) record(msg string) {
+	if strings.Contains(msg, l.want) {
+		l.once.Do(func() { close(l.seen) })
+	}
+}
+
+func (l *waitLogger) Debug(args ...any)            { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Debugf(f string, args ...any) { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Info(args ...any)             { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Infof(f string, args ...any)  { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Warn(args ...any)             { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Warnf(f string, args ...any)  { l.record(fmt.Sprintf(f, args...)) }
+func (l *waitLogger) Error(args ...any)            { l.record(fmt.Sprint(args...)) }
+func (l *waitLogger) Errorf(f string, args ...any) { l.record(fmt.Sprintf(f, args...)) }
+
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {
-	logs := testutil.StdoutOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(t)
 
-		mockMetrics := NewMockMetrics(ctrl)
-		mockConfig := config.NewMockConfig(map[string]string{
-			"DB_DIALECT":  "postgres",
-			"DB_HOST":     "host",
-			"DB_USER":     "user",
-			"DB_PASSWORD": "password",
-			"DB_PORT":     "3201",
-			"DB_NAME":     "test",
-		})
-
-		mockLogger := logging.NewMockLogger(logging.DEBUG)
-
-		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
-		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))
-
-		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
-
-		time.Sleep(100 * time.Millisecond)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_DIALECT":  "postgres",
+		"DB_HOST":     "host",
+		"DB_USER":     "user",
+		"DB_PASSWORD": "password",
+		"DB_PORT":     "3201",
+		"DB_NAME":     "test",
 	})
 
-	assert.Contains(t, logs, "retrying SQL database connection")
+	logger := newWaitLogger("retrying SQL database connection")
+
+	// pushDBMetrics emits both gauges from its own goroutine and repeats every
+	// 10s, so neither the number of calls nor their timing relative to the end of
+	// this test is something the test controls. Pinning them to the default
+	// Times(1) is what made this flaky; the gauges are incidental here anyway.
+	mockMetrics.EXPECT().SetGauge("app_sql_open_connections", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", gomock.Any()).AnyTimes()
+
+	db := NewSQL(mockConfig, logger, mockMetrics)
+	require.NotNil(t, db)
+
+	// Close stops the retry and metrics goroutines, so neither can touch the
+	// gomock controller after the test has finished.
+	t.Cleanup(func() { _ = db.Close() })
+
+	select {
+	case <-logger.seen:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for the retry connection log")
+	}
 }
 
 func TestNewSQL_CockroachDB(t *testing.T) {
@@ -457,6 +497,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -468,6 +509,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-full",
@@ -479,6 +521,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -490,6 +533,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -532,6 +576,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -546,6 +591,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-full",
@@ -587,6 +633,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 				clientCertPath, _ := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath}
 			},
 			sslMode: "verify-ca",
@@ -600,6 +647,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 				_, clientKeyPath := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -643,6 +691,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", invalidCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": invalidCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -658,6 +707,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", invalidKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": invalidKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -814,5 +864,78 @@ func createInvalidCert(t *testing.T) string {
 func cleanupCerts(certPaths map[string]string) {
 	for _, path := range certPaths {
 		os.Remove(path)
+	}
+}
+
+func TestDBConfig_String_RedactsPassword(t *testing.T) {
+	tests := []struct {
+		desc            string
+		config          DBConfig
+		wantContains    string
+		wantNotContains string
+	}{
+		{
+			desc: "password is redacted, never printed raw",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Password: "super-secret",
+				Port:     "5432",
+				Database: "app",
+			},
+			wantContains:    "Password:" + redactedPassword,
+			wantNotContains: "super-secret",
+		},
+		{
+			desc: "empty password stays empty, no mask",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Database: "app",
+			},
+			wantContains:    "Password: ",
+			wantNotContains: redactedPassword,
+		},
+	}
+
+	// wrapper mimics the realistic leak vector: a DBConfig logged as a field of a
+	// larger struct, where %+v recurses into DBConfig.String().
+	type wrapper struct{ Cfg DBConfig }
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Cover the direct String() call and printing the config as a struct field.
+			for _, got := range []string{tc.config.String(), fmt.Sprintf("%+v", wrapper{Cfg: tc.config})} {
+				assert.Contains(t, got, tc.wantContains)
+				assert.NotContains(t, got, tc.wantNotContains)
+			}
+		})
+	}
+}
+
+// TestDBConfig_GoString_RedactsPassword guards the %#v verb, which bypasses Stringer
+// and would otherwise print the raw password. GoString must redact it identically.
+func TestDBConfig_GoString_RedactsPassword(t *testing.T) {
+	cfg := DBConfig{
+		Dialect:  "postgres",
+		HostName: "localhost",
+		User:     "user",
+		Password: "super-secret",
+		Port:     "5432",
+		Database: "app",
+	}
+
+	type wrapper struct{ Cfg DBConfig }
+
+	// Direct %#v and %#v as a nested struct field both route through GoString.
+	for _, got := range []string{
+		fmt.Sprintf("%#v", cfg),
+		cfg.GoString(),
+		fmt.Sprintf("%#v", wrapper{Cfg: cfg}),
+	} {
+		assert.Contains(t, got, redactedPassword)
+		assert.NotContains(t, got, "super-secret")
 	}
 }

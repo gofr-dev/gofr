@@ -189,7 +189,7 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 }
 
 func dereferencePointerType(value reflect.Value) reflect.Value {
-	if value.Kind() == reflect.Ptr {
+	if value.Kind() == reflect.Pointer {
 		if value.IsNil() {
 			// Initialize the pointer to a new value if it's nil
 			value.Set(reflect.New(value.Type().Elem()))

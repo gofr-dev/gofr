@@ -30,6 +30,13 @@ var (
 	errValidateFuncEmpty = errors.New("validate func is empty")
 )
 
+// AuthHeaders returns the request header names GoFr's authentication middleware reads. It is the
+// single source of truth for callers that must forward a request's identity — e.g. the MCP server
+// re-dispatching a tool call through the router.
+func AuthHeaders() []string {
+	return []string{headerAuthorization, headerXAPIKey}
+}
+
 type AuthProvider interface {
 	GetAuthMethod() AuthMethod
 	ExtractAuthHeader(r *http.Request) (any, ErrorHTTP)

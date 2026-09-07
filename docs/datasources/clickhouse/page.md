@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to ClickHouse via the pluggable datasource interface. Run analytics queries with built-in tracing, metrics, and a uniform API across databases."
+nextjs:
+  metadata:
+    title: "ClickHouse in GoFr — Columnar Analytics Datasource"
+    description: "Connect GoFr to ClickHouse via the pluggable datasource interface. Run analytics queries with built-in tracing, metrics, and a uniform API across databases."
+---
+
 # ClickHouse
 
 ## Configuration
@@ -6,6 +14,14 @@ To connect to `ClickHouse`, you need to provide the following environment variab
 - `USERNAME`: The username for connecting to the database.
 - `PASSWORD`: The password for the specified user.
 - `DATABASE`: The name of the database to connect to.
+
+### Connection pool tuning (optional)
+The following `Config` fields tune the connection pool and dial behavior. Each is optional — leaving it unset (zero) keeps the underlying driver default, so existing applications are unaffected:
+
+- `MaxOpenConns`: Maximum number of open connections to the pool. Default `MaxIdleConns + 5`. Raise this when your service issues many concurrent queries and sees `acquire conn timeout` (every pooled connection was busy).
+- `MaxIdleConns`: Maximum number of idle connections kept in the pool. Default `5`.
+- `DialTimeout`: Timeout for establishing a connection. Default `30s`.
+- `ConnMaxLifetime`: Maximum amount of time a connection may be reused. Default `1h`.
 
 
 ## Setup
@@ -51,6 +67,9 @@ func main() {
 		Username: app.Config.Get("USERNAME"),
 		Password: app.Config.Get("PASSWORD"),
 		Database: app.Config.Get("DATABASE"),
+		// Optional connection-pool tuning; omit to use driver defaults.
+		MaxOpenConns: 20,
+		MaxIdleConns: 5,
 	}))
 
 	app.POST("/user", Post)
