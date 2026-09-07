@@ -215,6 +215,11 @@ func (a *App) logReadiness() {
 // per-dependency detail. The aggregation in Container.appHealth yields "UP" when all dependencies
 // are healthy and "DEGRADED" when one or more are down; "DOWN" is a fail-closed default for the
 // unreachable case where the aggregate key is missing or not a string.
+//
+// This stays unexported here rather than being a method on Container: Context embeds
+// *container.Container, so an exported method would be promoted onto every handler's ctx, and a
+// per-request call sweeps every datasource unless HEALTH_CACHE_TTL is set, which it is not by
+// default.
 func aggregateStatus(c *Context) string {
 	m, ok := c.Health(c).(map[string]any)
 	if !ok {
