@@ -366,10 +366,17 @@ jobs:
           fi
           echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
           echo "mode: atomic" > merged_profile.cov
+          # `| grep -v '/mock_'` matches the PKG job, which strips generated
+          # mocks before it uploads its profile. Without it here the two halves
+          # of one number are computed under different rules: pkg/gofr excludes
+          # its mocks while the submodules count theirs, and gomock mocks are
+          # heavily exercised by the tests that use them, so the merged figure
+          # is flattered by generated code. 66 mock_*.go files live under the
+          # submodules.
           grep -h -v "mode:" \
             ./Example-Test-Report/profile.cov \
             ./PKG-Coverage-Report/profile.cov \
-            "${submodule_profiles[@]}" >> merged_profile.cov
+            "${submodule_profiles[@]}" | grep -v '/mock_' >> merged_profile.cov
 
       # Calculate and output the total code coverage percentage.
       # This is written to the job summary rather than only echoed into a log —
@@ -564,10 +571,17 @@ jobs:
           fi
           echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
           echo "mode: atomic" > merged_profile.cov
+          # `| grep -v '/mock_'` matches the PKG job, which strips generated
+          # mocks before it uploads its profile. Without it here the two halves
+          # of one number are computed under different rules: pkg/gofr excludes
+          # its mocks while the submodules count theirs, and gomock mocks are
+          # heavily exercised by the tests that use them, so the merged figure
+          # is flattered by generated code. 66 mock_*.go files live under the
+          # submodules.
           grep -h -v "mode:" \
             ./Example-Test-Report/profile.cov \
             ./PKG-Coverage-Report/profile.cov \
-            "${submodule_profiles[@]}" >> merged_profile.cov
+            "${submodule_profiles[@]}" | grep -v '/mock_' >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
