@@ -91,6 +91,10 @@ type Container struct {
 	llms      map[string]ai.LLM   // instrumented models by name ("" = default); a mock sets the default directly
 	llmModels map[string]ai.Model // raw providers by name, for uninstrumented health probes
 	tools     ai.Tools            // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
+
+	// health carries the health endpoint's TTL cache, its singleflight and its timeout. It is a
+	// pointer because Container is copied by value by injectContainer; see healthProbe.
+	health *healthProbe
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -156,6 +160,8 @@ func (c *Container) Create(conf config.Config) {
 	c.File = file.NewLocalFileSystem(c.Logger)
 
 	c.WSManager = websocket.New()
+
+	c.health = newHealthProbe(c.healthDuration(conf, healthCacheTTLKey), c.healthDuration(conf, healthCheckTimeoutKey))
 }
 
 func (c *Container) createPubSub(conf config.Config) {
