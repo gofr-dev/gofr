@@ -104,6 +104,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  METRICS_CARDINALITY_LIMIT
+-  Per-instrument attribute-set limit. Once an instrument exceeds this many distinct label sets in a collection cycle, further series collapse into a single otel.metric.overflow series. Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT.
+-  2000
+
+---
+
 -  OTEL_RESOURCE_ATTRIBUTES
 -  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
 

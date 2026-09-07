@@ -82,6 +82,45 @@ func Test_metricsExporterConfig(t *testing.T) {
 	}
 }
 
+func Test_metricsCardinalityLimit(t *testing.T) {
+	ptr := func(n int) *int { return &n }
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want *int
+	}{
+		{"unset leaves SDK default", map[string]string{}, nil},
+		{"positive limit", map[string]string{"METRICS_CARDINALITY_LIMIT": "500"}, ptr(500)},
+		{"zero means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, ptr(0)},
+		{"negative means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "-1"}, ptr(-1)},
+		{"whitespace is trimmed", map[string]string{"METRICS_CARDINALITY_LIMIT": "  100  "}, ptr(100)},
+		{"invalid falls back to default", map[string]string{"METRICS_CARDINALITY_LIMIT": "abc"}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricsCardinalityLimit(config.NewMockConfig(tc.env), logging.NewMockLogger(logging.ERROR))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("metricsCardinalityLimit() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Test_metricsCardinalityLimit_invalidDoesNotLogValue ensures an invalid value is
+// not echoed into logs (CodeQL: clear-text logging of externally controlled input).
+func Test_metricsCardinalityLimit_invalidDoesNotLogValue(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		l := logging.NewMockLogger(logging.WARN)
+		metricsCardinalityLimit(config.NewMockConfig(map[string]string{"METRICS_CARDINALITY_LIMIT": "sneaky-value"}), l)
+	})
+
+	if strings.Contains(out, "sneaky-value") {
+		t.Errorf("raw METRICS_CARDINALITY_LIMIT value leaked into logs: %q", out)
+	}
+}
+
 // Test_metricsExporterConfig_otelFallback covers interval/temporality falling
 // back to the OpenTelemetry standard env vars, with METRICS_* taking precedence.
 func Test_metricsExporterConfig_otelFallback(t *testing.T) {
