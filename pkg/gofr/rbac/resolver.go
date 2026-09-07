@@ -54,9 +54,10 @@ func (r *endpointRule) matches(methodUpper, path string, config *Config) bool {
 
 // buildEndpointRules expands endpoints into one rule per declared method and orders them
 // most-specific-first, so that a narrower rule governs a request even when a broader one is
-// declared ahead of it. Rules that score identically - two patterns of the same shape, such as
-// "/{a}/{b}" and "/{x}/{y}" - keep their declaration order, which is the one case where the
-// order entries are written in still decides the outcome.
+// declared ahead of it. Rules that score identically on the path - two patterns of the
+// same shape, such as "/{a}/{b}" and "/{x}/{y}" - are separated first by method, an explicitly
+// declared one outranking "*", and then by enforcement, a rule that requires permissions
+// outranking a public one. Declaration order decides only between rules alike on all three.
 //
 // Duplicate (method, path) declarations collapse to the last one, matching how the lookup
 // maps are built, so both resolution paths always agree.
