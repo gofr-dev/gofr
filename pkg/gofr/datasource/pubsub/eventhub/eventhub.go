@@ -540,7 +540,9 @@ func (c *Client) Health() datasource.Health {
 // stuck in exactly this state would strand another goroutine -- an unbounded leak on the hot
 // health path. If a probe is already parked the broker is already unresponsive, so a poll that
 // finds the lock held reports that rather than piling on another abandoned goroutine. The lock is
-// released by the goroutine that ran the probe, once the SDK call finally returns.
+// released by the goroutine that ran the probe, once the SDK call returns -- on the timeout path
+// that is whenever the abandoned call finally unblocks, which is exactly when the next probe may
+// safely start.
 func (c *Client) probeWithin(ctx context.Context) (azeventhubs.EventHubProperties, error) {
 	if !c.probeMu.TryLock() {
 		return azeventhubs.EventHubProperties{}, errProbeInFlight
@@ -549,9 +551,11 @@ func (c *Client) probeWithin(ctx context.Context) (azeventhubs.EventHubPropertie
 	done := make(chan eventHubProps, 1)
 
 	go func() {
-		defer c.probeMu.Unlock()
-
 		props, err := c.consumer.GetEventHubProperties(ctx, nil)
+
+		// Release before publishing the result, so a caller that reads it and immediately
+		// re-probes never finds the lock still held by an already-finished probe.
+		c.probeMu.Unlock()
 		done <- eventHubProps{props: props, err: err}
 	}()
 

@@ -716,3 +716,38 @@ func Test_Health_ParkedProbeIsCappedAtOne(t *testing.T) {
 	require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
 		"the SDK probe must run at most once while one is still parked; more means a goroutine leaks per poll")
 }
+
+// Test_Health_ProbeRecoversAfterParkedCallReturns pins the release half of the cap: once a parked
+// probe's SDK call finally returns, the lock must free so the next poll runs a fresh probe rather
+// than stay wedged on errProbeInFlight forever. Drop the Unlock in probeWithin and a client that
+// probed once can never report up again -- a permanent false DOWN that the cap test alone does not
+// catch, because it never lets its parked probe return.
+func Test_Health_ProbeRecoversAfterParkedCallReturns(t *testing.T) {
+	release := make(chan struct{})
+
+	var calls int32
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			if atomic.AddInt32(&calls, 1) == 1 {
+				<-release // the first probe parks until released; later probes answer immediately
+			}
+
+			return azeventhubs.EventHubProperties{PartitionIDs: []string{"0"}}, nil
+		},
+	})
+
+	// First poll parks the probe and returns down on the deadline.
+	require.Equal(t, datasource.StatusDown, client.Health().Status)
+
+	// Let the parked probe finish. Its goroutine must release the lock as it returns.
+	close(release)
+
+	// A subsequent poll must therefore be able to run a fresh probe and report up. Eventually,
+	// because the release races the parked goroutine's return by a hair.
+	require.Eventually(t, func() bool {
+		return client.Health().Status == datasource.StatusUp
+	}, 5*time.Second, 20*time.Millisecond,
+		"probe must recover once the parked call returns and releases the lock")
+}
