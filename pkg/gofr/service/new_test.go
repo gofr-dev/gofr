@@ -12,8 +12,19 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
 
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// TestMethodQueryMatchesInboundConstant pins the two copies of the QUERY method
+// string together. The outbound client keeps its own constant rather than
+// importing gofr/http (see the comment on methodQuery), so nothing but this
+// assertion stops the two from drifting -- and a drift would be silent: the
+// outbound call would simply use a method no GoFr server routes.
+func TestMethodQueryMatchesInboundConstant(t *testing.T) {
+	assert.Equal(t, gofrHTTP.MethodQuery, methodQuery,
+		"the outbound QUERY method must be the same string the inbound router registers")
+}
 
 func TestNewHTTPService(t *testing.T) {
 	tests := []struct {

@@ -25,10 +25,13 @@ const (
 )
 
 // methodQuery is the HTTP QUERY method (RFC 10008). It mirrors the exported
-// http.MethodQuery / gofr.MethodQuery constant, kept local here because the
-// outbound service package cannot import gofr/http (its internal test suite
-// imports container -> service, which would form a cycle). Go's net/http has no
-// http.MethodQuery yet.
+// gofrHTTP.MethodQuery / gofr.MethodQuery constant and is deliberately a second
+// copy: importing gofr/http here for one string would pull gorilla/mux,
+// html/template and archive/zip into the outbound HTTP client's dependency
+// graph, which is nine packages the client has no other use for. (The import
+// itself compiles -- there is no cycle -- so the reason is the dependency
+// weight, not a build constraint.) Go's net/http has no http.MethodQuery yet.
+// TestMethodQueryMatchesInboundConstant pins this string to the inbound one.
 const methodQuery = "QUERY"
 
 type httpService struct {
