@@ -14,6 +14,9 @@ import (
 
 var errInvalidDgraphTxn = errors.New("invalid Dgraph transaction")
 
+// migrationMethodUP is the method recorded for an applied (UP) migration.
+const migrationMethodUP = "UP"
+
 // dgraphTxn is the subset of the Dgraph transaction used to record migrations.
 // The value returned by Dgraph.NewTxn satisfies it at runtime.
 type dgraphTxn interface {
@@ -148,23 +151,13 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-// commitMigration records the migration metadata in a Dgraph transaction, then
-// chains to the next migrator.
+// commitMigration records the migration metadata in a Dgraph transaction so the
+// version record is committed atomically, then chains to the next migrator.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
-	if data.UsedDatasources[dsDGraph] {
-		if err := recordDgraphMigration(c, data); err != nil {
-			return err
-		}
-
-		c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+	if !data.UsedDatasources[dsDGraph] {
+		return dm.migrator.commitMigration(c, data)
 	}
 
-	return dm.migrator.commitMigration(c, data)
-}
-
-// recordDgraphMigration writes a single migration record inside a transaction,
-// committing on success and discarding on any failure so the record is atomic.
-func recordDgraphMigration(c *container.Container, data transactionData) error {
 	payload := map[string]any{
 		"migrations": []map[string]any{
 			{
@@ -172,7 +165,7 @@ func recordDgraphMigration(c *container.Container, data transactionData) error {
 				// (func: type(Migration)) can find this record on later runs.
 				"dgraph.type":           "Migration",
 				"migrations.version":    data.MigrationNumber,
-				"migrations.method":     "UP",
+				"migrations.method":     migrationMethodUP,
 				"migrations.start_time": data.StartTime.Format(time.RFC3339),
 				"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
 			},
@@ -201,7 +194,13 @@ func recordDgraphMigration(c *container.Container, data transactionData) error {
 		return err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+
+	return dm.migrator.commitMigration(c, data)
 }
 
 // rollback handles migration failure and rollback.
