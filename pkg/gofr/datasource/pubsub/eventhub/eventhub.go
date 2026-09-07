@@ -48,9 +48,26 @@ type Config struct {
 	ProducerOptions  *azeventhubs.ProducerClientOptions
 }
 
+// consumerClient is the part of *azeventhubs.ConsumerClient this package uses. It exists so the
+// health probe can be exercised without a live namespace -- the same seam the SQS client uses for
+// its own health tests. The partition READS cannot: NewPartitionClient hands back the concrete
+// *azeventhubs.PartitionClient and ReceiveEvents is called on that, and the zero value of that
+// type nil-derefs. So a fake can decide which partition IDs come back and whether opening a
+// partition client fails, but not what reading one returns.
+type consumerClient interface {
+	GetEventHubProperties(ctx context.Context, options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
+	NewPartitionClient(partitionID string, options *azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error)
+	Close(ctx context.Context) error
+}
+
 type Client struct {
 	producer *azeventhubs.ProducerClient
-	consumer *azeventhubs.ConsumerClient
+	// consumer is written once by Connect and read without synchronization by Health, Subscribe
+	// and Close, so Connect must happen-before any of them -- which is what AddPubSub does. Note
+	// that as an interface this is two words, so a concurrent Connect can be observed half-written
+	// and pass a "!= nil" guard with a nil value behind it; as a pointer it could only be observed
+	// nil or whole. Synchronizing the field is a separate change.
+	consumer consumerClient
 	// we are using a processor such that to keep consuming the events from all the different partitions.
 	processor *azeventhubs.Processor
 	// a checkpoint is being called while committing the event received from the event.
@@ -176,7 +193,7 @@ func (c *Client) Connect() {
 	c.logger.Debug("Event Hub blobstore client setup success")
 
 	// create a consumer client using a connection string to the namespace and the event hub
-	consumerClient, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
+	consumer, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
 		c.cfg.ConsumerGroup, c.cfg.ConsumerOptions)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating consumer client %v", err)
@@ -187,7 +204,7 @@ func (c *Client) Connect() {
 	c.logger.Debug("Event Hub consumer client setup success")
 
 	// create a processor to receive and process events
-	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
+	processor, err := azeventhubs.NewProcessor(consumer, checkpointStore, nil)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating processor %v", err)
 
@@ -212,7 +229,7 @@ func (c *Client) Connect() {
 
 	c.processor = processor
 	c.producer = producerClient
-	c.consumer = consumerClient
+	c.consumer = consumer
 	c.checkPoint = checkpointStore
 
 	c.logger.Debug("Event Hub client initialization complete")
@@ -460,10 +477,71 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	return nil
 }
 
-func (c *Client) Health() datasource.Health {
-	c.logger.Error("health-check not implemented for Event Hub")
+// eventHubProps is the result of one probe, carried back off the goroutine that ran it.
+type eventHubProps struct {
+	props azeventhubs.EventHubProperties
+	err   error
+}
 
-	return datasource.Health{}
+func (c *Client) Health() datasource.Health {
+	health := datasource.Health{
+		Status: datasource.StatusDown,
+		Details: map[string]any{
+			"backend":  "EVENT_HUB",
+			"eventHub": c.cfg.EventhubName,
+		},
+	}
+
+	if c.consumer == nil {
+		health.Details["error"] = errClientNotConnected.Error()
+
+		return health
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), eventHubPropsTimeout)
+	defer cancel()
+
+	props, err := c.probeWithin(ctx)
+	if err != nil {
+		health.Details["error"] = err.Error()
+
+		return health
+	}
+
+	health.Status = datasource.StatusUp
+	health.Details["partitionCount"] = len(props.PartitionIDs)
+
+	return health
+}
+
+// probeWithin runs the connectivity probe and returns when ctx expires whether or not the probe
+// has.
+//
+// Passing ctx to GetEventHubProperties is not enough to bound it. In azeventhubs v1.4.0 that
+// method hands context.Background() to rpcLink.RPC (mgmt.go:67), and the wait for the reply
+// selects on *that* context (internal/rpc.go:263), so our deadline never fires there. The same
+// Background context also has no deadline to derive the AMQP "server-timeout" property from
+// (internal/rpc.go:244), so the broker-side bound is absent too. What ctx does bound is link
+// acquisition and the sleeps between retries -- which is why an unresolvable host still returns
+// promptly, and why the bound looks correct until a broker accepts a request and never answers.
+//
+// Running the call on its own goroutine and selecting here makes the deadline ours. The cost is
+// that an abandoned probe stays parked until the SDK returns; the channel is buffered so it can
+// always finish and exit rather than blocking forever on the send.
+func (c *Client) probeWithin(ctx context.Context) (azeventhubs.EventHubProperties, error) {
+	done := make(chan eventHubProps, 1)
+
+	go func() {
+		props, err := c.consumer.GetEventHubProperties(ctx, nil)
+		done <- eventHubProps{props: props, err: err}
+	}()
+
+	select {
+	case res := <-done:
+		return res.props, res.err
+	case <-ctx.Done():
+		return azeventhubs.EventHubProperties{}, ctx.Err()
+	}
 }
 
 func (c *Client) CreateTopic(_ context.Context, name string) error {
