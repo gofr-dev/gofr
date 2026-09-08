@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1415,4 +1416,61 @@ func TestCollectMessages_SingleMessage(t *testing.T) {
 	result := g.collectMessages(t.Context(), msgChan, 10)
 
 	assert.Equal(t, []byte("single"), result)
+}
+
+func TestGoogleClient_Subscribe_ConcurrentTopics(t *testing.T) {
+	client := getGoogleClient(t)
+
+	defer client.Close()
+
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+
+	g := &googleClient{
+		client:  client,
+		logger:  logging.NewMockLogger(logging.DEBUG),
+		metrics: mockMetrics,
+		Config: Config{
+			ProjectID:        "test",
+			SubscriptionName: "sub",
+		},
+		receiveChan: make(map[string]chan *pubsub.Message),
+		subStarted:  make(map[string]struct{}),
+	}
+
+	topics := []string{"race-topic-a", "race-topic-b", "race-topic-c", "race-topic-d", "race-topic-e"}
+
+	for _, topic := range topics {
+		_, err := client.CreateTopic(t.Context(), topic)
+		require.NoError(t, err)
+
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+			"topic", topic, "subscription_name", g.Config.SubscriptionName).Times(1)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	for _, topic := range topics {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			_, _ = g.Subscribe(ctx, topic)
+		}()
+	}
+
+	wg.Wait()
+
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	assert.Len(t, g.subStarted, len(topics))
+	assert.Len(t, g.receiveChan, len(topics))
 }
