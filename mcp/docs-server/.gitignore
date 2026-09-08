@@ -1,0 +1,3 @@
+# `go build` in this directory writes an extensionless binary named
+# after the package. Never commit it.
+/docs-server
