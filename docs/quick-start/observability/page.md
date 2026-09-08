@@ -292,10 +292,10 @@ METRICS_PORT=0
 
 ### Limiting Metric Cardinality
 
-Each metric instrument keeps a bounded number of distinct label sets per collection cycle. Once that limit is
-reached, further series collapse into a single `otel.metric.overflow` series, protecting the backend from a
-cardinality explosion. The default is `2000`; override it with `METRICS_CARDINALITY_LIMIT` (set `0` or a negative
-value for unlimited):
+Each metric instrument keeps a bounded number of distinct label sets per collection cycle; the remaining series
+collapse into a single `otel.metric.overflow` series, protecting the backend from a cardinality explosion. The
+limit is inclusive of that overflow slot, so a value of `n` keeps up to `n-1` real label sets. The default is
+`2000`; override it with `METRICS_CARDINALITY_LIMIT` (set `0` or a negative value for unlimited):
 
 ```dotenv
 METRICS_CARDINALITY_LIMIT=5000

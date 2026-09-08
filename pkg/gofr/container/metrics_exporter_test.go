@@ -28,6 +28,18 @@ func Test_metricsExporterConfig(t *testing.T) {
 			},
 		},
 		{
+			// Covers the wiring seam: removing the CardinalityLimit line from
+			// metricsExporterConfig makes the feature a silent no-op, and this is
+			// the only case that would catch it.
+			name: "cardinality limit is wired into the config",
+			env:  map[string]string{"METRICS_CARDINALITY_LIMIT": "500"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
+				CardinalityLimit: func() *int { n := 500; return &n }(),
+			},
+		},
+		{
 			name: "full otlp config",
 			env: map[string]string{
 				"METRICS_EXPORTER": "otlp", "METRICS_URL": "collector:4317", "METRICS_PROTOCOL": "http",

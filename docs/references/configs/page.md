@@ -105,7 +105,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Per-instrument attribute-set limit. Once an instrument exceeds this many distinct label sets in a collection cycle, further series collapse into a single otel.metric.overflow series. Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT.
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT.
 -  2000
 
 ---
