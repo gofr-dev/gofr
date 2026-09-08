@@ -17,6 +17,11 @@ const (
 // unauthenticated /.well-known/health endpoint. It receives the request context, which carries the
 // container, so datasources such as ctx.Redis or ctx.SQL can be probed.
 //
+// That context is the probe request's, and is canceled when the probe is abandoned — the
+// Kubernetes guide ships readinessProbe.timeoutSeconds: 2, so a slower check is abandoned on every
+// probe. A check that waits on anything must select on ctx.Done() or pass ctx down, or it leaks a
+// goroutine per probe for the life of the pod.
+//
 // Returning nil means ready; returning any error means not ready, and the endpoint answers 503 so a
 // Kubernetes readiness probe keeps the pod out of service. The returned error is logged but never
 // written to the response: the endpoint is unauthenticated and must not leak dependency details.
@@ -73,11 +78,11 @@ func ReplaceFrameworkChecks() ReadinessOption {
 //
 // Checks accumulate — two independent modules can each register one — and are evaluated in
 // registration order, stopping at the first that reports not ready. Register before App.Run.
+//
+// A nil check contributes nothing to the verdict, but its options are still applied: dropping the
+// registration outright would silently leave framework gating on for a caller who wrote
+// ReplaceFrameworkChecks.
 func (a *App) AddReadinessCheck(check ReadinessCheck, opts ...ReadinessOption) {
-	if check == nil {
-		return
-	}
-
 	r := readinessCheck{check: check}
 	for _, opt := range opts {
 		opt(&r)
@@ -130,7 +135,7 @@ func (a *App) healthHandler(c *Context) (any, error) {
 
 	// Default behavior, unchanged: with no application check registered the endpoint reports the
 	// aggregate dependency status with a 200 — DEGRADED is informational, not a readiness verdict.
-	if len(checks) == 0 {
+	if activeChecks(checks) == 0 {
 		return healthResponse{Name: c.GetAppName(), Status: aggregateStatus(c)}, nil
 	}
 
@@ -153,12 +158,31 @@ func runReadinessChecks(c *Context, checks []readinessCheck) error {
 	}
 
 	for _, r := range checks {
+		if r.check == nil {
+			continue
+		}
+
 		if err := r.check(c); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// activeChecks reports how many registrations carry a check to run. A registration made with a nil
+// check is kept for the mode its options state, but contributes nothing to the verdict — so with no
+// other registration the endpoint keeps its default behavior.
+func activeChecks(checks []readinessCheck) int {
+	n := 0
+
+	for _, r := range checks {
+		if r.check != nil {
+			n++
+		}
+	}
+
+	return n
 }
 
 // frameworkReplaced reports whether any registration disclaimed GoFr's dependency checks.
@@ -177,11 +201,12 @@ func frameworkReplaced(checks []readinessCheck) bool {
 // per-dependency detail behind it, which must not reach the unauthenticated response even by way of
 // a check that returns this error unchanged.
 //
-// A default check never needs it: GoFr evaluates it before the check runs. It is for a check
-// registered with ReplaceFrameworkChecks that wants the framework's verdict as one input among
-// others rather than as an unconditional gate — tolerating DEGRADED during a warm-up window, say,
-// or requiring it only when the application's own dependency is also down. Calling it runs a full
-// datasource sweep, so call it once per probe.
+// A default check never needs it: GoFr evaluates it before the check runs, so calling it there is a
+// second full sweep and roughly doubles the probe's cost. It is for a check registered with
+// ReplaceFrameworkChecks that wants the framework's verdict as one input among others rather than
+// as an unconditional gate — tolerating DEGRADED during a warm-up window, say, or requiring it only
+// when the application's own dependency is also down. Calling it runs a full datasource sweep, so
+// call it once per probe.
 //
 // It is a function rather than a method on Container because Context embeds *container.Container: a
 // method would be promoted onto every handler's ctx, where it would sweep every datasource in the
@@ -198,17 +223,22 @@ func FrameworkReadiness(c *Context) error {
 // policies is in force, so a 503 from this endpoint — or a 200 with a dependency down — is never a
 // surprise about where the verdict came from.
 func (a *App) logReadiness() {
-	if a.container.Logger == nil || len(a.readinessChecks) == 0 {
+	a.mu.Lock()
+	checks := a.readinessChecks
+	a.mu.Unlock()
+
+	n := activeChecks(checks)
+	if a.container.Logger == nil || n == 0 {
 		return
 	}
 
 	mode := "enabled, evaluated before the app checks"
-	if frameworkReplaced(a.readinessChecks) {
+	if frameworkReplaced(checks) {
 		mode = "replaced by the app checks"
 	}
 
 	a.container.Logger.Infof("readiness: %d app check(s) registered - framework checks: %s",
-		len(a.readinessChecks), mode)
+		n, mode)
 }
 
 // aggregateStatus runs the full health check and keeps only the overall status, discarding every

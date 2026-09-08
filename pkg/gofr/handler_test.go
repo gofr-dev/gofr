@@ -426,6 +426,18 @@ func TestApp_AddReadinessCheck(t *testing.T) {
 			func(a *App) { a.AddReadinessCheck(check(nil)); a.AddReadinessCheck(check(errCheck)) }, "",
 		},
 		{
+			"a nil check keeps the mode its options state", false,
+			func(a *App) {
+				a.AddReadinessCheck(nil, ReplaceFrameworkChecks())
+				a.AddReadinessCheck(check(nil))
+			},
+			statusUp,
+		},
+		{
+			"a nil check alone keeps the default behavior", false,
+			func(a *App) { a.AddReadinessCheck(nil, ReplaceFrameworkChecks()) }, "DEGRADED",
+		},
+		{
 			"the option on any one registration replaces the framework checks", false,
 			func(a *App) {
 				a.AddReadinessCheck(check(nil))
@@ -459,6 +471,21 @@ func TestApp_healthHandler_logsReason(t *testing.T) {
 
 	assert.Contains(t, logs, "readiness: not ready")
 	assert.Contains(t, logs, errCheck.Error())
+}
+
+// TestApp_healthHandler_evaluationOrder pins that GoFr's own checks are evaluated before the
+// application's, which is only observable in which reason reaches the log when both sides fail.
+func TestApp_healthHandler_evaluationOrder(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		a, ctx := readinessApp(t, false)
+		a.AddReadinessCheck(check(errCheck))
+
+		_, err := a.healthHandler(ctx)
+		require.Error(t, err)
+	})
+
+	assert.Contains(t, logs, errFrameworkChecks.Error())
+	assert.NotContains(t, logs, errCheck.Error())
 }
 
 // TestApp_errNotReady pins what a not-ready result reports: only "DOWN", a 503, and WARN — the
@@ -538,16 +565,17 @@ func TestApp_logReadiness(t *testing.T) {
 	}
 }
 
-// TestApp_AddReadinessCheck_concurrent registers checks while probes are in flight. Registration is
-// documented as pre-Run, but nothing enforces it and the endpoint is probed at Kubernetes frequency,
-// so the field is guarded — this fails under -race if that guard is dropped.
+// TestApp_AddReadinessCheck_concurrent registers checks while probes and the startup announcement
+// are in flight. Registration is documented as pre-Run, but nothing enforces it — httpServerSetup
+// runs on whichever goroutine called Run — and the endpoint is probed at Kubernetes frequency, so
+// the field is guarded on every path: this fails under -race if any of those guards is dropped.
 func TestApp_AddReadinessCheck_concurrent(t *testing.T) {
 	a, ctx := readinessApp(t, true)
 
 	var wg sync.WaitGroup
 
 	for range 10 {
-		wg.Add(2)
+		wg.Add(3)
 
 		go func() {
 			defer wg.Done()
@@ -559,6 +587,12 @@ func TestApp_AddReadinessCheck_concurrent(t *testing.T) {
 			defer wg.Done()
 
 			_, _ = a.healthHandler(ctx)
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			a.logReadiness()
 		}()
 	}
 

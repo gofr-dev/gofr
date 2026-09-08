@@ -90,6 +90,11 @@ the endpoint is unauthenticated and must not leak dependency details.
 Checks accumulate, so two independent modules can each register one; they are evaluated in
 registration order and the first not-ready verdict wins.
 
+The check receives the probe request's context, which is canceled when the probe is abandoned —
+`readinessProbe.timeoutSeconds` is small, so a slower check is abandoned on every probe. A check
+that waits on anything must select on `ctx.Done()` or pass `ctx` down to whatever it calls;
+otherwise it leaks a goroutine per probe for the life of the pod.
+
 ##### Requiring GoFr's checks in addition to your own
 
 This is the default: GoFr's own verdict on every registered datasource and service is evaluated
@@ -207,7 +212,9 @@ app.AddReadinessCheck(func(ctx *gofr.Context) error {
 `gofr.FrameworkReadiness` returns `nil` when every registered datasource and service is up, and
 otherwise an error naming the aggregate status only — never the per-dependency detail behind it, so
 a check that returns it unchanged still cannot leak anything to the unauthenticated response. It
-runs a full datasource sweep, so call it at most once per probe.
+runs a full datasource sweep, so call it at most once per probe — and never from a default-mode
+check, where GoFr has already run that sweep before the check and calling it again roughly doubles
+the probe's cost.
 
 ##### What you see at startup and at runtime
 
