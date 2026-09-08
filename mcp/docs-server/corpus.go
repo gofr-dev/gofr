@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
+)
+
+var (
+	errUnexpectedStatus = errors.New("unexpected status fetching documentation")
+	errNoPages          = errors.New("no documentation pages could be parsed")
 )
 
 // page is one documentation page parsed out of llms-full.txt.
@@ -40,7 +46,7 @@ func newCorpus(client *http.Client, url string) *corpus {
 
 func (c *corpus) load(ctx context.Context) ([]page, error) {
 	c.once.Do(func() {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, http.NoBody)
 		if err != nil {
 			c.loadErr = fmt.Errorf("building request: %w", err)
 			return
@@ -54,7 +60,7 @@ func (c *corpus) load(ctx context.Context) ([]page, error) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			c.loadErr = fmt.Errorf("fetching %s: unexpected status %d", c.url, resp.StatusCode)
+			c.loadErr = fmt.Errorf("%w: %s returned %d", errUnexpectedStatus, c.url, resp.StatusCode)
 			return
 		}
 
@@ -66,7 +72,7 @@ func (c *corpus) load(ctx context.Context) ([]page, error) {
 
 		c.pages = parseCorpus(string(body))
 		if len(c.pages) == 0 {
-			c.loadErr = fmt.Errorf("no pages parsed from %s", c.url)
+			c.loadErr = fmt.Errorf("%w from %s", errNoPages, c.url)
 		}
 	})
 

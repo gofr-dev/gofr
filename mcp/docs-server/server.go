@@ -11,6 +11,13 @@ import (
 	"strings"
 )
 
+const (
+	// A single JSON-RPC message can carry a whole documentation page, so
+	// the default 64 KB scanner limit is far too small.
+	initialBufferBytes = 64 * 1024
+	maxMessageBytes    = 8 * 1024 * 1024
+)
+
 // JSON-RPC 2.0 error codes used by MCP.
 const (
 	codeParseError     = -32700
@@ -52,7 +59,7 @@ func newServer(client *http.Client, url string) *server {
 // initialized` is one, and answering it makes strict clients disconnect.
 func (s *server) serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, 0, initialBufferBytes), maxMessageBytes)
 
 	encoder := json.NewEncoder(out)
 
@@ -91,7 +98,7 @@ func (s *server) handleLine(ctx context.Context, line []byte) (response, bool) {
 		return response{}, false
 	}
 
-	result, rpcErr := s.dispatch(ctx, req)
+	result, rpcErr := s.dispatch(ctx, &req)
 	if rpcErr != nil {
 		return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}, true
 	}
@@ -99,7 +106,7 @@ func (s *server) handleLine(ctx context.Context, line []byte) (response, bool) {
 	return response{JSONRPC: "2.0", ID: req.ID, Result: result}, true
 }
 
-func (s *server) dispatch(ctx context.Context, req request) (any, *rpcError) {
+func (s *server) dispatch(ctx context.Context, req *request) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
 		return map[string]any{
@@ -140,9 +147,9 @@ func (s *server) callTool(ctx context.Context, params json.RawMessage) (any, *rp
 
 	switch call.Name {
 	case "search_docs":
-		return s.searchDocs(pages, call)
+		return searchDocs(pages, &call)
 	case "get_doc":
-		return s.getDoc(pages, call)
+		return getDoc(pages, &call)
 	case "list_sections":
 		return textResult(renderSections(sections(pages))), nil
 	default:
@@ -150,7 +157,7 @@ func (s *server) callTool(ctx context.Context, params json.RawMessage) (any, *rp
 	}
 }
 
-func (s *server) searchDocs(pages []page, call toolCall) (any, *rpcError) {
+func searchDocs(pages []page, call *toolCall) (any, *rpcError) {
 	if strings.TrimSpace(call.Arguments.Query) == "" {
 		return toolError("search_docs requires a non-empty `query`."), nil
 	}
@@ -179,7 +186,7 @@ func (s *server) searchDocs(pages []page, call toolCall) (any, *rpcError) {
 	return textResult(b.String()), nil
 }
 
-func (s *server) getDoc(pages []page, call toolCall) (any, *rpcError) {
+func getDoc(pages []page, call *toolCall) (any, *rpcError) {
 	if strings.TrimSpace(call.Arguments.Path) == "" {
 		return toolError("get_doc requires a `path`, e.g. /docs/quick-start/introduction."), nil
 	}

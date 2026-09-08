@@ -130,7 +130,7 @@ func TestExcerpt(t *testing.T) {
 	t.Run("does not split multi-byte runes", func(t *testing.T) {
 		content := strings.Repeat("日本語テキスト", 200)
 
-		assert.True(t, len([]rune(excerpt(content, "日本"))) <= excerptRunes+1)
+		assert.LessOrEqual(t, len([]rune(excerpt(content, "日本"))), excerptRunes+1)
 	})
 }
 
@@ -176,6 +176,7 @@ func TestSections(t *testing.T) {
 func TestCorpusLoad(t *testing.T) {
 	t.Run("fetches and parses once", func(t *testing.T) {
 		calls := 0
+
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			calls++
 
@@ -200,12 +201,12 @@ func TestCorpusLoad(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
+
 		defer srv.Close()
 
 		_, err := newCorpus(srv.Client(), srv.URL).load(context.Background())
 
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unexpected status 500")
+		require.ErrorIs(t, err, errUnexpectedStatus)
 	})
 
 	t.Run("empty body is an error", func(t *testing.T) {
@@ -216,8 +217,7 @@ func TestCorpusLoad(t *testing.T) {
 
 		_, err := newCorpus(srv.Client(), srv.URL).load(context.Background())
 
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no pages parsed")
+		require.ErrorIs(t, err, errNoPages)
 	})
 
 	t.Run("unreachable host is an error", func(t *testing.T) {
