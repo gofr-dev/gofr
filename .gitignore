@@ -32,3 +32,9 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
+
+# `go build` writes an extensionless binary named after the package
+# directory, into whatever directory it was invoked from. Ignoring it
+# only inside mcp/docs-server/ missed the copy a root-level
+# `go build ./mcp/...` leaves here. Match the name anywhere.
+docs-server
