@@ -42,7 +42,7 @@ func New() *App {
 		port = defaultGRPCPort
 	}
 
-	app.grpcServer, err = newGRPCServer(app.container, port, app.Config)
+	app.grpcServer, err = newGRPCRunner(app.container, port, app.Config)
 
 	// Continue without gRPC server rather than failing the entire app
 	if err != nil {

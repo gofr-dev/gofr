@@ -1,13 +1,11 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin" //nolint:staticcheck // deprecated but kept for backward compatibility
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -76,7 +74,19 @@ func (a *App) initTracer() {
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 	if err != nil {
-		a.container.Error(err)
+		// Errorf, not Error: the logger JSON-marshals a bare error value, and an
+		// errors.errorString has no exported fields, so Error(err) logs
+		// {"message":{}} and the reason is lost.
+		a.container.Errorf("failed to build trace exporter: %v", err)
+	}
+
+	// getExporter can return a nil exporter without an error -- an unsupported
+	// TRACE_EXPORTER takes that path, and so does any exporter this build omits.
+	// A BatchSpanProcessor over a nil exporter panics on its first flush, on the
+	// processor's own goroutine, so tracing stays off instead. The provider is
+	// already installed above, which keeps trace and span IDs on every request.
+	if exporter == nil {
+		return
 	}
 
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
@@ -179,24 +189,6 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	}
 
 	return exporter, err
-}
-
-// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
-// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
-
-	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-	if len(headers) > 0 {
-		opts = append(opts, otlptracegrpc.WithHeaders(headers))
-	}
-
-	return otlptracegrpc.New(context.Background(), opts...)
 }
 
 func buildZipkinExporter(logger logging.Logger, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {

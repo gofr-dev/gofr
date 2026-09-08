@@ -1,3 +1,5 @@
+//go:build !gofr_nogrpc
+
 package gofr
 
 import (
@@ -491,11 +493,11 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	app.AddGRPCUnaryInterceptors(interceptor1, interceptor2)
 
 	// Create the server first
-	srv, err := app.grpcServer.ensureServer()
+	srv, err := g.ensureServer()
 	require.NoError(t, err)
 
 	// Start the server in a goroutine
-	go app.grpcServer.Run(c)
+	go g.Run(c)
 
 	// Wait for the server to start
 	time.Sleep(100 * time.Millisecond)
@@ -505,13 +507,13 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 
 	defer cancel()
 
-	err = app.grpcServer.Shutdown(ctx)
+	err = g.Shutdown(ctx)
 	require.NoError(t, err)
 
 	// Verify that the server was created with the interceptors and options
 	assert.NotNil(t, srv)
-	assert.Len(t, app.grpcServer.interceptors, 4) // 2 default + 2 test interceptors
-	assert.Len(t, app.grpcServer.options, 4)      // 2 test options + 2 default (interceptor) options
+	assert.Len(t, g.interceptors, 4) // 2 default + 2 test interceptors
+	assert.Len(t, g.options, 4)      // 2 test options + 2 default (interceptor) options
 }
 
 func TestApp_WithReflection(t *testing.T) {
@@ -521,10 +523,58 @@ func TestApp_WithReflection(t *testing.T) {
 	app.container = c
 	app.grpcServer = g
 
-	srv, err := app.grpcServer.ensureServer()
+	srv, err := g.ensureServer()
 	require.NoError(t, err)
 
 	services := srv.GetServiceInfo()
 	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
 	assert.True(t, ok, "reflection service should be registered")
+}
+
+// Moved here from gofr_test.go when App.grpcServer became an interface: both
+// tests reach the concrete server, which exists only in this build.
+
+func TestUnifiedAuthenticationRegistration(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Enable various auth methods
+	app.EnableBasicAuth("user", "pass")
+	app.EnableAPIKeyAuth("key1")
+	app.EnableOAuth("http://jwks", 3600)
+
+	// The router's middleware slice is not inspectable without reflection, but the
+	// gRPC interceptors are. Two are registered by default (recovery and
+	// observability), so the three Enable calls above must take the count to five.
+	// Asserting >= 2 -- as this did before the interceptors moved behind
+	// addGRPCInterceptors -- passes on the defaults alone and proves nothing.
+	assert.Len(t, app.grpcSrv().interceptors, 5, "gRPC unary interceptors should be registered")
+	assert.Len(t, app.grpcSrv().streamInterceptors, 5, "gRPC stream interceptors should be registered")
+}
+
+func TestStartGRPCServer_Registered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = true
+
+	wg := sync.WaitGroup{}
+
+	// startGRPCServer should add to WaitGroup and launch the server
+	app.startGRPCServer(&wg)
+
+	// Give it a moment to start then shut down
+	time.Sleep(50 * time.Millisecond)
+
+	// Read through getServer rather than the field: createServer publishes it from the serve
+	// goroutine, so an unguarded read here races that write.
+	if g := app.grpcSrv(); g != nil {
+		g.forceStop()
+	}
+
+	wg.Wait()
 }

@@ -546,6 +546,40 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
+      # gofr_nogrpc is scoped to ./pkg/... on purpose. Unlike the other tags it
+      # removes exported methods -- RegisterService and the AddGRPC* setters name
+      # grpc types and cannot exist without the import -- so the gRPC examples do
+      # not compile under it, which is the intended behaviour and not a failure.
+      - name: Build and test with the gRPC server omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nogrpc ./pkg/...
+          go vet   -tags gofr_nogrpc ./pkg/gofr/
+          go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
+
+      # gofr_nodgraph drops the Dgraph migrator, the one place in GoFr that imports
+      # dgo. The stub has to keep implementing migrator, so a change to that
+      # interface must update both halves; without this step only the real one
+      # would ever be compiled.
+      - name: Build and test with the Dgraph migrator omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nodgraph ./...
+          go vet   -tags gofr_nodgraph ./pkg/gofr/migration/
+          go test  -tags gofr_nodgraph -count=1 ./pkg/gofr/migration/
+
+      # gofr_nootlp is the tag that actually releases google.golang.org/grpc: the
+      # OTLP exporters pin it, otlpmetrichttp included, so gofr_nogrpc and
+      # gofr_nodgraph only pay off once this one is set too. Both halves of the
+      # trace and metric transports have tests that exist only under the tag.
+      - name: Build and test with the OTLP exporters omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nootlp ./...
+          go vet   -tags gofr_nootlp ./pkg/gofr/ ./pkg/gofr/metrics/exporters/
+          go test  -tags gofr_nootlp -count=1 ./pkg/gofr/metrics/exporters/
+          go test  -tags gofr_nootlp -count=1 -run 'TestOTLPTracesOmitted|Test_initTracer' ./pkg/gofr/
+
       # The tags are opt-in, so the default build must stay exactly as it was.
       # This is the assertion that keeps that true.
       - name: Default build links the same packages as before

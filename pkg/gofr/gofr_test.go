@@ -779,14 +779,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
-
-	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
-
-	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
-
-	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
-
 	mockConfig7 := createMockConfig("gofr", "", "")
 
 	tests := []struct {
@@ -797,10 +789,6 @@ func Test_initTracer(t *testing.T) {
 		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
-		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
-		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
-		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
 		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
@@ -1547,24 +1535,6 @@ func TestApp_OnStart(t *testing.T) {
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
-func TestUnifiedAuthenticationRegistration(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
-	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
-
-	// Verify HTTP middleware count (approximate check)
-	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
-	// but we can check if the grpcServer has interceptors added.
-	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
-	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
-}
-
 func Test_EnableBasicAuthWithFunc(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -1853,31 +1823,6 @@ func TestInitMetricsServer_DefaultPort(t *testing.T) {
 
 	// metricServer should be initialized with default port
 	assert.NotNil(t, app.metricServer)
-}
-
-func TestStartGRPCServer_Registered(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-	app.grpcRegistered = true
-
-	wg := sync.WaitGroup{}
-
-	// startGRPCServer should add to WaitGroup and launch the server
-	app.startGRPCServer(&wg)
-
-	// Give it a moment to start then shut down
-	time.Sleep(50 * time.Millisecond)
-
-	// Read through getServer rather than the field: createServer publishes it from the serve
-	// goroutine, so an unguarded read here races that write.
-	if app.grpcServer != nil {
-		app.grpcServer.forceStop()
-	}
-
-	wg.Wait()
 }
 
 func TestStartGRPCServer_NotRegistered(t *testing.T) {
