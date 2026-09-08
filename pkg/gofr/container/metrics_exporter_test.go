@@ -279,22 +279,21 @@ func Test_metricsExporterConfig_resourceAttributes(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "OTEL_RESOURCE_ATTRIBUTES is honored",
-			env:  map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "cloud.region=asia-south1"},
-			want: "cloud.region=asia-south1",
-		},
-		{
 			name: "METRICS_RESOURCE_ATTRIBUTES is honored",
 			env:  map[string]string{"METRICS_RESOURCE_ATTRIBUTES": "faas.instance=inst-1"},
 			want: "faas.instance=inst-1",
 		},
 		{
-			name: "both are concatenated with the GoFr-native value last",
-			env: map[string]string{
-				"OTEL_RESOURCE_ATTRIBUTES":    "cloud.region=asia-south1,k8s.pod.name=pod-1",
-				"METRICS_RESOURCE_ATTRIBUTES": "cloud.region=europe-west1",
-			},
-			want: "cloud.region=asia-south1,k8s.pod.name=pod-1,cloud.region=europe-west1",
+			name: "surrounding whitespace is trimmed",
+			env:  map[string]string{"METRICS_RESOURCE_ATTRIBUTES": "  faas.instance=inst-1  "},
+			want: "faas.instance=inst-1",
+		},
+		{
+			// The SDK reads OTEL_RESOURCE_ATTRIBUTES from the process environment
+			// itself; the container must not read it a second time.
+			name: "OTEL_RESOURCE_ATTRIBUTES is left to the SDK",
+			env:  map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "cloud.region=asia-south1"},
+			want: "",
 		},
 	}
 

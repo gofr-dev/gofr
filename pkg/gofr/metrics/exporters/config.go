@@ -50,13 +50,12 @@ type Config struct {
 
 	// ResourceAttributes carries resource attributes in the OpenTelemetry
 	// "key1=value1,key2=value2" format, resolved by the container from
-	// METRICS_RESOURCE_ATTRIBUTES and OTEL_RESOURCE_ATTRIBUTES.
+	// METRICS_RESOURCE_ATTRIBUTES.
 	//
-	// The SDK already merges resource.Environment() into the resource, so
-	// OTEL_RESOURCE_ATTRIBUTES set in the process environment has always been
-	// honored. This field is what makes the same value work when it is set
-	// anywhere else GoFr's config layer reads from -- configs/.env, most
-	// commonly -- which the SDK cannot see.
+	// It is the GoFr-native spelling of OTEL_RESOURCE_ATTRIBUTES, which the SDK
+	// keeps reading from the process environment on its own. Attributes named
+	// here win per key over the environment, except over GoFr's own identity
+	// attributes, which buildResource applies last.
 	ResourceAttributes string
 }
 

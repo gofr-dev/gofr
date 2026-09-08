@@ -82,17 +82,21 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// complete resource on its own rather than one that is only correct once a
 		// particular consumer merges it.
 		resource.WithFromEnv(),
-		resource.WithAttributes(attrs...),
 	}
 
-	// Attributes resolved through the GoFr config layer are applied after
-	// WithFromEnv, so they win per key. WithFromEnv only sees the process
-	// environment; these also carry values from configs/.env and anywhere else
-	// config.Config reads from, which is where a GoFr deployment usually puts
-	// them.
+	// METRICS_RESOURCE_ATTRIBUTES is applied after WithFromEnv, so it wins per
+	// key over the environment for the operator-owned attributes it names, while
+	// leaving the keys it does not mention in place. It reaches values a
+	// config.Config backed by something other than the environment holds, which
+	// WithFromEnv cannot see.
 	if cfgAttrs := parseResourceAttributes(cfg.ResourceAttributes); len(cfgAttrs) > 0 {
 		opts = append(opts, resource.WithAttributes(cfgAttrs...))
 	}
+
+	// GoFr's own identity attributes go last: resource.New is last-wins, and no
+	// operator-supplied attribute string may rename the service or restamp the
+	// framework version.
+	opts = append(opts, resource.WithAttributes(attrs...))
 
 	// Everything below is only meaningful to a push backend, and host.id is not
 	// free: on darwin the SDK shells out to ioreg, which costs ~10ms. A

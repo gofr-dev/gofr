@@ -111,25 +111,21 @@ func metricsTemporality(conf config.Config) string {
 // from the environment (see exporters.buildResource); these are the override for
 // what detection cannot reach.
 //
-// Both the GoFr-native METRICS_RESOURCE_ATTRIBUTES and the OpenTelemetry
-// standard OTEL_RESOURCE_ATTRIBUTES are honored, and both are read via conf.Get
-// rather than by letting the SDK read the environment directly, so a value set
-// in a .env file works the same as one exported into the process. They are
-// concatenated with the GoFr-native value last, because attribute sets are
-// last-value-wins: GoFr config wins per key, without discarding the OTEL_ keys
-// it does not mention.
+// This is the GoFr-native spelling, alongside METRICS_URL, METRICS_HEADERS and
+// METRICS_TEMPORALITY. The OpenTelemetry standard OTEL_RESOURCE_ATTRIBUTES is
+// deliberately not read here: the SDK already reads it from the process
+// environment via resource.WithFromEnv, and reading it again through conf.Get
+// would only duplicate that -- config.EnvLoader is itself backed by os.Getenv,
+// and godotenv exports every configs/.env key into the process before the
+// container is built. Reading only the GoFr-native name also keeps an operator
+// attribute string out of the path that could otherwise restamp GoFr's own
+// service.name.
+//
+// It is still resolved through conf.Get rather than os.Getenv, so it works for
+// a config.Config backed by something other than the environment -- Consul or
+// Vault, say -- which the SDK cannot see at all.
 func metricsResourceAttributes(conf config.Config) string {
-	otelAttrs := strings.TrimSpace(conf.Get("OTEL_RESOURCE_ATTRIBUTES"))
-	gofrAttrs := strings.TrimSpace(conf.Get("METRICS_RESOURCE_ATTRIBUTES"))
-
-	switch {
-	case otelAttrs == "":
-		return gofrAttrs
-	case gofrAttrs == "":
-		return otelAttrs
-	default:
-		return otelAttrs + "," + gofrAttrs
-	}
+	return strings.TrimSpace(conf.Get("METRICS_RESOURCE_ATTRIBUTES"))
 }
 
 // metricsHeaders builds export headers from METRICS_HEADERS (OTEL "k=v,k=v"

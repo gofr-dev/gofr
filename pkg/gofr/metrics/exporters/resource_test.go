@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/version"
 )
 
 func attrValue(attrs []attribute.KeyValue, key string) (string, bool) {
@@ -69,9 +70,9 @@ func Test_parseResourceAttributes(t *testing.T) {
 	}
 }
 
-// Config-sourced attributes are the only way a value set anywhere other than the
-// process environment reaches the resource: resource.WithFromEnv reads the OS
-// environment directly, so it cannot see configs/.env.
+// Config-sourced attributes are the only way a value held by a config.Config
+// that is not backed by the environment reaches the resource: resource.WithFromEnv
+// reads the OS environment directly and cannot see it.
 func TestBuildResource_configAttributesReachTheResource(t *testing.T) {
 	cfg := Config{AppName: "app", ResourceAttributes: "location=asia-south1,service.instance.id=inst-1"}
 
@@ -99,9 +100,8 @@ func TestBuildResource_configAttributesReachTheResource(t *testing.T) {
 	}
 }
 
-// Both spellings are honored, and the GoFr-native one wins per key. The
-// container concatenates them with its own value last; this asserts the ordering
-// that makes that work.
+// METRICS_RESOURCE_ATTRIBUTES wins per key over OTEL_RESOURCE_ATTRIBUTES in the
+// process environment, without discarding the env keys it does not mention.
 func TestBuildResource_configAttributesWinOverEnvironment(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1,cloud.region=us-central1")
 
@@ -121,5 +121,34 @@ func TestBuildResource_configAttributesWinOverEnvironment(t *testing.T) {
 	// A key the config does not mention must survive rather than be replaced.
 	if got, _ := attrValue(attrs, "cloud.region"); got != "us-central1" {
 		t.Errorf("cloud.region = %q, want %q (unmentioned env keys must survive)", got, "us-central1")
+	}
+}
+
+// GoFr's own identity attributes are applied last, so neither an operator's
+// METRICS_RESOURCE_ATTRIBUTES nor OTEL_RESOURCE_ATTRIBUTES in the environment can
+// rename the service or restamp the framework version.
+func TestBuildResource_identityAttributesAreNotOverridable(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=hijacked-by-env,framework_version=0.0.0-env")
+
+	cfg := Config{AppName: "app", ResourceAttributes: "service.name=hijacked-by-config,location=asia-south1"}
+
+	res := buildResource(context.Background(), &cfg, logging.NewMockLogger(logging.INFO))
+	if res == nil {
+		t.Fatal("expected a resource")
+	}
+
+	attrs := res.Attributes()
+
+	if got, _ := attrValue(attrs, "service.name"); got != "app" {
+		t.Errorf("service.name = %q, want %q (GoFr's identity must not be overridable)", got, "app")
+	}
+
+	if got, _ := attrValue(attrs, "framework_version"); got != version.Framework {
+		t.Errorf("framework_version = %q, want %q", got, version.Framework)
+	}
+
+	// An operator-owned key is still honored.
+	if got, _ := attrValue(attrs, "location"); got != "asia-south1" {
+		t.Errorf("location = %q, want %q", got, "asia-south1")
 	}
 }
