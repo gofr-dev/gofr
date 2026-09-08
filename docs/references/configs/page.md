@@ -104,6 +104,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  OTEL_RESOURCE_ATTRIBUTES
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
 -  HTTP_PORT
 -  Port on which the HTTP server listens
 -  8000
@@ -187,6 +192,17 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Enable gRPC server reflection
 -  false
 
+---
+
+-  HEALTH_CACHE_TTL
+-  How long a health result may be served without re-checking the backends, as a duration (`5s`, `10s`, `1m`). Unset, `0` or `disabled` turns caching off, which is the default: within a TTL a recovered backend still reports DOWN and a failed one still reports UP, so it is a trade to opt into rather than inherit.
+-  disabled
+
+---
+
+-  HEALTH_CHECK_TIMEOUT
+-  Upper bound on one round of health checks, as a duration (`2s`). Backends that have not answered by then are left out of the response and the aggregate status is DEGRADED. A check that is still running when the round is abandoned keeps running, so a probe arriving before it finishes reports DEGRADED with no per-dependency detail rather than starting a second round against the same unresponsive backend. Unset or `0` means the round is bounded only by each backend client's own timeout.
+-  disabled
 
 {% /table %}
 

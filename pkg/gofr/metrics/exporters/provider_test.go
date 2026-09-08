@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -72,5 +74,147 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 
 	if !strings.Contains(out, "blank import") {
 		t.Errorf("expected actionable 'blank import' guidance, got: %q", out)
+	}
+}
+
+// Google's OTLP ingest maps points onto prometheus_target and rejects any whose
+// "location" or "instance" label is empty, so the resource has to carry a source
+// for both. instance falls back to host.id, which is detected; location can only
+// come from the operator, via the standard OTel environment variable.
+func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
+
+	// host.id is only detected for push exporters, so select one.
+	res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "otlp"}, logging.NewMockLogger(logging.INFO))
+	if res == nil {
+		t.Fatal("expected a resource")
+	}
+
+	got := map[string]string{}
+	for _, kv := range res.Attributes() {
+		got[string(kv.Key)] = kv.Value.String()
+	}
+
+	if got["location"] != "us-central1" {
+		t.Errorf("location = %q, want %q (OTEL_RESOURCE_ATTRIBUTES must reach the resource)", got["location"], "us-central1")
+	}
+
+	if got["host.id"] == "" {
+		t.Error("host.id is empty; it is the last fallback Google accepts for the required instance label")
+	}
+
+	// The attributes that were already there must survive the merge.
+	if got["service.name"] != "app" {
+		t.Errorf("service.name = %q, want %q", got["service.name"], "app")
+	}
+
+	if got["framework_version"] == "" {
+		t.Error("framework_version was dropped")
+	}
+}
+
+// A registered detector must only run for the exporter it belongs to, so that a
+// Prometheus-only app never reaches for a cloud metadata server.
+func TestBuildResource_detectorRunsOnlyForItsExporter(t *testing.T) {
+	var called bool
+
+	// A non-empty schema URL that differs from the SDK's own is what a real vendor
+	// detector supplies -- contrib/detectors/gcp v1.44.0 pins semconv 1.41.0 while
+	// the SDK host detector pins 1.43.0. An empty one never conflicts in
+	// resource.Merge, so a probe using it would pass this test trivially.
+	RegisterResourceDetector("detector-probe", detectorFunc(func(context.Context) (*resource.Resource, error) {
+		called = true
+
+		return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0",
+			attribute.String("probe", "yes")), nil
+	}))
+
+	buildResource(context.Background(), &Config{AppName: "app"}, logging.NewMockLogger(logging.INFO))
+
+	if called {
+		t.Error("detector ran for an unrelated exporter")
+	}
+
+	res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "detector-probe"}, logging.NewMockLogger(logging.INFO))
+
+	if !called {
+		t.Fatal("detector did not run for its own exporter")
+	}
+
+	for _, kv := range res.Attributes() {
+		if string(kv.Key) == "probe" {
+			return
+		}
+	}
+
+	t.Error("detector attributes did not reach the resource")
+}
+
+type detectorFunc func(context.Context) (*resource.Resource, error)
+
+func (f detectorFunc) Detect(ctx context.Context) (*resource.Resource, error) { return f(ctx) }
+
+// host.id detection is not free -- on darwin the SDK shells out to ioreg, which
+// measured ~10ms. The default configuration is prometheus-only and has no use
+// for the label, so it must not pay that cost at every application start.
+func TestBuildResource_prometheusOnlySkipsHostIDDetection(t *testing.T) {
+	for _, exporter := range []string{"", "prometheus"} {
+		t.Run("exporter="+exporter, func(t *testing.T) {
+			res := buildResource(context.Background(), &Config{AppName: "app", Exporter: exporter},
+				logging.NewMockLogger(logging.INFO))
+
+			for _, kv := range res.Attributes() {
+				if string(kv.Key) == "host.id" {
+					t.Errorf("host.id was detected for a pull-only exporter; that costs a subprocess on darwin")
+				}
+			}
+
+			// The attributes that matter to every app must still be present.
+			var gotServiceName bool
+
+			for _, kv := range res.Attributes() {
+				if string(kv.Key) == "service.name" {
+					gotServiceName = true
+				}
+			}
+
+			if !gotServiceName {
+				t.Error("service.name missing")
+			}
+		})
+	}
+}
+
+// A vendor detector pinning an older semconv than the SDK's is the normal case,
+// not a fault: resource.Merge drops the schema URL but keeps every attribute. It
+// must not be reported as a failure, or every healthy boot on Google Cloud logs
+// a warning.
+func TestBuildResource_schemaURLConflictIsNotAFailure(t *testing.T) {
+	RegisterResourceDetector("schema-conflict", detectorFunc(func(context.Context) (*resource.Resource, error) {
+		return resource.NewWithAttributes("https://opentelemetry.io/schemas/1.41.0",
+			attribute.String("cloud.region", "us-central1")), nil
+	}))
+
+	// Warnf is WARN level, which the logger routes to normalOut (stdout); only
+	// ERROR and above go to stderr.
+	logs := testutil.StdoutOutputForFunc(func() {
+		res := buildResource(context.Background(), &Config{AppName: "app", Exporter: "schema-conflict"},
+			logging.NewMockLogger(logging.DEBUG))
+
+		// The attributes are what the backend reads; they must all survive.
+		got := map[string]bool{}
+		for _, kv := range res.Attributes() {
+			got[string(kv.Key)] = true
+		}
+
+		for _, want := range []string{"cloud.region", "host.id", "service.name", "framework_version"} {
+			if !got[want] {
+				t.Errorf("%s was dropped by the conflicting-schema merge", want)
+			}
+		}
+	})
+
+	if strings.Contains(logs, "resource detection was incomplete") {
+		t.Errorf("a schema-URL conflict must not be logged as a failure, got: %q", logs)
 	}
 }

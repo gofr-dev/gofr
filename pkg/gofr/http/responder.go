@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/textproto"
 	"reflect"
 	"sync"
 
@@ -30,14 +31,50 @@ const initialRespBufCap = 512
 // process-wide pool is the idiomatic shape for this and is safe for concurrent
 // use by construction.
 //
-//nolint:gochecknoglobals // process-wide pool of reusable response-encode buffers.
+// The encoder is pooled together with its buffer, not separately: a
+// json.Encoder is bound to the writer it was constructed with, so the two have
+// to travel as a pair. Constructing one per response was an allocation on every
+// request even though the buffer it wrote into was already pooled.
+//
+//nolint:gochecknoglobals // process-wide pool of reusable response encoders.
 var respBufPool = sync.Pool{
-	New: func() any { return bytes.NewBuffer(make([]byte, 0, initialRespBufCap)) },
+	New: func() any { return newRespEncoder() },
+}
+
+// Canonical key and shared value for the JSON content type, resolved once so no
+// response pays for canonicalization or a value-slice allocation.
+//
+//nolint:gochecknoglobals // immutable, process-wide header constants.
+var (
+	canonicalContentType = textproto.CanonicalMIMEHeaderKey("Content-Type")
+	jsonContentType      = []string{contentTypeJSON}
+)
+
+// respEncoder pairs a reusable buffer with the encoder bound to it, plus the
+// response envelope itself.
+//
+// The envelope is kept here so it can be encoded through a pointer. Passing a
+// struct to Encode, whose parameter is any, boxes it and costs an allocation on
+// every response; passing a pointer to a struct that already lives in the pool
+// does not. encoding/json produces identical output either way.
+type respEncoder struct {
+	buf  *bytes.Buffer
+	enc  *json.Encoder
+	resp response
 }
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
-	return &Responder{w: w, method: method}
+	res := ResponderFor(w, method)
+
+	return &res
+}
+
+// ResponderFor returns a Responder by value, so a caller that stores it inside
+// an allocation it already owns does not need a second one. Callers needing a
+// pointer keep using NewResponder.
+func ResponderFor(w http.ResponseWriter, method string) Responder {
+	return Responder{w: w, method: method}
 }
 
 // Responder encapsulates an http.ResponseWriter and is responsible for crafting structured responses.
@@ -55,34 +92,48 @@ func (r Responder) Respond(data any, err error) {
 
 	statusCode, errorObj := r.determineResponse(data, err)
 
+	// Assigned rather than Set: Header.Set canonicalizes the key and allocates a
+	// fresh []string for the value on every response, and both are constant here.
+	// Sharing the value slice is safe because it has len == cap == 1, so a later
+	// Header.Add appends into a new array instead of mutating it.
+	//
+	// The guard is a VALUE check, not a presence check. Header().Get returns ""
+	// both for an absent key and for a key explicitly set to "", and the default
+	// has to apply in both cases: a caller that pre-set Content-Type to "" would
+	// otherwise ship a JSON body with a blank Content-Type, since the present-but-
+	// empty entry also suppresses net/http's own sniffing.
+	header := r.w.Header()
+	if v := header[canonicalContentType]; len(v) == 0 || v[0] == "" {
+		header[canonicalContentType] = jsonContentType
+	}
+
+	re := getRespBuf()
+	buf := re.buf
+
 	var resp any
 
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
 	case resTypes.Response:
-		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
+		re.resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
+		resp = &re.resp
 	default:
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {
 			data = nil
 		}
 
-		resp = response{Data: data, Error: errorObj}
+		re.resp = response{Data: data, Error: errorObj}
+		resp = &re.resp
 	}
-
-	if r.w.Header().Get("Content-Type") == "" {
-		r.w.Header().Set("Content-Type", "application/json")
-	}
-
-	buf := getRespBuf()
 
 	// json.Encoder.Encode appends a trailing newline, exactly matching the
 	// previous json.Marshal(resp) followed by a separate Write of "\n". It also
 	// uses the same default HTML escaping as json.Marshal, so the bytes on the
 	// wire are identical to before.
-	if encodeErr := json.NewEncoder(buf).Encode(resp); encodeErr != nil {
-		putRespBuf(buf)
+	if encodeErr := re.enc.Encode(resp); encodeErr != nil {
+		putRespBuf(re)
 
 		r.w.WriteHeader(http.StatusInternalServerError)
 
@@ -94,25 +145,45 @@ func (r Responder) Respond(data any, err error) {
 	r.w.WriteHeader(statusCode)
 	_, _ = r.w.Write(buf.Bytes())
 
-	putRespBuf(buf)
+	putRespBuf(re)
 }
 
-// getRespBuf takes a reset buffer from the pool, ready to encode into. It is the
-// counterpart to putRespBuf, keeping the pool's type assertion in one place. The
-// assertion is safe: respBufPool is private and only ever holds *bytes.Buffer.
-func getRespBuf() *bytes.Buffer {
-	buf := respBufPool.Get().(*bytes.Buffer)
-	buf.Reset()
+// newRespEncoder builds an encoder bound to its own buffer. A json.Encoder is
+// tied to the writer it was constructed with, so the two are only ever created
+// and pooled as a pair.
+func newRespEncoder() *respEncoder {
+	buf := bytes.NewBuffer(make([]byte, 0, initialRespBufCap))
 
-	return buf
+	return &respEncoder{buf: buf, enc: json.NewEncoder(buf)}
 }
 
-// putRespBuf returns buf to the pool unless it has grown past maxRespPooledBuf,
-// so one oversized response cannot permanently inflate every pooled buffer. All
-// return-to-pool paths go through here to keep that cap invariant in one place.
-func putRespBuf(buf *bytes.Buffer) {
-	if buf.Cap() <= maxRespPooledBuf {
-		respBufPool.Put(buf)
+// getRespBuf takes a reset encoder from the pool, ready to encode into. It is
+// the counterpart to putRespBuf, keeping the pool's type assertion in one place.
+func getRespBuf() *respEncoder {
+	// The pool is private and New only ever yields *respEncoder, so this cannot fail. It is written
+	// to recover rather than to discard the result: ignoring it would turn an impossible failure into
+	// a nil dereference on the next line, which says nothing about what went wrong.
+	re, ok := respBufPool.Get().(*respEncoder)
+	if !ok {
+		re = newRespEncoder()
+	}
+
+	re.buf.Reset()
+
+	return re
+}
+
+// putRespBuf returns re to the pool unless its buffer has grown past
+// maxRespPooledBuf, so one oversized response cannot permanently inflate every
+// pooled buffer. All return-to-pool paths go through here to keep that cap
+// invariant in one place.
+func putRespBuf(re *respEncoder) {
+	// Clear the envelope so a payload cannot outlive its response inside the
+	// pool, and so nothing it referenced is kept alive.
+	re.resp = response{}
+
+	if re.buf.Cap() <= maxRespPooledBuf {
+		respBufPool.Put(re)
 	}
 }
 
