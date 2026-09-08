@@ -47,6 +47,16 @@ type Config struct {
 	//
 	// Set by Build; ignored on input.
 	Resource *resource.Resource
+
+	// ResourceAttributes carries resource attributes in the OpenTelemetry
+	// "key1=value1,key2=value2" format, resolved by the container from
+	// METRICS_RESOURCE_ATTRIBUTES.
+	//
+	// It is the GoFr-native spelling of OTEL_RESOURCE_ATTRIBUTES, which the SDK
+	// keeps reading from the process environment on its own. Attributes named
+	// here win per key over the environment, except over GoFr's own identity
+	// attributes, which buildResource applies last.
+	ResourceAttributes string
 }
 
 // Logger is the subset of the framework logger used by the exporters package.

@@ -109,6 +109,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  METRICS_RESOURCE_ATTRIBUTES
+-  The GoFr-native spelling of the above, same comma-separated key=value format. Read through the GoFr config layer, so it also works for a configuration source that is not the process environment. Takes priority per key when both are set; neither can override GoFr's own service.name or framework_version.
+
+---
+
 -  HTTP_PORT
 -  Port on which the HTTP server listens
 -  8000

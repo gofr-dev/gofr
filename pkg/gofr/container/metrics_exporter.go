@@ -57,6 +57,8 @@ func metricsExporterConfig(conf config.Config, appName, appVersion string, logge
 		Temporality: metricsTemporality(conf),
 		Headers:     headers,
 		Insecure:    insecure,
+
+		ResourceAttributes: metricsResourceAttributes(conf),
 	}
 }
 
@@ -99,6 +101,31 @@ func metricsTemporality(conf config.Config) string {
 	}
 
 	return defaultTemporality
+}
+
+// metricsResourceAttributes resolves the resource attributes describing this
+// deployment, in the OpenTelemetry "key1=value1,key2=value2" format.
+//
+// They are what identifies the time series to the backend, and some backends
+// reject points whose identifying labels resolve empty. GoFr detects what it can
+// from the environment (see exporters.buildResource); these are the override for
+// what detection cannot reach.
+//
+// This is the GoFr-native spelling, alongside METRICS_URL, METRICS_HEADERS and
+// METRICS_TEMPORALITY. The OpenTelemetry standard OTEL_RESOURCE_ATTRIBUTES is
+// deliberately not read here: the SDK already reads it from the process
+// environment via resource.WithFromEnv, and reading it again through conf.Get
+// would only duplicate that -- config.EnvLoader is itself backed by os.Getenv,
+// and godotenv exports every configs/.env key into the process before the
+// container is built. Reading only the GoFr-native name also keeps an operator
+// attribute string out of the path that could otherwise restamp GoFr's own
+// service.name.
+//
+// It is still resolved through conf.Get rather than os.Getenv, so it works for
+// a config.Config backed by something other than the environment -- Consul or
+// Vault, say -- which the SDK cannot see at all.
+func metricsResourceAttributes(conf config.Config) string {
+	return strings.TrimSpace(conf.Get("METRICS_RESOURCE_ATTRIBUTES"))
 }
 
 // metricsHeaders builds export headers from METRICS_HEADERS (OTEL "k=v,k=v"
