@@ -370,6 +370,34 @@ func TestMysqlHandler(t *testing.T) {
 	assert.Equal(t, 4, resp)
 }
 
+func TestProxySearchHandler(t *testing.T) {
+	// Exercises the outbound HTTP QUERY path: ProxySearchHandler calls
+	// c.GetHTTPService("anotherService").QueryWithHeaders(...), so the assertion
+	// pins that the downstream is invoked with method QUERY (via the mock's
+	// QueryWithHeaders binding), the "search" path, no query params, the JSON
+	// body the handler emits, and Content-Type: application/json.
+	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService("anotherService"))
+
+	ctx := createTestContext(http.MethodGet, "/proxy-search", mockContainer)
+
+	mockResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"data":{"matched":"golang"}}`)),
+	}
+
+	mocks.HTTPServices["anotherService"].EXPECT().QueryWithHeaders(
+		gomock.Any(),
+		"search",
+		nil,
+		[]byte(`{"filter":"golang"}`),
+		map[string]string{"Content-Type": "application/json"},
+	).Return(mockResp, nil)
+
+	resp, err := ProxySearchHandler(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"matched": "golang"}, resp)
+}
+
 func TestTraceHandler(t *testing.T) {
 	// Register HTTP service - each service gets its own separate mock instance
 	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService("anotherService"))
