@@ -71,6 +71,55 @@ func Test_WebSocket_Success(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// Test_WebSocket_ContextIsNotSelfReferential pins the fix for the
+// self-referential ctx.Context found in review of #4111 (see the issue
+// linked from that PR): App.WebSocket built the handler's context with
+// context.WithValue(ctx, ...) instead of context.WithValue(ctx.Context, ...).
+// ctx is a *Context, which embeds context.Context, so the parent of the
+// resulting value-context was ctx itself -- and ctx.Context was the very
+// value-context being constructed. Any walk of the parent chain other than
+// the lucky first lookup recursed forever.
+//
+// Calling .Done() is what recurses -- not receiving from the channel it
+// returns -- so this handler need only make that call, not read the result,
+// to exercise the bug. Pre-fix, that call alone crashes the whole test
+// binary with "fatal error: stack overflow" (unrecoverable: recover() cannot
+// catch a fatal error), rather than this test failing cleanly.
+func Test_WebSocket_ContextIsNotSelfReferential(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.WebSocket("/ws-selfref", func(ctx *Context) (any, error) {
+		_ = ctx.Context.Done()
+
+		return "ok", nil
+	})
+
+	go app.Run()
+
+	time.Sleep(100 * time.Millisecond)
+
+	wsURL := "ws" + server.URL[len("http"):] + "/ws-selfref"
+
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	err = ws.WriteMessage(websocket.TextMessage, []byte("hi"))
+	require.NoError(t, err)
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+
+	assert.Equal(t, "ok", string(message))
+}
+
 // Test_WebSocket_PlainHTTPRequestDoesNotPanic pins the fix for #3862: a plain
 // HTTP request to a route registered via app.WebSocket (no Upgrade headers,
 // so no WSConnectionKey is ever set on the request context) must get a clean
