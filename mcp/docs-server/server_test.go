@@ -163,7 +163,7 @@ func TestSearchDocsTool(t *testing.T) {
 		assert.True(t, isToolError(t, resp))
 	})
 
-	t.Run("limit is honoured", func(t *testing.T) {
+	t.Run("limit is honored", func(t *testing.T) {
 		resp := call(t, s, `{"jsonrpc":"2.0","id":4,"method":"tools/call",
 			"params":{"name":"search_docs","arguments":{"query":"gofr","limit":1}}}`)
 

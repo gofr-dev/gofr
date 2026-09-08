@@ -46,7 +46,7 @@ func listUsers(c *gofr.Context) (any, error) {
 }
 ```
 
-Always: parameterised queries only, `defer rows.Close()`, and check `rows.Err()`
+Always: parameterized queries only, `defer rows.Close()`, and check `rows.Err()`
 after the loop.
 
 ## Redis

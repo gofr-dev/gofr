@@ -49,7 +49,7 @@ RUN npm install
 RUN npm run build
 
 # Stage 2: Serve with Static Server
-# v1.0.0 adds the agent-facing serving behaviour the website relies on:
+# v1.0.0 adds the agent-facing serving behavior the website relies on:
 #   - Accept: text/markdown on an extensionless route resolves to the
 #     `<route>.md` sibling the website now generates for every page,
 #     with Content-Type: text/markdown and Vary: Accept

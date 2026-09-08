@@ -100,7 +100,7 @@ func TestSearch(t *testing.T) {
 		assert.Empty(t, search(pages, "kafka nonexistentterm", 10))
 	})
 
-	t.Run("honours the limit", func(t *testing.T) {
+	t.Run("honors the limit", func(t *testing.T) {
 		assert.Len(t, search(pages, "gofr", 1), 1)
 	})
 

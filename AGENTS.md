@@ -24,7 +24,7 @@ rules below are the parts agents get wrong most often, not a replacement for it.
 1. **PRs target `development`, never `main`.** Feature branches merge to
    `development` first; `main` is release-only. A PR opened against `main` will
    be closed.
-2. **Every behavioural change needs a test.** Table-driven, `testify` assertions,
+2. **Every behavioral change needs a test.** Table-driven, `testify` assertions,
    `go.uber.org/mock` for mocks. Do not hand-write mocks.
 3. **Datasource packages are separate modules.** Adding a dependency to
    `pkg/gofr/datasource/redis` must not pull that dependency into the root
