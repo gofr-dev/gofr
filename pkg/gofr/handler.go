@@ -167,10 +167,17 @@ func (h handler) serveInline(c *Context, spanCtx trace.SpanContext) (result any,
 // after the handler hijacks the connection).
 //
 // The handler outcome is sent through a buffered channel rather than to
-// shared variables, so the goroutine never writes a memory location the
-// main goroutine reads — `go test -race` stays clean. Buffer size 1 lets
-// the handler goroutine finish writing and exit even after the main
-// goroutine has already taken the ctx.Done or panicked branch.
+// shared variables, so its (result, err) pair never becomes a location
+// both goroutines touch. Buffer size 1 lets the handler goroutine finish
+// writing and exit even after the main goroutine has already taken the
+// ctx.Done or panicked branch.
+//
+// c.Context is a location both goroutines DO touch: h.function runs in the
+// spawned goroutine and is free to reassign it (App.WebSocket does, to
+// thread the connection through it), while this goroutine's select used to
+// read c.Context.Done() directly — a data race, since nothing ordered the
+// two accesses. See the watchCtx snapshot below, taken before the goroutine
+// is spawned, for the fix.
 func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *http.Request) (result any, err error) {
 	done := make(chan handlerOutcome, 1)
 	panicked := make(chan struct{})

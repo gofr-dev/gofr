@@ -287,8 +287,16 @@ jobs:
             export APP_ENV=test
 
             # Run tests for root gofr package
+            #
+            # -race here specifically (not the sub-packages run below, which is
+            # slower and heavier on external services) is what makes concurrency
+            # fixes in this package durable: the WebSocket/serveWithGoroutine
+            # data race fixed alongside this line had no CI signal until now
+            # (#3930) — go test -race stayed a claim in a doc comment nobody
+            # could fail on. -race requires cgo, which ubuntu-latest provides by
+            # default.
             exit_code=0
-            go test -v -short -covermode=atomic \
+            go test -v -short -race -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
