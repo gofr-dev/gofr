@@ -79,10 +79,18 @@ func ReplaceFrameworkChecks() ReadinessOption {
 // Checks accumulate — two independent modules can each register one — and are evaluated in
 // registration order, stopping at the first that reports not ready. Register before App.Run.
 //
-// A nil check contributes nothing to the verdict, but its options are still applied: dropping the
-// registration outright would silently leave framework gating on for a caller who wrote
-// ReplaceFrameworkChecks.
+// A nil check is a programming error, so the whole registration is dropped and logged rather than
+// half-applied: keeping its options would let ReplaceFrameworkChecks — a property of readiness as a
+// whole — turn framework gating off for every other module's check on the strength of a bug.
 func (a *App) AddReadinessCheck(check ReadinessCheck, opts ...ReadinessOption) {
+	if check == nil {
+		if a.container != nil && a.container.Logger != nil {
+			a.container.Errorf("invalid readiness check: check must not be nil - registration ignored")
+		}
+
+		return
+	}
+
 	r := readinessCheck{check: check}
 	for _, opt := range opts {
 		opt(&r)
@@ -135,7 +143,7 @@ func (a *App) healthHandler(c *Context) (any, error) {
 
 	// Default behavior, unchanged: with no application check registered the endpoint reports the
 	// aggregate dependency status with a 200 — DEGRADED is informational, not a readiness verdict.
-	if activeChecks(checks) == 0 {
+	if len(checks) == 0 {
 		return healthResponse{Name: c.GetAppName(), Status: aggregateStatus(c)}, nil
 	}
 
@@ -158,31 +166,12 @@ func runReadinessChecks(c *Context, checks []readinessCheck) error {
 	}
 
 	for _, r := range checks {
-		if r.check == nil {
-			continue
-		}
-
 		if err := r.check(c); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-// activeChecks reports how many registrations carry a check to run. A registration made with a nil
-// check is kept for the mode its options state, but contributes nothing to the verdict — so with no
-// other registration the endpoint keeps its default behavior.
-func activeChecks(checks []readinessCheck) int {
-	n := 0
-
-	for _, r := range checks {
-		if r.check != nil {
-			n++
-		}
-	}
-
-	return n
 }
 
 // frameworkReplaced reports whether any registration disclaimed GoFr's dependency checks.
@@ -227,8 +216,7 @@ func (a *App) logReadiness() {
 	checks := a.readinessChecks
 	a.mu.Unlock()
 
-	n := activeChecks(checks)
-	if a.container.Logger == nil || n == 0 {
+	if a.container.Logger == nil || len(checks) == 0 {
 		return
 	}
 
@@ -238,7 +226,7 @@ func (a *App) logReadiness() {
 	}
 
 	a.container.Logger.Infof("readiness: %d app check(s) registered - framework checks: %s",
-		n, mode)
+		len(checks), mode)
 }
 
 // aggregateStatus runs the full health check and keeps only the overall status, discarding every

@@ -426,15 +426,15 @@ func TestApp_AddReadinessCheck(t *testing.T) {
 			func(a *App) { a.AddReadinessCheck(check(nil)); a.AddReadinessCheck(check(errCheck)) }, "",
 		},
 		{
-			"a nil check keeps the mode its options state", false,
+			"a nil check drops its options too, rather than half-applying a bug", false,
 			func(a *App) {
 				a.AddReadinessCheck(nil, ReplaceFrameworkChecks())
 				a.AddReadinessCheck(check(nil))
 			},
-			statusUp,
+			"",
 		},
 		{
-			"a nil check alone keeps the default behavior", false,
+			"a nil check with options still leaves the default behavior", false,
 			func(a *App) { a.AddReadinessCheck(nil, ReplaceFrameworkChecks()) }, "DEGRADED",
 		},
 		{
@@ -471,6 +471,19 @@ func TestApp_healthHandler_logsReason(t *testing.T) {
 
 	assert.Contains(t, logs, "readiness: not ready")
 	assert.Contains(t, logs, errCheck.Error())
+}
+
+// TestApp_AddReadinessCheck_nilIsLogged pins that a dropped registration is reported: a nil check is
+// a programming error, and dropping it silently is what made the option-carrying case ambiguous.
+func TestApp_AddReadinessCheck_nilIsLogged(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddReadinessCheck(nil, ReplaceFrameworkChecks())
+	})
+
+	assert.Contains(t, logs, "invalid readiness check")
 }
 
 // TestApp_healthHandler_evaluationOrder pins that GoFr's own checks are evaluated before the
