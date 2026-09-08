@@ -1341,19 +1341,22 @@ func TestAddStaticFilesEndpointForms(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Index</html>"), 0600))
 
+	// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+	const wantEndpoint = "/static"
+
 	for _, endpoint := range []string{"static", "/static", "static/", "/static/"} {
 		t.Run(endpoint, func(t *testing.T) {
 			app := New()
 			app.AddStaticFiles(endpoint, dir)
 
 			stored := app.httpServer.staticFiles[dir]
-			assert.Equal(t, "/static", stored, "endpoint %q should normalize to /static", endpoint)
+			assert.Equal(t, wantEndpoint, stored, "endpoint %q should normalize to /static", endpoint)
 
 			// Wire the stored endpoint exactly as App.Run does and prove it serves.
 			router := gofrHTTP.NewRouter()
 			router.AddStaticFiles(app.Logger(), stored, dir)
 
-			for _, path := range []string{"/static", "/static/index.html"} {
+			for _, path := range []string{wantEndpoint, wantEndpoint + "/index.html"} {
 				w := httptest.NewRecorder()
 				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
 

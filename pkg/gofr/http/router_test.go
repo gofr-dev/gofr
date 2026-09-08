@@ -567,6 +567,48 @@ func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
 	}
 }
 
+// staticTestEndpoint is the normalized form every endpoint spelling below must converge to.
+// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+const staticTestEndpoint = "/static"
+
+// Test_StaticFileServing_EndpointForms covers the endpoint forms a direct caller can pass
+// to Router.AddStaticFiles. The route patterns are built from endpoint verbatim while
+// ServeHTTP normalizes incoming paths with path.Clean, so a leading or trailing slash
+// registers a pattern no request can ever match — every request under the endpoint 404s
+// even though registration logs success. (App.AddStaticFiles normalizes as well, so its
+// error logs agree on one form; this is the guarantee at the site where the patterns
+// are built.)
+func Test_StaticFileServing_EndpointForms(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"bare", "static"},
+		{"leading slash", "/static"},
+		{"trailing slash", "static/"},
+		{"leading and trailing slash", "/static/"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, path := range []string{staticTestEndpoint, staticTestEndpoint + "/index.html"} {
+				router := NewRouter()
+				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), tc.endpoint, tempDir)
+
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", tc.endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", tc.endpoint, path)
+			}
+		})
+	}
+}
+
 // Test_StaticFileServing_MethodNotAllowed covers the methods a static endpoint does not implement.
 // The routes carry no .Methods() matcher — deliberately, because restricting them there drops the
 // request to the catch-all and answers 404, which contradicts the 200 the same path gives for GET —
