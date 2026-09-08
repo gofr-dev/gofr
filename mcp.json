@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "gofr-docs": {
+      "type": "stdio",
+      "command": "go",
+      "args": ["run", "gofr.dev/mcp/docs-server@latest"]
+    }
+  }
+}

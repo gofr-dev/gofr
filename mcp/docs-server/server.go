@@ -227,7 +227,12 @@ func renderSections(counts map[string]int) string {
 	b.WriteString("GoFr documentation sections:\n\n")
 
 	for _, name := range names {
-		fmt.Fprintf(&b, "- /%s (%d pages)\n", name, counts[name])
+		suffix := "pages"
+		if counts[name] == 1 {
+			suffix = "page"
+		}
+
+		fmt.Fprintf(&b, "- /%s (%d %s)\n", name, counts[name], suffix)
 	}
 
 	return b.String()

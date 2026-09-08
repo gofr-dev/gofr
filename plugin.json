@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "gofr",
+  "version": "1.0.0",
+  "description": "Build and maintain Go microservices with GoFr, an opinionated framework with built-in observability, 15+ datasource clients, gRPC, GraphQL, WebSockets, Pub/Sub, and cron jobs.",
+  "author": {
+    "name": "GoFr",
+    "email": "connect@gofr.dev",
+    "url": "https://gofr.dev"
+  },
+  "homepage": "https://gofr.dev",
+  "repository": "https://github.com/gofr-dev/gofr",
+  "license": "Apache-2.0",
+  "keywords": ["golang", "microservices", "observability", "grpc", "opentelemetry"]
+}

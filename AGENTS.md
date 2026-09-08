@@ -60,8 +60,9 @@ some agent-facing files are split across the two repositories:
 - `docs/AGENTS.md` → served at `/AGENTS.md`. Framework usage guidance.
 - `docs/*/page.md` → the documentation pages, each also published as a Markdown
   twin (`/docs/quick-start/introduction.md`).
-- `.claude/plugin.json` and `skills/` → agent plugin manifest and skills for this
-  repository.
+- `plugin.json` + `mcp.json` at the repo root, and `skills/<name>/SKILL.md` →
+  the Agent Plugins package. The spec discovers components by these fixed
+  locations, so do not move them.
 - Everything under `/.well-known/`, `llms.txt`, and `openapi.json` is generated
   or authored in `gofr-dev/website`, not here.
 

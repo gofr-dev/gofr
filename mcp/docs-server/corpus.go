@@ -297,6 +297,12 @@ func sections(pages []page) map[string]int {
 		parts := strings.Split(strings.Trim(p.Route, "/"), "/")
 
 		name := parts[0]
+		if name == "" {
+			// Trimming "/" leaves an empty first element, which would
+			// render as a nameless "/ (1 page)" row.
+			name = "(home)"
+		}
+
 		if name == "docs" && len(parts) > 1 {
 			name = "docs/" + parts[1]
 		}
