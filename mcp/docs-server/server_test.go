@@ -109,12 +109,17 @@ func TestToolsList(t *testing.T) {
 }
 
 func TestToolDefinitionsAreWellFormed(t *testing.T) {
-	for _, tool := range toolDefinitions() {
-		name, _ := tool["name"].(string)
+	for _, def := range toolDefinitions() {
+		assert.NotEmpty(t, def.Name)
+		assert.NotEmpty(t, def.Description,
+			"%s needs a description for the model to route on", def.Name)
+		assert.Equal(t, schemaTypeObject, def.InputSchema.Type,
+			"%s needs an object input schema", def.Name)
 
-		assert.NotEmpty(t, name)
-		assert.NotEmpty(t, tool["description"], "%s needs a description for the model to route on", name)
-		assert.NotNil(t, tool["inputSchema"], "%s needs an input schema", name)
+		for _, required := range def.InputSchema.Required {
+			assert.Contains(t, def.InputSchema.Properties, required,
+				"%s marks %q required but does not declare it", def.Name, required)
+		}
 	}
 }
 

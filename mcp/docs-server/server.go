@@ -18,6 +18,16 @@ const (
 	maxMessageBytes    = 8 * 1024 * 1024
 )
 
+// Tool names, as the model sees them.
+const (
+	toolSearchDocs   = "search_docs"
+	toolGetDoc       = "get_doc"
+	toolListSections = "list_sections"
+
+	jsonRPCVersion   = "2.0"
+	schemaTypeObject = "object"
+)
+
 // JSON-RPC 2.0 error codes used by MCP.
 const (
 	codeParseError     = -32700
@@ -100,10 +110,10 @@ func (s *server) handleLine(ctx context.Context, line []byte) (response, bool) {
 
 	result, rpcErr := s.dispatch(ctx, &req)
 	if rpcErr != nil {
-		return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}, true
+		return response{JSONRPC: jsonRPCVersion, ID: req.ID, Error: rpcErr}, true
 	}
 
-	return response{JSONRPC: "2.0", ID: req.ID, Result: result}, true
+	return response{JSONRPC: jsonRPCVersion, ID: req.ID, Result: result}, true
 }
 
 func (s *server) dispatch(ctx context.Context, req *request) (any, *rpcError) {
@@ -146,11 +156,11 @@ func (s *server) callTool(ctx context.Context, params json.RawMessage) (any, *rp
 	}
 
 	switch call.Name {
-	case "search_docs":
+	case toolSearchDocs:
 		return searchDocs(pages, &call)
-	case "get_doc":
+	case toolGetDoc:
 		return getDoc(pages, &call)
-	case "list_sections":
+	case toolListSections:
 		return textResult(renderSections(sections(pages))), nil
 	default:
 		return nil, &rpcError{Code: codeMethodNotFound, Message: "unknown tool: " + call.Name}
@@ -220,71 +230,100 @@ func renderSections(counts map[string]int) string {
 	return b.String()
 }
 
-func textResult(text string) map[string]any {
-	return map[string]any{
-		"content": []map[string]any{{"type": "text", "text": text}},
-	}
+// The MCP tool-result wire shape.
+type toolResult struct {
+	Content []contentBlock `json:"content"`
+	IsError bool           `json:"isError,omitempty"`
+}
+
+type contentBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func textResult(text string) toolResult {
+	return toolResult{Content: []contentBlock{{Type: "text", Text: text}}}
 }
 
 // toolError reports a problem with the call itself. MCP models these as a
 // successful result carrying isError, not as a JSON-RPC error, so the
 // model can read the message and correct its next call.
-func toolError(text string) map[string]any {
+func toolError(text string) toolResult {
 	result := textResult(text)
-	result["isError"] = true
+	result.IsError = true
 
 	return result
 }
 
 func errorResponse(id json.RawMessage, code int, message string) response {
-	return response{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message}}
+	return response{JSONRPC: jsonRPCVersion, ID: id, Error: &rpcError{Code: code, Message: message}}
 }
 
-func toolDefinitions() []map[string]any {
-	return []map[string]any{
+// The MCP tool-definition wire shape. Modeled as types rather than
+// map[string]any so the compiler checks the payload the client parses.
+type tool struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	InputSchema toolSchema `json:"inputSchema"`
+}
+
+type toolSchema struct {
+	Type       string              `json:"type"`
+	Properties map[string]property `json:"properties"`
+	Required   []string            `json:"required,omitempty"`
+}
+
+type property struct {
+	Type        string `json:"type"`
+	Description string `json:"description,omitempty"`
+	Default     any    `json:"default,omitempty"`
+}
+
+func toolDefinitions() []tool {
+	return []tool{
 		{
-			"name": "search_docs",
-			"description": "Full-text search across all GoFr documentation. Use this first when answering " +
+			Name: toolSearchDocs,
+			Description: "Full-text search across all GoFr documentation. Use this first when answering " +
 				"a question about the GoFr Go framework — routing, handlers, datasources, observability, " +
 				"gRPC, GraphQL, WebSockets, Pub/Sub, migrations, deployment, or migrating from another framework.",
-			"inputSchema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"query": map[string]any{
-						"type":        "string",
-						"description": "Search terms, e.g. 'kafka consumer' or 'custom metrics'.",
+			InputSchema: toolSchema{
+				Type: schemaTypeObject,
+				Properties: map[string]property{
+					"query": {
+						Type:        "string",
+						Description: "Search terms, e.g. 'kafka consumer' or 'custom metrics'.",
 					},
-					"limit": map[string]any{
-						"type":        "integer",
-						"description": "Maximum number of results.",
-						"default":     defaultResults,
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results.",
+						Default:     defaultResults,
 					},
 				},
-				"required": []string{"query"},
+				Required: []string{"query"},
 			},
 		},
 		{
-			"name": "get_doc",
-			"description": "Fetch one GoFr documentation page in full, as Markdown. Use after search_docs " +
+			Name: toolGetDoc,
+			Description: "Fetch one GoFr documentation page in full, as Markdown. Use after search_docs " +
 				"when an excerpt is not enough.",
-			"inputSchema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"path": map[string]any{
-						"type":        "string",
-						"description": "Site path, e.g. '/docs/quick-start/introduction'.",
+			InputSchema: toolSchema{
+				Type: schemaTypeObject,
+				Properties: map[string]property{
+					"path": {
+						Type:        "string",
+						Description: "Site path, e.g. '/docs/quick-start/introduction'.",
 					},
 				},
-				"required": []string{"path"},
+				Required: []string{"path"},
 			},
 		},
 		{
-			"name": "list_sections",
-			"description": "List the GoFr documentation sections and how many pages each contains. " +
+			Name: toolListSections,
+			Description: "List the GoFr documentation sections and how many pages each contains. " +
 				"Use to orient before searching.",
-			"inputSchema": map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
+			InputSchema: toolSchema{
+				Type:       schemaTypeObject,
+				Properties: map[string]property{},
 			},
 		},
 	}
