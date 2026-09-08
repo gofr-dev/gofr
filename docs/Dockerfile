@@ -49,7 +49,18 @@ RUN npm install
 RUN npm run build
 
 # Stage 2: Serve with Static Server
-FROM zopdev/static-server:v0.0.9
+# v1.0.0 adds the agent-facing serving behaviour the website relies on:
+#   - Accept: text/markdown on an extensionless route resolves to the
+#     `<route>.md` sibling the website now generates for every page,
+#     with Content-Type: text/markdown and Vary: Accept
+#   - a Markdown 404 body pointing at /sitemap.xml and /llms.txt, so an
+#     agent that guesses a path can recover
+#   - `_headers` support, which is how the website declares its Link
+#     headers, nosniff, Referrer-Policy, and the media types for its
+#     extensionless /.well-known documents
+# On v0.0.9 all of the above is inert: the files ship but nothing serves
+# them as anything other than text/plain HTML-or-nothing.
+FROM zopdev/static-server:v1.0.0
 
 # Copy static files from the builder stage
 COPY --from=builder /app/out static
