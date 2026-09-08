@@ -63,9 +63,19 @@ func (a *App) Run() {
 	a.startTelemetryIfEnabled()
 	a.startAllServers(ctx)
 
-	select {
-	case <-shutdownDone:
-	case <-time.After(timeout):
+	// Only wait if a termination signal actually started the shutdown
+	// goroutine. startAllServers can return on its own (e.g. no HTTP/gRPC
+	// registered and METRICS_PORT=0, a documented way to disable the metrics
+	// server) with ctx never canceled - nothing is draining in that case, and
+	// shutdownDone never closes, so waiting unconditionally would cost the
+	// full shutdown timeout for no reason. On the real SIGTERM path ctx is
+	// canceled before startAllServers returns, so ctx.Err() is already set by
+	// the time we get here.
+	if ctx.Err() != nil {
+		select {
+		case <-shutdownDone:
+		case <-time.After(timeout):
+		}
 	}
 }
 

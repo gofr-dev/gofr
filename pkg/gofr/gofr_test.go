@@ -1466,6 +1466,42 @@ func Test_Shutdown_DrainsTelemetry(t *testing.T) {
 	require.ErrorIs(t, err, errFakeShutdown)
 }
 
+// TestDrainTelemetry_BoundsItself pins the timeout bound added in review of
+// #3925: drainTelemetry must apply its own telemetryFlushTimeout-based
+// deadline to the context it hands each registered shutdown func, regardless
+// of what deadline (if any) the caller's context carries. On the SIGTERM
+// path that caller context carries the whole shutdown grace period (default
+// 30s), so without its own bound a hung collector could hold shutdown open
+// for the entire grace period instead of telemetryFlushTimeout.
+//
+// Checking ctx.Deadline() rather than actually blocking for
+// telemetryFlushTimeout keeps this fast (a real hung-collector measurement
+// belongs in a process-level test, not go test).
+func TestDrainTelemetry_BoundsItself(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	g := New()
+
+	var (
+		gotDeadline time.Time
+		hasDeadline bool
+	)
+
+	g.telemetryShutdown = append(g.telemetryShutdown, func(ctx context.Context) error {
+		gotDeadline, hasDeadline = ctx.Deadline()
+		return nil
+	})
+
+	before := time.Now()
+
+	err := g.drainTelemetry(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, hasDeadline,
+		"drainTelemetry must bound the context it hands to each shutdown func with its own deadline")
+	assert.WithinDuration(t, before.Add(telemetryFlushTimeout), gotDeadline, time.Second)
+}
+
 // TestNewCMD_DrainsTelemetryExactlyOnce pins the CMD counterpart of
 // Test_Shutdown_DrainsTelemetry: NewCMD must register both telemetry
 // providers, and Run must drain them exactly once after the subcommand
