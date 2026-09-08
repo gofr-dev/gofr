@@ -51,8 +51,8 @@ the service is not ready to serve traffic.
 
 To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
 **not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
-pool stats, usernames, or raw error strings). No HTTP route serves the detailed map after this
-change — `Container.Health` still computes it for in-process ops tooling.
+pool stats, usernames, or raw error strings). The detailed map is served instead at `GET /health`
+on the metrics server — see below.
 
 > **Changed response shape:** this endpoint previously returned the full per-dependency map. It now
 > returns `{name, status}` only. The HTTP status code is unchanged (`200`), so existing readiness
@@ -250,9 +250,27 @@ report as down any downstream slower than the health-check timeout — while it 
 normally. Readiness is a signal for the orchestrator routing traffic to this pod, not for
 application-level dependency checks.
 
-> **Note:** The detailed per-dependency health map is being moved to the metrics server
-> (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that
-> work in #3806.
+### 3. Detailed health map - /health on the metrics server
+
+Ops tooling that needs the full per-dependency map can scrape `GET /health` on `METRICS_PORT`
+(default `2121`), next to `/metrics` and `/debug/pprof`:
+
+```json
+{
+  "name": "sample-service",
+  "version": "v1.0.0",
+  "status": "UP",
+  "sql": { "...": "..." }
+}
+```
+
+Like the public endpoint, it answers `200` regardless of the aggregate `status` — read the
+`status` field itself to act on degradation. Setting `METRICS_PORT=0` disables the metrics
+server entirely, this endpoint with it.
+
+> **Note:** "private" here means *not exposed through ingress*, identical to `/debug/pprof`'s
+> current guarantee — the metrics server binds all interfaces, so the boundary is network
+> policy, not loopback. Keep this port out of public ingress exactly as you would `/metrics`.
 
 ## Related production guides
 
