@@ -26,18 +26,23 @@ type page struct {
 // URL returns the page's canonical address on the site.
 func (p page) URL() string { return siteURL + p.Route }
 
-// corpus is the parsed documentation, loaded at most once per process.
+// corpus is the parsed documentation, fetched once and then reused.
 //
 // The fetch is deferred until the first tool call rather than done at
 // startup: an MCP client launches the server eagerly when the editor
 // opens, and a doc fetch that fails there would surface as "the server
 // crashed" rather than "that one call could not reach the network".
+//
+// Only SUCCESS is latched. sync.Once would have cached a failure too, so
+// a single flaky moment at the first tool call would leave every later
+// call in that editor session returning the same stale error, curable
+// only by restarting the server. Retrying costs one request after a
+// failure and keeps the process usable.
 type corpus struct {
-	client  *http.Client
-	url     string
-	once    sync.Once
-	pages   []page
-	loadErr error
+	client *http.Client
+	url    string
+	mu     sync.Mutex
+	pages  []page
 }
 
 func newCorpus(client *http.Client, url string) *corpus {
@@ -45,38 +50,50 @@ func newCorpus(client *http.Client, url string) *corpus {
 }
 
 func (c *corpus) load(ctx context.Context) ([]page, error) {
-	c.once.Do(func() {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, http.NoBody)
-		if err != nil {
-			c.loadErr = fmt.Errorf("building request: %w", err)
-			return
-		}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-		resp, err := c.client.Do(req)
-		if err != nil {
-			c.loadErr = fmt.Errorf("fetching %s: %w", c.url, err)
-			return
-		}
-		defer resp.Body.Close()
+	if len(c.pages) > 0 {
+		return c.pages, nil
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			c.loadErr = fmt.Errorf("%w: %s returned %d", errUnexpectedStatus, c.url, resp.StatusCode)
-			return
-		}
+	pages, err := c.fetch(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			c.loadErr = fmt.Errorf("reading %s: %w", c.url, err)
-			return
-		}
+	c.pages = pages
 
-		c.pages = parseCorpus(string(body))
-		if len(c.pages) == 0 {
-			c.loadErr = fmt.Errorf("%w from %s", errNoPages, c.url)
-		}
-	})
+	return c.pages, nil
+}
 
-	return c.pages, c.loadErr
+func (c *corpus) fetch(ctx context.Context) ([]page, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("building request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetching %s: %w", c.url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: %s returned %d", errUnexpectedStatus, c.url, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", c.url, err)
+	}
+
+	pages := parseCorpus(string(body))
+	if len(pages) == 0 {
+		return nil, fmt.Errorf("%w from %s", errNoPages, c.url)
+	}
+
+	return pages, nil
 }
 
 // parseCorpus splits llms-full.txt into pages.

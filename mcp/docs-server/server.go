@@ -97,7 +97,10 @@ func (s *server) serve(ctx context.Context, in io.Reader, out io.Writer) error {
 func (s *server) handleLine(ctx context.Context, line []byte) (response, bool) {
 	var req request
 	if err := json.Unmarshal(line, &req); err != nil {
-		return errorResponse(nil, codeParseError, "invalid JSON"), true
+		// JSON-RPC requires a null id when the request could not be
+		// parsed far enough to read one. Passing a nil RawMessage would
+		// drop the field entirely, which strict clients reject.
+		return errorResponse(json.RawMessage("null"), codeParseError, "invalid JSON"), true
 	}
 
 	if req.Method == "" {

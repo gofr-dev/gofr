@@ -6,7 +6,7 @@ this repository. If you are building an application *with* GoFr, you want
 <https://gofr.dev/AGENTS.md>.
 
 GoFr is an opinionated Go framework for production microservices. Apache 2.0,
-Go 1.25+. Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first change — the
+Go 1.26+ (see `go.mod`). Read [CONTRIBUTING.md](CONTRIBUTING.md) before your first change — the
 rules below are the parts agents get wrong most often, not a replacement for it.
 
 ## Repository layout

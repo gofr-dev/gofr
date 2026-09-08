@@ -220,6 +220,35 @@ func TestCorpusLoad(t *testing.T) {
 		require.ErrorIs(t, err, errNoPages)
 	})
 
+	t.Run("recovers after a transient failure", func(t *testing.T) {
+		// The regression this guards: with sync.Once, the first failure
+		// was cached forever and every later call in that editor session
+		// returned the same stale error.
+		fail := true
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if fail {
+				w.WriteHeader(http.StatusBadGateway)
+
+				return
+			}
+
+			_, _ = w.Write([]byte(sampleDump))
+		}))
+		defer srv.Close()
+
+		c := newCorpus(srv.Client(), srv.URL)
+
+		_, err := c.load(context.Background())
+		require.ErrorIs(t, err, errUnexpectedStatus)
+
+		fail = false
+
+		pages, err := c.load(context.Background())
+		require.NoError(t, err)
+		assert.Len(t, pages, 3)
+	})
+
 	t.Run("unreachable host is an error", func(t *testing.T) {
 		_, err := newCorpus(http.DefaultClient, "http://127.0.0.1:1/llms-full.txt").
 			load(context.Background())
