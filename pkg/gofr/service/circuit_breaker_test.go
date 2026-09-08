@@ -41,6 +41,7 @@ func setupHTTPServiceTestServerForCircuitBreaker(t *testing.T) (*httptest.Server
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
 	service := httpService{
@@ -75,6 +76,7 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -100,6 +102,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -187,6 +190,7 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -212,6 +216,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -299,6 +304,7 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -324,6 +330,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -411,6 +418,7 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -436,6 +444,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -523,6 +532,7 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -548,6 +558,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -636,6 +647,9 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 1.0, "service", "test-service").MinTimes(1)
 	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 0.0, "service", "test-service").AnyTimes()
+	// Exact count, not MinTimes: app_circuit_open_count must fire once for the
+	// Closed -> Open transition, not once per failing request that observes it.
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_circuit_open_count", "service", "test-service").Times(1)
 
 	service := httpService{
 		Client:  &http.Client{Transport: &customTransport{}},
@@ -662,6 +676,64 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 	}
 }
 
+// TestCircuitBreaker_OpenCircuit_CountsTransitionNotFailures pins the fix for
+// an app_circuit_open_count over-count found in review of #3856: openCircuit
+// is reached from handleFailure whenever failureCount > threshold, and every
+// concurrent request that passed the isOpen check before the trip falls
+// through to handleFailure and re-enters openCircuit. Without a
+// wasOpen guard, a burst of N concurrent failures recorded N-threshold
+// "openings" for what is a single Closed -> Open transition — exactly
+// concurrency-threshold, deterministic, and invisible to a MinTimes(1)
+// assertion (or to sequential traffic, which happens to trigger the trip
+// only once and so looks correct either way).
+func TestCircuitBreaker_OpenCircuit_CountsTransitionNotFailures(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_circuit_open_count", "service", "test-service").Times(1)
+
+	service := httpService{
+		Client:  &http.Client{Transport: &customTransport{}},
+		url:     "http://example.invalid",
+		name:    "test-service",
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  logging.NewMockLogger(logging.DEBUG),
+		Metrics: mockMetric,
+	}
+
+	cbConfig := CircuitBreakerConfig{
+		Threshold: 2,
+		// Long enough that the async health-check recovery goroutine cannot
+		// fire mid-test and interfere with the open-count assertion.
+		Interval: time.Minute,
+	}
+
+	httpServiceWithCB := cbConfig.AddOption(&service)
+
+	const concurrency = 30
+
+	var wg sync.WaitGroup
+
+	for range concurrency {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			resp, _ := httpServiceWithCB.Get(t.Context(), "invalid", nil)
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
 func TestCircuitBreaker_HTTP500_TripsCircuit(t *testing.T) {
 	server := testServer()
 	defer server.Close()
@@ -674,6 +746,7 @@ func TestCircuitBreaker_HTTP500_TripsCircuit(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := httpService{
 		Client:  &http.Client{Transport: &customTransport{}},
@@ -762,6 +835,7 @@ func TestCircuitBreaker_CustomHealthEndpoint_Recovery(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	httpSvc := NewHTTPService(server.URL,
 		logging.NewMockLogger(logging.DEBUG),
@@ -825,6 +899,7 @@ func TestCircuitBreaker_DefaultHealthEndpoint_NoRecoveryWhenMissing(t *testing.T
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// No HealthConfig - will use default /.well-known/alive which returns 404
 	httpSvc := NewHTTPService(server.URL,
@@ -889,6 +964,7 @@ func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	httpSvc := NewHTTPService(server.URL,
 		logging.NewMockLogger(logging.DEBUG),
@@ -956,6 +1032,7 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
 		&CircuitBreakerConfig{
@@ -1033,6 +1110,7 @@ func TestCircuitBreaker_ConcurrentFailures(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
 		&CircuitBreakerConfig{
@@ -1075,6 +1153,7 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
 		&CircuitBreakerConfig{
