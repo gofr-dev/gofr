@@ -239,19 +239,20 @@ func (r *remoteLogger) UpdateLogLevel() {
 			// Announce so the message always passes the gate. The gate is the
 			// level in force when the announcement is written (enabled: msg
 			// level >= current level), and the announcement is written at the
-			// level it is *about*.
+			// higher endpoint of the transition.
 			//
-			// Lowering the level makes the gate more permissive, so announce
-			// AFTER ChangeLevel at the new (now-passing) level. Raising it makes
-			// the gate more restrictive, so announce BEFORE ChangeLevel while
-			// the old level still lets the message through. Either way the
-			// announced level is one the active gate admits, so no transition —
-			// including into or out of FATAL — is silently dropped.
+			// We order the announcement so the gate is the *lower* endpoint at
+			// the moment we write: when lowering, ChangeLevel first (gate
+			// becomes the new, lower level); when raising, announce first (gate
+			// is still the old, lower level). The higher endpoint always clears
+			// the lower gate, so no transition — including into or out of
+			// FATAL — is silently dropped, while transitions that already
+			// emitted keep the severity they had.
 			if newLevel < oldLevel {
 				r.ChangeLevel(newLevel)
-				logLevelChange(r, oldLevel, newLevel, newLevel)
-			} else {
 				logLevelChange(r, oldLevel, newLevel, oldLevel)
+			} else {
+				logLevelChange(r, oldLevel, newLevel, newLevel)
 				r.ChangeLevel(newLevel)
 			}
 		} else {
@@ -272,17 +273,18 @@ func (r *remoteLogger) UpdateLogLevel() {
 }
 
 // logLevelChange announces a remote level change. announceLevel is the level to
-// emit the announcement at, chosen by the caller so it passes the gate in force
-// at the moment of the call (see UpdateLogLevel). FATAL is never a valid
-// announceLevel here — the caller always picks the lower endpoint of the
-// transition — so it is mapped to WARN only as a defensive fallback and never
-// routed through Fatalf (which would exit the process).
+// emit the announcement at, chosen by the caller (the higher endpoint of the
+// transition) so it passes the gate in force at the moment of the call (see
+// UpdateLogLevel). A FATAL announceLevel arises for X -> FATAL transitions and
+// is emitted via Errorf: it is the most severe level that is still guaranteed
+// to be visible, and it avoids routing through Fatalf (which would exit the
+// process).
 func logLevelChange(r *remoteLogger, oldLevel, newLevel, announceLevel logging.Level) {
 	message := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
 
 	switch announceLevel {
 	case logging.FATAL:
-		r.Warnf("%s", message)
+		r.Errorf("%s", message)
 	case logging.ERROR:
 		r.Errorf("%s", message)
 	case logging.WARN:
