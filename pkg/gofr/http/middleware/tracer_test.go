@@ -525,7 +525,7 @@ func TestSpanMetaCacheStillCachesStandardMethods(t *testing.T) {
 // primary bound, but it is an argument about reachability; the cap is a number,
 // and process memory should rest on the number too.
 func TestRouteCacheStopsAtItsLimit(t *testing.T) {
-	var c routeCache
+	var c routeCache[int]
 
 	for i := range routeCacheLimit + 500 {
 		c.store(routeKey{method: http.MethodGet, route: "/r/" + strconv.Itoa(i)}, i)

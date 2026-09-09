@@ -28,6 +28,18 @@ func Test_metricsExporterConfig(t *testing.T) {
 			},
 		},
 		{
+			// Covers the wiring seam: removing the CardinalityLimit line from
+			// metricsExporterConfig makes the feature a silent no-op, and this is
+			// the only case that would catch it.
+			name: "cardinality limit is wired into the config",
+			env:  map[string]string{"METRICS_CARDINALITY_LIMIT": "500"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
+				CardinalityLimit: func() *int { n := 500; return &n }(),
+			},
+		},
+		{
 			name: "full otlp config",
 			env: map[string]string{
 				"METRICS_EXPORTER": "otlp", "METRICS_URL": "collector:4317", "METRICS_PROTOCOL": "http",
@@ -79,6 +91,45 @@ func Test_metricsExporterConfig(t *testing.T) {
 				t.Errorf("metricsExporterConfig() =\n%+v\nwant\n%+v", got, tc.want)
 			}
 		})
+	}
+}
+
+func Test_metricsCardinalityLimit(t *testing.T) {
+	ptr := func(n int) *int { return &n }
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want *int
+	}{
+		{"unset leaves SDK default", map[string]string{}, nil},
+		{"positive limit", map[string]string{"METRICS_CARDINALITY_LIMIT": "500"}, ptr(500)},
+		{"zero means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, ptr(0)},
+		{"negative means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "-1"}, ptr(-1)},
+		{"whitespace is trimmed", map[string]string{"METRICS_CARDINALITY_LIMIT": "  100  "}, ptr(100)},
+		{"invalid falls back to default", map[string]string{"METRICS_CARDINALITY_LIMIT": "abc"}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricsCardinalityLimit(config.NewMockConfig(tc.env), logging.NewMockLogger(logging.ERROR))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("metricsCardinalityLimit() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Test_metricsCardinalityLimit_invalidDoesNotLogValue ensures an invalid value is
+// not echoed into logs (CodeQL: clear-text logging of externally controlled input).
+func Test_metricsCardinalityLimit_invalidDoesNotLogValue(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		l := logging.NewMockLogger(logging.WARN)
+		metricsCardinalityLimit(config.NewMockConfig(map[string]string{"METRICS_CARDINALITY_LIMIT": "sneaky-value"}), l)
+	})
+
+	if strings.Contains(out, "sneaky-value") {
+		t.Errorf("raw METRICS_CARDINALITY_LIMIT value leaked into logs: %q", out)
 	}
 }
 
