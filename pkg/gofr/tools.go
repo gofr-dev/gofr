@@ -342,6 +342,10 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 	}
 
 	if hasBody {
+		// MCP tool invocations always pass JSON bodies (the schema exposes `body`
+		// as a JSON string), so Content-Type is pinned to application/json. A
+		// QUERY route registered with a non-JSON binder is not reachable via MCP
+		// — the guard will 415 it because the Content-Type won't match.
 		req.Header.Set("Content-Type", "application/json")
 	}
 

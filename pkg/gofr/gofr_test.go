@@ -1999,7 +1999,7 @@ func Test_QUERY_Registration(t *testing.T) {
 
 	go app.Run()
 
-	time.Sleep(100 * time.Millisecond)
+	testutil.WaitForHTTPServer(t, fmt.Sprintf("http://localhost:%d", port))
 
 	netClient := &http.Client{Timeout: 500 * time.Millisecond}
 
@@ -2017,4 +2017,93 @@ func Test_QUERY_Registration(t *testing.T) {
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.Contains(t, string(respBody), `"filter":"title"`)
+}
+
+// TestQueryContentTypeGuardWiring pins that the RFC 10008 Content-Type guard is
+// actually wired to registered QUERY routes and not to the router's catch-all.
+// Removing the `if method == MethodQuery` block in rest.go would make all three
+// sub-tests fail — the 200 path proves the guard passes a valid request, the
+// rejection paths prove it runs before the handler, and the 404 path proves it
+// does NOT run for unregistered paths (so a QUERY to an unknown route gets 404,
+// not a spurious 400 or 415).
+func TestQueryContentTypeGuardWiring(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
+	}
+
+	app.QUERY("/guarded", func(ctx *Context) (any, error) {
+		return "ok", nil
+	})
+
+	go app.Run()
+
+	base := fmt.Sprintf("http://localhost:%d", port)
+	testutil.WaitForHTTPServer(t, base)
+
+	netClient := &http.Client{Timeout: 500 * time.Millisecond}
+
+	tests := []struct {
+		desc        string
+		path        string
+		contentType string
+		body        string
+		wantStatus  int
+	}{
+		{
+			desc:        "valid JSON body reaches the handler",
+			path:        "/guarded",
+			contentType: "application/json",
+			body:        `{}`,
+			wantStatus:  http.StatusOK,
+		},
+		{
+			desc:       "missing Content-Type is rejected before the handler (guard wired)",
+			path:       "/guarded",
+			body:       `{}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			desc:        "unsupported Content-Type is rejected before the handler (guard wired)",
+			path:        "/guarded",
+			contentType: "text/plain",
+			body:        "hello",
+			wantStatus:  http.StatusUnsupportedMediaType,
+		},
+		{
+			desc:        "QUERY to an unregistered path is 404, not 400/415 (guard not on catch-all)",
+			path:        "/no-such-route",
+			contentType: "application/json",
+			body:        `{}`,
+			wantStatus:  http.StatusNotFound,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			req, _ := http.NewRequestWithContext(t.Context(), "QUERY",
+				base+tc.path, strings.NewReader(tc.body))
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+
+			resp, err := netClient.Do(req)
+			require.NoError(t, err)
+
+			resp.Body.Close()
+
+			assert.Equal(t, tc.wantStatus, resp.StatusCode)
+		})
+	}
 }
