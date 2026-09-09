@@ -205,6 +205,8 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 }
 
 // Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+//
+// The write is committed before this returns, whether or not CommitNow is set on the mutation.
 func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	start := time.Now()
 
@@ -217,7 +219,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	}
 
 	// Execute mutation
-	resp, err := d.client.NewTxn().Mutate(tracedCtx, mutation)
+	resp, err := d.mutateInTxn(tracedCtx, mutation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the mutation details
@@ -235,6 +237,43 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	}
 
 	d.sendOperationStats(tracedCtx, start, mutationToString(mutation), "mutate", span, ql, "dgraph_mutate_duration")
+
+	return resp, nil
+}
+
+// mutateInTxn runs the mutation and resolves the transaction it opens.
+//
+// dgo only finishes the transaction when the caller set CommitNow on the mutation — it copies
+// the field into the request (dgo v210 txn.go:157) and marks the transaction finished only when
+// it is set (txn.go:206). Mutating without it therefore staged the write into a transaction that
+// was then abandoned to the garbage collector: nothing was persisted, no error was returned, and
+// the transaction stayed open on the server until Dgraph timed it out. Committing here makes a
+// single Mutate call atomic whichever way the caller wrote it.
+func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.Response, error) {
+	txn := d.client.NewTxn()
+
+	// Discard is a no-op once the transaction is finished (dgo v210 txn.go:289), so this only
+	// does anything on the paths that did not reach a commit.
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			d.logger.Error("dgraph mutation transaction discard failed: ", err)
+		}
+	}()
+
+	resp, err := txn.Mutate(ctx, mutation)
+	if err != nil {
+		return nil, err
+	}
+
+	// dgo already committed and marked the transaction finished; calling Commit again returns
+	// ErrFinished (txn.go:239).
+	if mutation.CommitNow {
+		return resp, nil
+	}
+
+	if err := txn.Commit(ctx); err != nil {
+		return nil, err
+	}
 
 	return resp, nil
 }
