@@ -198,7 +198,13 @@ func (c *Container) checkPrimaryDatasources(ctx context.Context, collector *heal
 		})
 	}
 
-	if c.PubSub != nil {
+	// isNil, not a plain != nil: the pub/sub constructors assign the result of
+	// google.New or kafka.New straight into this interface, and those return a
+	// TYPED nil when they reject an incomplete config. A typed nil in an interface
+	// is not equal to nil, so a plain check admits it and the Health call below
+	// runs on a nil receiver. SQL and Redis above already use isNil for the same
+	// reason; this guard was the odd one out.
+	if !isNil(c.PubSub) {
 		runCheck(wg, collector, pubsubKey, func() {
 			health := c.PubSub.Health()
 			collector.record(pubsubKey, health, health.Status == datasource.StatusDown)
@@ -342,12 +348,30 @@ func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	}
 }
 
+// isNil reports whether i is absent: either an unset interface, or an interface
+// holding a nil pointer.
+//
+// The Kind check is not optional. reflect.Value.IsNil PANICS on a value whose
+// kind cannot be nil, and a datasource field can legitimately hold one: an
+// implementation of pubsub.Client, Redis or DB may be a struct value rather than
+// a pointer, which is ordinary Go and something GoFr's own tests do. Calling
+// IsNil on that took the process down.
+//
+// Anything not nillable is present by definition, so it reports false.
 func isNil(i any) bool {
-	// Get the value of the interface
 	val := reflect.ValueOf(i)
+	if !val.IsValid() {
+		return true
+	}
 
-	// If the interface is not assigned or is nil, return true
-	return !val.IsValid() || val.IsNil()
+	//nolint:exhaustive // the default is the point: every kind that cannot be nil is present.
+	switch val.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return val.IsNil()
+	default:
+		return false
+	}
 }
 
 // stalledHealth is the body returned while a previous round's checks are still outstanding. It
