@@ -44,6 +44,12 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 
 	opts := []metricSdk.Option{metricSdk.WithResource(cfg.Resource)}
 
+	// Only override when explicitly configured, so an unset METRICS_CARDINALITY_LIMIT
+	// leaves the SDK default (2000, or OTEL_GO_X_CARDINALITY_LIMIT) untouched.
+	if cfg.CardinalityLimit != nil {
+		opts = append(opts, metricSdk.WithCardinalityLimit(*cfg.CardinalityLimit))
+	}
+
 	if r := prometheusReader(logger); r != nil {
 		opts = append(opts, metricSdk.WithReader(r))
 	}
