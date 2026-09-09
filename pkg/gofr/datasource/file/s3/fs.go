@@ -337,7 +337,11 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 
 	// check if they have the same name or not
 	if oldname == newname {
+		st = statusSuccess
+		msg = "Old and new names are identical, no operation performed"
+
 		f.logger.Logf("%q & %q are same", oldname, newname)
+
 		return nil
 	}
 
