@@ -969,3 +969,98 @@ func BenchmarkRouter_Get_PathParam(b *testing.B) {
 		r.ServeHTTP(w, req)
 	}
 }
+
+func Test_Router_AllowedMethods(t *testing.T) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users", noopHandler())
+	r.Add(http.MethodPost, "/users", noopHandler())
+	r.Add(http.MethodPut, "/users/{id}", noopHandler())
+	r.Add(http.MethodDelete, "/users/{id}", noopHandler())
+
+	tests := []struct {
+		name     string
+		path     string
+		expected []string
+	}{
+		{"exact match with GET and POST", "/users", []string{"GET", "POST"}},
+		{"path param match with PUT and DELETE", "/users/123", []string{"DELETE", "PUT"}},
+		{"unregistered path", "/unknown", nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPatch, tc.path, http.NoBody)
+			allowed := r.AllowedMethods(req)
+			assert.Equal(t, tc.expected, allowed)
+		})
+	}
+}
+
+func Test_StaticFileServing_Symlinks(t *testing.T) {
+	baseDir := t.TempDir()
+
+	publicDir := filepath.Join(baseDir, "public")
+	require.NoError(t, os.MkdirAll(publicDir, 0755))
+
+	assetsDir := filepath.Join(publicDir, "assets")
+	require.NoError(t, os.MkdirAll(assetsDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(assetsDir, "logo.png"), []byte("PNGDATA"), 0644))
+
+	secretsDir := filepath.Join(baseDir, "secrets")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "passwords.txt"), []byte("SUPERSECRET"), 0644))
+
+	require.NoError(t, os.Symlink(filepath.Join(secretsDir, "passwords.txt"), filepath.Join(publicDir, "evil.txt")))
+	require.NoError(t, os.Symlink(secretsDir, filepath.Join(publicDir, "evildir")))
+	require.NoError(t, os.Symlink(filepath.Join("assets", "logo.png"), filepath.Join(publicDir, "rel-inside.png")))
+
+	subDir := filepath.Join(publicDir, "sub")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+	require.NoError(t, os.Symlink(filepath.Join("..", "assets", "logo.png"), filepath.Join(subDir, "dotdot-inside.png")))
+
+	tests := []struct {
+		name         string
+		path         string
+		expectedCode int
+		expectedBody string
+	}{
+		{
+			name:         "symlink pointing outside is rejected with 404",
+			path:         "/static/evil.txt",
+			expectedCode: http.StatusNotFound,
+			expectedBody: "404 Not Found",
+		},
+		{
+			name:         "directory symlink pointing outside is rejected with 404",
+			path:         "/static/evildir/passwords.txt",
+			expectedCode: http.StatusNotFound,
+			expectedBody: "404 Not Found",
+		},
+		{
+			name:         "relative symlink inside root is served",
+			path:         "/static/rel-inside.png",
+			expectedCode: http.StatusOK,
+			expectedBody: "PNGDATA",
+		},
+		{
+			name:         "relative symlink with dotdot inside root is served",
+			path:         "/static/sub/dotdot-inside.png",
+			expectedCode: http.StatusOK,
+			expectedBody: "PNGDATA",
+		},
+	}
+
+	router := NewRouter()
+	router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", publicDir)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody))
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+			assert.NotContains(t, w.Body.String(), "SUPERSECRET")
+		})
+	}
+}

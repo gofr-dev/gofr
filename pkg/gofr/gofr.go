@@ -176,13 +176,21 @@ func (a *App) httpServerSetup() {
 
 	a.setupGraphQL()
 
-	if a.container.Logger != nil {
-		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
-	}
-
-	a.httpServer.router.PathPrefix("/").Handler(handler{
+	a.httpServer.router.NotFoundHandler = handler{
 		function:  catchAllHandler,
 		container: a.container,
+	}
+
+	a.httpServer.router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := a.httpServer.router.AllowedMethods(r)
+		if len(methods) > 0 {
+			w.Header().Set("Allow", strings.Join(methods, ", "))
+		}
+
+		handler{
+			function:  methodNotAllowedHandler,
+			container: a.container,
+		}.ServeHTTP(w, r)
 	})
 
 	var registeredMethods []string
@@ -464,7 +472,7 @@ func (a *App) setupGraphQL() {
 		}
 
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
-		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
+		a.httpServer.router.NewRoute().Path("/graphql").Methods(http.MethodPost).Handler(a.graphqlManager.GetHandler())
 	}
 }
 
