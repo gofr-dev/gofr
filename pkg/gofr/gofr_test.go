@@ -2043,7 +2043,7 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 		}),
 	}
 
-	app.QUERY("/guarded", func(ctx *Context) (any, error) {
+	app.QUERY("/guarded", func(_ *Context) (any, error) {
 		return "ok", nil
 	})
 
