@@ -9,9 +9,8 @@ type healthResponse struct {
 
 // healthHandler serves the public, unauthenticated /.well-known/health endpoint. It reports only
 // the application name and aggregate status — no hosts, ports, credentials, or connection stats.
-// No HTTP route serves the full detailed map after this change; Container.Health still computes it
-// for in-process ops tooling, and #3806 tracks exposing it on the metrics server (METRICS_PORT),
-// behind the same network boundary as /metrics and /debug/pprof.
+// The full detailed map is served instead at GET /health on the metrics server (METRICS_PORT),
+// behind the same network boundary as /metrics and /debug/pprof; see newMetricsMux.
 func healthHandler(c *Context) (any, error) {
 	return healthResponse{Name: c.GetAppName(), Status: aggregateStatus(c)}, nil
 }
