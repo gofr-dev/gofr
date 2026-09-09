@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type mockMetrics struct {
@@ -202,7 +204,301 @@ func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
 }
 
-// ---------------------------------------------------------------------------
+// mockOptRecorder implements both optional fast-path interfaces so the
+// measurement-option path is exercised, and records what it was handed.
+type mockOptRecorder struct {
+	noopMetrics
+
+	mu      sync.Mutex
+	optHits int
+	values  []float64
+	// attrs holds the attribute set of every recorded observation, so a test
+	// can assert WHAT was labeled and not merely that something was.
+	attrs []attribute.Set
+}
+
+// noopMetrics satisfies the metrics interface without assertions, so the option
+// path can be exercised without a mock expectation for every call.
+type noopMetrics struct{}
+
+func (noopMetrics) IncrementCounter(context.Context, string, ...string)            {}
+func (noopMetrics) DeltaUpDownCounter(context.Context, string, float64, ...string) {}
+func (noopMetrics) RecordHistogram(context.Context, string, float64, ...string)    {}
+func (noopMetrics) SetGauge(string, float64, ...string)                            {}
+
+func (m *mockOptRecorder) RecordHistogramOpt(_ context.Context, _ string, v float64, opts ...metric.RecordOption) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.optHits++
+	m.values = append(m.values, v)
+	m.attrs = append(m.attrs, metric.NewRecordConfig(opts).Attributes())
+}
+
+// attrMap flattens the i-th recorded attribute set into a map of key to the
+// value AND its type, so a String->Int regression is visible.
+func (m *mockOptRecorder) attrMap(i int) map[string]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	out := map[string]string{}
+	for _, kv := range m.attrs[i].ToSlice() {
+		out[string(kv.Key)] = kv.Value.Type().String() + ":" + kv.Value.String()
+	}
+
+	return out
+}
+
+// capturedPath runs one request through a router that has the given routes
+// registered and returns what metricsPath resolved for it.
+//
+// It goes through mux rather than calling metricsPath on a bare request because
+// the templated half of the answer comes from the matched route, which only
+// exists once the router has run.
+func capturedPath(t *testing.T, target string, routes ...string) (path string, templated bool) {
+	t.Helper()
+
+	capture := func(_ http.ResponseWriter, r *http.Request) { path, templated = metricsPath(r) }
+
+	router := mux.NewRouter()
+	for _, route := range routes {
+		router.NewRoute().Methods(http.MethodGet).Path(route).HandlerFunc(capture)
+	}
+
+	router.NotFoundHandler = http.HandlerFunc(capture)
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
+
+	return path, templated
+}
+
+// TestMetricsPath pins the path label and the cacheability flag directly, rather
+// than only through the cache-growth tests that consume them.
+//
+// The second return value is the whole reason the caches are bounded: it must be
+// false for every branch that falls back to the raw, caller-controlled URL path,
+// and true only for a route template.
+func TestMetricsPath(t *testing.T) {
+	tests := []struct {
+		desc          string
+		target        string
+		routes        []string
+		wantPath      string
+		wantTemplated bool
+	}{
+		{"matched template", "/users/7", []string{"/users/{id}"}, "/users/{id}", true},
+		{"trailing slash trimmed off the template", "/users/7/", []string{"/users/{id}/"}, "/users/{id}", true},
+		{"unmatched route falls back to the raw path", "/nope/xyz", nil, "/nope/xyz", false},
+		{"root template is never cacheable", "/", []string{"/"}, "", false},
+		{"/static prefix is never cacheable", "/static/app/x", []string{"/static/{rest}"}, "/static/app/x", false},
+		// The two below MATCH a route, so the template would win were the
+		// extension not checked -- that is the branch they exist to pin.
+		{"static extension beats the template", "/assets/logo.css", []string{"/assets/{f}"}, "/assets/logo.css", false},
+		{"uppercase static extension too", "/assets/LOGO.CSS", []string{"/assets/{f}"}, "/assets/LOGO.CSS", false},
+		{"graphql is matched and templated", "/graphql", []string{"/graphql"}, "/graphql", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			path, templated := capturedPath(t, tc.target, tc.routes...)
+
+			assert.Equal(t, tc.wantPath, path, "path label")
+			assert.Equal(t, tc.wantTemplated, templated, "cacheable only for a route template")
+		})
+	}
+}
+
+// TestMetricsOptRecorderIsUsedAndStillRecords pins that the faster path is taken
+// and that every request is still observed exactly once.
+func TestMetricsOptRecorderIsUsedAndStillRecords(t *testing.T) {
+	rec := &mockOptRecorder{}
+
+	router := mux.NewRouter()
+	router.Use(Metrics(rec))
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	const n = 25
+	for i := range n {
+		router.ServeHTTP(httptest.NewRecorder(),
+			httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/"+strconv.Itoa(i), http.NoBody))
+	}
+
+	require.Equal(t, n, rec.optHits, "every request must still be recorded")
+
+	for _, v := range rec.values {
+		// Not Positive: a handler this trivial can complete inside the clock's
+		// granularity, making a zero-second duration legitimate rather than a
+		// defect. The upper bound is the assertion that earns its place — it
+		// pins the unit, so passing nanoseconds here instead of seconds fails.
+		require.GreaterOrEqual(t, v, 0.0, "duration must be a non-negative number of seconds")
+		require.Less(t, v, 1.0, "a trivial handler records well under a second; larger means wrong units")
+	}
+}
+
+// TestMetricsOptRecorderLabels pins WHAT the fast path emits. metricsManager
+// implements RecordHistogramOpt, so production flows through optionRecorder --
+// yet nothing asserted its labels, which meant changing status from
+// attribute.String to attribute.Int, or emitting the concrete path instead of
+// the template, kept every test green while dashboards broke and metric
+// cardinality exploded.
+func TestMetricsOptRecorderLabels(t *testing.T) {
+	rec := &mockOptRecorder{}
+
+	router := mux.NewRouter()
+	router.Use(Metrics(rec))
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/7", http.NoBody))
+
+	require.Equal(t, 1, rec.optHits)
+
+	assert.Equal(t, map[string]string{
+		// The ROUTE TEMPLATE, never the concrete path: "/users/7" here would put
+		// one time series per user id into the backend.
+		"path":   "STRING:/users/{id}",
+		"method": "STRING:GET",
+		// STRING, not INT64: metricsManager's varargs path emits status as a
+		// string and OTLP distinguishes KeyValue types, so the two recorders
+		// must agree or a query breaks depending on which one was selected.
+		"status": "STRING:201",
+	}, rec.attrMap(0))
+}
+
+// TestMetricsOptCacheIsBounded drives the guard rather than asserting that a
+// compile-time constant is positive. Deleting the ceiling used to leave this
+// test green.
+func TestMetricsOptCacheIsBounded(t *testing.T) {
+	require.Positive(t, routeCacheLimit, "the option cache must carry a ceiling")
+
+	o := &optionRecorder{rec: &mockOptRecorder{}, statusAttr: newStatusAttrCache()}
+
+	// Well past the ceiling, all templated and all with a cacheable method, so
+	// nothing but the ceiling itself can stop the growth.
+	for i := range routeCacheLimit + 1000 {
+		o.record("/r/"+strconv.Itoa(i), http.MethodGet, http.StatusOK, 0.01, true)
+	}
+
+	assert.Equal(t, int64(routeCacheLimit), o.cache.len(),
+		"the option cache must stop at its ceiling")
+}
+
+// TestMetricsCachesRejectUntemplatedPaths is the regression test for real routes
+// being starved out of the cache by catch-all traffic.
+//
+// Every unmatched request resolves through GoFr's PathPrefix("/") catch-all and
+// falls back to the raw URL path, which is caller-controlled. Those used to be
+// cached, so a stream of unique unmatched paths filled the cache to its ceiling;
+// after that every first-seen legitimate route could never be stored and rebuilt
+// its measurement option per request forever. Memory stayed bounded and the
+// optimization silently reverted to baseline for production traffic.
+func TestMetricsCachesRejectUntemplatedPaths(t *testing.T) {
+	t.Run("optionRecorder", func(t *testing.T) {
+		o := &optionRecorder{rec: &mockOptRecorder{}, statusAttr: newStatusAttrCache()}
+
+		for i := range 2000 {
+			o.record("/attacker/"+strconv.Itoa(i), http.MethodGet, http.StatusOK, 0.01, false)
+		}
+
+		require.Zero(t, o.cache.len(), "a caller-controlled path must never be cached")
+
+		// A real route is still cached, and is not competing with the noise.
+		o.record("/users/{id}", http.MethodGet, http.StatusOK, 0.01, true)
+		assert.Equal(t, int64(1), o.cache.len())
+	})
+
+	t.Run("attrsRecorder", func(t *testing.T) {
+		a := &attrsRecorder{rec: &mockAttrsRecorder{}, statusAttr: newStatusAttrCache()}
+
+		for i := range 2000 {
+			a.record("/attacker/"+strconv.Itoa(i), http.MethodGet, http.StatusOK, 0.01, false)
+		}
+
+		require.Zero(t, a.cache.len(), "a caller-controlled path must never be cached")
+
+		a.record("/users/{id}", http.MethodGet, http.StatusOK, 0.01, true)
+		assert.Equal(t, int64(1), a.cache.len())
+	})
+}
+
+// TestMetricsCachesRejectUndefinedMethods pins the other half of the key. The
+// path is bounded by the route table, but net/http accepts any RFC 7230 token as
+// a method, so an unbounded method half reopens the same growth on a bounded
+// route.
+func TestMetricsCachesRejectUndefinedMethods(t *testing.T) {
+	o := &optionRecorder{rec: &mockOptRecorder{}, statusAttr: newStatusAttrCache()}
+	a := &attrsRecorder{rec: &mockAttrsRecorder{}, statusAttr: newStatusAttrCache()}
+
+	for i := range 2000 {
+		o.record("/users/{id}", "M"+strconv.Itoa(i), http.StatusOK, 0.01, true)
+		a.record("/users/{id}", "M"+strconv.Itoa(i), http.StatusOK, 0.01, true)
+	}
+
+	assert.Zero(t, o.cache.len(), "an undefined method must never mint an option-cache entry")
+	assert.Zero(t, a.cache.len(), "an undefined method must never mint an attrs-cache entry")
+}
+
+// TestAttrsRecorderIsCorrectAndBounded covers attrsRecorder, which no in-tree
+// type selects (*metricsManager implements both optional interfaces, so
+// optionRecorder always wins) and which therefore ran at zero coverage while its
+// cache had no ceiling at all.
+func TestAttrsRecorderIsCorrectAndBounded(t *testing.T) {
+	rec := &mockAttrsRecorder{}
+	a := &attrsRecorder{rec: rec, statusAttr: newStatusAttrCache()}
+
+	a.record("/users/{id}", http.MethodGet, http.StatusCreated, 0.02, true)
+
+	require.Len(t, rec.attrs, 1)
+	assert.Equal(t, map[string]string{
+		"path":   "STRING:/users/{id}",
+		"method": "STRING:GET",
+		"status": "STRING:201",
+	}, kvSlice(rec.attrs[0]))
+
+	// Repeated calls reuse the cached base pair rather than growing.
+	for range 100 {
+		a.record("/users/{id}", http.MethodGet, http.StatusOK, 0.02, true)
+	}
+
+	assert.Equal(t, int64(1), a.cache.len())
+
+	for i := range routeCacheLimit + 500 {
+		a.record("/r/"+strconv.Itoa(i), http.MethodGet, http.StatusOK, 0.01, true)
+	}
+
+	assert.Equal(t, int64(routeCacheLimit), a.cache.len(),
+		"the attrs cache must carry the same ceiling as the option cache")
+}
+
+// mockAttrsRecorder captures what the attribute fast path emits.
+type mockAttrsRecorder struct {
+	noopMetrics
+
+	mu    sync.Mutex
+	attrs [][]attribute.KeyValue
+}
+
+func (m *mockAttrsRecorder) RecordHistogramAttrs(_ context.Context, _ string, _ float64,
+	attrs ...attribute.KeyValue,
+) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.attrs = append(m.attrs, append([]attribute.KeyValue(nil), attrs...))
+}
+
+func kvSlice(kvs []attribute.KeyValue) map[string]string {
+	out := map[string]string{}
+	for _, kv := range kvs {
+		out[string(kv.Key)] = kv.Value.Type().String() + ":" + kv.Value.String()
+	}
+
+	return out
+}
+
 // Characterization suite for the Metrics HTTP middleware.
 //
 // Everything below pins CURRENT behavior of pkg/gofr/http/middleware/metrics.go
