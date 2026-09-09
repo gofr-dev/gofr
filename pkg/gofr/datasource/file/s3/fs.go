@@ -77,7 +77,7 @@ func New(config *Config) file.CloudFileSystem {
 	return &FileSystem{config: config}
 }
 
-// UseLogger sets the Logger interface for the FTP file system.
+// UseLogger sets the Logger interface for the S3 file system.
 func (f *FileSystem) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
@@ -94,7 +94,7 @@ func (f *FileSystem) UseMetrics(metrics any) {
 // Connect initializes and validates the connection to the S3 service.
 //
 // This method sets up the S3 client using the provided configuration, including access key, secret key, region, and base endpoint.
-// It loads the AWS configuration and creates an S3 client, which is then assigns it to the `fileSystem` struct.
+// It loads the AWS configuration and creates an S3 client and assigns it to the `fileSystem` struct.
 // This method also logs the outcome of the connection attempt.
 func (f *FileSystem) Connect() {
 	var msg string
