@@ -152,11 +152,26 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 		l.enabler = e
 	}
 
+	// Resolved once, here, for the same reason as enabler: the embedded logger is
+	// assigned in New and never reassigned, so a per-request assertion would pay
+	// for a question whose answer cannot change.
+	if e, ok := base.(entryLogger); ok {
+		l.entries = e
+	}
+
 	if remoteConfigURL != "" {
 		go l.UpdateLogLevel()
 	}
 
 	return l
+}
+
+// entryLogger is the optional interface a logger implements when it can take an
+// already-built entry directly, without the one-element slice a variadic Log
+// allocates to carry it. It mirrors the middleware's own contract.
+type entryLogger interface {
+	LogEntry(any)
+	ErrorEntry(any)
 }
 
 // logEnabler is the optional interface a logger implements when it can report,
@@ -174,7 +189,41 @@ type remoteLogger struct {
 	// enabler is the embedded logger's LogEnabled, resolved once in New. nil
 	// when the embedded logger does not implement it.
 	enabler logEnabler
+	// entries is the embedded logger's single-value log path, resolved once in
+	// New. nil when the embedded logger does not implement it.
+	entries entryLogger
 	logging.Logger
+}
+
+// LogEntry forwards a single pre-built entry to the embedded logger's
+// allocation-free path, bypassing the slice a variadic Log allocates.
+//
+// Forwarding is safe with respect to the dynamic level: this type does not gate
+// on currentLevel, it PUSHES level changes down with ChangeLevel, and the
+// embedded logger applies them to its own atomic before deciding. So an entry
+// routed this way passes exactly the same gate as one routed through Log.
+//
+// An embedded logger without the fast path leaves entries nil and falls back to
+// Log, which is what every external Logger implementation will do.
+func (r *remoteLogger) LogEntry(entry any) {
+	if r.entries == nil {
+		r.Log(entry)
+
+		return
+	}
+
+	r.entries.LogEntry(entry)
+}
+
+// ErrorEntry forwards a single pre-built entry at ERROR, mirroring LogEntry.
+func (r *remoteLogger) ErrorEntry(entry any) {
+	if r.entries == nil {
+		r.Error(entry)
+
+		return
+	}
+
+	r.entries.ErrorEntry(entry)
 }
 
 // LogEnabled reports whether an entry written through Log survives the level
