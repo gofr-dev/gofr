@@ -716,7 +716,7 @@ func TestTrieRouter_IndexInvariant(t *testing.T) {
 		// Every route mux itself would match must be among the candidates.
 		cands := make([]*routeEntry, 0, len(idx.fallback))
 
-		idx.root.collect(pathTrimForTest(req.URL.Path), &cands)
+		cands = idx.root.collect(pathTrimForTest(req.URL.Path), cands)
 		cands = append(cands, idx.fallback...)
 
 		inCandidates := make(map[*mux.Route]bool, len(cands))

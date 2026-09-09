@@ -464,7 +464,7 @@ func (a *App) setupGraphQL() {
 		}
 
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
-		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
+		a.httpServer.router.Add(http.MethodPost, "/graphql", a.graphqlManager.GetHandler())
 	}
 }
 
