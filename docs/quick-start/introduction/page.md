@@ -88,6 +88,8 @@ The `hello-world` server involves three essential steps:
 
    In this step, the server is instructed to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /greet_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the `/todo` endpoint with _ToDoCreationHandler_.
 
+   The full set of verbs is `app.GET`, `app.POST`, `app.PUT`, `app.PATCH`, `app.DELETE`, and `app.QUERY`. `QUERY` is the HTTP QUERY method (RFC 10008) — a safe, idempotent verb whose search criteria live in the request body; a `QUERY` request MUST carry a `Content-Type` GoFr can decode (`application/json`, form, multipart, or octet-stream), and GoFr rejects a missing one with 400 and an unsupported one with 415 before your handler runs.
+
    **Good To Know**
 
 > In Go, functions are first-class citizens, allowing easy handler definition and reference.

@@ -25,6 +25,7 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -1534,4 +1535,35 @@ func Test_TracerContract_StatusFlowsThroughLoggingChain(t *testing.T) {
 
 	require.Len(t, lg.errors, 1, "5xx is logged via Error")
 	assert.Equal(t, http.StatusServiceUnavailable, lg.errors[0].Response)
+}
+
+// TestCacheableMethodSet pins the method half of every per-route cache's bound.
+// The list is a membership test with no other observable effect -- a method
+// dropped from it silently stops being cached and every request on it rebuilds
+// its span metadata, with nothing failing -- so the set is asserted directly
+// rather than through a caching side effect.
+func TestCacheableMethodSet(t *testing.T) {
+	cacheable := []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace,
+		// QUERY (RFC 10008) has no net/http constant, so it has to be listed by
+		// hand and is the entry most likely to be forgotten when this set is
+		// next touched.
+		gofrHTTP.MethodQuery,
+	}
+
+	for _, method := range cacheable {
+		assert.True(t, cacheableMethod(method),
+			"%s is a defined method and must be cacheable", method)
+	}
+
+	// The bound only holds because an arbitrary token is refused: net/http
+	// accepts any RFC 7230 token as a method, so an unauthenticated client
+	// minting M00001, M00002, ... must not be able to mint a permanent cache
+	// entry per request.
+	for _, method := range []string{"M00001", "QUER", "QUERYX", "query", ""} {
+		assert.False(t, cacheableMethod(method),
+			"%q is not a defined method and must not be cacheable", method)
+	}
 }
