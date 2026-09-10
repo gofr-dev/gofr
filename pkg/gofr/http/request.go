@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -63,6 +64,30 @@ func isBindableMediaType(ct string) bool {
 	_, ok := bindersByMediaType[ct]
 
 	return ok
+}
+
+// AcceptedQueryMediaTypes returns the comma-separated list of media types the
+// QUERY guard accepts, in the exact form RFC 10008 §3.1 wants for the
+// Accept-Query response header on a 415. Derived from bindersByMediaType so a
+// new binder appears here automatically — the header and the guard's real
+// accept set cannot drift. Excludes the "binary/octet-stream" GoFr spelling
+// because it is a private alias for "application/octet-stream", which is
+// already advertised; publishing both would misrepresent one canonical
+// vocabulary as two.
+func AcceptedQueryMediaTypes() string {
+	types := make([]string, 0, len(bindersByMediaType))
+
+	for ct := range bindersByMediaType {
+		if ct == contentTypeBinary {
+			continue
+		}
+
+		types = append(types, ct)
+	}
+
+	sort.Strings(types)
+
+	return strings.Join(types, ", ")
 }
 
 // ValidateQueryContentType enforces RFC 10008's requirement that a QUERY request

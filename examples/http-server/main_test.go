@@ -107,7 +107,7 @@ func TestIntegration_QueryHandler(t *testing.T) {
 	go main()
 	testutil.WaitForHTTPServer(t, host)
 
-	req, _ := http.NewRequestWithContext(t.Context(), "QUERY", host+"/search", strings.NewReader(`{"filter":"golang"}`))
+	req, _ := http.NewRequestWithContext(t.Context(), gofr.MethodQuery, host+"/search", strings.NewReader(`{"filter":"golang"}`))
 	req.Header.Set("content-type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

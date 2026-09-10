@@ -2055,11 +2055,12 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 	netClient := &http.Client{Timeout: 500 * time.Millisecond}
 
 	tests := []struct {
-		desc        string
-		path        string
-		contentType string
-		body        string
-		wantStatus  int
+		desc            string
+		path            string
+		contentType     string
+		body            string
+		wantStatus      int
+		wantAcceptQuery bool
 	}{
 		{
 			desc:        "valid JSON body reaches the handler",
@@ -2075,11 +2076,12 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			desc:        "unsupported Content-Type is rejected before the handler (guard wired)",
-			path:        "/guarded",
-			contentType: "text/plain",
-			body:        "hello",
-			wantStatus:  http.StatusUnsupportedMediaType,
+			desc:            "unsupported Content-Type is rejected with Accept-Query header (RFC 10008 §3.1)",
+			path:            "/guarded",
+			contentType:     "text/plain",
+			body:            "hello",
+			wantStatus:      http.StatusUnsupportedMediaType,
+			wantAcceptQuery: true,
 		},
 		{
 			desc:        "QUERY to an unregistered path is 404, not 400/415 (guard not on catch-all)",
@@ -2092,7 +2094,7 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			req, _ := http.NewRequestWithContext(t.Context(), "QUERY",
+			req, _ := http.NewRequestWithContext(t.Context(), MethodQuery,
 				base+tc.path, strings.NewReader(tc.body))
 			if tc.contentType != "" {
 				req.Header.Set("Content-Type", tc.contentType)
@@ -2101,9 +2103,20 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 			resp, err := netClient.Do(req)
 			require.NoError(t, err)
 
+			acceptQuery := resp.Header.Get("Accept-Query")
+
 			resp.Body.Close()
 
 			assert.Equal(t, tc.wantStatus, resp.StatusCode)
+
+			if tc.wantAcceptQuery {
+				// Advertised set must be exactly the media types the guard would
+				// have accepted, so a client cannot ask for a type Bind refuses.
+				assert.Equal(t, gofrHTTP.AcceptedQueryMediaTypes(), acceptQuery,
+					"415 must carry Accept-Query listing the accepted media types (RFC 10008 §3.1)")
+			} else {
+				assert.Empty(t, acceptQuery, "Accept-Query is only advertised on 415, not on %d", resp.StatusCode)
+			}
 		})
 	}
 }

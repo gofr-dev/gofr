@@ -1203,3 +1203,26 @@ func TestErrorUnsupportedMediaType(t *testing.T) {
 	assert.Equal(t, "unsupported media type: application/xml",
 		ErrorUnsupportedMediaType{ContentType: "application/xml"}.Error())
 }
+
+// TestAcceptedQueryMediaTypes pins the Accept-Query header value shape:
+//   - every canonical media type Bind can decode is advertised
+//   - the "binary/octet-stream" GoFr alias is omitted (application/octet-stream
+//     is the RFC 2046 spelling and already covers the same binder)
+//   - the list is stable across runs (sorted), so log-based alerting and
+//     integration tests can string-match without ordering flakes.
+func TestAcceptedQueryMediaTypes(t *testing.T) {
+	got := AcceptedQueryMediaTypes()
+
+	// Stable across calls — sorted, not map-iteration-order.
+	assert.Equal(t, got, AcceptedQueryMediaTypes(), "AcceptedQueryMediaTypes must be stable across calls")
+
+	types := strings.Split(got, ", ")
+
+	// Every RFC 2046 media type in the binder map must appear; the private
+	// binary/octet-stream alias must not.
+	assert.Contains(t, types, contentTypeJSON)
+	assert.Contains(t, types, contentTypeMultipartForm)
+	assert.Contains(t, types, contentTypeFormURLEncoded)
+	assert.Contains(t, types, contentTypeOctetStream)
+	assert.NotContains(t, types, contentTypeBinary, "binary/octet-stream is an internal alias, do not advertise it")
+}

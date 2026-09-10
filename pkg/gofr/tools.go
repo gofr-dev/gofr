@@ -36,11 +36,6 @@ const (
 	maxToolResponseBytes = 4 << 20 // cap a captured tool response at 4 MiB
 )
 
-// MethodQuery is the HTTP QUERY method (RFC 10008), re-exported from
-// gofr.dev/pkg/gofr/http so callers can reference gofr.MethodQuery the way they
-// use http.MethodGet from the stdlib, instead of hardcoding the "QUERY" string.
-const MethodQuery = gofrHTTP.MethodQuery
-
 // registerTools builds the router-backed tool provider and installs it so both the MCP server and
 // ctx.LLM().Tools() expose the app's handlers. It is the tool-exposure step, independent of the MCP
 // transport that EnableMCP layers on top.
