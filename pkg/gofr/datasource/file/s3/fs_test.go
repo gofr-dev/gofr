@@ -723,3 +723,28 @@ func Test_Stat_ListObjectsV2Fails_Error(t *testing.T) {
 	require.Error(t, err, "Expected error when ListObjectsV2 fails")
 	require.Contains(t, err.Error(), "mocked error", "Expected error to contain mocked error")
 }
+
+// Test_RenameFile_ToSameName_LogsSuccess guards against the same-name no-op
+// being reported as an ERROR by observability while returning nil to the caller.
+func Test_RenameFile_ToSameName_LogsSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	logs := make([]FileLog, 0)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().Do(func(args ...any) {
+		if fl, ok := args[0].(*FileLog); ok {
+			logs = append(logs, *fl)
+		}
+	})
+
+	require.NoError(t, fs.Rename("abcd.json", "abcd.json"))
+
+	require.Len(t, logs, 1)
+	require.Equal(t, "RENAME", logs[0].Operation)
+	require.Equal(t, statusSuccess, *logs[0].Status)
+}
