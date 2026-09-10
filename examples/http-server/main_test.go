@@ -95,6 +95,38 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 }
 
+func TestIntegration_QueryHandler(t *testing.T) {
+	httpPort := testutil.GetFreePort(t)
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+	host := fmt.Sprintf("http://localhost:%d", httpPort)
+
+	go main()
+	testutil.WaitForHTTPServer(t, host)
+
+	req, _ := http.NewRequestWithContext(t.Context(), gofr.MethodQuery, host+"/search", strings.NewReader(`{"filter":"golang"}`))
+	req.Header.Set("content-type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	data := struct {
+		Data map[string]string `json:"data"`
+	}{}
+	require.NoError(t, json.Unmarshal(b, &data))
+	assert.Equal(t, "golang", data.Data["matched"])
+}
+
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	httpPort := testutil.GetFreePort(t)
 	port := testutil.GetFreePort(t)
@@ -336,6 +368,34 @@ func TestMysqlHandler(t *testing.T) {
 	resp, err := MysqlHandler(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, resp)
+}
+
+func TestProxySearchHandler(t *testing.T) {
+	// Exercises the outbound HTTP QUERY path: ProxySearchHandler calls
+	// c.GetHTTPService("anotherService").QueryWithHeaders(...), so the assertion
+	// pins that the downstream is invoked with method QUERY (via the mock's
+	// QueryWithHeaders binding), the "search" path, no query params, the JSON
+	// body the handler emits, and Content-Type: application/json.
+	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService("anotherService"))
+
+	ctx := createTestContext(http.MethodGet, "/proxy-search", mockContainer)
+
+	mockResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"data":{"matched":"golang"}}`)),
+	}
+
+	mocks.HTTPServices["anotherService"].EXPECT().QueryWithHeaders(
+		gomock.Any(),
+		"search",
+		nil,
+		[]byte(`{"filter":"golang"}`),
+		map[string]string{"Content-Type": "application/json"},
+	).Return(mockResp, nil)
+
+	resp, err := ProxySearchHandler(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"matched": "golang"}, resp)
 }
 
 func TestTraceHandler(t *testing.T) {
