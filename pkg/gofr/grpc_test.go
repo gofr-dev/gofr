@@ -299,7 +299,7 @@ func Test_injectContainer_Fails(t *testing.T) {
 	require.ErrorIs(t, err, errNonAddressable)
 	require.Nil(t, srv1.c1)
 
-	// Case: server is passed as unadressable(non-pointer)
+	// Case: server is passed as unaddressable(non-pointer)
 	srv3 := fail{}
 	out := testutil.StdoutOutputForFunc(func() {
 		cont, _ := container.NewMockContainer(t)
