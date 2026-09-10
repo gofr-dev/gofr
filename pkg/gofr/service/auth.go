@@ -82,3 +82,18 @@ func (a *authProvider) DeleteWithHeaders(ctx context.Context, path string, body 
 
 	return a.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
+
+func (a *authProvider) Query(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	return a.QueryWithHeaders(ctx, path, queryParams, body, nil)
+}
+
+func (a *authProvider) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	headers, err := a.auth(ctx, headers)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+}

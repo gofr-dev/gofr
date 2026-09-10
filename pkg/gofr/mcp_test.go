@@ -328,3 +328,72 @@ func TestHelpers(t *testing.T) {
 	assert.Equal(t, "42", scalar(json.RawMessage(`"42"`)))
 	assert.Equal(t, "true", scalar(json.RawMessage(`true`)))
 }
+
+func TestRouterTools_List_ExposesQuery(t *testing.T) {
+	app, rt := testRouterTools(t)
+	app.QUERY("/search", func(*Context) (any, error) { return nil, nil })
+	app.POST("/write", func(*Context) (any, error) { return nil, nil })
+
+	specs := rt.List()
+	names := toolNames(specs)
+
+	assert.Contains(t, names, "query_search", "QUERY handlers are exposed (safe + idempotent)")
+	assert.NotContains(t, names, "post_write", "write handlers remain unexposed")
+
+	// The QUERY tool must advertise a required "body" argument for the query payload.
+	var querySpec ai.ToolSpec
+
+	for _, s := range specs {
+		if s.Name == "query_search" {
+			querySpec = s
+		}
+	}
+
+	require.NotEmpty(t, querySpec.Name)
+	assert.Equal(t, ai.ReadOnly, querySpec.Access, "QUERY is safe, so it is ReadOnly")
+
+	schema := map[string]any{}
+	require.NoError(t, json.Unmarshal(querySpec.InputSchema, &schema))
+
+	props, _ := schema["properties"].(map[string]any)
+	assert.Contains(t, props, "body", "QUERY tool schema must include a body property")
+	assert.Contains(t, schema["required"], "body", "body must be required")
+}
+
+func TestRouterTools_Call_QueryForwardsBody(t *testing.T) {
+	app, rt := testRouterTools(t)
+	app.QUERY("/search", func(c *Context) (any, error) {
+		payload := map[string]any{}
+		if err := c.Bind(&payload); err != nil {
+			return nil, err
+		}
+
+		return payload, nil
+	})
+
+	res, err := rt.Call(t.Context(), "query_search", json.RawMessage(`{"body":{"filter":"title"}}`))
+	require.NoError(t, err)
+
+	body, err := res.JSON()
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"filter":"title"`, "the QUERY body must reach the handler")
+}
+
+func TestRouterTools_Call_QueryWithPathParamAndBody(t *testing.T) {
+	app, rt := testRouterTools(t)
+	app.QUERY("/index/{name}/search", func(c *Context) (any, error) {
+		payload := map[string]any{}
+		_ = c.Bind(&payload)
+		payload["index"] = c.PathParam("name")
+
+		return payload, nil
+	})
+
+	res, err := rt.Call(t.Context(), "query_index_name_search",
+		json.RawMessage(`{"name":"books","body":{"q":"go"}}`))
+	require.NoError(t, err)
+
+	body, _ := res.JSON()
+	assert.Contains(t, string(body), `"index":"books"`)
+	assert.Contains(t, string(body), `"q":"go"`)
+}
