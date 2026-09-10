@@ -39,6 +39,15 @@ type Config struct {
 	// builders that manage their own transport security (e.g. gcp).
 	Insecure bool
 
+	// CardinalityLimit overrides the per-instrument attribute-set limit applied
+	// to every meter. A non-nil value calls metricSdk.WithCardinalityLimit: a
+	// positive value caps distinct series per instrument per collection cycle
+	// (further series collapse into a single otel.metric.overflow series), while
+	// zero or negative disables the limit (unlimited). nil leaves the SDK default
+	// in place (2000, or OTEL_GO_X_CARDINALITY_LIMIT). Populated from
+	// METRICS_CARDINALITY_LIMIT.
+	CardinalityLimit *int
+
 	// Resource is the resource attached to every exported metric, resolved by
 	// Build before any Builder runs. Builders read it to check whether the
 	// attributes their backend requires were actually populated -- Google drops

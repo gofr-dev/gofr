@@ -10,17 +10,20 @@ on:
     branches:
       - main
       - development
+    # Kept on `push` only. A docs merge cannot change Go coverage or lint
+    # results, and re-running the pipeline on development would publish a
+    # duplicate qlty point via upload_coverage and queue behind other merges
+    # (push runs are deliberately never cancelled — see the concurrency note
+    # below). The gating that matters happens on `pull_request`, which
+    # deliberately has no filter so docs-only PRs run the full required set.
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'
       - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
-    paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
-      - '**/*.md'
 
 # One in-flight run per ref. Pushing twice to a PR branch otherwise starts a
 # second full 14-job matrix — including the Kafka/Redis/MySQL services and the
