@@ -286,10 +286,19 @@ jobs:
             set -eo pipefail
             export APP_ENV=test
 
-            # Run tests for root gofr package
+            # Run tests for root gofr package.
+            #
+            # `-coverpkg=./pkg/gofr/...`, not `./pkg/gofr`: the narrow form
+            # instruments only the 29 top-level pkg/gofr/*.go files, so every
+            # in-repo sub-package — http, http/middleware, container, service,
+            # logging, cmd, migration, rbac, datasource/sql, datasource/redis
+            # and the rest — was absent from the published figure even though
+            # its tests run here on every push. The narrow glob measured 1,848
+            # statements; the tree measures 10,482, and the figure went from
+            # 86.5% to 90.0% without a new test being written (#4202).
             exit_code=0
             go test -v -short -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr || exit_code=$?
+              -coverpkg=./pkg/gofr/... -coverprofile=root_pkg.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
               exit 2
@@ -298,10 +307,13 @@ jobs:
               exit $exit_code
             fi
 
-            # Run tests for sub-packages
+            # Run tests for sub-packages. Same widening as above; the profile
+            # name says sub-packages because these are packages of this module,
+            # not the pkg/gofr/datasource/* submodules (those are separate Go
+            # modules, covered by Submodule-Unit-Testing).
             exit_code=0
             go test -v -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/... || exit_code=$?
+              -coverpkg=./pkg/gofr/... -coverprofile=sub_pkgs.cov ./pkg/gofr/... || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in gofr sub-packages tests"
               exit 2
@@ -310,9 +322,28 @@ jobs:
               exit $exit_code
             fi
 
-            # Combine coverage profiles
+            # Combine coverage profiles.
+            #
+            # `/mock_` strips generated gomock files. `/testutil/` strips the
+            # test helper package, which the widened -coverpkg would otherwise
+            # admit: it is scaffolding for tests, not shipped behaviour, and at
+            # 98% it flatters the numerator the same way the mocks would.
+            #
+            # The awk merges duplicate blocks. Under a multi-package -coverpkg
+            # every block is emitted once per test binary, so a plain
+            # concatenation here is 31 copies of the same 12k blocks: 21 MB of
+            # profile to upload, download and hand to qlty. Keyed by block
+            # position, statement count carried through, execution counts
+            # summed — which is what merging two profiles of the same code
+            # means. `go tool cover` reaches the same percentage either way
+            # (it resolves duplicates itself); this is about the artifact, and
+            # about a profile a human can read.
             echo "mode: atomic" > profile.cov
-            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            grep -h -v "mode:" root_pkg.cov sub_pkgs.cov \
+              | grep -v '/mock_' \
+              | grep -v '/testutil/' \
+              | awk '{stmts[$1] = $2; count[$1] += $3} END {for (blk in stmts) print blk, stmts[blk], count[blk]}' \
+              | sort >> profile.cov
 
             # Show coverage summary
             go tool cover -func profile.cov
