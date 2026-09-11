@@ -12,24 +12,22 @@ import (
 	"time"
 )
 
-// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
-// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
-// on an unreachable metrics collector.
-const metricsFlushTimeout = 10 * time.Second
+// telemetryFlushTimeout bounds the metrics/trace flush and shutdown performed
+// after a CMD app's handler returns, so a CLI invocation cannot hang
+// indefinitely waiting on an unreachable collector.
+const telemetryFlushTimeout = 10 * time.Second
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
 
-		if a.container != nil {
-			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
-
-			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-				a.Logger().Errorf("failed to flush metrics: %v", err)
-			}
-
-			cancel()
+		// drainTelemetry bounds itself with telemetryFlushTimeout, so
+		// context.Background() here just needs to be cancelable eventually
+		// — the flush's own deadline is what actually protects a CLI
+		// invocation from an unreachable collector.
+		if err := a.drainTelemetry(context.Background()); err != nil {
+			a.Logger().Errorf("failed to flush telemetry: %v", err)
 		}
 
 		if closer, ok := a.container.Logger.(io.Closer); ok {
@@ -52,9 +50,33 @@ func (a *App) Run() {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
 	}
 
-	a.startShutdownHandler(ctx, timeout)
+	// shutdownDone is closed once startShutdownHandler's goroutine finishes
+	// Shutdown (which drains telemetry, closes servers, etc). Without waiting
+	// on it here, startAllServers returning (the servers having stopped) lets
+	// Run — and then main — return out from under that goroutine: on a real
+	// SIGTERM the process exits before the flush completes, so buffered spans
+	// and metrics are dropped exactly like before this fix, just later in the
+	// shutdown sequence instead of at initTracer.
+	shutdownDone := make(chan struct{})
+
+	a.startShutdownHandler(ctx, timeout, shutdownDone)
 	a.startTelemetryIfEnabled()
 	a.startAllServers(ctx)
+
+	// Only wait if a termination signal actually started the shutdown
+	// goroutine. startAllServers can return on its own (e.g. no HTTP/gRPC
+	// registered and METRICS_PORT=0, a documented way to disable the metrics
+	// server) with ctx never canceled - nothing is draining in that case, and
+	// shutdownDone never closes, so waiting unconditionally would cost the
+	// full shutdown timeout for no reason. On the real SIGTERM path ctx is
+	// canceled before startAllServers returns, so ctx.Err() is already set by
+	// the time we get here.
+	if ctx.Err() != nil {
+		select {
+		case <-shutdownDone:
+		case <-time.After(timeout):
+		}
+	}
 }
 
 // handleStartupHooks runs the startup hooks and returns false if the application should exit.
@@ -75,9 +97,14 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 }
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
-func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+// shutdownDone is closed when the goroutine has finished calling a.Shutdown,
+// so Run can wait for it before returning — see the select on shutdownDone
+// in Run.
+func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration, shutdownDone chan struct{}) {
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
+		defer close(shutdownDone)
+
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout

@@ -31,8 +31,9 @@ When that context is canceled, a goroutine creates a timeout context using `SHUT
 3. Cron stop — halts the scheduler and waits for jobs already running, bounded by the shutdown deadline
 4. `metricServer.Shutdown(ctx)` — stops `/metrics`
 5. `mcpServer.Shutdown(ctx)` — stops the MCP server
-6. `container.ShutdownMetrics(ctx)` and `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
-7. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
+6. Telemetry drain — flushes buffered metrics and any spans still sitting in the tracer's batch buffer, then shuts both providers down. This step has its own bound, independent of `SHUTDOWN_GRACE_PERIOD`: an unreachable collector cannot hold the rest of shutdown open past that inner timeout
+7. `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
+8. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
 
 The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers finish in-progress queries. It runs second-to-last on purpose: every producer of datasource traffic — handlers, streams, cron jobs — is drained before the connections they use are torn down. Application code does not need to coordinate this order.
 

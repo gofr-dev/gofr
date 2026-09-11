@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(metricsFlushTimeout + 5*time.Second):
+	case <-time.After(telemetryFlushTimeout + 5*time.Second):
 		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
 	}
 
@@ -886,6 +887,24 @@ func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
 	require.NotEqual(t, sc1.TraceID(), sc2.TraceID(), "TraceIDs must differ across spans for correlation")
 }
 
+// Test_initTracer_RegistersShutdown_NoExporter pins the fix for #3771: even
+// on the no-exporter (NeverSample) path, initTracer must register the
+// TracerProvider's Shutdown func so App.Shutdown/Run drain it like any other
+// telemetry provider.
+func Test_initTracer_RegistersShutdown_NoExporter(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config:    config.NewMockConfig(nil),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	require.Len(t, a.telemetryShutdown, 1, "initTracer must register exactly one shutdown func")
+	require.NoError(t, a.telemetryShutdown[0](t.Context()))
+}
+
 // Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
 // SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoSamplingButValidIDs.
 func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
@@ -905,6 +924,25 @@ func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
 
 	require.True(t, span.IsRecording(),
 		"expected recording span when TRACE_EXPORTER=gofr; SDK provider should be installed")
+}
+
+// Test_initTracer_RegistersShutdown_WithExporter pins the fix for #3771 on the
+// SDK path: initTracer must register the TracerProvider's Shutdown func so
+// App.Shutdown/Run flush buffered spans instead of dropping them.
+func Test_initTracer_RegistersShutdown_WithExporter(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config: config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER": gofrTraceExporter,
+		}),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	require.Len(t, a.telemetryShutdown, 1, "initTracer must register exactly one shutdown func")
+	require.NoError(t, a.telemetryShutdown[0](t.Context()))
 }
 
 func Test_UseMiddleware(t *testing.T) {
@@ -1390,6 +1428,113 @@ func Test_Shutdown(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
+}
+
+var errFakeShutdown = errors.New("fake telemetry shutdown error")
+
+// Test_Shutdown_DrainsTelemetry pins the fix for #3771: App.Shutdown must
+// drain every func registered in telemetryShutdown (metrics provider, tracer
+// provider, and anything else registered the same way), not just close the
+// container. A fake shutdown func standing in for a telemetry provider must
+// be invoked exactly once, and its error must surface in Shutdown's result.
+func Test_Shutdown_DrainsTelemetry(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	g := New()
+
+	// New must register both telemetry providers (metrics, tracer) — kills a
+	// mutation that drops either registration while every other assertion in
+	// this test stays green (the fake appended below would still be the only
+	// thing observed calling in).
+	require.Len(t, g.telemetryShutdown, 2, "New must register a shutdown func for both metrics and the tracer")
+
+	calls := 0
+
+	g.telemetryShutdown = append(g.telemetryShutdown, func(context.Context) error {
+		calls++
+		return errFakeShutdown
+	})
+
+	// No running server here: Shutdown alone is what's under test, and a
+	// concurrent go g.Run() previously raced this direct call on calls (a
+	// plain int) whenever Run's own signal-driven shutdown handler fired
+	// first — flaky under go test -v (each test runs once) and caught by
+	// -race. Shutdown draining the registry doesn't need a live server to
+	// shut down.
+	err := g.Shutdown(t.Context())
+
+	assert.Equal(t, 1, calls, "expected the registered telemetry shutdown func to be invoked exactly once")
+	require.ErrorIs(t, err, errFakeShutdown)
+}
+
+// TestDrainTelemetry_BoundsItself pins the timeout bound added in review of
+// #3925: drainTelemetry must apply its own telemetryFlushTimeout-based
+// deadline to the context it hands each registered shutdown func, regardless
+// of what deadline (if any) the caller's context carries. On the SIGTERM
+// path that caller context carries the whole shutdown grace period (default
+// 30s), so without its own bound a hung collector could hold shutdown open
+// for the entire grace period instead of telemetryFlushTimeout.
+//
+// Checking ctx.Deadline() rather than actually blocking for
+// telemetryFlushTimeout keeps this fast (a real hung-collector measurement
+// belongs in a process-level test, not go test).
+func TestDrainTelemetry_BoundsItself(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	g := New()
+
+	var (
+		gotDeadline time.Time
+		hasDeadline bool
+	)
+
+	g.telemetryShutdown = append(g.telemetryShutdown, func(ctx context.Context) error {
+		gotDeadline, hasDeadline = ctx.Deadline()
+		return nil
+	})
+
+	before := time.Now()
+
+	err := g.drainTelemetry(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, hasDeadline,
+		"drainTelemetry must bound the context it hands to each shutdown func with its own deadline")
+	assert.WithinDuration(t, before.Add(telemetryFlushTimeout), gotDeadline, time.Second)
+}
+
+// TestNewCMD_DrainsTelemetryExactlyOnce pins the CMD counterpart of
+// Test_Shutdown_DrainsTelemetry: NewCMD must register both telemetry
+// providers, and Run must drain them exactly once after the subcommand
+// returns. Two mutations survived without this — dropping drainTelemetry
+// from Run's CMD path, and dropping the metrics registration in NewCMD —
+// because TestNewCMD_ShutdownMetricsCalledAfterRun only asserts the handler
+// ran and Run returned, not that anything was actually drained.
+func TestNewCMD_DrainsTelemetryExactlyOnce(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{"", "test-drain"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	require.Len(t, a.telemetryShutdown, 2, "NewCMD must register a shutdown func for both metrics and the tracer")
+
+	var calls atomic.Int64
+
+	a.telemetryShutdown = append(a.telemetryShutdown, func(context.Context) error {
+		calls.Add(1)
+		return nil
+	})
+
+	a.SubCommand("test-drain", func(_ *Context) (any, error) {
+		return "ok", nil
+	})
+
+	a.Run()
+
+	assert.Equal(t, int64(1), calls.Load(),
+		"expected the registered telemetry shutdown func to be drained exactly once after Run")
 }
 
 func TestShutdown_StopsCron(t *testing.T) {

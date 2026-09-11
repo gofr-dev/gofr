@@ -55,10 +55,38 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
 
+	// telemetryShutdown holds one flush/shutdown func per telemetry provider
+	// (metrics, tracer) registered during app construction. Drained once by
+	// drainTelemetry from both the HTTP/gRPC shutdown path (Shutdown) and the
+	// CMD flush path (Run).
+	telemetryShutdown []func(ctx context.Context) error
+
 	// readinessChecks are the application-registered readiness checks for /.well-known/health,
 	// evaluated in registration order; empty means the endpoint keeps its default behavior.
 	// Guarded by mu: registration is documented as pre-Run, but probes run concurrently.
 	readinessChecks []readinessCheck
+}
+
+// drainTelemetry runs every registered telemetry shutdown func (metrics
+// provider, tracer provider) and joins their errors. Safe to call with an
+// empty registry.
+func (a *App) drainTelemetry(ctx context.Context) error {
+	// Bounded independently of the caller's context: on the SIGTERM path,
+	// ctx carries the full shutdown grace period (default 30s, see
+	// getShutdownTimeoutFromConfig), and a hung collector would otherwise
+	// hold the flush open for that entire window — risking SIGKILL mid-flush
+	// on a Kubernetes rolling deploy. telemetryFlushTimeout applies the same
+	// bound the CMD path already used.
+	ctx, cancel := context.WithTimeout(ctx, telemetryFlushTimeout)
+	defer cancel()
+
+	var err error
+
+	for _, shutdown := range a.telemetryShutdown {
+		err = errors.Join(err, shutdown(ctx))
+	}
+
+	return err
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -123,8 +151,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.mcpServer.Shutdown(ctx))
 	}
 
+	err = errors.Join(err, a.drainTelemetry(ctx))
+
 	if a.container != nil {
-		err = errors.Join(err, a.container.ShutdownMetrics(ctx))
 		err = errors.Join(err, a.container.Close())
 	}
 
