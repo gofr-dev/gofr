@@ -167,13 +167,28 @@ func (h handler) serveInline(c *Context, spanCtx trace.SpanContext) (result any,
 // after the handler hijacks the connection).
 //
 // The handler outcome is sent through a buffered channel rather than to
-// shared variables, so the goroutine never writes a memory location the
-// main goroutine reads — `go test -race` stays clean. Buffer size 1 lets
-// the handler goroutine finish writing and exit even after the main
-// goroutine has already taken the ctx.Done or panicked branch.
+// shared variables, so its (result, err) pair never becomes a location
+// both goroutines touch. Buffer size 1 lets the handler goroutine finish
+// writing and exit even after the main goroutine has already taken the
+// ctx.Done or panicked branch.
+//
+// c.Context is a location both goroutines DO touch: h.function runs in the
+// spawned goroutine and is free to reassign it (App.WebSocket does, to
+// thread the connection through it), while this goroutine's select used to
+// read c.Context.Done() directly — a data race, since nothing ordered the
+// two accesses. See the watchCtx snapshot below, taken before the goroutine
+// is spawned, for the fix.
 func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *http.Request) (result any, err error) {
 	done := make(chan handlerOutcome, 1)
 	panicked := make(chan struct{})
+
+	// Snapshot the context to watch for cancellation before spawning the
+	// handler goroutine below. h.function may reassign c.Context while it
+	// runs (App.WebSocket does, to thread the connection through it) —
+	// reading c.Context in the select instead of here would race that
+	// write. watchCtx is a local copy this goroutine alone reads, so the
+	// write in the spawned goroutine and this read never overlap.
+	watchCtx := c.Context
 
 	go func() {
 		defer func() {
@@ -187,13 +202,13 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	}()
 
 	select {
-	case <-c.Context.Done():
+	case <-watchCtx.Done():
 		// Server-side timeout or client cancellation. Map to the matching
 		// gofrHTTP error so Respond emits 408 (timeout) or 499 (client
 		// closed).
 		err = gofrHTTP.ErrorRequestTimeout{}
 
-		if errors.Is(c.Context.Err(), context.Canceled) {
+		if errors.Is(watchCtx.Err(), context.Canceled) {
 			err = gofrHTTP.ErrorClientClosedRequest{}
 		}
 	case out := <-done:
