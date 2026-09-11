@@ -450,19 +450,24 @@ jobs:
               # is checked without mutation in the code_quality job instead.
               go mod download
 
-              # Deliberately NOT `-short`. `-short` does not merely shorten these
-              # suites, it deletes whole test functions from the coverage figure:
-              # the mongo driver's own `mtest` harness calls t.Skip("skipping
-              # mtest integration test in short mode") even for
-              # ClientType(mtest.Mock), which needs no server and no network. Ten
-              # test functions covering every mongo CRUD path were being skipped,
-              # and pkg/gofr/datasource/mongo reported 27.2% instead of 87.7% —
-              # for tests that already exist and run in 1.4s.
+              # NOTE: this whole block is the single-quoted payload of the
+              # `bash -c` above, so nothing in here may contain an apostrophe —
+              # not even inside a comment. One in a comment closes the quote and
+              # the runner fails with a syntax error before any test runs.
               #
-              # Every other submodule reports an identical coverage figure with
-              # and without the flag — nothing else in this tree is gated on
-              # testing.Short() — so dropping it changes only what mtest was
-              # hiding.
+              # Deliberately NOT `-short`. It does not merely shorten these
+              # suites, it deletes whole test functions from the coverage figure:
+              # the mtest harness shipped by the mongo driver calls t.Skip with
+              # "skipping mtest integration test in short mode" even under
+              # ClientType of mtest.Mock, which needs no server and no network.
+              # Ten test functions covering every mongo CRUD path were being
+              # skipped, so pkg/gofr/datasource/mongo reported 27.2% instead of
+              # 87.7% for tests that already exist and run in 1.4s.
+              #
+              # Measured across all 27 submodules: mongo is the only one whose
+              # figure changes at all and the only one with any testing.Short
+              # gating, and all 27 pass either way. Dropping the flag changes
+              # only what mtest was hiding.
               go test ./... -v -coverprofile="${module_name}.cov" -coverpkg=./...
 
               # Copy coverage file to the coverage_reports directory
