@@ -450,8 +450,25 @@ jobs:
               # is checked without mutation in the code_quality job instead.
               go mod download
 
-              # Run tests with a focus on failed tests first
-              go test ./... -v -short -coverprofile="${module_name}.cov" -coverpkg=./...
+              # NOTE: this whole block is the single-quoted payload of the
+              # `bash -c` above, so nothing in here may contain an apostrophe —
+              # not even inside a comment. One in a comment closes the quote and
+              # the runner fails with a syntax error before any test runs.
+              #
+              # Deliberately NOT `-short`. It does not merely shorten these
+              # suites, it deletes whole test functions from the coverage figure:
+              # the mtest harness shipped by the mongo driver calls t.Skip with
+              # "skipping mtest integration test in short mode" even under
+              # ClientType of mtest.Mock, which needs no server and no network.
+              # Ten test functions covering every mongo CRUD path were being
+              # skipped, so pkg/gofr/datasource/mongo reported 27.2% instead of
+              # 87.7% for tests that already exist and run in 1.4s.
+              #
+              # Measured across all 27 submodules: mongo is the only one whose
+              # figure changes at all and the only one with any testing.Short
+              # gating, and all 27 pass either way. Dropping the flag changes
+              # only what mtest was hiding.
+              go test ./... -v -coverprofile="${module_name}.cov" -coverpkg=./...
 
               # Copy coverage file to the coverage_reports directory
               cp "${module_name}.cov" "$COVERAGE_DIR/"
