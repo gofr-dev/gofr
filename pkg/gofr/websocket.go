@@ -44,7 +44,14 @@ func (a *App) WebSocket(route string, handler Handler) {
 
 		ctx.Request = conn
 
-		ctx.Context = context.WithValue(ctx, websocket.WSConnectionKey, conn)
+		// The parent must be ctx.Context (the embedded context.Context), not ctx
+		// itself: ctx is a *Context, so passing ctx here would make the value
+		// context's parent be ctx, whose .Context field is the very value context
+		// being constructed. Any walk of the parent chain other than the lucky
+		// first lookup (e.g. .Done(), or a .Value() for any other key) would then
+		// recurse into itself forever -- an unrecoverable stack overflow, since
+		// recover() cannot catch a fatal error.
+		ctx.Context = context.WithValue(ctx.Context, websocket.WSConnectionKey, conn)
 
 		defer a.httpServer.ws.CloseConnection(connID)
 
