@@ -206,6 +206,89 @@ For endpoints that need to match multiple paths, use mux patterns:
 - **Middle variable**: Use `"/api/{category}/posts"` instead of `"/api/*/posts"`
     - Matches: `/api/tech/posts`, `/api/news/posts`
 
+### Rule Resolution
+
+More than one endpoint entry can match the same request — a broad pattern and a narrow one, for
+example. GoFr resolves this by **most specific wins**, rather than by the order the entries appear
+in the config file.
+
+Specificity is compared segment by segment, and the first segment where two patterns differ decides:
+
+1. A literal segment (`users`) is more specific than
+2. a constrained variable (`{id:[0-9]+}`), which is more specific than
+3. a free variable (`{id}`), which is more specific than
+4. a multi-segment catch-all (`{path:.*}`).
+
+If the paths are equally specific, an entry that names its methods explicitly wins over one
+declared with `["*"]`.
+
+```json
+{
+  "endpoints": [
+    {
+      "path": "/admin/{path:.*}",
+      "methods": ["*"],
+      "requiredPermissions": ["admin:read"]
+    },
+    {
+      "path": "/admin/orgs/{org_id}",
+      "methods": ["DELETE"],
+      "requiredPermissions": ["admin:write"]
+    }
+  ]
+}
+```
+
+`DELETE /admin/orgs/123` matches both entries, and the second one governs it — so `admin:write` is
+required. `GET /admin/settings` matches only the first, so `admin:read` is required.
+
+`GET /admin/orgs/123` is the case to watch. The narrow entry is `["DELETE"]`-only, so it does not
+cover a GET at all and drops out on method before specificity is ever considered — the catch-all
+governs, and the request needs only `admin:read`. Writing a strict rule for one method does not
+protect the other methods on that path; each method needs its own entry, or the broad entry has to
+be strict enough to stand on its own.
+
+> **Note**: `"methods": ["*"]` — and omitting `methods` entirely, which means the same thing —
+> matches **every** HTTP method, including methods GoFr does not otherwise know about. Since an
+> entry states what a caller must have in order to be let through, covering an unrecognized method
+> tightens enforcement rather than relaxing it.
+
+#### Where the ordering is not decided
+
+**Two patterns that score identically** — `/{a}/{b}` and `/{x}/{y}` are the same shape, so nothing
+about the patterns separates them. One thing still does: an entry that **requires permissions wins
+over a public one**, because a tie is a config that did not express an intent either way and
+enforcing is the recoverable half of that mistake. Past that, the first entry declared wins. Avoid
+writing two entries that overlap without one being plainly narrower than the other.
+
+**A constraint that can span segments** — a constraint containing `/`, such as `{path:[a-z/]+}`,
+matches `/files/a/b/c` the way a catch-all does, so it is scored as one: least specific, losing to
+any narrower entry it overlaps. That is decided by the `/` appearing in the constraint at all, not
+by whether the regex can really produce one — `{id:[0-9]+/}` is scored as a catch-all even though
+it is anchored to a single segment. The effect is only ever to move an entry *down* the ordering,
+so it can lose to a narrower rule but never shadow one. Write multi-segment matches as `{path:.*}`
+or `{path:.+}` and the scoring is exact.
+
+#### Declaring the same path twice
+
+Two entries with the same method and path are one entry: **the last one declared wins, in full**.
+That includes the `public` flag — a public entry followed by a protected one for the same key is
+protected, not public. Duplicates are not rejected, so it is worth checking for them in a config
+assembled from more than one source.
+
+#### A pattern that cannot compile
+
+If a pattern's constraint is not valid regex — `{id:[}`, for example — the config still loads and
+the application still starts, but the pattern can never match a request, so **that endpoint is not
+enforced**. GoFr logs the pattern at error level on startup:
+
+```
+RBAC: endpoint[2]: invalid mux pattern: "/api/{id:[}": ... This endpoint will never match a
+request, so it is NOT enforced - any route it was meant to govern is currently unguarded.
+```
+
+Treat that line as an open route, not a warning about a typo.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
@@ -465,8 +548,17 @@ Or use role inheritance to avoid duplication:
 **Route not being protected by RBAC**
 - Verify the route is explicitly configured in `endpoints[]` array
 - Check that the path pattern matches exactly (case-sensitive)
-- Ensure HTTP method matches (or use `["*"]` for all methods)
+- Ensure HTTP method matches (or use `["*"]` for all methods) — a rule declared for one method does
+  not cover the others on that path
+- Check the startup logs for `invalid mux pattern` — a pattern whose constraint is not valid regex
+  loads but never matches, leaving that endpoint unenforced
 - Remember: Routes not in RBAC config are allowed to proceed (not blocked)
+
+**The wrong permission is being required on a path two entries match**
+- The more specific pattern governs — see [Rule Resolution](#rule-resolution)
+- Check whether the narrower entry actually covers the request's method; if it does not, it drops
+  out and the broader entry applies
+- If both patterns are equally specific, declaration order decides — rewrite one to be narrower
 
 ## How It Works
 

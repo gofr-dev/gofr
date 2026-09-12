@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 // routeCacheLimit caps the number of entries any per-route cache in this package
@@ -39,7 +41,7 @@ func cacheableMethod(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
 		http.MethodPatch, http.MethodDelete, http.MethodConnect,
-		http.MethodOptions, http.MethodTrace:
+		http.MethodOptions, http.MethodTrace, gofrHTTP.MethodQuery:
 		return true
 	default:
 		return false
