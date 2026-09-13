@@ -12,30 +12,41 @@ import (
 	"time"
 )
 
-// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
-// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
-// on an unreachable metrics collector.
-const metricsFlushTimeout = 10 * time.Second
+// telemetryFlushTimeout bounds the metrics and traces flush/shutdown performed
+// after a CMD app's handler returns, so a CLI invocation cannot hang
+// indefinitely waiting on an unreachable collector.
+const telemetryFlushTimeout = 10 * time.Second
+
+// runCMD runs a CMD application's subcommand and then flushes telemetry: the
+// final metric window and the pending span batch would otherwise be dropped when
+// the process exits, which for a CLI invocation is every window and every batch.
+// The flush is bounded by telemetryFlushTimeout so an unreachable collector
+// cannot hang the invocation.
+func (a *App) runCMD() {
+	a.cmd.Run(a.container)
+
+	if a.container != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+		defer cancel()
+
+		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush metrics: %v", err)
+		}
+
+		if err := a.shutdownTraces(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush traces: %v", err)
+		}
+	}
+
+	if closer, ok := a.container.Logger.(io.Closer); ok {
+		closer.Close()
+	}
+}
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
-		a.cmd.Run(a.container)
-
-		if a.container != nil {
-			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
-
-			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-				a.Logger().Errorf("failed to flush metrics: %v", err)
-			}
-
-			cancel()
-		}
-
-		if closer, ok := a.container.Logger.(io.Closer); ok {
-			closer.Close()
-		}
-
+		a.runCMD()
 		return
 	}
 
