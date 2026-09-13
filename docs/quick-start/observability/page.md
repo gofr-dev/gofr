@@ -428,7 +428,33 @@ Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and
 
 
 
-#### 4. [GoFr Tracer](https://tracer.gofr.dev/):
+#### 4. [Google Cloud Trace](https://cloud.google.com/trace) (keyless):
+
+Exports spans straight to Google Cloud's Telemetry (OTLP) API — no key file and no Collector
+sidecar. Authentication uses Application Default Credentials, so on Cloud Run, GKE or GCE the
+attached service account is enough. The exporter lives in its own module, enabled by a blank import:
+
+```go
+import _ "gofr.dev/pkg/gofr/traces/exporters/gcp"
+```
+
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=gcp
+TRACER_RATIO=1.0
+# TRACER_URL is optional; it defaults to telemetry.googleapis.com:443
+```
+
+Grant the workload's service account `roles/telemetry.tracesWriter` on the project receiving the
+spans. `roles/cloudtrace.agent` is **not** sufficient — it authorizes the older Cloud Trace API,
+which this exporter does not call. Locally, run `gcloud auth application-default login` and set
+`GOOGLE_CLOUD_PROJECT`, since a user credential carries no project.
+
+See `examples/using-gcp-traces` for a full Cloud Run deployment.
+
+#### 5. [GoFr Tracer](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. Users can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service, available anywhere, anytime.
