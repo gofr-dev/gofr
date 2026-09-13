@@ -1,3 +1,5 @@
+//go:build !gofr_nographql
+
 package gofr
 
 import (
@@ -97,6 +99,8 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 		enumCache: make(map[string]*graphql.Enum),
 	}
 }
+
+func (*graphQLManager) enabled() bool { return true }
 
 func (m *graphQLManager) RegisterQuery(name string, handler Handler) {
 	m.mu.Lock()
@@ -581,3 +585,15 @@ const graphiqlHTML = `<!DOCTYPE html>
     </script>
 </body>
 </html>`
+
+// noopResponder is used by GraphQL resolvers. GraphQL reuses *gofr.Context (which
+// requires a Responder) but handles its own response serialization — the resolver
+// result is collected by the GraphQL engine and written as part of the unified
+// GraphQL JSON response, not via the standard HTTP responder.
+//
+// It lives here rather than in responder.go because getResolver is its only user,
+// and responder.go cannot carry the build tag: it also holds the exported
+// Responder interface, which every build needs.
+type noopResponder struct{}
+
+func (noopResponder) Respond(_ any, _ error) {}
