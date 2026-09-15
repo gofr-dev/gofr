@@ -2,10 +2,11 @@ module gofr.dev/pkg/gofr/traces/exporters/gcp
 
 go 1.26.0
 
-// TODO: drop this replace once a gofr.dev release contains
+// TODO(#4210): drop this replace once a gofr.dev release contains
 // pkg/gofr/traces/exporters, and pin that version instead. The metrics exporter
 // module carries no replace for exactly this reason — it was added only after
-// the core it needs had shipped.
+// the core it needs had shipped. Until then this module is in-repo only: a
+// replace in a dependency's go.mod is ignored by the consuming main module.
 replace gofr.dev => ../../../../..
 
 require (
