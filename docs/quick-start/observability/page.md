@@ -290,6 +290,17 @@ To disable the metrics server entirely, set the `METRICS_PORT` environment varia
 METRICS_PORT=0
 ```
 
+### Limiting Metric Cardinality
+
+Each metric instrument keeps a bounded number of distinct label sets per collection cycle; the remaining series
+collapse into a single `otel.metric.overflow` series, protecting the backend from a cardinality explosion. The
+limit is inclusive of that overflow slot, so a value of `n` keeps up to `n-1` real label sets. The default is
+`2000`; override it with `METRICS_CARDINALITY_LIMIT` (set `0` or a negative value for unlimited):
+
+```dotenv
+METRICS_CARDINALITY_LIMIT=5000
+```
+
 ### Example Dashboard
 
 These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
