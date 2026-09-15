@@ -38,8 +38,14 @@ type ShutdownFunc func(ctx context.Context) error
 //
 // Build never returns a nil provider or a nil ShutdownFunc. Every failure —
 // unknown exporter name, a builder that errors — degrades to the NeverSample
-// provider described in neverSampleProvider rather than crashing app start.
+// provider described in neverSampleProvider rather than crashing app start. A
+// nil logger is substituted with noopLogger, so a caller that does not want the
+// diagnostics does not have to supply one.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, trace.TracerProvider) {
+	if logger == nil {
+		logger = noopLogger{}
+	}
+
 	name := strings.ToLower(strings.TrimSpace(cfg.Exporter))
 	if name == "" {
 		return neverSampleProvider()

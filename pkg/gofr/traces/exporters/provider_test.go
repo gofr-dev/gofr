@@ -188,3 +188,32 @@ func Test_Build_publishesTheResourceBeforeTheBuilderRuns(t *testing.T) {
 		t.Fatal("expected Build to publish cfg.Resource before invoking the builder")
 	}
 }
+
+// Build is exported, so a caller outside the framework can reach it without a
+// logger. noopLogger is documented as the fallback for exactly that caller; this
+// pins that it is actually substituted rather than dereferenced.
+func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
+	Register("test-nil-logger", stubBuilder)
+
+	tests := []struct {
+		name     string
+		exporter string
+	}{
+		{name: "tracing disabled", exporter: ""},
+		{name: "unknown exporter takes the degrade path", exporter: "no-such-exporter"},
+		{name: "builder runs", exporter: "test-nil-logger"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{AppName: "app", Exporter: tt.exporter, Ratio: 1}
+
+			shutdown, tp := Build(t.Context(), &cfg, nil)
+			if shutdown == nil || tp == nil {
+				t.Fatal("Build must never return a nil ShutdownFunc or provider")
+			}
+
+			_ = shutdown(t.Context())
+		})
+	}
+}

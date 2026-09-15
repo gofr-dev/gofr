@@ -465,3 +465,34 @@ func BenchmarkSpanStart_NeverSampleSDK(b *testing.B) {
 		span.End()
 	}
 }
+
+// Test_App_tracerRatio pins the TRACER_RATIO fallback. An unparsable value
+// resolves to 1, not to 0: prior to the exporter registry a parse failure left
+// the ratio at its zero value and silently disabled tracing. Both behaviors are
+// defensible, and this test exists so the next refactor picks one deliberately
+// rather than by accident — see the comment on tracerRatio.
+func Test_App_tracerRatio(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected float64
+	}{
+		{name: "unset defaults to full sampling", value: "", expected: 1},
+		{name: "explicit full sampling", value: "1", expected: 1},
+		{name: "fractional ratio", value: "0.25", expected: 0.25},
+		{name: "explicit zero disables sampling", value: "0", expected: 0},
+		{name: "unparsable value falls back to 1, not 0", value: "10%", expected: 1},
+		{name: "non-numeric value falls back to 1, not 0", value: "abc", expected: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{
+				Config:    config.NewMockConfig(map[string]string{"TRACER_RATIO": tt.value}),
+				container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+			}
+
+			require.InDelta(t, tt.expected, app.tracerRatio(), 0)
+		})
+	}
+}

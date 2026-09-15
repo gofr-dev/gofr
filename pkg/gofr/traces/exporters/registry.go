@@ -21,6 +21,9 @@ import (
 // exporters (otlp, jaeger, zipkin) and optional submodules (gcp) self-register
 // via Register in an init() function; Build then selects one by name.
 //
+// The logger passed to a Builder is never nil: Build substitutes a no-op logger
+// when its caller supplies none, so a builder can log unconditionally.
+//
 // Experimental: this is a new public extension point and its shape (returning an
 // sdktrace.SpanExporter, the Config/Logger arguments) may change in a future
 // minor release as more vendor exporters land. Pin your GoFr version if you

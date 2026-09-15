@@ -42,11 +42,22 @@ Tracing is opt-in. Set:
 |------------------|------------------------------------------------------|------------------------------------------|
 | `TRACE_EXPORTER` | `otlp`, `jaeger`, `zipkin` (deprecated)              | Required to enable                       |
 | `TRACER_URL`     | Endpoint URL or `host:port`                          | Required when exporter is set            |
-| `TRACER_RATIO`   | Sample ratio (0.0–1.0)                               | Defaults to `1` (100%)                   |
+| `TRACER_RATIO`   | Sample ratio (0.0–1.0)                               | Defaults to `1` (100%); an unparsable value also resolves to `1` |
 | `TRACER_HEADERS` | Custom headers (e.g., for SaaS auth)                 | Comma-separated `key=value` pairs        |
 | `TRACER_AUTH_KEY`| Single auth header value                             | Use `TRACER_HEADERS` for multiple        |
 
 The `zipkin` value emits a deprecation warning at startup and recommends switching to `otlp` (verified in `pkg/gofr/otel.go`).
+
+Two failure modes are worth knowing before you set these:
+
+- **An unparsable `TRACER_RATIO` samples everything.** `TRACER_RATIO=10%` is not a number, so it is
+  rejected and the ratio falls back to `1` — every trace is exported, and the error names both the
+  rejected value and the ratio actually applied. Use `0.1`, not `10%`, and watch for that log line if
+  export volume is higher than you expect.
+- **An unrecognized `TRACE_EXPORTER` disables tracing rather than pretending to work.** The app
+  starts, logs the unsupported name, and installs a non-recording provider. Trace and span IDs stay
+  valid, so `X-Correlation-ID` and the `trace_id` log field keep working — but no span leaves the
+  process. Check the startup log if a backend you configured is receiving nothing.
 
 ## End-to-end example
 

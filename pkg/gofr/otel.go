@@ -87,10 +87,21 @@ func (a *App) shutdownTraces(ctx context.Context) error {
 	return a.shutdownTracer(ctx)
 }
 
+// tracerRatio resolves TRACER_RATIO, the head-based sampling ratio.
+//
+// An unparsable value falls back to 1 (sample everything), matching the
+// documented default of the config itself. The alternative — treating a typo as
+// 0 — silently disables tracing on the deployment that most needs it, and the
+// operator sees the same effect as a working exporter with no traffic. Over-
+// sampling is visible and costs money; under-sampling is invisible. The error is
+// logged naming both the rejected value and the ratio actually applied, so the
+// volume jump is attributable.
 func (a *App) tracerRatio() float64 {
-	ratio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
+	value := a.Config.GetOrDefault("TRACER_RATIO", "1")
+
+	ratio, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		a.container.Error(err)
+		a.container.Errorf("invalid TRACER_RATIO %q: %v; falling back to 1 (sampling every trace)", value, err)
 
 		return 1
 	}
