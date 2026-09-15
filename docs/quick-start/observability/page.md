@@ -480,7 +480,7 @@ APP_NAME=my-service
 
 # Grafana Cloud OTLP endpoint with authentication
 TRACE_EXPORTER=otlp
-TRACER_URL=otlp-gateway-prod-us-east-0.grafana.net:443
+TRACER_URL=https://otlp-gateway-prod-us-east-0.grafana.net:443
 TRACER_HEADERS="Authorization=Basic dXNlcm5hbWU6cGFzc3dvcmQ=,X-Scope-OrgID=123456"
 TRACER_RATIO=1.0
 ```
