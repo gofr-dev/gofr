@@ -12,7 +12,7 @@ nextjs:
 GoFr ships built-in OpenTelemetry tracing — every HTTP request, gRPC call, and datasource operation is traced automatically. Configure the exporter via `TRACE_EXPORTER` (`otlp`, `jaeger`, `zipkin`, or `gofr`) and `TRACER_URL`, set `TRACER_RATIO` for head-based sampling, and W3C Trace Context propagation flows through GoFr's HTTP service client without extra code.
 {% /answer %}
 
-{% howto name="Wire production tracing for a GoFr service" description="Configure OTLP gRPC tracing in GoFr, point it at Jaeger / Tempo / Honeycomb, and tune sampling for production." steps=[{"name": "Set TRACE_EXPORTER", "text": "Set TRACE_EXPORTER=otlp in configs/.env (or an env-based ConfigMap in K8s) — GoFr ships an OTLP gRPC exporter."}, {"name": "Set TRACER_URL", "text": "Set TRACER_URL to a bare host:port (no http:// scheme) on port 4317 for OTLP gRPC; route to Jaeger collector, Tempo, or any OTLP backend."}, {"name": "Tune TRACER_RATIO", "text": "Set TRACER_RATIO to 1.0 in dev for full sampling; in prod step down to 0.1 or lower based on volume."}, {"name": "Add custom spans", "text": "Use ctx.Trace(name) inside handlers to mark sub-operations; existing HTTP, gRPC, and datasource spans are emitted automatically."}, {"name": "Verify in the backend", "text": "Hit a route, then open the Jaeger UI / Grafana Tempo and search for the service by APP_NAME — confirm spans show up with trace_id."}, {"name": "Propagate across services", "text": "GoFr injects W3C TraceContext on outbound calls via ctx.GetHTTPService — so two GoFr services share a single trace ID end to end."}] /%}
+{% howto name="Wire production tracing for a GoFr service" description="Configure OTLP gRPC tracing in GoFr, point it at Jaeger / Tempo / Honeycomb, and tune sampling for production." steps=[{"name": "Set TRACE_EXPORTER", "text": "Set TRACE_EXPORTER=otlp in configs/.env (or an env-based ConfigMap in K8s) — GoFr ships an OTLP gRPC exporter."}, {"name": "Set TRACER_URL", "text": "Set TRACER_URL to the collector endpoint on port 4317 for OTLP gRPC \u2014 https:// for a TLS-terminating backend, http:// or a bare host:port for plaintext; route to Jaeger collector, Tempo, or any OTLP backend."}, {"name": "Tune TRACER_RATIO", "text": "Set TRACER_RATIO to 1.0 in dev for full sampling; in prod step down to 0.1 or lower based on volume."}, {"name": "Add custom spans", "text": "Use ctx.Trace(name) inside handlers to mark sub-operations; existing HTTP, gRPC, and datasource spans are emitted automatically."}, {"name": "Verify in the backend", "text": "Hit a route, then open the Jaeger UI / Grafana Tempo and search for the service by APP_NAME — confirm spans show up with trace_id."}, {"name": "Propagate across services", "text": "GoFr injects W3C TraceContext on outbound calls via ctx.GetHTTPService — so two GoFr services share a single trace ID end to end."}] /%}
 
 ## When to use this guide
 
@@ -40,6 +40,7 @@ GoFr reads tracing config from environment variables. The relevant keys (verifie
 |---|---|---|
 | `TRACE_EXPORTER` | One of `otlp`, `jaeger`, `zipkin`, `gofr` | unset (tracing disabled) |
 | `TRACER_URL` | Endpoint for the chosen exporter | unset |
+| `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme | `true` |
 | `TRACER_HOST` | **Deprecated** — use `TRACER_URL` | unset |
 | `TRACER_PORT` | **Deprecated** — use `TRACER_URL` | `9411` |
 | `TRACER_RATIO` | Head-based sampling ratio (0.0–1.0) | `1` |
@@ -64,6 +65,25 @@ TRACER_RATIO: "0.1"
 ```
 
 `jaeger` and `otlp` use the same OTLP gRPC exporter under the hood — they differ only in log labeling.
+
+### TLS
+
+Transport security comes from the `TRACER_URL` scheme when it has one:
+
+```yaml
+TRACER_URL: "https://collector.example.com:4317"   # TLS, system root CAs
+TRACER_URL: "http://collector.example.com:4317"    # plaintext
+```
+
+A schemeless `host:port` stays plaintext for backward compatibility — that is what every existing
+GoFr deployment points at. Set `TRACER_INSECURE: "false"` to upgrade it to TLS without changing the
+endpoint. `TRACER_INSECURE` is ignored (with a warning) when the URL already carries a scheme, and
+GoFr warns when credentials from `TRACER_HEADERS`/`TRACER_AUTH_KEY` would travel over a plaintext
+connection.
+
+Precedence is `TRACER_URL`'s scheme, then `TRACER_INSECURE`, then the OTel standard
+`OTEL_EXPORTER_OTLP_INSECURE` / `OTEL_EXPORTER_OTLP_TRACES_INSECURE`. The SDK applies its
+environment variables before any option GoFr passes, so a GoFr config always wins over them.
 
 ### Grafana Tempo / OpenTelemetry Collector
 
@@ -94,7 +114,7 @@ Or with a single auth header:
 TRACER_AUTH_KEY: "Bearer YOUR_TOKEN"
 ```
 
-GoFr's OTLP exporter currently uses an insecure (cleartext) gRPC connection inside the cluster — for SaaS endpoints over the public internet, route through an OTel Collector that terminates TLS, or rely on a service mesh.
+For a SaaS endpoint over the public internet, give `TRACER_URL` an `https://` scheme (or set `TRACER_INSECURE: "false"` on a schemeless one) so the connection is encrypted — see the TLS section above. A schemeless URL with no `TRACER_INSECURE` stays cleartext, and GoFr warns when credentials would travel over it.
 
 ## Sampling: head-based vs tail-based
 
