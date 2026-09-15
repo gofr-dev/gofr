@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	cloud.google.com/go/cloudsqlconn v1.25.1
 	github.com/go-sql-driver/mysql v1.10.0
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/stretchr/testify v1.12.1
 )
 
