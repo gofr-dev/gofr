@@ -146,7 +146,13 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_URL
--  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger. An `http://` or `https://` scheme selects the transport; a schemeless `host:port` is governed by TRACER_INSECURE.
+
+---
+
+-  TRACER_INSECURE
+-  Whether a schemeless TRACER_URL (`host:port`) is exported over plaintext. Set to `false` to use TLS with the system root CAs. Ignored when TRACER_URL carries an `http://` or `https://` scheme, which selects the transport itself. Takes precedence over the OTel standard OTEL_EXPORTER_OTLP_INSECURE / OTEL_EXPORTER_OTLP_TRACES_INSECURE. Supported for otlp, jaeger.
+-  true
 
 ---
 

@@ -155,6 +155,30 @@ func (a *App) getTracerHeaders() map[string]string {
 	return headers
 }
 
+// tracerInsecure resolves TRACER_INSECURE, which controls transport security for
+// a schemeless TRACER_URL (host:port). It reports the flag and whether it was
+// explicitly configured — a scheme-bearing TRACER_URL derives its security from
+// the scheme and warns when the flag was set and therefore ignored.
+//
+// It defaults to true (plaintext), unlike METRICS_INSECURE, which defaults to
+// false. See resolveOtlpTransport for why the two diverge.
+func (a *App) tracerInsecure() (insecure, set bool) {
+	v := strings.TrimSpace(a.Config.Get("TRACER_INSECURE"))
+	if v == "" {
+		return true, false
+	}
+
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		a.Logger().Warnf("invalid TRACER_INSECURE %q: expected a boolean; defaulting to plaintext for a "+
+			"schemeless TRACER_URL", v)
+
+		return true, false
+	}
+
+	return b, true
+}
+
 func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
@@ -165,7 +189,12 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	switch strings.ToLower(name) {
 	case "otlp", "jaeger":
-		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers)
+		// Resolved inside the case, not above the switch: TRACER_INSECURE means
+		// nothing to zipkin or gofr, and evaluating it for them would warn about a
+		// malformed value under an exporter that never reads it.
+		insecure, insecureSet := a.tracerInsecure()
+
+		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers, insecure, insecureSet)
 	case "zipkin":
 		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
 			"Zipkin supports OTLP natively (v2.24+) — to migrate, switch to TRACE_EXPORTER=otlp " +
@@ -181,16 +210,99 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	return exporter, err
 }
 
+// otlpTransport is the resolved transport-security decision for the OTLP trace
+// exporter: which endpoint option to use, whether to apply WithInsecure, and
+// whether the resulting connection carries traffic in the clear.
+type otlpTransport struct {
+	// useEndpointURL selects WithEndpointURL (the endpoint carries a scheme)
+	// over WithEndpoint. The two are never combined.
+	useEndpointURL bool
+
+	// insecure applies WithInsecure(). Only ever true for a schemeless endpoint —
+	// WithEndpointURL derives transport security from the scheme itself.
+	insecure bool
+
+	// plaintext reports whether spans will leave the process unencrypted,
+	// regardless of which option expressed it.
+	plaintext bool
+}
+
+// resolveOtlpTransport derives transport security from the TRACER_URL scheme
+// when it has one, and from TRACER_INSECURE only when it does not.
+//
+// Before this change the exporter passed the raw TRACER_URL to WithEndpoint,
+// which stores it verbatim as the gRPC target. A scheme-bearing value is not a
+// valid target ("too many colons in address"), so the dialer never opened a
+// socket and no span was ever exported — the endpoint was unusable rather than
+// downgraded.
+//
+// WithEndpointURL is what reads the scheme, and it must never be paired with
+// WithInsecure(): the SDK applies options in slice order, so a WithInsecure()
+// appended afterwards would override the scheme and downgrade the connection to
+// plaintext. Hence the two are mutually exclusive below.
+//
+// Precedence: the SDK applies OTEL_EXPORTER_OTLP_INSECURE (and
+// OTEL_EXPORTER_OTLP_TRACES_INSECURE) before any explicit option, so whatever
+// GoFr passes here wins over them. TRACER_URL's scheme, then TRACER_INSECURE,
+// then the OTel standard variables.
+//
+// Deliberate divergence from the metrics exporter (metrics/exporters/otlp.go),
+// which defaults a schemeless METRICS_URL to TLS: every TRACER_URL=host:4317
+// deployment in the wild points at a plaintext collector today, because this
+// exporter hardcoded WithInsecure(). Defaulting a schemeless endpoint to TLS
+// would break all of them silently in a minor release, so traces default a
+// schemeless endpoint to plaintext and TRACER_INSECURE=false is the opt-in.
+func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureSet bool) otlpTransport {
+	const (
+		schemeHTTP  = "http://"
+		schemeHTTPS = "https://"
+	)
+
+	// Scheme comparison is case-insensitive per RFC 3986 §3.1, and url.Parse
+	// inside WithEndpointURL treats it that way — so HTTPS://host:4317 must not
+	// fall through to WithEndpoint, where it would be an invalid gRPC target.
+	scheme := strings.ToLower(url)
+
+	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
+		if insecureSet {
+			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
+				"from the URL scheme", url)
+		}
+
+		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
+	}
+
+	return otlpTransport{insecure: insecure, plaintext: insecure}
+}
+
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
 // jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
+func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string,
+	insecure, insecureSet bool) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("%s:%s", host, port)
 	}
 
+	transport := resolveOtlpTransport(logger, url, insecure, insecureSet)
+
+	if transport.plaintext && len(headers) > 0 {
+		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
+			"headers (including auth credentials) will be sent in the clear", url)
+	}
+
 	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
 
-	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+	var opts []otlptracegrpc.Option
+
+	if transport.useEndpointURL {
+		opts = append(opts, otlptracegrpc.WithEndpointURL(url))
+	} else {
+		opts = append(opts, otlptracegrpc.WithEndpoint(url))
+
+		if transport.insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+	}
 
 	if len(headers) > 0 {
 		opts = append(opts, otlptracegrpc.WithHeaders(headers))
