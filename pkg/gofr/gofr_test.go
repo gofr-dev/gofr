@@ -1540,8 +1540,8 @@ func TestNewCMD_DrainsTelemetryExactlyOnce(t *testing.T) {
 // TestRun_WaitsForTelemetryDrainOnCancellation pins the guarantee requested
 // in review of #3925: on termination (a real SIGTERM cancels Run's context
 // exactly like this), Run must not return until the shutdown goroutine's
-// telemetry drain has finished. It drives runUntilShutdown — the part of Run
-// that performs the wait — directly with a context it cancels itself, rather
+// telemetry drain has finished. It drives runUntilShutdown, the part of Run
+// that performs the wait, directly with a context it cancels itself, rather
 // than sending a real OS SIGTERM: a real signal.NotifyContext(SIGTERM) is
 // process-wide, and this package's suite leaks other Run goroutines with
 // their own registrations still alive, so a real SIGTERM here also woke
@@ -1564,7 +1564,7 @@ func TestRun_WaitsForTelemetryDrainOnCancellation(t *testing.T) {
 	app.telemetryShutdown = append(app.telemetryShutdown, func(context.Context) error {
 		// Long enough that, without the wait on shutdownDone, the HTTP
 		// server's own (much faster) graceful shutdown lets startAllServers
-		// return before this completes — making a dropped wait reliably
+		// return before this completes, making a dropped wait reliably
 		// observable instead of a rare race.
 		time.Sleep(200 * time.Millisecond)
 		drained.Store(true)

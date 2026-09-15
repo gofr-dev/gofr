@@ -66,7 +66,7 @@ func (a *App) Run() {
 // runUntilShutdown starts telemetry and all registered servers, then blocks
 // until they stop. It is split out of Run so the wait it performs below can
 // be exercised with a directly cancelable context instead of a real OS
-// signal — delivering an actual SIGTERM inside `go test` reaches every
+// signal: delivering an actual SIGTERM inside `go test` reaches every
 // still-registered signal.NotifyContext in the process, including ones
 // leaked by unrelated tests, not just this App's.
 func (a *App) runUntilShutdown(ctx context.Context, timeout time.Duration, shutdownDone chan struct{}) {
