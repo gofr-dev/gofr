@@ -1537,6 +1537,66 @@ func TestNewCMD_DrainsTelemetryExactlyOnce(t *testing.T) {
 		"expected the registered telemetry shutdown func to be drained exactly once after Run")
 }
 
+// TestRun_WaitsForTelemetryDrainOnCancellation pins the guarantee requested
+// in review of #3925: on termination (a real SIGTERM cancels Run's context
+// exactly like this), Run must not return until the shutdown goroutine's
+// telemetry drain has finished. It drives runUntilShutdown — the part of Run
+// that performs the wait — directly with a context it cancels itself, rather
+// than sending a real OS SIGTERM: a real signal.NotifyContext(SIGTERM) is
+// process-wide, and this package's suite leaks other Run goroutines with
+// their own registrations still alive, so a real SIGTERM here also woke
+// those up and crashed unrelated, already-completed tests instead of
+// exercising just this App. Deleting the shutdownDone wait in
+// runUntilShutdown (the `if ctx.Err() != nil { select { ... } }` block)
+// leaves this test red, because it can then return before the registered
+// shutdown func has run.
+func TestRun_WaitsForTelemetryDrainOnCancellation(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	app.GET("/hello", func(*Context) (any, error) {
+		return helloWorld, nil
+	})
+
+	var drained atomic.Bool
+
+	app.telemetryShutdown = append(app.telemetryShutdown, func(context.Context) error {
+		// Long enough that, without the wait on shutdownDone, the HTTP
+		// server's own (much faster) graceful shutdown lets startAllServers
+		// return before this completes — making a dropped wait reliably
+		// observable instead of a rare race.
+		time.Sleep(200 * time.Millisecond)
+		drained.Store(true)
+
+		return nil
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	timeout := 5 * time.Second
+	shutdownDone := make(chan struct{})
+
+	app.startShutdownHandler(ctx, timeout, shutdownDone)
+
+	runDone := make(chan struct{})
+
+	go func() {
+		defer close(runDone)
+		app.runUntilShutdown(ctx, timeout, shutdownDone)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-runDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runUntilShutdown did not return after cancellation within the timeout")
+	}
+
+	assert.True(t, drained.Load(), "expected telemetry drain to complete before Run returned on cancellation")
+}
+
 func TestShutdown_StopsCron(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
