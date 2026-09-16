@@ -122,11 +122,15 @@ func (a *App) mcpPort() (int, bool) {
 type mcpServer struct {
 	port    int
 	handler http.Handler
-	srvMu   sync.Mutex // guards srv, written by Run on the serve goroutine and read by Shutdown on the caller goroutine
-	srv     *http.Server
+	// srvMu guards srv, listener and stopped. Run writes srv on the serve goroutine; Shutdown reads
+	// all three on the caller goroutine.
+	srvMu sync.Mutex
+	srv   *http.Server
 	// listener is created by bind, before any server starts, and consumed by Run. Splitting the
 	// bind from the serve is what lets a port conflict fail startup deterministically: see bind.
 	listener net.Listener
+	// stopped records a Shutdown that arrived before Run assigned srv, so Run does not serve.
+	stopped bool
 }
 
 func newMCPServer(port int, handler http.Handler) *mcpServer {
@@ -165,20 +169,14 @@ func (m *mcpServer) bind(ctx context.Context) error {
 		return err
 	}
 
+	m.srvMu.Lock()
 	m.listener = l
+	m.srvMu.Unlock()
 
 	return nil
 }
 
 func (m *mcpServer) Run(c *container.Container) {
-	if m.listener == nil {
-		c.Errorf("MCP server was not bound; refusing to serve on port %d", m.port)
-
-		return
-	}
-
-	c.Logf("Starting MCP server on port: %d", m.port)
-
 	// Assign under the lock, then serve on the local copy so the blocking Serve call never holds it
 	// while Shutdown reads srv.
 	srv := &http.Server{
@@ -187,12 +185,31 @@ func (m *mcpServer) Run(c *container.Container) {
 	}
 
 	m.srvMu.Lock()
-	m.srv = srv
+
+	if m.stopped {
+		m.srvMu.Unlock()
+
+		return
+	}
+
+	listener := m.listener
+	if listener != nil {
+		m.srv = srv
+	}
+
 	m.srvMu.Unlock()
+
+	if listener == nil {
+		c.Errorf("MCP server was not bound; refusing to serve on port %d", m.port)
+
+		return
+	}
+
+	c.Logf("Starting MCP server on port: %d", m.port)
 
 	// The port was already claimed by bind, so Serve cannot fail for being in use. Anything reported
 	// here is a fault while already serving, which is the same class of event the HTTP server logs.
-	if err := srv.Serve(m.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		c.Errorf("error while serving the MCP server on port %d, err: %v", m.port, err)
 	}
 }
@@ -200,11 +217,24 @@ func (m *mcpServer) Run(c *container.Container) {
 func (m *mcpServer) Shutdown(ctx context.Context) error {
 	m.srvMu.Lock()
 	srv := m.srv
-	m.srvMu.Unlock()
 
+	// Run has not assigned srv yet, so there is no server for srv.Shutdown to stop — but bind may
+	// already hold the port. Mark the server stopped so a later Run returns instead of serving, and
+	// release the listener here, since nothing else would ever close it.
 	if srv == nil {
-		return nil
+		m.stopped = true
+		l := m.listener
+		m.listener = nil
+		m.srvMu.Unlock()
+
+		if l == nil {
+			return nil
+		}
+
+		return l.Close()
 	}
+
+	m.srvMu.Unlock()
 
 	return ShutdownWithContext(ctx, func(ctx context.Context) error {
 		return srv.Shutdown(ctx)

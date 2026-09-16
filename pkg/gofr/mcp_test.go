@@ -446,6 +446,45 @@ func TestMCPServer_Run_ServesOnTheBoundListener(t *testing.T) {
 	}
 }
 
+// TestMCPServer_ShutdownBeforeRunReleasesTheListener pins the window between bind and Run. Run
+// assigns srv on the serve goroutine, so a shutdown that lands after bind but before that assignment
+// finds no server to stop. If Shutdown treated that as nothing to do, the listener bind claimed would
+// stay open, Run would go on to Serve it with nothing left to close it, and startMCPServer's
+// waitgroup would never return.
+func TestMCPServer_ShutdownBeforeRunReleasesTheListener(t *testing.T) {
+	m := newMCPServer(testutil.GetFreePort(t), http.NotFoundHandler())
+
+	require.NoError(t, m.bind(t.Context()))
+	require.NoError(t, m.Shutdown(t.Context()))
+
+	done := make(chan struct{})
+
+	logs := testutil.StderrOutputForFunc(func() {
+		go func() {
+			defer close(done)
+
+			m.Run(container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"})))
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("Run served after Shutdown; startMCPServer would hang on the waitgroup")
+		}
+	})
+
+	assert.Empty(t, logs, "a shutdown before Run is not a serving fault and must not be logged as one")
+
+	// The port must be free again: Shutdown released the listener rather than leaving it to Run.
+	l, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", fmt.Sprintf("127.0.0.1:%d", m.port))
+	if assert.NoError(t, err, "Shutdown before Run left the MCP port bound") {
+		_ = l.Close()
+	}
+
+	// Shutdown stays safe to call again, as (*App).Shutdown may on the failed-startup path.
+	assert.NoError(t, m.Shutdown(t.Context()))
+}
+
 // TestMCPServer_Run_WithoutBindRefusesToServe guards the ordering the design depends on. Run is only
 // ever reached after bindMCPServer succeeds, so an unbound server reaching it means the sequence in
 // (*App).Run was broken — it must say so rather than silently serve nothing or panic.
