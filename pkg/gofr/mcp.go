@@ -31,10 +31,12 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 	}
 }
 
-// EnableMCP exposes the app's read-only HTTP handlers (GET/HEAD/OPTIONS) as agent-callable tools over
-// an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Write
-// handlers are never exposed, so an agent cannot mutate state through this surface. The tools are also
-// reachable in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
+// EnableMCP exposes the app's safe HTTP handlers — read-only methods (GET/HEAD/OPTIONS) and QUERY
+// (RFC 10008, safe and idempotent, whose query payload is passed as a "body" tool argument) — as
+// agent-callable tools over an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables
+// the server). Write handlers (POST/PUT/PATCH/DELETE) are never exposed, so an agent cannot mutate
+// state through this surface. The tools are also reachable in handlers via ctx.LLM().Tools() regardless
+// of whether the server is enabled.
 //
 // It performs no network I/O: the port is only resolved here, and claimed later during Run. A port
 // that cannot be claimed fails startup — see (*App).bindMCPServer — but it does so from Run, where
@@ -188,6 +190,7 @@ func (m *mcpServer) Run(c *container.Container) {
 
 	if m.stopped {
 		m.srvMu.Unlock()
+		c.Logf("MCP server was shut down before it started on port: %d", m.port)
 
 		return
 	}
@@ -216,13 +219,13 @@ func (m *mcpServer) Run(c *container.Container) {
 
 func (m *mcpServer) Shutdown(ctx context.Context) error {
 	m.srvMu.Lock()
+	m.stopped = true
 	srv := m.srv
 
 	// Run has not assigned srv yet, so there is no server for srv.Shutdown to stop — but bind may
 	// already hold the port. Mark the server stopped so a later Run returns instead of serving, and
 	// release the listener here, since nothing else would ever close it.
 	if srv == nil {
-		m.stopped = true
 		l := m.listener
 		m.listener = nil
 		m.srvMu.Unlock()
