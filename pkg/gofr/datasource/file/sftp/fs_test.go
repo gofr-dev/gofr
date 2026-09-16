@@ -152,7 +152,7 @@ func TestFiles_ChDir(t *testing.T) {
 
 	err := files.ChDir("test.csv")
 
-	require.NoError(t, err, "TEST[%d] Failed. Desc %v")
+	require.ErrorIs(t, err, errChDirNotSupported, "TEST[%d] Failed. Desc %v")
 }
 
 func TestFiles_GetWd(t *testing.T) {
@@ -308,4 +308,100 @@ func TestFiles_Stat(t *testing.T) {
 		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
+}
+
+// captureOperationLogs returns a FileSystem whose logger records every FileLog
+// emitted by sendOperationStats, so tests can assert the operation name and the
+// success/error status that observability actually reports.
+func captureOperationLogs(t *testing.T) (FileSystem, *MocksftpClient, *[]FileLog) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+
+	mockClient := NewMocksftpClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+
+	logs := make([]FileLog, 0)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().Do(func(args ...any) {
+		if fl, ok := args[0].(*FileLog); ok {
+			logs = append(logs, *fl)
+		}
+	})
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any()).AnyTimes()
+
+	return FileSystem{logger: mockLogger, client: mockClient}, mockClient, &logs
+}
+
+// TestFiles_OperationLogs_NameAndStatus pins the operation name and status that
+// each method reports. It regression-guards three defects: Getwd reported STAT,
+// MkdirAll reported MKDIR, and a failed OpenFile reported SUCCESS.
+func TestFiles_OperationLogs_NameAndStatus(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		setup     func(c *MocksftpClient)
+		call      func(f FileSystem)
+		expOp     string
+		expStatus string
+	}{
+		{
+			desc:      "Getwd reports GETWD, not STAT",
+			setup:     func(c *MocksftpClient) { c.EXPECT().Getwd().Return("/home", nil) },
+			call:      func(f FileSystem) { _, _ = f.Getwd() },
+			expOp:     File.OpGetwd,
+			expStatus: statusSuccess,
+		},
+		{
+			desc:      "MkdirAll reports MKDIR_ALL, not MKDIR",
+			setup:     func(c *MocksftpClient) { c.EXPECT().MkdirAll("/a/b").Return(nil) },
+			call:      func(f FileSystem) { _ = f.MkdirAll("/a/b", 0) },
+			expOp:     File.OpMkdirAll,
+			expStatus: statusSuccess,
+		},
+		{
+			desc:      "Mkdir still reports MKDIR",
+			setup:     func(c *MocksftpClient) { c.EXPECT().Mkdir("/a").Return(nil) },
+			call:      func(f FileSystem) { _ = f.Mkdir("/a", 0) },
+			expOp:     File.OpMkdir,
+			expStatus: statusSuccess,
+		},
+		{
+			desc: "failed OpenFile reports ERROR, not SUCCESS",
+			setup: func(c *MocksftpClient) {
+				c.EXPECT().OpenFile("x.csv", 0).Return(nil, errOpenFile)
+			},
+			call:      func(f FileSystem) { _, _ = f.OpenFile("x.csv", 0, 0) },
+			expOp:     File.OpOpenFile,
+			expStatus: statusError,
+		},
+		{
+			desc:      "ChDir reports CHDIR with ERROR",
+			setup:     func(_ *MocksftpClient) {},
+			call:      func(f FileSystem) { _ = f.ChDir("/a") },
+			expOp:     File.OpChDir,
+			expStatus: statusError,
+		},
+	}
+
+	for i, tc := range testCases {
+		fs, client, logs := captureOperationLogs(t)
+
+		tc.setup(client)
+		tc.call(fs)
+
+		require.Len(t, *logs, 1, "TEST[%d] Failed. Desc %v", i, tc.desc)
+		require.Equal(t, tc.expOp, (*logs)[0].Operation, "TEST[%d] Failed. Desc %v", i, tc.desc)
+		require.Equal(t, tc.expStatus, *(*logs)[0].Status, "TEST[%d] Failed. Desc %v", i, tc.desc)
+	}
+}
+
+// TestFiles_ChDir_ReturnsError guards against ChDir silently reporting success
+// for an operation the SFTP client does not implement.
+func TestFiles_ChDir_ReturnsError(t *testing.T) {
+	files, mocks := getMocks(t)
+
+	mocks.logger.EXPECT().Errorf("Chdir is not implemented for SFTP")
+
+	require.ErrorIs(t, files.ChDir("any"), errChDirNotSupported)
 }

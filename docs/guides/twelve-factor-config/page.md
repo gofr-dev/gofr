@@ -86,9 +86,10 @@ data:
   DB_MAX_OPEN_CONNECTION: "20"
   DB_MAX_IDLE_CONNECTION: "5"
   TRACE_EXPORTER: otlp
-  # GoFr's OTLP exporter speaks gRPC (otlptracegrpc). TRACER_URL must be a bare
-  # host:port — no http:// scheme — and the OTLP gRPC port is 4317 (4318 is OTLP
-  # HTTP, which GoFr does NOT use).
+  # GoFr's OTLP exporter speaks gRPC (otlptracegrpc), on port 4317 (4318 is OTLP
+  # HTTP, which GoFr does NOT use). The TRACER_URL scheme selects the transport:
+  # https:// for TLS, http:// or a bare host:port for plaintext.
+  # A bare host:port can be upgraded with TRACER_INSECURE: "false".
   TRACER_URL: otel-collector.observability.svc.cluster.local:4317
 ---
 apiVersion: v1

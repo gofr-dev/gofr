@@ -23,7 +23,7 @@ You have a GoFr service already containerized (see {% new-tab-link newtab=false 
 | GoFr feature | Kubernetes object | Notes |
 |---|---|---|
 | `/.well-known/alive` | `livenessProbe.httpGet` | Restart unhealthy pods |
-| `/.well-known/health` | `readinessProbe.httpGet` | Gate traffic until datasources are reachable |
+| `/.well-known/health` | `readinessProbe.httpGet` | Gates traffic only once a [readiness check](/docs/advanced-guide/monitoring-service-health) is registered — by default it always answers `200` |
 | `OnStart` hooks | `startupProbe` | Long warm-ups (cache fill, migrations) |
 | Graceful shutdown on SIGTERM | `terminationGracePeriodSeconds` | Drain in-flight requests |
 | `configs/.env` keys | `ConfigMap` + `envFrom` | Non-secret config |

@@ -104,6 +104,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  METRICS_CARDINALITY_LIMIT
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT.
+-  2000
+
+---
+
 -  OTEL_RESOURCE_ATTRIBUTES
 -  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
 
@@ -140,7 +146,13 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_URL
--  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger. An `http://` or `https://` scheme selects the transport; a schemeless `host:port` is governed by TRACER_INSECURE.
+
+---
+
+-  TRACER_INSECURE
+-  Whether a schemeless TRACER_URL (`host:port`) is exported over plaintext. Set to `false` to use TLS with the system root CAs. Ignored when TRACER_URL carries an `http://` or `https://` scheme, which selects the transport itself. Takes precedence over the OTel standard OTEL_EXPORTER_OTLP_INSECURE / OTEL_EXPORTER_OTLP_TRACES_INSECURE. Supported for otlp, jaeger.
+-  true
 
 ---
 
