@@ -356,17 +356,11 @@ const redactedPlaceholder = "REDACTED"
 // A scheme-bearing TRACER_URL is a real URL, so it can carry credentials in its
 // userinfo (https://user:token@collector:4317) or its query
 // (https://collector/api/v2/spans?api-key=...). Both are replaced rather than
-// dropped, so the log still shows that something was configured there. A
-// schemeless host:port does not parse with a host, so everything before its
-// last '@' is replaced instead.
+// dropped, so the log still shows that something was configured there.
 func redactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
-		if i := strings.LastIndex(raw, "@"); i >= 0 {
-			return redactedPlaceholder + raw[i:]
-		}
-
-		return raw
+		return redactUnparsedURL(raw)
 	}
 
 	if u.User != nil {
@@ -380,6 +374,32 @@ func redactURL(raw string) string {
 	u.Fragment = ""
 
 	return u.String()
+}
+
+// redactUnparsedURL redacts an endpoint that url.Parse cannot split into a host
+// and the rest: a schemeless host:port, host/path or user:pass@host, or input
+// that does not parse at all. It works on the raw string and over-redacts
+// rather than risk a leak.
+//
+// Userinfo is handled first, up to the last '@'. A '?' in a password, or an
+// '@' in a query value, then falls inside the replaced prefix instead of
+// splitting the credential. The query and fragment are handled after that.
+func redactUnparsedURL(raw string) string {
+	redacted := raw
+
+	if i := strings.LastIndex(redacted, "@"); i >= 0 {
+		redacted = redactedPlaceholder + redacted[i:]
+	}
+
+	if i := strings.IndexByte(redacted, '#'); i >= 0 {
+		redacted = redacted[:i]
+	}
+
+	if i := strings.IndexByte(redacted, '?'); i >= 0 {
+		redacted = redacted[:i+1] + redactedPlaceholder
+	}
+
+	return redacted
 }
 
 type otelErrorHandler struct {

@@ -631,6 +631,12 @@ func Test_redactURL(t *testing.T) {
 		{name: "fragment is dropped", raw: "https://collector:4317#s3cret", expected: "https://collector:4317"},
 		{name: "schemeless userinfo", raw: "user:s3cret@collector:4317", expected: "REDACTED@collector:4317"},
 		{name: "unparsable with userinfo", raw: "https://user:s3cret@collector:43%17", expected: "REDACTED@collector:43%17"},
+		{name: "schemeless query credentials", raw: "localhost:9411/api/v2/spans?api-key=s3cret",
+			expected: "localhost:9411/api/v2/spans?REDACTED"},
+		{name: "schemeless userinfo and query", raw: "user:s3cret@collector:4317/p?k=s3cret", expected: "REDACTED@collector:4317/p?REDACTED"},
+		{name: "schemeless password containing '?'", raw: "user:s3?cret@collector:4317", expected: "REDACTED@collector:4317"},
+		{name: "schemeless '@' inside query value", raw: "collector:4317/p?k=s3cret@x", expected: "REDACTED@x"},
+		{name: "schemeless fragment is dropped", raw: "collector:4317#s3cret", expected: "collector:4317"},
 	}
 
 	for _, tt := range tests {
@@ -661,6 +667,8 @@ func Test_initTracer_doesNotLogCredentials(t *testing.T) {
 			expected: "invalid TRACER_INSECURE"},
 		{name: "zipkin query key", exporter: "zipkin", url: "http://localhost:2005/api/v2/spans?api-key=" + secret,
 			expected: "Exporting traces to zipkin at http://localhost:2005/api/v2/spans?REDACTED"},
+		{name: "zipkin schemeless query key", exporter: "zipkin", url: "localhost:9411/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at localhost:9411/api/v2/spans?REDACTED"},
 		{name: "gofr userinfo", exporter: "gofr", url: "https://user:" + secret + "@tracer.example.com/api/spans",
 			expected: "Exporting traces to GoFr at https://REDACTED@tracer.example.com/api/spans"},
 	}
