@@ -1,0 +1,79 @@
+name: CodeQL
+# Advanced setup, replacing the repository's CodeQL default setup.
+#
+# Default setup never analyzed pull requests opened from forks — none of #4139,
+# #4201, #4203, #4205 or #4208 has a CodeQL check, while same-repo PRs such as
+# #4195 and #4244 do. Outside contributions arrive from forks, so for them
+# code scanning first saw that code after it had merged into development, and
+# the first place its alerts could fail a check was the release PR to main.
+#
+# `pull_request` from a fork runs with a read-only token; codeql-action still
+# uploads the results for the PR, so no `pull_request_target` is needed — and
+# using it would run untrusted fork code with a write token.
+#
+# NOTE: the upload is rejected while default setup is still enabled. A repo
+# admin must switch CodeQL to "Advanced" (Settings → Code security) when this
+# merges.
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+  # Weekly, so newly published queries run against code that has not changed.
+  schedule:
+    - cron: '27 3 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The two languages default setup analyzed.
+          - language: go
+            build-mode: autobuild
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # go.work pins a newer Go than go.mod may resolve to; see the action.
+      - name: Allow Go toolchain auto-upgrade
+        if: matrix.language == 'go'
+        uses: ./.github/actions/setup-go-toolchain
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          category: /language:${{ matrix.language }}
