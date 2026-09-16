@@ -29,10 +29,12 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 	}
 }
 
-// EnableMCP exposes the app's read-only HTTP handlers (GET/HEAD/OPTIONS) as agent-callable tools over
-// an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Write
-// handlers are never exposed, so an agent cannot mutate state through this surface. The tools are also
-// reachable in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
+// EnableMCP exposes the app's safe HTTP handlers — read-only methods (GET/HEAD/OPTIONS) and QUERY
+// (RFC 10008, safe and idempotent, whose query payload is passed as a "body" tool argument) — as
+// agent-callable tools over an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables
+// the server). Write handlers (POST/PUT/PATCH/DELETE) are never exposed, so an agent cannot mutate
+// state through this surface. The tools are also reachable in handlers via ctx.LLM().Tools() regardless
+// of whether the server is enabled.
 func (a *App) EnableMCP(opts ...MCPOption) {
 	cfg := &mcpConfig{exclude: make(map[string]bool)}
 	for _, o := range opts {
@@ -75,8 +77,11 @@ func (a *App) mcpPort() (int, bool) {
 type mcpServer struct {
 	port    int
 	handler http.Handler
-	srvMu   sync.Mutex // guards srv, written by Run on the serve goroutine and read by Shutdown on the caller goroutine
+	// srvMu guards srv and stopped; see the note on httpServer.stopped for why a
+	// nil srv alone cannot tell Shutdown whether a start is still coming.
+	srvMu   sync.Mutex
 	srv     *http.Server
+	stopped bool
 }
 
 func newMCPServer(port int, handler http.Handler) *mcpServer {
@@ -97,6 +102,14 @@ func (m *mcpServer) Run(c *container.Container) {
 	}
 
 	m.srvMu.Lock()
+
+	if m.stopped {
+		m.srvMu.Unlock()
+		c.Logf("MCP server was shut down before it started on port: %d", m.port)
+
+		return
+	}
+
 	m.srv = srv
 	m.srvMu.Unlock()
 
@@ -107,6 +120,7 @@ func (m *mcpServer) Run(c *container.Container) {
 
 func (m *mcpServer) Shutdown(ctx context.Context) error {
 	m.srvMu.Lock()
+	m.stopped = true
 	srv := m.srv
 	m.srvMu.Unlock()
 
