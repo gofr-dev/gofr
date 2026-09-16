@@ -23,8 +23,8 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 
 		// drainTelemetry bounds itself with telemetryFlushTimeout, so
-		// context.Background() here just needs to be cancelable eventually
-		// — the flush's own deadline is what actually protects a CLI
+		// context.Background() here just needs to be cancelable eventually:
+		// the flush's own deadline is what actually protects a CLI
 		// invocation from an unreachable collector.
 		if err := a.drainTelemetry(context.Background()); err != nil {
 			a.Logger().Errorf("failed to flush telemetry: %v", err)
@@ -53,7 +53,7 @@ func (a *App) Run() {
 	// shutdownDone is closed once startShutdownHandler's goroutine finishes
 	// Shutdown (which drains telemetry, closes servers, etc). Without waiting
 	// on it here, startAllServers returning (the servers having stopped) lets
-	// Run — and then main — return out from under that goroutine: on a real
+	// Run, and then main, return out from under that goroutine: on a real
 	// SIGTERM the process exits before the flush completes, so buffered spans
 	// and metrics are dropped exactly like before this fix, just later in the
 	// shutdown sequence instead of at initTracer.
@@ -108,8 +108,8 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
 // shutdownDone is closed when the goroutine has finished calling a.Shutdown,
-// so Run can wait for it before returning — see the select on shutdownDone
-// in Run.
+// so Run can wait for it before returning; see the wait on shutdownDone
+// in runUntilShutdown.
 func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration, shutdownDone chan struct{}) {
 	// Goroutine to handle shutdown when context is canceled
 	go func() {

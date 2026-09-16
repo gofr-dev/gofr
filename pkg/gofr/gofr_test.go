@@ -1442,7 +1442,7 @@ func Test_Shutdown_DrainsTelemetry(t *testing.T) {
 
 	g := New()
 
-	// New must register both telemetry providers (metrics, tracer) — kills a
+	// New must register both telemetry providers (metrics, tracer): kills a
 	// mutation that drops either registration while every other assertion in
 	// this test stays green (the fake appended below would still be the only
 	// thing observed calling in).
@@ -1458,7 +1458,7 @@ func Test_Shutdown_DrainsTelemetry(t *testing.T) {
 	// No running server here: Shutdown alone is what's under test, and a
 	// concurrent go g.Run() previously raced this direct call on calls (a
 	// plain int) whenever Run's own signal-driven shutdown handler fired
-	// first — flaky under go test -v (each test runs once) and caught by
+	// first, flaky under go test -v (each test runs once) and caught by
 	// -race. Shutdown draining the registry doesn't need a live server to
 	// shut down.
 	err := g.Shutdown(t.Context())
@@ -1506,8 +1506,8 @@ func TestDrainTelemetry_BoundsItself(t *testing.T) {
 // TestNewCMD_DrainsTelemetryExactlyOnce pins the CMD counterpart of
 // Test_Shutdown_DrainsTelemetry: NewCMD must register both telemetry
 // providers, and Run must drain them exactly once after the subcommand
-// returns. Two mutations survived without this — dropping drainTelemetry
-// from Run's CMD path, and dropping the metrics registration in NewCMD —
+// returns. Two mutations survived without this: dropping drainTelemetry
+// from Run's CMD path, and dropping the metrics registration in NewCMD,
 // because TestNewCMD_ShutdownMetricsCalledAfterRun only asserts the handler
 // ran and Run returned, not that anything was actually drained.
 func TestNewCMD_DrainsTelemetryExactlyOnce(t *testing.T) {
@@ -1582,6 +1582,7 @@ func TestRun_WaitsForTelemetryDrainOnCancellation(t *testing.T) {
 
 	go func() {
 		defer close(runDone)
+
 		app.runUntilShutdown(ctx, timeout, shutdownDone)
 	}()
 
@@ -1595,6 +1596,36 @@ func TestRun_WaitsForTelemetryDrainOnCancellation(t *testing.T) {
 	}
 
 	assert.True(t, drained.Load(), "expected telemetry drain to complete before Run returned on cancellation")
+}
+
+// TestRunUntilShutdown_ReturnsImmediatelyWithoutCancellation pins the other
+// half of the guard in runUntilShutdown: it must wait on shutdownDone only
+// when ctx was actually canceled. Replacing `if ctx.Err() != nil` with
+// `if true` leaves this test red, because runUntilShutdown would then block
+// for the full timeout even though nothing is draining and shutdownDone
+// never closes — the 30s hang a server-less app (no routes, METRICS_PORT=0)
+// hit before this guard was added.
+func TestRunUntilShutdown_ReturnsImmediatelyWithoutCancellation(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("METRICS_PORT", "0")
+
+	app := New()
+
+	// New auto-registers pkg/gofr/static (present in this package's own
+	// working directory) as an HTTP static file server, which would
+	// otherwise listen forever and defeat the "returns immediately" this
+	// test is pinning. A server-less app has no HTTP server registered.
+	app.httpRegistered = false
+
+	shutdownDone := make(chan struct{})
+	timeout := 5 * time.Second
+
+	start := time.Now()
+	app.runUntilShutdown(t.Context(), timeout, shutdownDone)
+	elapsed := time.Since(start)
+
+	assert.Less(t, elapsed, timeout,
+		"runUntilShutdown must not wait on shutdownDone when ctx was never canceled")
 }
 
 func TestShutdown_StopsCron(t *testing.T) {

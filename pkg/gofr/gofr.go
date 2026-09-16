@@ -74,7 +74,7 @@ func (a *App) drainTelemetry(ctx context.Context) error {
 	// Bounded independently of the caller's context: on the SIGTERM path,
 	// ctx carries the full shutdown grace period (default 30s, see
 	// getShutdownTimeoutFromConfig), and a hung collector would otherwise
-	// hold the flush open for that entire window — risking SIGKILL mid-flush
+	// hold the flush open for that entire window, risking SIGKILL mid-flush
 	// on a Kubernetes rolling deploy. telemetryFlushTimeout applies the same
 	// bound the CMD path already used.
 	ctx, cancel := context.WithTimeout(ctx, telemetryFlushTimeout)
