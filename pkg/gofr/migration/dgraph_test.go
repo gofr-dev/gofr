@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -12,6 +13,33 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+// fakeDgraphTxn is a minimal dgraphTxn used to drive commitMigration in tests.
+type fakeDgraphTxn struct {
+	mutateErr error
+	commitErr error
+	setJSON   []byte
+	mutated   bool
+	committed bool
+	discarded bool
+}
+
+func (f *fakeDgraphTxn) Mutate(_ context.Context, mu *api.Mutation) (*api.Response, error) {
+	f.mutated = true
+	f.setJSON = mu.SetJson
+
+	return nil, f.mutateErr
+}
+
+func (f *fakeDgraphTxn) Commit(context.Context) error {
+	f.committed = true
+	return f.commitErr
+}
+
+func (f *fakeDgraphTxn) Discard(context.Context) error {
+	f.discarded = true
+	return nil
+}
 
 func dgraphSetup(t *testing.T) (migrator, *container.MockDgraph, *container.Container) {
 	t.Helper()
@@ -45,19 +73,13 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		err      error
-		mockResp map[string]any
+		mockResp *api.Response
 		expected int64
 	}{
 		{
-			desc: "success",
-			err:  nil,
-			mockResp: map[string]any{
-				"migrations": []map[string]any{
-					{
-						"version": float64(10),
-					},
-				},
-			},
+			desc:     "success",
+			err:      nil,
+			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":10}]}`)},
 			expected: 10,
 		},
 		{
@@ -69,7 +91,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 		{
 			desc:     "empty response",
 			err:      nil,
-			mockResp: map[string]any{},
+			mockResp: &api.Response{Json: []byte(`{"migrations":[]}`)},
 			expected: 0,
 		},
 	}
@@ -94,31 +116,75 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 }
 
 func Test_DGraphCommitMigration(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
-	timeNow := time.Now()
-
-	testCases := []struct {
-		desc string
-		err  error
-	}{
-		{"success", nil},
-		{"mutation failed", context.DeadlineExceeded},
-	}
-
 	td := transactionData{
-		StartTime:       timeNow,
+		StartTime:       time.Now(),
 		MigrationNumber: 10,
 		UsedDatasources: map[string]bool{dsDGraph: true},
 	}
 
-	for i, tc := range testCases {
-		mockDGraph.EXPECT().Mutate(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+	t.Run("success commits the record", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		txn := &fakeDgraphTxn{}
+		mockDGraph.EXPECT().NewTxn().Return(txn)
 
 		err := migratorWithDGraph.commitMigration(mockContainer, td)
 
-		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed!", i, tc.desc)
-	}
+		require.NoError(t, err)
+		assert.True(t, txn.mutated && txn.committed && txn.discarded)
+		// The record must be typed as Migration and carry the version so
+		// getLastMigration can find it on subsequent runs.
+		assert.Contains(t, string(txn.setJSON), `"dgraph.type":"Migration"`)
+		assert.Contains(t, string(txn.setJSON), `"migrations.version":10`)
+	})
+
+	t.Run("mutate error is returned without commit", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		txn := &fakeDgraphTxn{mutateErr: context.DeadlineExceeded}
+		mockDGraph.EXPECT().NewTxn().Return(txn)
+
+		err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.False(t, txn.committed)
+		assert.True(t, txn.discarded)
+	})
+
+	t.Run("commit error is returned", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		txn := &fakeDgraphTxn{commitErr: context.DeadlineExceeded}
+		mockDGraph.EXPECT().NewTxn().Return(txn)
+
+		err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	t.Run("invalid transaction type", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		mockDGraph.EXPECT().NewTxn().Return("not a txn")
+
+		err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+		require.ErrorIs(t, err, errInvalidDgraphTxn)
+	})
+
+	t.Run("typed-nil transaction does not panic", func(t *testing.T) {
+		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+		mockDGraph.EXPECT().NewTxn().Return((*fakeDgraphTxn)(nil))
+
+		err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+		require.ErrorIs(t, err, errInvalidDgraphTxn)
+	})
+
+	t.Run("skips record when dgraph not used", func(t *testing.T) {
+		migratorWithDGraph, _, mockContainer := dgraphSetup(t)
+		unused := transactionData{StartTime: time.Now(), MigrationNumber: 10}
+
+		err := migratorWithDGraph.commitMigration(mockContainer, unused)
+
+		require.NoError(t, err)
+	})
 }
 
 func Test_DGraphBeginTransaction(t *testing.T) {

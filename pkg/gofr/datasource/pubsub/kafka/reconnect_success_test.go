@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -60,7 +59,6 @@ func TestEnsureConnected_ReconnectSuccess(t *testing.T) {
 			conns: []Connection{stale},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 		// Pre-arm the throttle so we can assert it gets reset on
 		// successful reconnect.
 		reconnectErrLogAt: time.Now().Add(time.Hour),
@@ -113,7 +111,6 @@ func TestEnsureConnected_ReconnectFailureLogThrottled(t *testing.T) {
 			conns: []Connection{stale},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 	}
 
 	// First failure: throttle is zero-value, so this must arm it.

@@ -29,10 +29,16 @@ func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
 func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (any, error) {
-		connID := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
+		connID, ok := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
+		if !ok {
+			// The request never went through the WebSocket upgrade middleware
+			// (e.g. a plain HTTP GET with no Upgrade headers), so no
+			// WSConnectionKey was ever set on the context.
+			return nil, websocket.ErrorNotWebSocketUpgrade{}
+		}
 
 		conn := a.httpServer.ws.GetWebsocketConnection(connID)
-		if conn.Conn == nil {
+		if conn == nil || conn.Conn == nil {
 			return nil, websocket.ErrorConnection
 		}
 

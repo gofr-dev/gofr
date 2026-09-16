@@ -48,16 +48,41 @@ func metricsExporterConfig(conf config.Config, appName, appVersion string, logge
 	}
 
 	return exporters.Config{
-		AppName:     appName,
-		AppVersion:  appVersion,
-		Exporter:    strings.TrimSpace(conf.Get("METRICS_EXPORTER")),
-		Endpoint:    strings.TrimSpace(conf.Get("METRICS_URL")),
-		Protocol:    conf.GetOrDefault("METRICS_PROTOCOL", "grpc"),
-		Interval:    metricsExportInterval(conf, logger),
-		Temporality: metricsTemporality(conf),
-		Headers:     headers,
-		Insecure:    insecure,
+		AppName:          appName,
+		AppVersion:       appVersion,
+		Exporter:         strings.TrimSpace(conf.Get("METRICS_EXPORTER")),
+		Endpoint:         strings.TrimSpace(conf.Get("METRICS_URL")),
+		Protocol:         conf.GetOrDefault("METRICS_PROTOCOL", "grpc"),
+		Interval:         metricsExportInterval(conf, logger),
+		Temporality:      metricsTemporality(conf),
+		Headers:          headers,
+		Insecure:         insecure,
+		CardinalityLimit: metricsCardinalityLimit(conf, logger),
 	}
+}
+
+// metricsCardinalityLimit resolves the per-instrument cardinality limit from
+// METRICS_CARDINALITY_LIMIT. It returns nil when unset (leaving the SDK default
+// of 2000, or OTEL_GO_X_CARDINALITY_LIMIT, in place) or when the value is not an
+// integer. A parsed value (including zero or negative, meaning unlimited) is
+// returned as an explicit override. The raw value is never logged.
+func metricsCardinalityLimit(conf config.Config, logger exporters.Logger) *int {
+	v := strings.TrimSpace(conf.Get("METRICS_CARDINALITY_LIMIT"))
+	if v == "" {
+		return nil
+	}
+
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		if logger != nil {
+			logger.Warnf("invalid METRICS_CARDINALITY_LIMIT: expected an integer; " +
+				"using the default cardinality limit")
+		}
+
+		return nil
+	}
+
+	return &n
 }
 
 // metricsExportInterval resolves the push interval, preferring the GoFr-native
