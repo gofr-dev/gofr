@@ -1,5 +1,16 @@
 export const navigation = [
     {
+        title: 'Why GoFr',
+        desc: "Understand why GoFr is a strong choice for microservices, production APIs, and backend teams that want observability, config management, and less boilerplate built in.",
+        links: [
+            {
+                title: 'Why GoFr for Microservices',
+                href: '/why-gofr/why-gofr-microservices',
+                desc: "Learn why GoFr helps teams build production-ready microservices faster with built-in observability, datasource integrations, and cleaner backend architecture."
+            },
+        ],
+    },
+    {
         title: 'Quick Start Guide',
         desc: "Get started with GoFR through our Quick Start Guide. Learn to build scalable applications with easy-to-follow instructions on server setup, database connections, configuration management, and more. Boost your productivity and streamline your development process.",
         links: [
