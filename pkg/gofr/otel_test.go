@@ -614,3 +614,79 @@ func BenchmarkSpanStart_NeverSampleSDK(b *testing.B) {
 		span.End()
 	}
 }
+
+func Test_redactURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		expected string
+	}{
+		{name: "schemeless host:port is unchanged", raw: "collector:4317", expected: "collector:4317"},
+		{name: "plain https URL is unchanged", raw: "https://collector:4317", expected: "https://collector:4317"},
+		{name: "path is kept", raw: "http://localhost:2005/api/v2/spans", expected: "http://localhost:2005/api/v2/spans"},
+		{name: "empty is unchanged", raw: "", expected: ""},
+		{name: "userinfo with password", raw: "https://user:s3cret@collector:4317", expected: "https://REDACTED@collector:4317"},
+		{name: "userinfo token only", raw: "https://t0ken@collector:4317", expected: "https://REDACTED@collector:4317"},
+		{name: "query credentials", raw: "https://zipkin/api/v2/spans?api-key=s3cret", expected: "https://zipkin/api/v2/spans?REDACTED"},
+		{name: "fragment is dropped", raw: "https://collector:4317#s3cret", expected: "https://collector:4317"},
+		{name: "schemeless userinfo", raw: "user:s3cret@collector:4317", expected: "REDACTED@collector:4317"},
+		{name: "unparsable with userinfo", raw: "https://user:s3cret@collector:43%17", expected: "REDACTED@collector:43%17"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, redactURL(tt.raw))
+		})
+	}
+}
+
+// Test_initTracer_doesNotLogCredentials drives the real startup path for every
+// exporter that logs its endpoint, and asserts the credentials in TRACER_URL and
+// the raw TRACER_INSECURE value never reach the log.
+func Test_initTracer_doesNotLogCredentials(t *testing.T) {
+	const secret = "s3cret-value"
+
+	tests := []struct {
+		name     string
+		exporter string
+		url      string
+		insecure string
+		expected string
+	}{
+		{name: "otlp userinfo", exporter: "otlp", url: "https://user:" + secret + "@localhost:4317",
+			expected: "Exporting traces to otlp at https://REDACTED@localhost:4317"},
+		{name: "jaeger ignored TRACER_INSECURE", exporter: "JAEGER", url: "http://user:" + secret + "@localhost:4317",
+			insecure: "true", expected: "Exporting traces to jaeger at http://REDACTED@localhost:4317"},
+		{name: "otlp invalid TRACER_INSECURE", exporter: "otlp", url: "localhost:4317", insecure: secret,
+			expected: "invalid TRACER_INSECURE"},
+		{name: "zipkin query key", exporter: "zipkin", url: "http://localhost:2005/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at http://localhost:2005/api/v2/spans?REDACTED"},
+		{name: "gofr userinfo", exporter: "gofr", url: "https://user:" + secret + "@tracer.example.com/api/spans",
+			expected: "Exporting traces to GoFr at https://REDACTED@tracer.example.com/api/spans"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := map[string]string{"TRACE_EXPORTER": tt.exporter, "TRACER_URL": tt.url, "TRACER_AUTH_KEY": "Bearer x"}
+			if tt.insecure != "" {
+				cfg["TRACER_INSECURE"] = tt.insecure
+			}
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(func() {
+					mockContainer, _ := container.NewMockContainer(t)
+
+					a := App{Config: config.NewMockConfig(cfg), container: mockContainer}
+					a.initTracer()
+				})
+			})
+
+			out := stdout + stderr
+
+			require.Contains(t, out, tt.expected)
+			require.NotContains(t, out, secret)
+		})
+	}
+}
