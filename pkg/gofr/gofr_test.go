@@ -1603,7 +1603,7 @@ func TestRun_WaitsForTelemetryDrainOnCancellation(t *testing.T) {
 // when ctx was actually canceled. Replacing `if ctx.Err() != nil` with
 // `if true` leaves this test red, because runUntilShutdown would then block
 // for the full timeout even though nothing is draining and shutdownDone
-// never closes — the 30s hang a server-less app (no routes, METRICS_PORT=0)
+// never closes: the 30s hang a server-less app (no routes, METRICS_PORT=0)
 // hit before this guard was added.
 func TestRunUntilShutdown_ReturnsImmediatelyWithoutCancellation(t *testing.T) {
 	testutil.NewServerConfigs(t)
