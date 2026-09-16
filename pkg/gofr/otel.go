@@ -165,6 +165,30 @@ func (a *App) getTracerHeaders() map[string]string {
 	return headers
 }
 
+// tracerInsecure resolves TRACER_INSECURE, which controls transport security for
+// a schemeless TRACER_URL (host:port). It reports the flag and whether it was
+// explicitly configured — a scheme-bearing TRACER_URL derives its security from
+// the scheme and warns when the flag was set and therefore ignored.
+//
+// It defaults to true (plaintext), unlike METRICS_INSECURE, which defaults to
+// false. See resolveOtlpTransport for why the two diverge.
+func (a *App) tracerInsecure() (insecure, set bool) {
+	v := strings.TrimSpace(a.Config.Get("TRACER_INSECURE"))
+	if v == "" {
+		return true, false
+	}
+
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		a.Logger().Warnf("invalid TRACER_INSECURE %q: expected a boolean; defaulting to plaintext for a "+
+			"schemeless TRACER_URL", v)
+
+		return true, false
+	}
+
+	return b, true
+}
+
 func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
@@ -175,7 +199,12 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	switch strings.ToLower(name) {
 	case "otlp", "jaeger":
-		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers)
+		// Resolved inside the case, not above the switch: TRACER_INSECURE means
+		// nothing to zipkin or gofr, and evaluating it for them would warn about a
+		// malformed value under an exporter that never reads it.
+		insecure, insecureSet := a.tracerInsecure()
+
+		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers, insecure, insecureSet)
 	case "zipkin":
 		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
 			"Zipkin supports OTLP natively (v2.24+) — to migrate, switch to TRACE_EXPORTER=otlp " +

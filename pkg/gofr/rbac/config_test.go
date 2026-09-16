@@ -384,7 +384,7 @@ func createTestConfigFile(filename, content string) (string, error) {
 	return filename, err
 }
 
-func TestConfig_FindEndpointByPattern(t *testing.T) {
+func TestConfig_Resolve(t *testing.T) {
 	t.Run("finds endpoint with mux pattern", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
@@ -394,7 +394,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		endpoint, isPublic := config.findEndpointByPattern("GET", "/api/users")
+		endpoint, isPublic := config.resolve("GET", "/api/users")
 		assert.NotNil(t, endpoint)
 		assert.Equal(t, "/api/{resource}", endpoint.Path)
 		assert.False(t, isPublic)
@@ -409,7 +409,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		endpoint, isPublic := config.findEndpointByPattern("GET", "/api/users/123")
+		endpoint, isPublic := config.resolve("GET", "/api/users/123")
 		assert.NotNil(t, endpoint)
 		assert.False(t, isPublic)
 	})
@@ -423,7 +423,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		endpoint, isPublic := config.findEndpointByPattern("GET", "/public/files")
+		endpoint, isPublic := config.resolve("GET", "/public/files")
 		assert.NotNil(t, endpoint)
 		assert.True(t, isPublic)
 	})
@@ -437,7 +437,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		endpoint, isPublic := config.findEndpointByPattern("GET", "/other/path")
+		endpoint, isPublic := config.resolve("GET", "/other/path")
 		assert.Nil(t, endpoint)
 		assert.False(t, isPublic)
 	})
@@ -451,89 +451,9 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		endpoint, isPublic := config.findEndpointByPattern("POST", "/api/users")
+		endpoint, isPublic := config.resolve("POST", "/api/users")
 		assert.Nil(t, endpoint)
 		assert.False(t, isPublic)
-	})
-}
-
-func TestConfig_MatchesKey(t *testing.T) {
-	t.Run("matches exact path", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/api/users", "GET", "/api/users")
-		assert.True(t, result)
-	})
-
-	t.Run("matches mux pattern", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/api/{resource}", "GET", "/api/users")
-		assert.True(t, result)
-	})
-
-	t.Run("matches mux pattern with constraint", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/api/users/{id:[0-9]+}", "GET", "/api/users/123")
-		assert.True(t, result)
-	})
-
-	t.Run("matches mux pattern with constraint", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/test/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/test/{id:[0-9]+}", "GET", "/test/456")
-		assert.True(t, result)
-	})
-
-	t.Run("returns false when method doesn't match", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/api/users", "POST", "/api/users")
-		assert.False(t, result)
-	})
-
-	t.Run("returns false for invalid mux pattern", func(t *testing.T) {
-		config := &Config{
-			Endpoints: []EndpointMapping{
-				{Path: "/api/invalid{", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
-			},
-		}
-		err := config.processUnifiedConfig()
-		require.NoError(t, err)
-
-		result := config.matchesKey("GET:/api/invalid{", "GET", "/test")
-		assert.False(t, result)
 	})
 }
 

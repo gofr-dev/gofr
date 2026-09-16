@@ -12,8 +12,39 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+func Test_App_tracerInsecure(t *testing.T) {
+	tests := []struct {
+		name            string
+		value           string
+		expectedFlag    bool
+		expectedFlagSet bool
+	}{
+		{name: "unset defaults to plaintext", value: "", expectedFlag: true, expectedFlagSet: false},
+		{name: "explicit true", value: "true", expectedFlag: true, expectedFlagSet: true},
+		{name: "explicit false", value: "false", expectedFlag: false, expectedFlagSet: true},
+		{name: "numeric false", value: "0", expectedFlag: false, expectedFlagSet: true},
+		{name: "whitespace is trimmed", value: " false ", expectedFlag: false, expectedFlagSet: true},
+		{name: "invalid value falls back to the default", value: "yes-please", expectedFlag: true, expectedFlagSet: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{
+				Config:    config.NewMockConfig(map[string]string{"TRACER_INSECURE": tt.value}),
+				container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+			}
+
+			insecure, set := app.tracerInsecure()
+
+			require.Equal(t, tt.expectedFlag, insecure)
+			require.Equal(t, tt.expectedFlagSet, set)
+		})
+	}
+}
 
 func TestParseHeaders(t *testing.T) {
 	tests := []struct {

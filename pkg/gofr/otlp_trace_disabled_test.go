@@ -18,7 +18,7 @@ import (
 // take the process down doing so.
 
 func TestOTLPTracesOmitted_ExporterErrors(t *testing.T) {
-	_, err := buildOtlpExporter(nil, "otlp", "localhost:4317", "", "", nil)
+	_, err := buildOtlpExporter(nil, "otlp", "localhost:4317", "", "", nil, true, false)
 
 	require.ErrorIs(t, err, errOTLPTracesOmitted)
 	assert.Contains(t, err.Error(), "gofr_nootlp")

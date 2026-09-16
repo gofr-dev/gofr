@@ -53,6 +53,11 @@ type App struct {
 	graphqlManager      graphQLRunner
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
+
+	// readinessChecks are the application-registered readiness checks for /.well-known/health,
+	// evaluated in registration order; empty means the endpoint keeps its default behavior.
+	// Guarded by mu: registration is documented as pre-Run, but probes run concurrently.
+	readinessChecks []readinessCheck
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -157,7 +162,7 @@ func (a *App) httpServerSetup() {
 	}
 
 	// Register default routes - these are only added when HTTP server is actually starting
-	a.add(http.MethodGet, service.HealthPath, healthHandler)
+	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
 	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
@@ -174,6 +179,8 @@ func (a *App) httpServerSetup() {
 	}
 
 	a.setupGraphQL()
+
+	a.logReadiness()
 
 	if a.container.Logger != nil {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)

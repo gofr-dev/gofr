@@ -23,6 +23,6 @@ var errOTLPTracesOmitted = errors.New("TRACE_EXPORTER=otlp is unavailable: this 
 	"-tags gofr_nootlp, which omits the OTLP exporters. Use TRACE_EXPORTER=zipkin or gofr, " +
 	"or rebuild without the tag")
 
-func buildOtlpExporter(_ logging.Logger, _, _, _, _ string, _ map[string]string) (sdktrace.SpanExporter, error) {
+func buildOtlpExporter(_ logging.Logger, _, _, _, _ string, _ map[string]string, _, _ bool) (sdktrace.SpanExporter, error) {
 	return nil, errOTLPTracesOmitted
 }
