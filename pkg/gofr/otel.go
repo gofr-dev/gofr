@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -172,7 +173,7 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 	b, err := strconv.ParseBool(v)
 	if err != nil {
 		// The raw value is not echoed. Tracer config reaches a log only through
-		// redactURL or as a matched constant.
+		// redactURL, redactExporterName or as a matched constant.
 		a.Logger().Warn("invalid TRACER_INSECURE: expected true or false; defaulting to plaintext for a " +
 			"schemeless TRACER_URL")
 
@@ -204,7 +205,8 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	case gofrTraceExporter:
 		exporter = buildGoFrExporter(a.Logger(), url)
 	default:
-		a.container.Error("unsupported TRACE_EXPORTER: expected one of otlp, jaeger, zipkin or gofr")
+		a.container.Errorf("unsupported TRACE_EXPORTER=%s: expected one of otlp, jaeger, zipkin or gofr",
+			redactExporterName(name))
 	}
 
 	return exporter, err
@@ -357,10 +359,18 @@ const redactedPlaceholder = "REDACTED"
 // userinfo (https://user:token@collector:4317) or its query
 // (https://collector/api/v2/spans?api-key=...). Both are replaced rather than
 // dropped, so the log still shows that something was configured there.
+//
+// Secrets placed in path segments (https://host/v1/TOKEN/spans) are not
+// redacted: no tracer backend GoFr supports takes credentials there, and
+// hiding the path would hide the part of the endpoint an operator debugs.
+//
+// Control characters are escaped on the unparsed path only: url.Parse rejects
+// them, so such a value always lands there, and a raw newline would otherwise
+// forge a second log line in the terminal's pretty output.
 func redactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
-		return redactUnparsedURL(raw)
+		return escapeControlChars(redactUnparsedURL(raw))
 	}
 
 	if u.User != nil {
@@ -374,6 +384,51 @@ func redactURL(raw string) string {
 	u.Fragment = ""
 
 	return u.String()
+}
+
+// escapeControlChars replaces every control character with its \x or \u
+// escape, so a logged value always stays on one line.
+func escapeControlChars(s string) string {
+	if strings.IndexFunc(s, unicode.IsControl) < 0 {
+		return s
+	}
+
+	var b strings.Builder
+
+	for _, r := range s {
+		switch {
+		case !unicode.IsControl(r):
+			b.WriteRune(r)
+		case r <= unicode.MaxLatin1:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		}
+	}
+
+	return b.String()
+}
+
+// maxEchoedExporterNameLen bounds how much of an unsupported TRACE_EXPORTER is
+// echoed back; every supported name is at most 6 characters.
+const maxEchoedExporterNameLen = 16
+
+// redactExporterName returns an unsupported TRACE_EXPORTER value in a form safe
+// to log. A typo of a real exporter name -- short, letters and '-' or '_' only
+// -- is echoed so it can be spotted; anything else, which is more likely a
+// value pasted into the wrong variable, is replaced.
+func redactExporterName(name string) string {
+	if name == "" || len(name) > maxEchoedExporterNameLen {
+		return redactedPlaceholder
+	}
+
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '-' && r != '_' {
+			return redactedPlaceholder
+		}
+	}
+
+	return name
 }
 
 // redactUnparsedURL redacts an endpoint that url.Parse cannot split into a host

@@ -615,6 +615,29 @@ func BenchmarkSpanStart_NeverSampleSDK(b *testing.B) {
 	}
 }
 
+func Test_redactExporterName(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{name: "typo of a real exporter is echoed", value: "otpl", expected: "otpl"},
+		{name: "mixed case and separators are echoed", value: "Open_Telemetry-x", expected: "Open_Telemetry-x"},
+		{name: "empty is replaced", value: "", expected: "REDACTED"},
+		{name: "longer than 16 is replaced", value: "abcdefghijklmnopq", expected: "REDACTED"},
+		{name: "digits look like a pasted secret", value: "ab12cd34", expected: "REDACTED"},
+		{name: "URL pasted into the wrong variable", value: "https://x", expected: "REDACTED"},
+		{name: "control character is replaced", value: "otlp\n", expected: "REDACTED"},
+		{name: "non-ASCII letter is replaced", value: "ötlp", expected: "REDACTED"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, redactExporterName(tt.value))
+		})
+	}
+}
+
 func Test_redactURL(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -637,6 +660,12 @@ func Test_redactURL(t *testing.T) {
 		{name: "schemeless password containing '?'", raw: "user:s3?cret@collector:4317", expected: "REDACTED@collector:4317"},
 		{name: "schemeless '@' inside query value", raw: "collector:4317/p?k=s3cret@x", expected: "REDACTED@x"},
 		{name: "schemeless fragment is dropped", raw: "collector:4317#s3cret", expected: "collector:4317"},
+		{name: "newline cannot forge a log line", raw: "collector:4317\n{\"level\":\"INFO\"}",
+			expected: `collector:4317\x0a{"level":"INFO"}`},
+		{name: "carriage return and tab are escaped", raw: "host\r:4317\t", expected: `host\x0d:4317\x09`},
+		{name: "C1 control is escaped", raw: "host" + string(rune(0x85)) + ":4317", expected: `host\x85:4317`},
+		{name: "control char with userinfo is escaped after redaction", raw: "https://user:s3cret@collector\n:4317",
+			expected: `REDACTED@collector\x0a:4317`},
 	}
 
 	for _, tt := range tests {
@@ -671,6 +700,10 @@ func Test_initTracer_doesNotLogCredentials(t *testing.T) {
 			expected: "Exporting traces to zipkin at localhost:9411/api/v2/spans?REDACTED"},
 		{name: "gofr userinfo", exporter: "gofr", url: "https://user:" + secret + "@tracer.example.com/api/spans",
 			expected: "Exporting traces to GoFr at https://REDACTED@tracer.example.com/api/spans"},
+		{name: "secret pasted into TRACE_EXPORTER", exporter: secret, url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER=REDACTED"},
+		{name: "typo in TRACE_EXPORTER is echoed", exporter: "otpl", url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER=otpl"},
 	}
 
 	for _, tt := range tests {
