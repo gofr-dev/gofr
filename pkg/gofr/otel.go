@@ -114,18 +114,18 @@ func (a *App) tracerRatio() float64 {
 	return ratio
 }
 
-func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
-	if url == "" && name == "" {
+func isValidConfig(logger logging.Logger, name, endpoint, host, port string) bool {
+	if endpoint == "" && name == "" {
 		logger.Debug("tracing is disabled, as configs are not provided")
 		return false
 	}
 
-	if url != "" && name == "" {
+	if endpoint != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
 	}
 
-	if url == "" && name != "" && !strings.EqualFold(name, gofrTraceExporter) && host != "" && port != "" {
+	if endpoint == "" && name != "" && !strings.EqualFold(name, gofrTraceExporter) && host != "" && port != "" {
 		logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 	}
 
@@ -214,14 +214,14 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 // buildGoFrExporter ships spans to GoFr's hosted tracer. It stays here rather
 // than in traces/exporters because NewExporter is exported API of this package.
 func buildGoFrExporter(_ context.Context, cfg *exporters.Config, logger exporters.Logger) (sdktrace.SpanExporter, error) {
-	url := cfg.Endpoint
-	if url == "" {
-		url = "https://tracer-api.gofr.dev/api/spans"
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	logger.Infof("Exporting traces to GoFr at %s", exporters.RedactURL(url))
+	logger.Infof("Exporting traces to GoFr at %s", exporters.RedactURL(endpoint))
 
-	return NewExporter(url, logging.NewLogger(logging.INFO)), nil
+	return NewExporter(endpoint, logging.NewLogger(logging.INFO)), nil
 }
 
 type otelErrorHandler struct {
