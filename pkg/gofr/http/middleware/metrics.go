@@ -44,12 +44,51 @@ type routeMethodKey struct {
 // metrics, so recording app_http_response for it would double-count.
 const graphqlPath = "/graphql"
 
+// MetricsOption configures the Metrics middleware.
+type MetricsOption func(*metricsOptions)
+
+type metricsOptions struct {
+	untemplatedLimit int64
+}
+
+// WithCardinalityLimit sizes the budget for caller-controlled (path, method)
+// labels from the meter provider's per-instrument datapoint ceiling, so that
+// unmatched traffic can take at most a quarter of it and the route table keeps
+// the rest. A ceiling of zero or less means unlimited, and the budget stays at
+// untemplatedLabelLimit because memory still needs a bound.
+func WithCardinalityLimit(limit int) MetricsOption {
+	return func(o *metricsOptions) {
+		o.untemplatedLimit = untemplatedBudget(limit)
+	}
+}
+
+// untemplatedCeilingShare is the inverse of the fraction of the provider ceiling
+// that caller-controlled labels may occupy. A pair usually lands on a single
+// status, but can also add the collapsed __unmatched__ and __other__ series, so
+// a quarter leaves most of the ceiling for real routes.
+const untemplatedCeilingShare = 4
+
+func untemplatedBudget(ceiling int) int64 {
+	if ceiling <= 0 {
+		return untemplatedLabelLimit
+	}
+
+	return min(int64(untemplatedLabelLimit), int64(ceiling/untemplatedCeilingShare))
+}
+
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
-func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
+func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) http.Handler {
 	// The recording strategy is selected once, here, from what the metrics
 	// backend supports. The per-request path then makes a single call and
 	// carries none of that branching itself.
 	recorder := newHistogramRecorder(metrics)
+
+	options := metricsOptions{untemplatedLimit: untemplatedLabelLimit}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	untemplatedLimit := options.untemplatedLimit
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +118,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			// nothing, net/http implicit-200) to http.StatusOK so neither the
 			// histogram nor any status cache is poisoned with status=0.
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				pathLabel, methodLabel := metricLabels(path, req.Method, templated)
+				pathLabel, methodLabel := metricLabels(path, req.Method, templated, untemplatedLimit)
 				recorder.record(pathLabel, methodLabel, res.Status(),
 					time.Since(start).Seconds(), templated)
 			}(srw, r)
@@ -114,8 +153,9 @@ const (
 	unmatchedPathLabel = "__unmatched__"
 	otherMethodLabel   = "__other__"
 
-	// untemplatedLabelLimit is how many distinct caller-controlled (path, method)
-	// pairs are recorded verbatim before both halves collapse.
+	// untemplatedLabelLimit is the most distinct caller-controlled (path, method)
+	// pairs recorded verbatim before both halves collapse. WithCardinalityLimit
+	// lowers it to a quarter of a smaller provider ceiling; it never raises it.
 	//
 	// It bounds the PAIR rather than each half separately, because two independent
 	// ceilings multiply: 4096 paths and 64 methods is a quarter of a million
@@ -123,15 +163,11 @@ const (
 	// to protect. One ceiling on the pair is the quantity that actually maps onto
 	// datapoints.
 	//
-	// The value is deliberately a small fraction of the default provider ceiling,
+	// The value is a quarter of the SDK default provider ceiling (2000),
 	// so caller-controlled series cannot crowd out the route table. It also sits
 	// below routeCacheLimit on purpose: this check fires first, so routeCache's
 	// own refusal to store past its limit never triggers for this set.
-	//
-	// It is a constant and does not follow METRICS_CARDINALITY_LIMIT. A ceiling
-	// set below roughly this value can be filled by caller-controlled series
-	// alone, and real routes then overflow as they did before this bound existed.
-	untemplatedLabelLimit = 512
+	untemplatedLabelLimit = 500
 )
 
 // untemplatedLabels is the set of caller-controlled (path, method) pairs
@@ -172,7 +208,7 @@ type untemplatedKey struct{ path, method string }
 // the raw path for unrouted and static requests, and the verbatim method
 // including custom verbs, are both deliberately tested -- while stopping a
 // caller from filling the datapoint table.
-func metricLabels(path, method string, templated bool) (pathLabel, methodLabel string) {
+func metricLabels(path, method string, templated bool, limit int64) (pathLabel, methodLabel string) {
 	standardMethod := cacheableMethod(method)
 	if templated && standardMethod {
 		return path, method
@@ -183,7 +219,7 @@ func metricLabels(path, method string, templated bool) (pathLabel, methodLabel s
 		return path, method
 	}
 
-	if untemplatedLabels.len() >= untemplatedLabelLimit {
+	if untemplatedLabels.len() >= limit {
 		if !templated {
 			path = unmatchedPathLabel
 		}

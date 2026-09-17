@@ -122,3 +122,95 @@ func TestTemplatedRoutesSurviveJunkTraffic(t *testing.T) {
 	assert.Contains(t, rec.series(), [2]string{"/users/{id}", http.MethodGet},
 		"a templated route keeps its own series regardless of junk traffic")
 }
+
+func TestUntemplatedBudget(t *testing.T) {
+	tests := []struct {
+		ceiling  int
+		expected int64
+	}{
+		{ceiling: 2000, expected: untemplatedLabelLimit},
+		{ceiling: 100000, expected: untemplatedLabelLimit},
+		{ceiling: 100, expected: 25},
+		{ceiling: 3, expected: 0},
+		{ceiling: 0, expected: untemplatedLabelLimit},
+		{ceiling: -1, expected: untemplatedLabelLimit},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, untemplatedBudget(tt.ceiling), "ceiling %d", tt.ceiling)
+	}
+}
+
+// TestLowCeilingKeepsRoutesReachable is the case a fixed budget got wrong: with
+// the provider ceiling at 100, 512 caller-controlled pairs alone would fill it.
+// Through WithCardinalityLimit the junk takes at most a quarter and a real route
+// still records under its own template.
+func TestLowCeilingKeepsRoutesReachable(t *testing.T) {
+	untemplatedLabels.reset()
+	defer untemplatedLabels.reset()
+
+	const ceiling = 100
+
+	junk := &cardRecorder{}
+	h := Metrics(junk, WithCardinalityLimit(ceiling))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	for i := range ceiling * 3 {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(),
+			http.MethodGet, fmt.Sprintf("/.env.scan-%d", i), http.NoBody))
+	}
+
+	assert.LessOrEqual(t, len(junk.series()), ceiling/untemplatedCeilingShare+1,
+		"junk may take at most a quarter of the ceiling, plus the collapsed series")
+
+	rec := &cardRecorder{}
+	router := mux.NewRouter()
+	router.Use(Metrics(rec, WithCardinalityLimit(ceiling)))
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/users/7", http.NoBody))
+
+	assert.Contains(t, rec.series(), [2]string{"/users/{id}", http.MethodGet})
+}
+
+// BenchmarkMetricLabels isolates the per-request cost this change adds in front
+// of the recorder, for the three paths a request can take through it.
+func BenchmarkMetricLabels(b *testing.B) {
+	b.Run("templated", func(b *testing.B) {
+		b.ReportAllocs()
+
+		for range b.N {
+			metricLabels("/users/{id}", http.MethodGet, true, untemplatedLabelLimit)
+		}
+	})
+
+	b.Run("untemplated_admitted", func(b *testing.B) {
+		untemplatedLabels.reset()
+		b.Cleanup(untemplatedLabels.reset)
+		metricLabels("/.env", http.MethodGet, false, untemplatedLabelLimit)
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for range b.N {
+			metricLabels("/.env", http.MethodGet, false, untemplatedLabelLimit)
+		}
+	})
+
+	b.Run("untemplated_collapsed", func(b *testing.B) {
+		untemplatedLabels.reset()
+		b.Cleanup(untemplatedLabels.reset)
+
+		for i := range untemplatedLabelLimit {
+			metricLabels(fmt.Sprintf("/fill/%d", i), http.MethodGet, false, untemplatedLabelLimit)
+		}
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for range b.N {
+			metricLabels("/.env.new", http.MethodGet, false, untemplatedLabelLimit)
+		}
+	})
+}
