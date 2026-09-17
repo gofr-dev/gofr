@@ -43,6 +43,11 @@ func (a *App) runCMD() {
 	}
 }
 
+// shutdownWaitMargin is the extra time Run gives the graceful-shutdown goroutine on top of the
+// shutdown timeout that goroutine already bounds itself by. The wait is a safety net against a
+// shutdown step that ignores its context, not a second deadline competing with the first one.
+const shutdownWaitMargin = time.Second
+
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
@@ -63,9 +68,10 @@ func (a *App) Run() {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
 	}
 
-	a.startShutdownHandler(ctx, timeout)
+	shutdownDone := a.startShutdownHandler(ctx, timeout)
 	a.startTelemetryIfEnabled()
 	a.startAllServers(ctx)
+	a.awaitShutdown(ctx, shutdownDone, timeout)
 }
 
 // handleStartupHooks runs the startup hooks and returns false if the application should exit.
@@ -85,15 +91,21 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 	return true
 }
 
-// startShutdownHandler starts a goroutine to handle graceful shutdown.
-func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+// startShutdownHandler starts a goroutine to handle graceful shutdown. The returned channel is
+// closed once that goroutine has finished, so Run can wait for it instead of letting the process
+// exit while shutdown is still in flight.
+func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
+		defer close(done)
+
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), timeout)
-		defer done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		defer cancel()
 
 		if a.hasTelemetry() {
 			a.sendTelemetry(http.DefaultClient, false)
@@ -106,6 +118,27 @@ func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
 		}
 	}()
+
+	return done
+}
+
+// awaitShutdown blocks until the graceful shutdown started by startShutdownHandler has finished,
+// so a main that only calls Run does not return — and let the process exit — while the datasources
+// are still being closed.
+//
+// It returns at once when the servers stopped for a reason other than a termination signal: no
+// shutdown is running in that case, and the handler goroutine is still parked on a context that is
+// canceled only once Run returns.
+func (a *App) awaitShutdown(ctx context.Context, done <-chan struct{}, timeout time.Duration) {
+	if ctx.Err() == nil {
+		return
+	}
+
+	select {
+	case <-done:
+	case <-time.After(timeout + shutdownWaitMargin):
+		a.Logger().Errorf("graceful shutdown did not finish within %v, exiting anyway", timeout+shutdownWaitMargin)
+	}
 }
 
 // startTelemetryIfEnabled starts telemetry if it's enabled.
