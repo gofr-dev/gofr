@@ -6,6 +6,8 @@ const (
 	defaultPublicStaticDir = "static"
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
+	otlpTraceExporter      = "otlp"
+	jaegerTraceExporter    = "jaeger"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 	checkPortTimeout       = 2 * time.Second
 	gofrHost               = "https://gofr.dev"

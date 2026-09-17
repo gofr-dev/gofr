@@ -836,7 +836,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		config             config.Config
 		expectedLogMessage string
 	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER=abc: expected one of otlp, jaeger, zipkin or gofr"},
 		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
 		{"miss tracer_url ", mockConfig3,
 			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
