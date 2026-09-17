@@ -99,13 +99,17 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 // PathPrefix("/") catch-all -- registered with no .Methods() restriction -- means
 // an unmatched request still runs this middleware rather than being turned away.
 //
-// The process cannot run out of memory over this: the meter provider sets an
-// explicit datapoint ceiling (see metrics/exporters/provider.go). What it can do
-// is lose its own metrics. Datapoints past that ceiling are folded into a single
-// overflow series, so junk arriving first evicts nothing but occupies the slots,
-// and the REAL routes registered afterwards are the ones that vanish from the
-// dashboard. Collapsing caller-controlled labels keeps the junk to one series and
-// leaves the ceiling for routes that matter.
+// The meter provider caps datapoints per instrument: the SDK default of 2000,
+// OTEL_GO_X_CARDINALITY_LIMIT, or METRICS_CARDINALITY_LIMIT, which takes
+// precedence. Datapoints past that ceiling are folded into a single overflow
+// series, so junk arriving first evicts nothing but occupies the slots, and the
+// REAL routes registered afterwards are the ones that vanish from the dashboard.
+// Collapsing caller-controlled labels keeps the junk to one series and leaves the
+// ceiling for routes that matter.
+//
+// It is also the only bound on memory when that ceiling is configured away
+// (METRICS_CARDINALITY_LIMIT=0 means unlimited): every series pins a datapoint,
+// and exporters re-send every held series on every interval.
 const (
 	unmatchedPathLabel = "__unmatched__"
 	otherMethodLabel   = "__other__"
@@ -119,8 +123,14 @@ const (
 	// to protect. One ceiling on the pair is the quantity that actually maps onto
 	// datapoints.
 	//
-	// The value is deliberately a small fraction of that provider ceiling, so
-	// caller-controlled series can never crowd out the route table.
+	// The value is deliberately a small fraction of the default provider ceiling,
+	// so caller-controlled series cannot crowd out the route table. It also sits
+	// below routeCacheLimit on purpose: this check fires first, so routeCache's
+	// own refusal to store past its limit never triggers for this set.
+	//
+	// It is a constant and does not follow METRICS_CARDINALITY_LIMIT. A ceiling
+	// set below roughly this value can be filled by caller-controlled series
+	// alone, and real routes then overflow as they did before this bound existed.
 	untemplatedLabelLimit = 512
 )
 
@@ -134,6 +144,19 @@ const (
 // Admission is check-then-act, so concurrent first sightings can overshoot by
 // roughly the number of requests in flight. The overshoot is bounded by
 // concurrency rather than by the caller, and the population stays finite.
+//
+// Admission is first-come and nothing is ever evicted. That mirrors the
+// resource: a cumulative histogram never resets (sdk/metric
+// internal/aggregate/histogram.go), so a series once recorded keeps its
+// datapoint for the life of the process. Evicting a pair here would free
+// nothing there, and admitting a new pair in its place would mint another
+// datapoint -- this set would stop bounding anything. The accepted cost is that
+// a burst of junk early in the process fills the set, after which other
+// untemplated traffic, static assets included, is recorded as __unmatched__. It
+// is still counted and timed, only not per path. Templated routes never reach
+// the set and are unaffected.
+//
+// Tests that assert on this set reset it and must not call t.Parallel().
 //
 //nolint:gochecknoglobals // process-wide by necessity: see above.
 var untemplatedLabels routeCache[struct{}]
