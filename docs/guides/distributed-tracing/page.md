@@ -110,6 +110,7 @@ For business-level operations inside a handler, wrap them with `c.Trace("name")`
 - **Sidecar tracing** — Istio and Linkerd inject their own spans. Configure them to use the same backend, not a parallel one.
 - **Logs without trace IDs** — if `trace_id` is empty in a log, the request didn't carry a `traceparent`. Likely the entry point (Ingress, gateway) is not adding one.
 - **High cardinality span names** — never put a path parameter (e.g., `/orders/12345`) directly in a span name. Use the route template.
+- **A short `SHUTDOWN_GRACE_PERIOD` cuts the final flush off** — on shutdown GoFr flushes the spans still sitting in the batch processor before it closes the datasources, and that flush is bounded by [`SHUTDOWN_GRACE_PERIOD`](/docs/guides/graceful-shutdown) along with the rest of the drain. Against a collector that is unreachable, the OTLP exporter spends its own 10s export timeout there. Keep the grace period comfortably above that, or a pod's last spans are dropped exactly when you are debugging why it went away.
 
 ## What spans cost
 
