@@ -8,6 +8,7 @@ const (
 	gofrTraceExporter      = "gofr"
 	otlpTraceExporter      = "otlp"
 	jaegerTraceExporter    = "jaeger"
+	zipkinTraceExporter    = "zipkin"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 	checkPortTimeout       = 2 * time.Second
 	gofrHost               = "https://gofr.dev"
