@@ -3,17 +3,279 @@ package gofr
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
+
+func Test_resolveOtlpTransport(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		insecure    bool
+		insecureSet bool
+		expected    otlpTransport
+	}{
+		{
+			name:     "schemeless endpoint defaults to plaintext",
+			url:      "collector:4317",
+			insecure: true,
+			expected: otlpTransport{useEndpointURL: false, insecure: true, plaintext: true},
+		},
+		{
+			name:        "schemeless endpoint with TRACER_INSECURE=false uses TLS",
+			url:         "collector:4317",
+			insecure:    false,
+			insecureSet: true,
+			expected:    otlpTransport{useEndpointURL: false, insecure: false, plaintext: false},
+		},
+		{
+			name:     "http scheme is plaintext",
+			url:      "http://collector:4317",
+			insecure: true,
+			expected: otlpTransport{useEndpointURL: true, insecure: false, plaintext: true},
+		},
+		{
+			name:     "https scheme uses TLS",
+			url:      "https://collector:4317",
+			insecure: true,
+			expected: otlpTransport{useEndpointURL: true, insecure: false, plaintext: false},
+		},
+		{
+			name:        "https scheme wins over TRACER_INSECURE=true",
+			url:         "https://collector:4317",
+			insecure:    true,
+			insecureSet: true,
+			expected:    otlpTransport{useEndpointURL: true, insecure: false, plaintext: false},
+		},
+		{
+			name:        "http scheme wins over TRACER_INSECURE=false",
+			url:         "http://collector:4317",
+			insecure:    false,
+			insecureSet: true,
+			expected:    otlpTransport{useEndpointURL: true, insecure: false, plaintext: true},
+		},
+		{
+			name:     "deprecated host:port path is plaintext by default",
+			url:      "localhost:9411",
+			insecure: true,
+			expected: otlpTransport{useEndpointURL: false, insecure: true, plaintext: true},
+		},
+		{
+			name:     "scheme match is case-insensitive",
+			url:      "HTTPS://collector:4317",
+			insecure: true,
+			expected: otlpTransport{useEndpointURL: true, insecure: false, plaintext: false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveOtlpTransport(logging.NewMockLogger(logging.ERROR), tt.url, tt.insecure, tt.insecureSet)
+
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// Test_resolveOtlpTransport_httpsIsNotDowngraded guards the invariant that makes
+// the fix correct: an https:// endpoint resolves to WithEndpointURL alone. Pairing
+// it with WithInsecure() would override the scheme, because the SDK applies
+// options in slice order.
+func Test_resolveOtlpTransport_httpsIsNotDowngraded(t *testing.T) {
+	got := resolveOtlpTransport(logging.NewMockLogger(logging.ERROR), "https://otelcol.local:4317", true, false)
+
+	require.True(t, got.useEndpointURL, "an https:// endpoint must be passed to WithEndpointURL")
+	require.False(t, got.insecure, "WithInsecure must never be applied to an https:// endpoint")
+	require.False(t, got.plaintext, "an https:// endpoint must not resolve to plaintext")
+}
+
+func Test_resolveOtlpTransport_warnsWhenInsecureIgnored(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		resolveOtlpTransport(logging.NewMockLogger(logging.WARN), "https://collector:4317", true, true)
+	})
+
+	require.Contains(t, out, "TRACER_INSECURE")
+}
+
+func Test_App_tracerInsecure(t *testing.T) {
+	tests := []struct {
+		name            string
+		value           string
+		expectedFlag    bool
+		expectedFlagSet bool
+	}{
+		{name: "unset defaults to plaintext", value: "", expectedFlag: true, expectedFlagSet: false},
+		{name: "explicit true", value: "true", expectedFlag: true, expectedFlagSet: true},
+		{name: "explicit false", value: "false", expectedFlag: false, expectedFlagSet: true},
+		{name: "numeric false", value: "0", expectedFlag: false, expectedFlagSet: true},
+		{name: "whitespace is trimmed", value: " false ", expectedFlag: false, expectedFlagSet: true},
+		{name: "invalid value falls back to the default", value: "yes-please", expectedFlag: true, expectedFlagSet: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &App{
+				Config:    config.NewMockConfig(map[string]string{"TRACER_INSECURE": tt.value}),
+				container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+			}
+
+			insecure, set := app.tracerInsecure()
+
+			require.Equal(t, tt.expectedFlag, insecure)
+			require.Equal(t, tt.expectedFlagSet, set)
+		})
+	}
+}
+
+func Test_buildOtlpExporter_warnsOnPlaintextCredentials(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		exp, err := buildOtlpExporter(logging.NewMockLogger(logging.WARN), "otlp", "collector:4317", "", "",
+			map[string]string{"Authorization": "Bearer token"}, true, false)
+		require.NoError(t, err)
+		require.NotNil(t, exp)
+
+		_ = exp.Shutdown(t.Context())
+	})
+
+	require.Contains(t, out, "plaintext")
+}
+
+func Test_buildOtlpExporter(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		host        string
+		port        string
+		insecure    bool
+		insecureSet bool
+	}{
+		{name: "schemeless default", url: "collector:4317", insecure: true},
+		{name: "schemeless with TLS", url: "collector:4317", insecure: false, insecureSet: true},
+		{name: "http scheme", url: "http://collector:4317", insecure: true},
+		{name: "https scheme", url: "https://collector:4317", insecure: true},
+		{name: "deprecated host and port", host: "localhost", port: "9411", insecure: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exp, err := buildOtlpExporter(logging.NewMockLogger(logging.ERROR), "otlp", tt.url, tt.host, tt.port,
+				nil, tt.insecure, tt.insecureSet)
+
+			require.NoError(t, err)
+			require.NotNil(t, exp)
+
+			_ = exp.Shutdown(t.Context())
+		})
+	}
+}
+
+// Test_buildOtlpExporter_wireTransport asserts the bytes the exporter actually
+// puts on the socket, which is the only assertion that fails if the option block
+// regresses: Test_buildOtlpExporter's err == nil && exp != nil holds for any
+// option set, and resolveOtlpTransport is a pure function the wiring could stop
+// consulting. Restoring the pre-fix line (WithInsecure + WithEndpoint(url)) makes
+// both scheme-bearing subtests fail here — the raw URL is an invalid gRPC target,
+// so no connection is ever opened.
+func Test_buildOtlpExporter_wireTransport(t *testing.T) {
+	const (
+		h2cPreface   = "PRI * HTTP/2.0"
+		tlsHandshake = 0x16
+	)
+
+	tests := []struct {
+		name        string
+		scheme      string
+		insecure    bool
+		insecureSet bool
+		expectTLS   bool
+	}{
+		{name: "schemeless endpoint speaks h2c", scheme: "", insecure: true},
+		{name: "http scheme speaks h2c", scheme: "http://", insecure: true},
+		{name: "https scheme speaks TLS", scheme: "https://", insecure: true, expectTLS: true},
+		{
+			name: "schemeless with TRACER_INSECURE=false speaks TLS", scheme: "", insecure: false,
+			insecureSet: true, expectTLS: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			first := make(chan []byte, 1)
+			url := tt.scheme + listenForFirstBytes(t, first)
+
+			exp, err := buildOtlpExporter(logging.NewMockLogger(logging.ERROR), "otlp", url, "", "",
+				nil, tt.insecure, tt.insecureSet)
+			require.NoError(t, err)
+
+			t.Cleanup(func() { _ = exp.Shutdown(context.Background()) })
+
+			// The export itself always errors — nothing on the far end speaks OTLP.
+			// What is under test is whether a connection happened at all, and in
+			// which protocol. A short deadline keeps the TLS case off the SDK default.
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+
+			_ = exp.ExportSpans(ctx, tracetest.SpanStubs{{Name: "wire-probe"}}.Snapshots())
+
+			select {
+			case got := <-first:
+				require.NotEmpty(t, got, "connection opened but no bytes were sent")
+
+				if tt.expectTLS {
+					require.EqualValues(t, tlsHandshake, got[0], "expected a TLS ClientHello, got %q", got)
+				} else {
+					require.Contains(t, string(got), h2cPreface, "expected the h2c preface")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatalf("no connection was made to %s: the endpoint is not a usable gRPC target", url)
+			}
+		})
+	}
+}
+
+// listenForFirstBytes starts a throwaway listener and hands the first bytes of
+// the first connection to first. It returns the host:port to dial.
+func listenForFirstBytes(t *testing.T, first chan<- []byte) string {
+	t.Helper()
+
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+		buf := make([]byte, 24)
+		n, _ := conn.Read(buf)
+
+		first <- buf[:n]
+	}()
+
+	return ln.Addr().String()
+}
 
 func TestParseHeaders(t *testing.T) {
 	tests := []struct {
@@ -350,5 +612,122 @@ func BenchmarkSpanStart_NeverSampleSDK(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, span := tr.Start(ctx, "GET /plaintext")
 		span.End()
+	}
+}
+
+func Test_redactExporterName(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{name: "typo of a real exporter is echoed", value: "otpl", expected: "otpl"},
+		{name: "mixed case and separators are echoed", value: "Open_Telemetry-x", expected: "Open_Telemetry-x"},
+		{name: "empty is replaced", value: "", expected: "REDACTED"},
+		{name: "longer than 16 is replaced", value: "abcdefghijklmnopq", expected: "REDACTED"},
+		{name: "digits look like a pasted secret", value: "ab12cd34", expected: "REDACTED"},
+		{name: "URL pasted into the wrong variable", value: "https://x", expected: "REDACTED"},
+		{name: "control character is replaced", value: "otlp\n", expected: "REDACTED"},
+		{name: "non-ASCII letter is replaced", value: "ötlp", expected: "REDACTED"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, redactExporterName(tt.value))
+		})
+	}
+}
+
+func Test_redactURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		expected string
+	}{
+		{name: "schemeless host:port is unchanged", raw: "collector:4317", expected: "collector:4317"},
+		{name: "plain https URL is unchanged", raw: "https://collector:4317", expected: "https://collector:4317"},
+		{name: "path is kept", raw: "http://localhost:2005/api/v2/spans", expected: "http://localhost:2005/api/v2/spans"},
+		{name: "empty is unchanged", raw: "", expected: ""},
+		{name: "userinfo with password", raw: "https://user:s3cret@collector:4317", expected: "https://REDACTED@collector:4317"},
+		{name: "userinfo token only", raw: "https://t0ken@collector:4317", expected: "https://REDACTED@collector:4317"},
+		{name: "query credentials", raw: "https://zipkin/api/v2/spans?api-key=s3cret", expected: "https://zipkin/api/v2/spans?REDACTED"},
+		{name: "fragment is dropped", raw: "https://collector:4317#s3cret", expected: "https://collector:4317"},
+		{name: "schemeless userinfo", raw: "user:s3cret@collector:4317", expected: "REDACTED@collector:4317"},
+		{name: "unparsable with userinfo", raw: "https://user:s3cret@collector:43%17", expected: "REDACTED@collector:43%17"},
+		{name: "schemeless query credentials", raw: "localhost:9411/api/v2/spans?api-key=s3cret",
+			expected: "localhost:9411/api/v2/spans?REDACTED"},
+		{name: "schemeless userinfo and query", raw: "user:s3cret@collector:4317/p?k=s3cret", expected: "REDACTED@collector:4317/p?REDACTED"},
+		{name: "schemeless password containing '?'", raw: "user:s3?cret@collector:4317", expected: "REDACTED@collector:4317"},
+		{name: "schemeless '@' inside query value", raw: "collector:4317/p?k=s3cret@x", expected: "REDACTED@x"},
+		{name: "schemeless fragment is dropped", raw: "collector:4317#s3cret", expected: "collector:4317"},
+		{name: "newline cannot forge a log line", raw: "collector:4317\n{\"level\":\"INFO\"}",
+			expected: `collector:4317\x0a{"level":"INFO"}`},
+		{name: "carriage return and tab are escaped", raw: "host\r:4317\t", expected: `host\x0d:4317\x09`},
+		{name: "C1 control is escaped", raw: "host" + string(rune(0x85)) + ":4317", expected: `host\x85:4317`},
+		{name: "control char with userinfo is escaped after redaction", raw: "https://user:s3cret@collector\n:4317",
+			expected: `REDACTED@collector\x0a:4317`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, redactURL(tt.raw))
+		})
+	}
+}
+
+// Test_initTracer_doesNotLogCredentials drives the real startup path for every
+// exporter that logs its endpoint, and asserts the credentials in TRACER_URL and
+// the raw TRACER_INSECURE value never reach the log.
+func Test_initTracer_doesNotLogCredentials(t *testing.T) {
+	const secret = "s3cret-value"
+
+	tests := []struct {
+		name     string
+		exporter string
+		url      string
+		insecure string
+		expected string
+	}{
+		{name: "otlp userinfo", exporter: "otlp", url: "https://user:" + secret + "@localhost:4317",
+			expected: "Exporting traces to otlp at https://REDACTED@localhost:4317"},
+		{name: "jaeger ignored TRACER_INSECURE", exporter: "JAEGER", url: "http://user:" + secret + "@localhost:4317",
+			insecure: "true", expected: "Exporting traces to jaeger at http://REDACTED@localhost:4317"},
+		{name: "otlp invalid TRACER_INSECURE", exporter: "otlp", url: "localhost:4317", insecure: secret,
+			expected: "invalid TRACER_INSECURE"},
+		{name: "zipkin query key", exporter: "zipkin", url: "http://localhost:2005/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at http://localhost:2005/api/v2/spans?REDACTED"},
+		{name: "zipkin schemeless query key", exporter: "zipkin", url: "localhost:9411/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at localhost:9411/api/v2/spans?REDACTED"},
+		{name: "gofr userinfo", exporter: "gofr", url: "https://user:" + secret + "@tracer.example.com/api/spans",
+			expected: "Exporting traces to GoFr at https://REDACTED@tracer.example.com/api/spans"},
+		{name: "secret pasted into TRACE_EXPORTER", exporter: secret, url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER=REDACTED"},
+		{name: "typo in TRACE_EXPORTER is echoed", exporter: "otpl", url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER=otpl"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := map[string]string{"TRACE_EXPORTER": tt.exporter, "TRACER_URL": tt.url, "TRACER_AUTH_KEY": "Bearer x"}
+			if tt.insecure != "" {
+				cfg["TRACER_INSECURE"] = tt.insecure
+			}
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(func() {
+					mockContainer, _ := container.NewMockContainer(t)
+
+					a := App{Config: config.NewMockConfig(cfg), container: mockContainer}
+					a.initTracer()
+				})
+			})
+
+			out := stdout + stderr
+
+			require.Contains(t, out, tt.expected)
+			require.NotContains(t, out, secret)
+		})
 	}
 }

@@ -48,16 +48,68 @@ func metricsExporterConfig(conf config.Config, appName, appVersion string, logge
 	}
 
 	return exporters.Config{
-		AppName:     appName,
-		AppVersion:  appVersion,
-		Exporter:    strings.TrimSpace(conf.Get("METRICS_EXPORTER")),
-		Endpoint:    strings.TrimSpace(conf.Get("METRICS_URL")),
-		Protocol:    conf.GetOrDefault("METRICS_PROTOCOL", "grpc"),
-		Interval:    metricsExportInterval(conf, logger),
-		Temporality: metricsTemporality(conf),
-		Headers:     headers,
-		Insecure:    insecure,
+		AppName:          appName,
+		AppVersion:       appVersion,
+		Exporter:         strings.TrimSpace(conf.Get("METRICS_EXPORTER")),
+		Endpoint:         strings.TrimSpace(conf.Get("METRICS_URL")),
+		Protocol:         conf.GetOrDefault("METRICS_PROTOCOL", "grpc"),
+		Interval:         metricsExportInterval(conf, logger),
+		Temporality:      metricsTemporality(conf),
+		Headers:          headers,
+		Insecure:         insecure,
+		CardinalityLimit: metricsCardinalityLimit(conf, logger),
 	}
+}
+
+// metricsCardinalityLimit resolves the per-instrument cardinality limit from
+// METRICS_CARDINALITY_LIMIT. It returns nil when unset (leaving the SDK default
+// of 2000, or OTEL_GO_X_CARDINALITY_LIMIT, in place) or when the value is not an
+// integer. A parsed value (including zero or negative, meaning unlimited) is
+// returned as an explicit override. The raw value is never logged.
+func metricsCardinalityLimit(conf config.Config, logger exporters.Logger) *int {
+	v := strings.TrimSpace(conf.Get("METRICS_CARDINALITY_LIMIT"))
+	if v == "" {
+		return nil
+	}
+
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		if logger != nil {
+			logger.Warnf("invalid METRICS_CARDINALITY_LIMIT: expected an integer; " +
+				"using the default cardinality limit")
+		}
+
+		return nil
+	}
+
+	return &n
+}
+
+// defaultMetricsCardinalityLimit is the OTel SDK's per-instrument default.
+const defaultMetricsCardinalityLimit = 2000
+
+// MetricsCardinalityLimit returns the per-instrument datapoint ceiling the meter
+// provider will actually apply: METRICS_CARDINALITY_LIMIT when it parses (the
+// override metricsExporterConfig passes to the provider), otherwise
+// OTEL_GO_X_CARDINALITY_LIMIT, which the SDK reads itself, otherwise the SDK
+// default. Zero or negative means unlimited.
+//
+// Reading the OTel key through conf agrees with the SDK reading it through
+// os.Getenv: GoFr's env loader loads configs/.env into the process environment
+// before either runs, so a value set only in .env is visible to both.
+//
+// It is a function rather than a Container method so that it is not promoted
+// onto every handler's Context.
+func MetricsCardinalityLimit(conf config.Config) int {
+	if n := metricsCardinalityLimit(conf, nil); n != nil {
+		return *n
+	}
+
+	if n, err := strconv.Atoi(strings.TrimSpace(conf.Get("OTEL_GO_X_CARDINALITY_LIMIT"))); err == nil {
+		return n
+	}
+
+	return defaultMetricsCardinalityLimit
 }
 
 // metricsExportInterval resolves the push interval, preferring the GoFr-native

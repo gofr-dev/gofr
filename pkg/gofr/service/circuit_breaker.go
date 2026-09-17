@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -18,6 +19,14 @@ var (
 	// ErrCircuitOpen indicates that the circuit breaker is open.
 	ErrCircuitOpen                        = errors.New("unable to connect to server at host")
 	ErrUnexpectedCircuitBreakerResultType = errors.New("unexpected result type from circuit breaker")
+
+	// errUnsupportedMethod is returned by doRequest when it is asked to route
+	// an HTTP method it does not handle. Unexported because doRequest itself is
+	// unexported and all in-tree callers pass a known method constant, so the
+	// default branch is unreachable from outside the package — but the branch
+	// itself is worth keeping: an earlier revision returned (nil, nil) silently
+	// in that spot.
+	errUnsupportedMethod = errors.New("unsupported HTTP method for circuit breaker")
 )
 
 // CircuitBreakerConfig holds the configuration for the circuitBreaker.
@@ -130,11 +139,22 @@ func (cb *circuitBreaker) startHealthChecks() {
 
 // openCircuit transitions the circuit breaker to the open state.
 func (cb *circuitBreaker) openCircuit() {
+	wasOpen := cb.state == OpenState
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
 
 	if cb.metrics != nil {
 		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
+
+		// Only count a real Closed -> Open transition. openCircuit is reached
+		// from handleFailure whenever failureCount > threshold, and every
+		// concurrent request that passed the isOpen check before the trip
+		// falls through to handleFailure and re-enters here — without this
+		// guard, a burst of N concurrent failures records N-threshold
+		// "openings" for what is a single transition.
+		if !wasOpen {
+			cb.metrics.IncrementCounter(context.Background(), "app_circuit_open_count", "service", cb.serviceName)
+		}
 	}
 }
 
@@ -255,6 +275,12 @@ func (cb *circuitBreaker) doRequest(ctx context.Context, method, path string, qu
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 		})
+	case methodQuery:
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+		})
+	default:
+		return nil, fmt.Errorf("%w: %q", errUnsupportedMethod, method)
 	}
 
 	resp, err := cb.handleCircuitBreakerResult(result, err)
@@ -320,4 +346,16 @@ func (cb *circuitBreaker) Put(ctx context.Context, path string, queryParams map[
 func (cb *circuitBreaker) Delete(ctx context.Context, path string, body []byte) (
 	*http.Response, error) {
 	return cb.doRequest(ctx, http.MethodDelete, path, nil, body, nil)
+}
+
+// QueryWithHeaders is a wrapper for doRequest with the QUERY method and headers.
+func (cb *circuitBreaker) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, methodQuery, path, queryParams, body, headers)
+}
+
+// Query is a wrapper for doRequest with the QUERY method.
+func (cb *circuitBreaker) Query(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, methodQuery, path, queryParams, body, nil)
 }

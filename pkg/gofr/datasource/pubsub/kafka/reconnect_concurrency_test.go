@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -9,8 +10,10 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -33,7 +36,6 @@ func newStaleClient(t *testing.T) (*kafkaClient, *MockConnection) {
 			conns: []Connection{stale},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 	}
 
 	return k, stale
@@ -264,4 +266,46 @@ func TestClose_ConcurrentEnsureConnected_NoRace(t *testing.T) {
 	defer k.connMu.RUnlock()
 
 	assert.Nil(t, k.conn)
+}
+
+// TestClose_DuringInFlightReconnect_DoesNotRevive covers the window Close
+// cannot signal its way out of: retryConnect has already passed its own
+// closed check and is inside initialize, dialing. Without the re-check under
+// connMu, that dial publishes k.conn and k.writer onto a client that is
+// already closed, and both leak for the life of the process.
+func TestClose_DuringInFlightReconnect_DoesNotRevive(t *testing.T) {
+	k := &kafkaClient{
+		config: Config{Brokers: []string{"broker.invalid:0"}, BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+		logger: &mockLogger{},
+		closed: make(chan struct{}),
+	}
+
+	dialed := make(chan struct{})
+	release := make(chan struct{})
+
+	original := connectToBrokers
+
+	t.Cleanup(func() { connectToBrokers = original })
+
+	connectToBrokers = func(context.Context, []string, *kafka.Dialer, pubsub.Logger) ([]Connection, error) {
+		close(dialed)
+		<-release // hold the dial open until Close has run
+
+		return []Connection{&MockConn{addr: "127.0.0.1:9092", isHealthy: true}}, nil
+	}
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- k.initialize(t.Context()) }()
+
+	<-dialed
+	require.NoError(t, k.Close())
+	close(release)
+
+	require.ErrorIs(t, <-errCh, errClientClosed)
+
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	require.Nil(t, k.conn, "a closed client must not be revived by an in-flight reconnect")
+	require.Nil(t, k.writer, "the writer dialed after Close must not be published")
 }

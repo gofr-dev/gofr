@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,7 +105,10 @@ func TestSetMiddlewareHeaders(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 
-			setMiddlewareHeaders(tc.environmentConfig, tc.registeredRoutes, w, tc.origin, tc.allowedOrigins)
+			// The fixed headers are now built once per middleware instance
+			// rather than per request; build them here the same way CORS does.
+			fixed, methods := buildFixedHeaders(tc.environmentConfig, tc.registeredRoutes)
+			setMiddlewareHeaders(w, tc.origin, tc.allowedOrigins, fixed, methods)
 
 			for header, expectedValue := range tc.expectedHeaders {
 				actualValue := w.Header().Get(header)
@@ -137,7 +141,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			allowedOrigins:    map[string]bool{"*": true},
 			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
+				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
 			},
 		},
@@ -148,7 +152,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			allowedOrigins:    map[string]bool{"*": true},
 			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders + ", clientid",
+				"Access-Control-Allow-Headers": allowedHeaders + ", clientid",
 				"Access-Control-Allow-Methods": "POST, PUT, OPTIONS",
 			},
 		},
@@ -164,7 +168,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			expectedHeaders: map[string]string{
 				"Access-Control-Max-Age":       strconv.Itoa(600),
 				"Access-Control-Allow-Origin":  "https://example.com",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
+				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "OPTIONS",
 				"Vary":                         "Origin",
 			},
@@ -178,7 +182,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			allowedOrigins:   map[string]bool{"*": true},
 			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
+				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 			},
 		},
@@ -192,7 +196,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			allowedOrigins:   map[string]bool{"https://a.com": true, "https://b.com": true},
 			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "https://b.com",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
+				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
 				"Vary":                         "Origin",
 			},
@@ -207,7 +211,7 @@ func setMiddlewareHeadersTestCases() []struct {
 			allowedOrigins:   map[string]bool{"https://a.com": true},
 			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "",
-				"Access-Control-Allow-Headers": corsCharDefaultAllowHeaders,
+				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
 			},
 		},
@@ -267,7 +271,417 @@ func TestParseOrigins(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
+// TestCORSDoesNotMutateRegisteredRoutes pins that building the method list does
+// not append into the caller's slice. That slice is the router's
+// RegisteredRoutes, and appending in place would write past the caller's length
+// whenever capacity exceeded it.
+func TestCORSDoesNotMutateRegisteredRoutes(t *testing.T) {
+	// A sentinel sits just past the caller's length, in spare capacity: an
+	// in-place append would overwrite exactly that element.
+	backing := make([]string, 3, 8)
+	backing[0], backing[1], backing[2] = http.MethodGet, http.MethodPost, "sentinel"
+	routes := backing[:2]
+
+	_, methods := buildFixedHeaders(map[string]string{}, routes)
+
+	require.Equal(t, []string{"GET, POST, OPTIONS"}, methods)
+	require.Equal(t, []string{http.MethodGet, http.MethodPost}, routes,
+		"the caller's slice must be unchanged")
+	require.Equal(t, "sentinel", backing[2], "nothing may be written past the caller's length")
+}
+
+// TestCORSHeadersStableAcrossRequests pins that precomputing the fixed headers
+// yields the same response headers on every request, including a configured
+// override and a pass-through custom header.
+func TestCORSHeadersStableAcrossRequests(t *testing.T) {
+	routes := []string{http.MethodGet}
+	cfg := map[string]string{
+		"Access-Control-Allow-Origin": "*",
+		"X-Custom-Header":             "custom",
+	}
+
+	h := CORS(cfg, &routes)(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	var first http.Header
+
+	for i := range 5 {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody))
+
+		if i == 0 {
+			first = w.Header().Clone()
+
+			continue
+		}
+
+		require.Equal(t, first, w.Header(), "headers must not drift between requests")
+	}
+
+	require.Equal(t, "*", first.Get("Access-Control-Allow-Origin"))
+	require.Equal(t, "GET, OPTIONS", first.Get("Access-Control-Allow-Methods"))
+	require.Equal(t, "custom", first.Get("X-Custom-Header"))
+	require.Contains(t, first.Get("Access-Control-Allow-Headers"), "Authorization")
+}
+
+// TestSharedHeaderValueSurvivesAdd is the safety proof for assigning a shared
+// one-element value slice straight into the header map: a later Header.Add must
+// append into a new array rather than mutating the slice every response shares.
+func TestSharedHeaderValueSurvivesAdd(t *testing.T) {
+	routes := []string{http.MethodGet}
+	fixed, methods := buildFixedHeaders(map[string]string{}, routes)
+
+	before := append([]string(nil), methods...)
+
+	for range 3 {
+		h := http.Header{}
+		setMiddlewareHeaders(h2w(h), "", map[string]bool{"*": true}, fixed, methods)
+
+		h.Add("Access-Control-Allow-Methods", "PATCH")
+		h.Add("Access-Control-Allow-Headers", "X-Extra")
+	}
+
+	require.Equal(t, before, methods, "the shared methods slice must never be mutated")
+
+	for _, f := range fixed {
+		require.Len(t, f.value, 1, "a shared header value must stay single-element")
+	}
+}
+
+// h2w adapts a bare Header to the ResponseWriter setMiddlewareHeaders expects.
+type headerOnlyWriter struct{ h http.Header }
+
+func (w headerOnlyWriter) Header() http.Header     { return w.h }
+func (headerOnlyWriter) Write([]byte) (int, error) { return 0, nil }
+func (headerOnlyWriter) WriteHeader(int)           {}
+
+func h2w(h http.Header) http.ResponseWriter { return headerOnlyWriter{h: h} }
+
+// corsBenchWriter is a ResponseWriter that keeps a header map and discards everything else, so a
+// benchmark measures the middleware rather than the recorder.
+type corsBenchWriter struct{ h http.Header }
+
+func (w *corsBenchWriter) Header() http.Header       { return w.h }
+func (*corsBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*corsBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkCORS measures the middleware on the path every request takes: the CORS headers are
+// written before the handler runs, on every response, matched or not.
+//
+// Allocations are the metric that matters here. The header set is constant for the lifetime of the
+// server, so building it per request was pure waste.
+func BenchmarkCORS(b *testing.B) {
+	routes := []string{"GET /users", "POST /users", "GET /users/{id}"}
+	h := CORS(map[string]string{}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users", http.NoBody)
+	req.Header.Set("Origin", "https://example.com")
+
+	w := &corsBenchWriter{h: make(http.Header, 8)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		h.ServeHTTP(w, req)
+	}
+}
+
+// TestCORS_OriginAllowListMatchedByCanonicalKey is the regression test for a
+// config that restricted the origin being turned into one that echoed a
+// wildcard, and for that same config then overwriting the negotiated header.
+//
+// buildFixedHeaders classifies each config entry by key and writes everything it
+// does not recognize into the fixed set, which is applied AFTER the per-request
+// origin negotiation. With a raw-key match, a caller spelling the key
+// "access-control-allow-origin" -- CORS is exported, so callers do build this map
+// -- was missed by parseOrigins, which fell back to its wildcard default, and was
+// routed to the default branch, which canonicalized it straight over the
+// negotiated Access-Control-Allow-Origin.
+func TestCORS_OriginAllowListMatchedByCanonicalKey(t *testing.T) {
+	for _, spelling := range []string{
+		"Access-Control-Allow-Origin",
+		"access-control-allow-origin",
+		"ACCESS-CONTROL-ALLOW-ORIGIN",
+		"Access-control-allow-origin",
+	} {
+		t.Run(spelling, func(t *testing.T) {
+			routes := []string{http.MethodGet}
+			handler := CORS(map[string]string{spelling: "https://trusted.com"}, &routes)(
+				http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+			unlisted := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Origin", "https://evil.com")
+			handler.ServeHTTP(unlisted, req)
+
+			assert.Empty(t, unlisted.Header().Get(headerAccessControlAllowOrigin),
+				"an unlisted origin must not be granted access under any spelling of the config key")
+
+			listed := httptest.NewRecorder()
+			req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Origin", "https://trusted.com")
+			handler.ServeHTTP(listed, req)
+
+			assert.Equal(t, "https://trusted.com", listed.Header().Get(headerAccessControlAllowOrigin),
+				"the negotiated origin must survive the fixed-header pass that runs after it")
+			assert.Equal(t, "Origin", listed.Header().Get("Vary"))
+		})
+	}
+}
+
+// TestCORS_CaseVariantMethodsAndHeadersAreClassified pins the other two headers
+// the classifier owns. A case-variant spelling reaching the default branch would
+// REPLACE the derived Allow-Methods, or replace rather than extend the
+// framework's required Allow-Headers.
+func TestCORS_CaseVariantMethodsAndHeadersAreClassified(t *testing.T) {
+	routes := []string{http.MethodGet}
+	handler := CORS(map[string]string{
+		"access-control-allow-methods": "GET, PATCH",
+		"access-control-allow-headers": "clientid",
+	}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+
+	assert.Equal(t, "GET, PATCH", w.Header().Get(headerAccessControlAllowMethods),
+		"a configured method list replaces the derived one")
+	assert.Equal(t, allowedHeaders+", clientid", w.Header().Get(headerAccessControlAllowHeaders),
+		"configured headers extend the framework's required set rather than replacing it")
+}
+
+// TestCORS_DuplicateSpellingsResolveDeterministically pins the precedence rule.
+// Two spellings of one header are one header, and the map they arrive in has no
+// order, so leaving the collision to the classifier let map iteration decide the
+// winner -- a different value could be sent on different requests in one process.
+func TestCORS_DuplicateSpellingsResolveDeterministically(t *testing.T) {
+	routes := []string{http.MethodGet}
+	handler := CORS(map[string]string{
+		"Access-Control-Allow-Headers": "X-Canonical",
+		"access-control-allow-headers": "x-lower",
+		"ACCESS-CONTROL-ALLOW-HEADERS": "X-UPPER",
+	}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	for range 50 {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+
+		assert.Equal(t, allowedHeaders+", X-Canonical", w.Header().Get(headerAccessControlAllowHeaders),
+			"the exactly-canonical spelling must win, on every request")
+	}
+}
+
+// TestSharedHeaderValuesHaveNoSpareCapacity states the invariant the shared
+// value slices rest on, for every slice rather than only the ones a particular
+// test happens to touch. A shared slice with room to grow would let one
+// response's Header.Add write into every other response's header, process-wide.
+func TestSharedHeaderValuesHaveNoSpareCapacity(t *testing.T) {
+	routes := []string{http.MethodGet, http.MethodPost}
+	fixed, methods := buildFixedHeaders(canonicalizeConfig(map[string]string{
+		"Access-Control-Max-Age":       "600",
+		"access-control-allow-headers": "clientid",
+	}), routes)
+
+	require.Len(t, methods, 1)
+	assert.Equal(t, 1, cap(methods), "the shared methods slice must have no spare capacity")
+
+	assert.Equal(t, 1, cap(wildcardOrigin), "the shared wildcard origin must have no spare capacity")
+
+	for _, f := range fixed {
+		assert.Len(t, f.value, 1, "a shared header value must stay single-element")
+		assert.Equal(t, 1, cap(f.value), "a shared header value must have no spare capacity: "+f.key)
+	}
+}
+
+// BenchmarkCORS_NamedOrigin measures the branch BenchmarkCORS does not reach.
+// An empty config takes the wildcard fast path, where the value slice is shared
+// and nothing allocates; a named-origin config still goes through Header.Set and
+// Vary's Header.Add, so the "→ 0 allocs" claim does not hold for it.
+func BenchmarkCORS_NamedOrigin(b *testing.B) {
+	routes := []string{"GET /users", "POST /users", "GET /users/{id}"}
+	h := CORS(map[string]string{
+		headerAccessControlAllowOrigin: "https://a.example.com, https://b.example.com",
+	}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users", http.NoBody)
+	req.Header.Set("Origin", "https://b.example.com")
+
+	w := &corsBenchWriter{h: make(http.Header, 8)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		h.ServeHTTP(w, req)
+	}
+}
+
+// TestCORS_WildcardPathIsAllocationFree guards the headline claim with a number
+// rather than a benchmark reading, so a regression fails the suite instead of
+// quietly showing up in a table nobody diffs.
+func TestCORS_WildcardPathIsAllocationFree(t *testing.T) {
+	routes := []string{"GET /users", "POST /users"}
+	h := CORS(map[string]string{}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users", http.NoBody)
+	req.Header.Set("Origin", "https://example.com")
+
+	w := &corsBenchWriter{h: make(http.Header, 8)}
+
+	// Warm the sync.Once so first-request construction is not counted.
+	h.ServeHTTP(w, req)
+
+	allocs := testing.AllocsPerRun(200, func() {
+		clear(w.h)
+		h.ServeHTTP(w, req)
+	})
+
+	assert.Zero(t, allocs, "the wildcard path must write its headers without allocating")
+}
+
+// corsLifecycleServe issues one request through h and returns the response headers.
+func corsLifecycleServe(t *testing.T, h http.Handler, origin string) http.Header {
+	t.Helper()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+
+	h.ServeHTTP(w, req)
+
+	return w.Header()
+}
+
+func corsLifecycleNoop() http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+}
+
+// TestCORSLifecycleContract pins WHEN the configuration and the route set are
+// read, which is the one behavioral difference this PR introduces against the
+// per-request build it replaces.
+//
+// The contract is a single rule: BOTH inputs are read exactly once, on the first
+// request, and never again. The rule matters because the two halves used to
+// freeze at different instants -- the config at construction, the routes at the
+// first request -- a split nothing documented and nobody would expect. Anything
+// completed before the first request is therefore still honored, which is what
+// this test covers; TestCORSLifecycleFrozenAfterFirstRequest covers the other
+// half.
+func TestCORSLifecycleContract(t *testing.T) {
+	t.Run("config completed before the first request is observed", func(t *testing.T) {
+		cfg := map[string]string{}
+		routes := []string{http.MethodGet}
+		h := CORS(cfg, &routes)(corsLifecycleNoop())
+
+		cfg["Access-Control-Max-Age"] = "99"
+		cfg[headerAccessControlAllowOrigin] = "https://late.com"
+
+		got := corsLifecycleServe(t, h, "https://late.com")
+
+		assert.Equal(t, "99", got.Get("Access-Control-Max-Age"),
+			"a config completed after CORS() but before serving must still be honored")
+		assert.Equal(t, "https://late.com", got.Get(headerAccessControlAllowOrigin),
+			"the allow-list must be built from the same snapshot as the fixed headers")
+	})
+
+	t.Run("routes appended before the first request are observed", func(t *testing.T) {
+		routes := make([]string, 0, 3)
+		routes = append(routes, http.MethodGet)
+
+		h := CORS(map[string]string{}, &routes)(corsLifecycleNoop())
+
+		// Exactly what handler registration does: finish the route list, then serve.
+		routes = append(routes, http.MethodPatch, http.MethodDelete)
+
+		assert.Equal(t, "GET, PATCH, DELETE, OPTIONS",
+			corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods))
+	})
+
+	t.Run("routes replaced through the pointer before serving are observed", func(t *testing.T) {
+		// gofr.go assigns rather than appends: *RegisteredRoutes = registeredMethods.
+		routes := []string{http.MethodGet}
+		h := CORS(map[string]string{}, &routes)(corsLifecycleNoop())
+
+		routes = []string{http.MethodPost, http.MethodPut}
+
+		assert.Equal(t, "POST, PUT, OPTIONS",
+			corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods))
+	})
+}
+
+// TestCORSLifecycleFrozenAfterFirstRequest pins the other half of the contract.
+//
+// Mutating either input after the first request is served is unsupported, and
+// deliberately so: both are read from every serving goroutine, so a caller
+// mutating them concurrently races regardless of when the read happens. Freezing
+// makes that race impossible rather than merely unlikely. GoFr never does it --
+// GetConfigs builds the map fully before handing it to CORS, and httpServerSetup
+// assigns the final route list synchronously before the serve goroutine starts.
+func TestCORSLifecycleFrozenAfterFirstRequest(t *testing.T) {
+	t.Run("both inputs are frozen once a request has been served", func(t *testing.T) {
+		cfg := map[string]string{"Access-Control-Max-Age": "600"}
+		routes := make([]string, 0, 2)
+		routes = append(routes, http.MethodGet)
+
+		h := CORS(cfg, &routes)(corsLifecycleNoop())
+
+		before := corsLifecycleServe(t, h, "")
+		require.Equal(t, "600", before.Get("Access-Control-Max-Age"))
+		require.Equal(t, "GET, OPTIONS", before.Get(headerAccessControlAllowMethods))
+
+		cfg["Access-Control-Max-Age"] = "1"
+		cfg[headerAccessControlAllowHeaders] = "clientid"
+
+		routes = append(routes, http.MethodDelete)
+
+		after := corsLifecycleServe(t, h, "")
+
+		assert.Equal(t, "600", after.Get("Access-Control-Max-Age"),
+			"config is frozen after the first request")
+		assert.Equal(t, allowedHeaders, after.Get(headerAccessControlAllowHeaders),
+			"config is frozen after the first request")
+		assert.Equal(t, "GET, OPTIONS", after.Get(headerAccessControlAllowMethods),
+			"routes are frozen after the first request")
+	})
+
+	t.Run("the freeze happens exactly once under concurrent first requests", func(t *testing.T) {
+		routes := []string{http.MethodGet, http.MethodPost}
+		h := CORS(map[string]string{"Access-Control-Max-Age": "600"}, &routes)(corsLifecycleNoop())
+
+		const n = 200
+
+		var (
+			wg   sync.WaitGroup
+			mu   sync.Mutex
+			seen = map[string]int{}
+		)
+
+		for range n {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				got := corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods)
+
+				mu.Lock()
+				seen[got]++
+				mu.Unlock()
+			}()
+		}
+
+		wg.Wait()
+
+		assert.Equal(t, map[string]int{"GET, POST, OPTIONS": n}, seen,
+			"every concurrent first request must observe the same fully-built header set")
+	})
+}
+
 // Characterization suite: pins the EXACT observable output of the CORS
 // middleware. Every helper/type/const below is prefixed with `corsChar` and
 // every test with `Test_CORSContract` to stay collision-free.
@@ -288,6 +702,9 @@ const corsCharDefaultAllowHeaders = "Authorization, Content-Type, x-requested-wi
 
 // Test_CORSContract_DefaultAllowHeadersLiteral pins the exact bytes of the
 // default Access-Control-Allow-Headers value.
+
+// Test_CORSContract_DefaultAllowHeadersLiteral pins the exact bytes of the
+// default Access-Control-Allow-Headers value.
 func Test_CORSContract_DefaultAllowHeadersLiteral(t *testing.T) {
 	assert.Equal(t, corsCharDefaultAllowHeaders, allowedHeaders)
 }
@@ -305,6 +722,8 @@ const (
 )
 
 // corsCharSpyHandler records whether the inner handler was reached.
+
+// corsCharSpyHandler records whether the inner handler was reached.
 type corsCharSpyHandler struct {
 	called int
 }
@@ -315,6 +734,9 @@ func (h *corsCharSpyHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusFound)
 	_, _ = w.Write([]byte(corsCharBody))
 }
+
+// corsCharHeaderLines renders a whole http.Header into a deterministic, sorted
+// slice of "Key: v1, v2" lines so a full snapshot can be compared exactly.
 
 // corsCharHeaderLines renders a whole http.Header into a deterministic, sorted
 // slice of "Key: v1, v2" lines so a full snapshot can be compared exactly.
@@ -340,6 +762,8 @@ func corsCharSorted(in []string) []string {
 func corsCharMethodsLine(v string) string { return corsCharKeyMethods + ": " + v }
 
 func corsCharOriginLine(v string) string { return corsCharKeyOrigin + ": " + v }
+
+// corsCharRun drives the middleware once and returns the recorder plus the spy.
 
 // corsCharRun drives the middleware once and returns the recorder plus the spy.
 func corsCharRun(t *testing.T, cfg map[string]string, routes *[]string,
@@ -578,6 +1002,9 @@ func corsCharCustomHeaderCases() []corsCharCase {
 
 // corsCharGarbageKeyCases pins what happens for config keys that are not the
 // canonical, exactly-cased header names the implementation compares against.
+
+// corsCharGarbageKeyCases pins what happens for config keys that are not the
+// canonical, exactly-cased header names the implementation compares against.
 func corsCharGarbageKeyCases() []corsCharCase {
 	twoRoutes := []string{http.MethodGet, http.MethodPost}
 	baseMethods := corsCharMethodsLine("GET, POST, OPTIONS")
@@ -722,27 +1149,6 @@ func Test_CORSContract_AllowMethodsJoin(t *testing.T) {
 // Test_CORSContract_RoutesReadAtRequestTime pins that the routes slice is
 // dereferenced per request, so routes registered after the middleware was
 // constructed do show up in Access-Control-Allow-Methods.
-func Test_CORSContract_RoutesReadAtRequestTime(t *testing.T) {
-	routes := []string{http.MethodGet}
-	handler := CORS(nil, &routes)(&corsCharSpyHandler{})
-
-	first := httptest.NewRecorder()
-	handler.ServeHTTP(first, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
-	require.Equal(t, "GET, OPTIONS", first.Header().Get(corsCharKeyMethods))
-
-	routes = []string{http.MethodGet, http.MethodPost}
-
-	second := httptest.NewRecorder()
-	handler.ServeHTTP(second, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
-	assert.Equal(t, "GET, POST, OPTIONS", second.Header().Get(corsCharKeyMethods))
-
-	// Replacing the whole slice through the same variable is also picked up.
-	routes = []string{http.MethodDelete}
-
-	third := httptest.NewRecorder()
-	handler.ServeHTTP(third, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
-	assert.Equal(t, "DELETE, OPTIONS", third.Header().Get(corsCharKeyMethods))
-}
 
 // Test_CORSContract_RoutesBackingArrayAliasing guards against writing through
 // the caller's route slice. The header used to be built with
@@ -776,76 +1182,6 @@ func Test_CORSContract_RoutesBackingArrayAliasing(t *testing.T) {
 	assert.Equal(t, "GET, POST, OPTIONS", w2.Header().Get(corsCharKeyMethods))
 	assert.Equal(t, "SENTINEL-2", backing[2], "second request must not clobber the array either")
 }
-
-// Test_CORSContract_ParseOriginsEvaluatedOnce pins that the allowed-origin set
-// is computed ONCE at construction time, so mutating the config map afterwards
-// does not change origin matching, even though the header-setting loop does
-// read the map on every request.
-func Test_CORSContract_ParseOriginsEvaluatedOnce(t *testing.T) {
-	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA}
-	routes := []string{http.MethodGet}
-	handler := CORS(cfg, &routes)(&corsCharSpyHandler{})
-
-	cfg[corsCharKeyOrigin] = corsCharOriginB
-
-	// The stale set still matches the ORIGINAL origin.
-	stale := httptest.NewRecorder()
-	reqA := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody)
-	reqA.Header.Set("Origin", corsCharOriginA)
-	handler.ServeHTTP(stale, reqA)
-
-	assert.Equal(t, corsCharSorted([]string{
-		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"),
-		corsCharOriginLine(corsCharOriginA), corsCharVaryLine,
-	}), corsCharHeaderLines(stale.Header()))
-
-	// The newly configured origin is NOT honored.
-	fresh := httptest.NewRecorder()
-	reqB := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody)
-	reqB.Header.Set("Origin", corsCharOriginB)
-	handler.ServeHTTP(fresh, reqB)
-
-	assert.Equal(t, corsCharSorted([]string{
-		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"),
-	}), corsCharHeaderLines(fresh.Header()))
-}
-
-// Test_CORSContract_ConfigMutationIsIgnoredAfterConstruction pins the other
-// half. The configuration is folded onto canonical header keys once, inside
-// CORS, so a caller that mutates the map afterwards changes nothing.
-//
-// The custom-header loop used to read the map on every request, which made
-// post-construction keys appear immediately. That was never a feature worth
-// keeping: the map is read from every serving goroutine, so a caller mutating
-// it while requests are in flight is a data race, and the origin allow-list had
-// already been resolved once at construction — so the two halves of the same
-// config disagreed about when it was read.
-func Test_CORSContract_ConfigMutationIsIgnoredAfterConstruction(t *testing.T) {
-	cfg := map[string]string{}
-	routes := []string{http.MethodGet}
-	handler := CORS(cfg, &routes)(&corsCharSpyHandler{})
-
-	before := httptest.NewRecorder()
-	handler.ServeHTTP(before, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
-	require.Equal(t, corsCharSorted([]string{
-		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"), corsCharOriginLine("*"),
-	}), corsCharHeaderLines(before.Header()))
-
-	cfg["Access-Control-Max-Age"] = "42"
-	cfg[corsCharKeyHeaders] = "clientid"
-	cfg[corsCharKeyMethods] = "GET, PATCH"
-
-	after := httptest.NewRecorder()
-	handler.ServeHTTP(after, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
-
-	assert.Equal(t, corsCharSorted([]string{
-		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"), corsCharOriginLine("*"),
-	}), corsCharHeaderLines(after.Header()), "the response must be identical to the one before the mutation")
-}
-
-// Test_CORSContract_CustomHeaderLoopIsOrderIndependent pins that Go's random
-// map iteration order over the custom-header loop cannot change the final
-// header set.
 func Test_CORSContract_CustomHeaderLoopIsOrderIndependent(t *testing.T) {
 	cfg := map[string]string{
 		corsCharKeyOrigin:                  corsCharOriginA,
@@ -882,6 +1218,9 @@ func Test_CORSContract_CustomHeaderLoopIsOrderIndependent(t *testing.T) {
 
 // Test_CORSContract_VaryIsAddedNotSet pins that Vary is added once per request
 // and that repeated requests on fresh recorders never accumulate values.
+
+// Test_CORSContract_VaryIsAddedNotSet pins that Vary is added once per request
+// and that repeated requests on fresh recorders never accumulate values.
 func Test_CORSContract_VaryIsAddedNotSet(t *testing.T) {
 	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA}
 	routes := []string{http.MethodGet}
@@ -896,6 +1235,10 @@ func Test_CORSContract_VaryIsAddedNotSet(t *testing.T) {
 		assert.Equal(t, []string{"Origin"}, w.Header().Values("Vary"))
 	}
 }
+
+// Test_CORSContract_VaryAccumulatesOnSharedResponseWriter pins that the
+// middleware uses Add (not Set) for Vary, so a pre-existing Vary value is
+// preserved and appended to.
 
 // Test_CORSContract_VaryAccumulatesOnSharedResponseWriter pins that the
 // middleware uses Add (not Set) for Vary, so a pre-existing Vary value is
@@ -950,6 +1293,9 @@ func Test_CORSContract_ParseOriginsExact(t *testing.T) {
 
 // Test_CORSContract_WildcardBeatsExplicitMatch pins that a "*" entry anywhere in
 // the list short-circuits dynamic matching and suppresses Vary entirely.
+
+// Test_CORSContract_WildcardBeatsExplicitMatch pins that a "*" entry anywhere in
+// the list short-circuits dynamic matching and suppresses Vary entirely.
 func Test_CORSContract_WildcardBeatsExplicitMatch(t *testing.T) {
 	routes := []string{http.MethodGet}
 	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA + ",*"}
@@ -961,6 +1307,9 @@ func Test_CORSContract_WildcardBeatsExplicitMatch(t *testing.T) {
 	}), corsCharHeaderLines(w.Header()))
 	assert.Empty(t, w.Header().Values("Vary"))
 }
+
+// Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig pins that OPTIONS
+// short-circuits regardless of configuration or origin match.
 
 // Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig pins that OPTIONS
 // short-circuits regardless of configuration or origin match.
@@ -990,6 +1339,9 @@ func Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig(t *testing.T) {
 
 // Test_CORSContract_NonOptionsMethodsAlwaysReachInner pins that every
 // non-OPTIONS method falls through to the inner handler unchanged.
+
+// Test_CORSContract_NonOptionsMethodsAlwaysReachInner pins that every
+// non-OPTIONS method falls through to the inner handler unchanged.
 func Test_CORSContract_NonOptionsMethodsAlwaysReachInner(t *testing.T) {
 	methods := []string{
 		http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
@@ -1012,125 +1364,6 @@ func Test_CORSContract_NonOptionsMethodsAlwaysReachInner(t *testing.T) {
 // Test_CORSContract_SetMiddlewareHeadersDirectSnapshot pins the unexported
 // helper directly, including the case where the passed allowedOrigins set
 // disagrees with the config map (which the exported CORS wrapper cannot do).
-func Test_CORSContract_SetMiddlewareHeadersDirectSnapshot(t *testing.T) {
-	cases := []struct {
-		name     string
-		config   map[string]string
-		routes   []string
-		origin   string
-		allowed  map[string]bool
-		expLines []string
-	}{
-		{
-			name: "nil allowed origins set emits no origin header", config: map[string]string{},
-			routes: []string{http.MethodGet}, origin: corsCharOriginA, allowed: nil,
-			expLines: []string{corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS")},
-		},
-		{
-			name: "empty allowed origins set emits no origin header", config: map[string]string{},
-			routes: []string{http.MethodGet}, origin: corsCharOriginA, allowed: map[string]bool{},
-			expLines: []string{corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS")},
-		},
-		{
-			name: "false valued entry does not match", config: map[string]string{},
-			routes: []string{http.MethodGet}, origin: corsCharOriginA,
-			allowed:  map[string]bool{corsCharOriginA: false},
-			expLines: []string{corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS")},
-		},
-		{
-			name:   "empty string origin can be allowed and is echoed as an empty header",
-			config: map[string]string{}, routes: []string{http.MethodGet}, origin: "",
-			allowed: map[string]bool{"": true},
-			expLines: []string{
-				corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"),
-				corsCharKeyOrigin + ": ", corsCharVaryLine,
-			},
-		},
-		{
-			name: "allowed set overrides what the config map says", config: map[string]string{corsCharKeyOrigin: corsCharOriginA},
-			routes: []string{http.MethodGet}, origin: corsCharOriginEvil,
-			allowed: map[string]bool{corsCharOriginEvil: true},
-			expLines: []string{
-				corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"),
-				corsCharOriginLine(corsCharOriginEvil), corsCharVaryLine,
-			},
-		},
-	}
-
-	for i := range cases {
-		tc := &cases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			setMiddlewareHeaders(tc.config, tc.routes, w, tc.origin, tc.allowed)
-
-			assert.Equal(t, corsCharSorted(tc.expLines), corsCharHeaderLines(w.Header()))
-		})
-	}
-}
-
-// TestCORS_OriginAllowListMatchedByCanonicalKey is the regression test for a config that restricted
-// the origin being turned into one that echoed a wildcard.
-//
-// setMiddlewareHeaders classifies config entries by canonical header name, but the allow-list was
-// read with a raw literal lookup. A caller spelling the key "access-control-allow-origin" — CORS is
-// exported, so callers do build this map — had it dropped by the classifier and missed by
-// parseOrigins, which then fell back to its wildcard default and sent "*" to an unlisted origin.
-func TestCORS_OriginAllowListMatchedByCanonicalKey(t *testing.T) {
-	spellings := []string{
-		"Access-Control-Allow-Origin",
-		"access-control-allow-origin",
-		"ACCESS-CONTROL-ALLOW-ORIGIN",
-		"Access-control-allow-origin",
-	}
-
-	for _, spelling := range spellings {
-		t.Run(spelling, func(t *testing.T) {
-			routes := []string{http.MethodGet}
-			handler := CORS(map[string]string{spelling: "https://trusted.com"}, &routes)(
-				http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-
-			unlisted := httptest.NewRecorder()
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
-			req.Header.Set("Origin", "https://evil.com")
-			handler.ServeHTTP(unlisted, req)
-
-			assert.Empty(t, unlisted.Header().Get(headerAccessControlAllowOrigin),
-				"an unlisted origin must not be granted access under any spelling of the config key")
-
-			listed := httptest.NewRecorder()
-			req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
-			req.Header.Set("Origin", "https://trusted.com")
-			handler.ServeHTTP(listed, req)
-
-			assert.Equal(t, "https://trusted.com", listed.Header().Get(headerAccessControlAllowOrigin))
-			assert.Equal(t, "Origin", listed.Header().Get("Vary"),
-				"a negotiated origin must not be cached across origins")
-		})
-	}
-}
-
-// TestCORS_DuplicateSpellingsResolveDeterministically pins the precedence rule. Two spellings of one
-// header are one header, and the map they arrive in has no order, so resolving the collision during
-// the per-request walk let map iteration decide the winner — a different value could be sent on
-// different requests within a single process.
-func TestCORS_DuplicateSpellingsResolveDeterministically(t *testing.T) {
-	routes := []string{http.MethodGet}
-	handler := CORS(map[string]string{
-		"Access-Control-Allow-Headers": "X-Canonical",
-		"access-control-allow-headers": "x-lower",
-		"ACCESS-CONTROL-ALLOW-HEADERS": "X-UPPER",
-	}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-
-	// Many requests, because the bug this guards was probabilistic.
-	for range 50 {
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
-
-		assert.Equal(t, allowedHeaders+", X-Canonical", w.Header().Get(headerAccessControlAllowHeaders),
-			"the exactly-canonical spelling must win, on every request")
-	}
-}
 
 // TestCanonicalizeConfig_Precedence covers the fold directly, including the tie-break among
 // non-canonical spellings where no key is the canonical one.
