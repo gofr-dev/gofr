@@ -63,6 +63,46 @@ func TestBuild_appliesCardinalityLimit(t *testing.T) {
 	}
 }
 
+// TestBuild_unsetCardinalityLimitHonorsSDKEnv pins the other half of the
+// contract: with METRICS_CARDINALITY_LIMIT unset, Build must pass no limit at
+// all. The SDK applies explicit options after OTEL_GO_X_CARDINALITY_LIMIT
+// (sdk/metric config.go newConfig), so any hard-coded WithCardinalityLimit in
+// Build would silently make that variable inert.
+func TestBuild_unsetCardinalityLimitHonorsSDKEnv(t *testing.T) {
+	t.Setenv("OTEL_GO_X_CARDINALITY_LIMIT", "3")
+
+	reader := metricSdk.NewManualReader()
+
+	Register("card-env-test", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
+		return reader, nil
+	})
+
+	cfg := Config{AppName: "app", AppVersion: "v1", Exporter: "card-env-test"}
+
+	shutdown, meter := Build(context.Background(), &cfg, logging.NewMockLogger(logging.ERROR))
+
+	defer func() { _ = shutdown(context.Background()) }()
+
+	counter, err := meter.Int64Counter("card_env_counter")
+	if err != nil {
+		t.Fatalf("failed to create counter: %v", err)
+	}
+
+	const distinct = 10
+	for i := 0; i < distinct; i++ {
+		counter.Add(context.Background(), 1, metric.WithAttributes(attribute.Int("i", i)))
+	}
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect failed: %v", err)
+	}
+
+	if points := countDataPoints(t, &rm, "card_env_counter"); points == 0 || points > 3 {
+		t.Errorf("OTEL_GO_X_CARDINALITY_LIMIT=3 not honored with METRICS_CARDINALITY_LIMIT unset: got %d data points", points)
+	}
+}
+
 func countDataPoints(t *testing.T, rm *metricdata.ResourceMetrics, name string) int {
 	t.Helper()
 
