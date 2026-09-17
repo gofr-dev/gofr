@@ -8,6 +8,7 @@ import (
 	"golang.org/x/text/language"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -16,21 +17,11 @@ type Config struct {
 	LogProbes   LogProbes
 
 	// MetricsCardinalityLimit is the meter provider's effective per-instrument
-	// datapoint ceiling, resolved the way the provider resolves it:
-	// METRICS_CARDINALITY_LIMIT, then OTEL_GO_X_CARDINALITY_LIMIT, then the SDK
-	// default. Zero or negative means unlimited. The Metrics middleware sizes its
+	// datapoint ceiling, from container.MetricsCardinalityLimit so the two cannot
+	// disagree. Zero or negative means unlimited. The Metrics middleware sizes its
 	// caller-controlled label budget from it; see WithCardinalityLimit.
 	MetricsCardinalityLimit int
 }
-
-// defaultMetricsCardinalityLimit is the OTel SDK's per-instrument default, used
-// when neither METRICS_CARDINALITY_LIMIT nor OTEL_GO_X_CARDINALITY_LIMIT is set.
-const defaultMetricsCardinalityLimit = 2000
-
-const (
-	metricsCardinalityLimitKey = "METRICS_CARDINALITY_LIMIT"
-	otelCardinalityLimitKey    = "OTEL_GO_X_CARDINALITY_LIMIT"
-)
 
 type LogProbes struct {
 	Disabled bool
@@ -67,24 +58,9 @@ func GetConfigs(c config.Config) Config {
 		middlewareConfigs.LogProbes.Disabled = value
 	}
 
-	middlewareConfigs.MetricsCardinalityLimit = metricsCardinalityLimit(c)
+	middlewareConfigs.MetricsCardinalityLimit = container.MetricsCardinalityLimit(c)
 
 	return middlewareConfigs
-}
-
-// metricsCardinalityLimit resolves the provider ceiling with the same precedence
-// the provider applies: METRICS_CARDINALITY_LIMIT (container/metrics_exporter.go,
-// which also warns on an invalid value), then OTEL_GO_X_CARDINALITY_LIMIT (read
-// by the SDK itself), then the SDK default. A value that does not parse is
-// skipped, as both of those skip it.
-func metricsCardinalityLimit(c config.Config) int {
-	for _, key := range []string{metricsCardinalityLimitKey, otelCardinalityLimitKey} {
-		if n, err := strconv.Atoi(strings.TrimSpace(c.Get(key))); err == nil {
-			return n
-		}
-	}
-
-	return defaultMetricsCardinalityLimit
 }
 
 func convertHeaderNames(header string) string {

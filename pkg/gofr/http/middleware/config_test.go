@@ -45,14 +45,14 @@ func TestGetConfigs_MetricsCardinalityLimit(t *testing.T) {
 		expected int
 	}{
 		{name: "neither set uses the SDK default", env: map[string]string{}, expected: 2000},
-		{name: "METRICS_CARDINALITY_LIMIT", env: map[string]string{metricsCardinalityLimitKey: "100"}, expected: 100},
-		{name: "OTEL_GO_X_CARDINALITY_LIMIT", env: map[string]string{otelCardinalityLimitKey: "300"}, expected: 300},
+		{name: "METRICS_CARDINALITY_LIMIT", env: map[string]string{"METRICS_CARDINALITY_LIMIT": "100"}, expected: 100},
+		{name: "OTEL_GO_X_CARDINALITY_LIMIT", env: map[string]string{"OTEL_GO_X_CARDINALITY_LIMIT": "300"}, expected: 300},
 		{name: "GoFr key wins over the OTel key",
-			env: map[string]string{metricsCardinalityLimitKey: "100", otelCardinalityLimitKey: "300"}, expected: 100},
+			env: map[string]string{"METRICS_CARDINALITY_LIMIT": "100", "OTEL_GO_X_CARDINALITY_LIMIT": "300"}, expected: 100},
 		{name: "invalid GoFr key falls through to the OTel key",
-			env: map[string]string{metricsCardinalityLimitKey: "lots", otelCardinalityLimitKey: "300"}, expected: 300},
-		{name: "zero means unlimited and is kept", env: map[string]string{metricsCardinalityLimitKey: "0"}, expected: 0},
-		{name: "whitespace is trimmed", env: map[string]string{metricsCardinalityLimitKey: " 64 "}, expected: 64},
+			env: map[string]string{"METRICS_CARDINALITY_LIMIT": "lots", "OTEL_GO_X_CARDINALITY_LIMIT": "300"}, expected: 300},
+		{name: "zero means unlimited and is kept", env: map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, expected: 0},
+		{name: "whitespace is trimmed", env: map[string]string{"METRICS_CARDINALITY_LIMIT": " 64 "}, expected: 64},
 	}
 
 	for _, tt := range tests {

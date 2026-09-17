@@ -105,7 +105,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct path and method pairs; past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets; past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
 -  2000
 
 ---

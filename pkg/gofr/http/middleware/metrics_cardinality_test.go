@@ -24,24 +24,26 @@ func (*cardRecorder) IncrementCounter(context.Context, string, ...string)       
 func (*cardRecorder) DeltaUpDownCounter(context.Context, string, float64, ...string) {}
 func (*cardRecorder) SetGauge(string, float64, ...string)                            {}
 
-// series returns the distinct (path, method) pairs recorded -- one metric series
-// each, and one retained datapoint each.
-func (c *cardRecorder) series() map[[2]string]int {
-	out := map[[2]string]int{}
+// series returns the distinct (path, method, status) sets recorded -- the unit the
+// provider ceiling counts, one retained datapoint each.
+func (c *cardRecorder) series() map[[3]string]int {
+	out := map[[3]string]int{}
 
 	for _, l := range c.labels {
-		var pair [2]string
+		var set [3]string
 
 		for i := 0; i+1 < len(l); i += 2 {
 			switch l[i] {
 			case "path":
-				pair[0] = l[i+1]
+				set[0] = l[i+1]
 			case "method":
-				pair[1] = l[i+1]
+				set[1] = l[i+1]
+			case "status":
+				set[2] = l[i+1]
 			}
 		}
 
-		out[pair]++
+		out[set]++
 	}
 
 	return out
@@ -52,12 +54,41 @@ func (c *cardRecorder) series() map[[2]string]int {
 func cardServe(t *testing.T, rec *cardRecorder, method, path string) {
 	t.Helper()
 
+	cardServeStatus(t, rec, method, path, http.StatusNotFound)
+}
+
+func cardServeStatus(t *testing.T, rec *cardRecorder, method, path string, status int) {
+	t.Helper()
+
 	h := Metrics(rec)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(status)
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), method, path, http.NoBody)
 	h.ServeHTTP(httptest.NewRecorder(), req)
+}
+
+// TestMultiStatusPairsStayWithinBudget is the review finding that the budget
+// once counted (path, method) pairs while the provider ceiling counts
+// (path, method, status) sets: 3000 unmatched paths each seen with 4 statuses
+// kept 501 pairs but minted 2004 sets, the whole default ceiling. Static assets
+// served as 200, 304, 403 and 404 produce exactly that mix.
+func TestMultiStatusPairsStayWithinBudget(t *testing.T) {
+	untemplatedLabels.reset()
+	defer untemplatedLabels.reset()
+
+	statuses := []int{http.StatusOK, http.StatusNotModified, http.StatusForbidden, http.StatusNotFound}
+	rec := &cardRecorder{}
+
+	for i := range 3000 {
+		for _, status := range statuses {
+			cardServeStatus(t, rec, http.MethodGet, fmt.Sprintf("/static/asset-%d.js", i), status)
+		}
+	}
+
+	// The budget, plus at most one collapsed series per status.
+	assert.LessOrEqual(t, len(rec.series()), untemplatedLabelLimit+len(statuses),
+		"%d attribute sets recorded against a budget of %d", len(rec.series()), untemplatedLabelLimit)
 }
 
 // TestUntemplatedSeriesAreBounded is what this change exists for.
@@ -119,7 +150,7 @@ func TestTemplatedRoutesSurviveJunkTraffic(t *testing.T) {
 		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/users/42", http.NoBody))
 
 	require.Len(t, rec.labels, 1)
-	assert.Contains(t, rec.series(), [2]string{"/users/{id}", http.MethodGet},
+	assert.Contains(t, rec.series(), [3]string{"/users/{id}", http.MethodGet, "200"},
 		"a templated route keeps its own series regardless of junk traffic")
 }
 
@@ -132,6 +163,8 @@ func TestUntemplatedBudget(t *testing.T) {
 		{ceiling: 100000, expected: untemplatedLabelLimit},
 		{ceiling: 100, expected: 25},
 		{ceiling: 3, expected: 0},
+		{ceiling: 1, expected: 0},
+		{ceiling: 4, expected: 1},
 		{ceiling: 0, expected: untemplatedLabelLimit},
 		{ceiling: -1, expected: untemplatedLabelLimit},
 	}
@@ -172,7 +205,7 @@ func TestLowCeilingKeepsRoutesReachable(t *testing.T) {
 	router.ServeHTTP(httptest.NewRecorder(),
 		httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/users/7", http.NoBody))
 
-	assert.Contains(t, rec.series(), [2]string{"/users/{id}", http.MethodGet})
+	assert.Contains(t, rec.series(), [3]string{"/users/{id}", http.MethodGet, "200"})
 }
 
 // BenchmarkMetricLabels isolates the per-request cost this change adds in front
@@ -182,19 +215,19 @@ func BenchmarkMetricLabels(b *testing.B) {
 		b.ReportAllocs()
 
 		for range b.N {
-			metricLabels("/users/{id}", http.MethodGet, true, untemplatedLabelLimit)
+			metricLabels("/users/{id}", http.MethodGet, http.StatusOK, true, untemplatedLabelLimit)
 		}
 	})
 
 	b.Run("untemplated_admitted", func(b *testing.B) {
 		untemplatedLabels.reset()
 		b.Cleanup(untemplatedLabels.reset)
-		metricLabels("/.env", http.MethodGet, false, untemplatedLabelLimit)
+		metricLabels("/.env", http.MethodGet, http.StatusNotFound, false, untemplatedLabelLimit)
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for range b.N {
-			metricLabels("/.env", http.MethodGet, false, untemplatedLabelLimit)
+			metricLabels("/.env", http.MethodGet, http.StatusNotFound, false, untemplatedLabelLimit)
 		}
 	})
 
@@ -203,14 +236,14 @@ func BenchmarkMetricLabels(b *testing.B) {
 		b.Cleanup(untemplatedLabels.reset)
 
 		for i := range untemplatedLabelLimit {
-			metricLabels(fmt.Sprintf("/fill/%d", i), http.MethodGet, false, untemplatedLabelLimit)
+			metricLabels(fmt.Sprintf("/fill/%d", i), http.MethodGet, http.StatusNotFound, false, untemplatedLabelLimit)
 		}
 
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for range b.N {
-			metricLabels("/.env.new", http.MethodGet, false, untemplatedLabelLimit)
+			metricLabels("/.env.new", http.MethodGet, http.StatusNotFound, false, untemplatedLabelLimit)
 		}
 	})
 }
