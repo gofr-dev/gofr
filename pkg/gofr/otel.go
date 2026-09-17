@@ -85,19 +85,19 @@ func (a *App) initTracer() {
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
-	if url == "" && name == "" {
+func isValidConfig(logger logging.Logger, name, endpoint, host, port string) bool {
+	if endpoint == "" && name == "" {
 		logger.Debug("tracing is disabled, as configs are not provided")
 		return false
 	}
 
-	if url != "" && name == "" {
+	if endpoint != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
 	}
 
 	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
-	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
+	if endpoint == "" && name != "" && !strings.EqualFold(name, "gofr") {
 		if host != "" && port != "" {
 			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 		} else {
@@ -183,7 +183,7 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 	return b, true
 }
 
-func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
+func (a *App) getExporter(name, host, port, endpoint string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
 		err      error
@@ -193,17 +193,17 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	switch strings.ToLower(name) {
 	case otlpTraceExporter:
-		exporter, err = a.buildOtlpFamilyExporter(otlpTraceExporter, url, host, port, headers)
+		exporter, err = a.buildOtlpFamilyExporter(otlpTraceExporter, endpoint, host, port, headers)
 	case jaegerTraceExporter:
-		exporter, err = a.buildOtlpFamilyExporter(jaegerTraceExporter, url, host, port, headers)
-	case "zipkin":
+		exporter, err = a.buildOtlpFamilyExporter(jaegerTraceExporter, endpoint, host, port, headers)
+	case zipkinTraceExporter:
 		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
 			"Zipkin supports OTLP natively (v2.24+) — to migrate, switch to TRACE_EXPORTER=otlp " +
 			"and point TRACER_URL to your Zipkin OTLP gRPC endpoint (default: <host>:4317)")
 
-		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, headers)
+		exporter, err = buildZipkinExporter(a.Logger(), endpoint, host, port, headers)
 	case gofrTraceExporter:
-		exporter = buildGoFrExporter(a.Logger(), url)
+		exporter = buildGoFrExporter(a.Logger(), endpoint)
 	default:
 		a.container.Errorf("unsupported TRACE_EXPORTER=%s: expected one of otlp, jaeger, zipkin or gofr",
 			redactExporterName(name))
@@ -266,7 +266,7 @@ type otlpTransport struct {
 // exporter hardcoded WithInsecure(). Defaulting a schemeless endpoint to TLS
 // would break all of them silently in a minor release, so traces default a
 // schemeless endpoint to plaintext and TRACER_INSECURE=false is the opt-in.
-func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureSet bool) otlpTransport {
+func resolveOtlpTransport(logger logging.Logger, endpoint string, insecure, insecureSet bool) otlpTransport {
 	const (
 		schemeHTTP  = "http://"
 		schemeHTTPS = "https://"
@@ -275,12 +275,12 @@ func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureS
 	// Scheme comparison is case-insensitive per RFC 3986 §3.1, and url.Parse
 	// inside WithEndpointURL treats it that way — so HTTPS://host:4317 must not
 	// fall through to WithEndpoint, where it would be an invalid gRPC target.
-	scheme := strings.ToLower(url)
+	scheme := strings.ToLower(endpoint)
 
 	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
 		if insecureSet {
 			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
-				"from the URL scheme", redactURL(url))
+				"from the URL scheme", redactURL(endpoint))
 		}
 
 		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
@@ -291,27 +291,27 @@ func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureS
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
 // jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string,
+func buildOtlpExporter(logger logging.Logger, name, endpoint, host, port string, headers map[string]string,
 	insecure, insecureSet bool) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	transport := resolveOtlpTransport(logger, url, insecure, insecureSet)
+	transport := resolveOtlpTransport(logger, endpoint, insecure, insecureSet)
 
 	if transport.plaintext && len(headers) > 0 {
 		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
-			"headers (including auth credentials) will be sent in the clear", redactURL(url))
+			"headers (including auth credentials) will be sent in the clear", redactURL(endpoint))
 	}
 
-	logger.Infof("Exporting traces to %s at %s", name, redactURL(url))
+	logger.Infof("Exporting traces to %s at %s", name, redactURL(endpoint))
 
 	var opts []otlptracegrpc.Option
 
 	if transport.useEndpointURL {
-		opts = append(opts, otlptracegrpc.WithEndpointURL(url))
+		opts = append(opts, otlptracegrpc.WithEndpointURL(endpoint))
 	} else {
-		opts = append(opts, otlptracegrpc.WithEndpoint(url))
+		opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
 
 		if transport.insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
@@ -325,29 +325,29 @@ func buildOtlpExporter(logger logging.Logger, name, url, host, port string, head
 	return otlptracegrpc.New(context.Background(), opts...)
 }
 
-func buildZipkinExporter(logger logging.Logger, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+func buildZipkinExporter(logger logging.Logger, endpoint, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
 	}
 
-	logger.Infof("Exporting traces to zipkin at %s", redactURL(url))
+	logger.Infof("Exporting traces to zipkin at %s", redactURL(endpoint))
 
 	var opts []zipkin.Option
 	if len(headers) > 0 {
 		opts = append(opts, zipkin.WithHeaders(headers))
 	}
 
-	return zipkin.New(url, opts...)
+	return zipkin.New(endpoint, opts...)
 }
 
-func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter {
-	if url == "" {
-		url = "https://tracer-api.gofr.dev/api/spans"
+func buildGoFrExporter(logger logging.Logger, endpoint string) sdktrace.SpanExporter {
+	if endpoint == "" {
+		endpoint = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	logger.Infof("Exporting traces to GoFr at %s", redactURL(url))
+	logger.Infof("Exporting traces to GoFr at %s", redactURL(endpoint))
 
-	return NewExporter(url, logging.NewLogger(logging.INFO))
+	return NewExporter(endpoint, logging.NewLogger(logging.INFO))
 }
 
 // redactedPlaceholder stands in for credentials when a tracer endpoint is logged.
