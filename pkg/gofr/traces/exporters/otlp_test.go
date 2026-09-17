@@ -117,7 +117,7 @@ func Test_buildOtlpExporter_warnsOnPlaintextCredentials(t *testing.T) {
 			Headers:  map[string]string{"Authorization": "Bearer token"},
 		}
 
-		exp, err := buildOtlpExporter(t.Context(), &cfg, logging.NewMockLogger(logging.WARN))
+		exp, err := buildOtlpExporter(t.Context(), exporterOTLP, &cfg, logging.NewMockLogger(logging.WARN))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -146,7 +146,7 @@ func Test_buildOtlpExporter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exp, err := buildOtlpExporter(t.Context(), &tt.cfg, logging.NewMockLogger(logging.ERROR))
+			exp, err := buildOtlpExporter(t.Context(), exporterOTLP, &tt.cfg, logging.NewMockLogger(logging.ERROR))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -212,7 +212,7 @@ func Test_buildOtlpExporter_wireTransport(t *testing.T) {
 			cfg.Exporter = exporterOTLP
 			cfg.Endpoint = tt.scheme + listenForFirstBytes(t, first)
 
-			exp, err := buildOtlpExporter(t.Context(), &cfg, logging.NewMockLogger(logging.ERROR))
+			exp, err := buildOtlpExporter(t.Context(), exporterOTLP, &cfg, logging.NewMockLogger(logging.ERROR))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

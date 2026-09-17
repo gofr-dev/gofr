@@ -46,7 +46,7 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, trace
 		logger = noopLogger{}
 	}
 
-	name := strings.ToLower(strings.TrimSpace(cfg.Exporter))
+	name := exporterName(cfg.Exporter)
 	if name == "" {
 		return neverSampleProvider()
 	}
@@ -99,16 +99,27 @@ func shutdownFunc(tp *sdktrace.TracerProvider) ShutdownFunc {
 	}
 }
 
+// exporterName normalizes a configured TRACE_EXPORTER into the key the registry
+// is looked up by. Every log line that names an exporter uses this form rather
+// than the raw config value: a name that matches a registered key is known to be
+// safe to echo, while the raw value is operator input of any shape.
+func exporterName(configured string) string {
+	return strings.ToLower(strings.TrimSpace(configured))
+}
+
 // spanExporter looks up and constructs the configured exporter, returning nil
 // (having logged why) when it cannot be built.
+//
+// name is the normalized, registry-matched form; cfg.Exporter is the raw config
+// value and reaches a log only through redactExporterName.
 func spanExporter(ctx context.Context, name string, cfg *Config, logger Logger) sdktrace.SpanExporter {
 	build, ok := lookup(name)
 	if !ok {
 		if importPath, known := knownExternalExporters[name]; known {
 			logger.Errorf("TRACE_EXPORTER=%q is not registered: add a blank import to enable it "+
-				"(import _ %q); tracing is disabled until then", cfg.Exporter, importPath)
+				"(import _ %q); tracing is disabled until then", name, importPath)
 		} else {
-			logger.Errorf("unsupported TRACE_EXPORTER: %s; tracing is disabled", cfg.Exporter)
+			logger.Errorf("unsupported TRACE_EXPORTER: %s; tracing is disabled", redactExporterName(cfg.Exporter))
 		}
 
 		return nil
@@ -116,7 +127,7 @@ func spanExporter(ctx context.Context, name string, cfg *Config, logger Logger) 
 
 	exporter, err := build(ctx, cfg, logger)
 	if err != nil {
-		logger.Errorf("failed to initialize %q trace exporter: %v; tracing is disabled", cfg.Exporter, err)
+		logger.Errorf("failed to initialize %q trace exporter: %v; tracing is disabled", name, err)
 		return nil
 	}
 
@@ -143,7 +154,7 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		resource.WithAttributes(attrs...),
 	}
 
-	if d, ok := lookupDetector(strings.ToLower(strings.TrimSpace(cfg.Exporter))); ok {
+	if d, ok := lookupDetector(exporterName(cfg.Exporter)); ok {
 		opts = append(opts, resource.WithDetectors(d))
 	}
 

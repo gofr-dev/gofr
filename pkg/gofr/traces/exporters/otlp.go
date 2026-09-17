@@ -17,9 +17,11 @@ const (
 //nolint:gochecknoinits // self-registration of the built-in exporters is the intended pattern.
 func init() {
 	// jaeger accepts OTLP over gRPC natively (1.35+); the two names differ only
-	// in how the endpoint is logged.
-	Register(exporterOTLP, buildOtlpExporter)
-	Register(exporterJaeger, buildOtlpExporter)
+	// in how the endpoint is logged. Each builder closes over the name it was
+	// registered under, so the log line names a matched constant rather than the
+	// configured string — which is operator input of any shape.
+	Register(exporterOTLP, otlpBuilder(exporterOTLP))
+	Register(exporterJaeger, otlpBuilder(exporterJaeger))
 }
 
 // otlpTransport is the resolved transport-security decision for the OTLP trace
@@ -73,7 +75,7 @@ func resolveOtlpTransport(cfg *Config, endpoint string, logger Logger) otlpTrans
 	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
 		if cfg.InsecureSet {
 			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
-				"from the URL scheme", endpoint)
+				"from the URL scheme", RedactURL(endpoint))
 		}
 
 		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
@@ -98,9 +100,21 @@ func hasEndpoint(cfg *Config) bool {
 	return cfg.Endpoint != "" || (cfg.Host != "" && cfg.Port != "")
 }
 
-// buildOtlpExporter exports spans over OTLP gRPC. jaeger accepts the same
-// protocol, so both names resolve here.
-func buildOtlpExporter(ctx context.Context, cfg *Config, logger Logger) (sdktrace.SpanExporter, error) {
+// otlpBuilder returns the OTLP builder as registered under name. jaeger accepts
+// the same protocol, so both names resolve to the same exporter and differ only
+// in the name logged.
+func otlpBuilder(name string) Builder {
+	return func(ctx context.Context, cfg *Config, logger Logger) (sdktrace.SpanExporter, error) {
+		return buildOtlpExporter(ctx, name, cfg, logger)
+	}
+}
+
+// buildOtlpExporter exports spans over OTLP gRPC.
+//
+// name is the registered exporter name, passed in as the matched constant rather
+// than read from cfg.Exporter: the configured string is operator input, and the
+// two differ whenever TRACE_EXPORTER carries padding or mixed case.
+func buildOtlpExporter(ctx context.Context, name string, cfg *Config, logger Logger) (sdktrace.SpanExporter, error) {
 	if !hasEndpoint(cfg) {
 		return nil, ErrMissingEndpoint
 	}
@@ -110,10 +124,10 @@ func buildOtlpExporter(ctx context.Context, cfg *Config, logger Logger) (sdktrac
 
 	if transport.plaintext && len(cfg.Headers) > 0 {
 		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
-			"headers (including auth credentials) will be sent in the clear", endpoint)
+			"headers (including auth credentials) will be sent in the clear", RedactURL(endpoint))
 	}
 
-	logger.Infof("Exporting traces to %s at %s", strings.ToLower(cfg.Exporter), endpoint)
+	logger.Infof("Exporting traces to %s at %s", name, RedactURL(endpoint))
 
 	var opts []otlptracegrpc.Option
 
@@ -131,5 +145,7 @@ func buildOtlpExporter(ctx context.Context, cfg *Config, logger Logger) (sdktrac
 		opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
 	}
 
-	return otlptracegrpc.New(ctx, opts...)
+	exporter, err := otlptracegrpc.New(ctx, opts...)
+
+	return exporter, redactEndpointInError(err, endpoint)
 }

@@ -59,6 +59,13 @@ Two failure modes are worth knowing before you set these:
   valid, so `X-Correlation-ID` and the `trace_id` log field keep working — but no span leaves the
   process. Check the startup log if a backend you configured is receiving nothing.
 
+A credential inside `TRACER_URL` — `https://user:token@collector:4317`, or
+`?api-key=...` on a Zipkin spans URL — is replaced with `REDACTED` wherever GoFr
+logs the endpoint: at startup, and in the export errors the OTel SDK raises later.
+The host, port and path are kept, so the line still tells you where spans are
+going. A secret pasted into `TRACE_EXPORTER` is redacted too, while a plain typo
+(`otpl`) is echoed back so you can spot it.
+
 ## End-to-end example
 
 Service A receives an HTTP request, calls Service B over HTTP, which writes to a database. With GoFr defaults, the trace contains:

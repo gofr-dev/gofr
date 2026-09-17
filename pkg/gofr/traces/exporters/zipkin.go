@@ -34,12 +34,16 @@ func buildZipkinExporter(_ context.Context, cfg *Config, logger Logger) (sdktrac
 
 	endpoint := zipkinEndpoint(cfg)
 
-	logger.Infof("Exporting traces to zipkin at %s", endpoint)
+	logger.Infof("Exporting traces to %s at %s", exporterZipkin, RedactURL(endpoint))
 
 	var opts []zipkin.Option
 	if len(cfg.Headers) > 0 {
 		opts = append(opts, zipkin.WithHeaders(cfg.Headers))
 	}
 
-	return zipkin.New(endpoint, opts...)
+	// zipkin.New reports an unparsable endpoint as `invalid collector URL "<raw>"`,
+	// so its error needs the same redaction as the log line above.
+	exporter, err := zipkin.New(endpoint, opts...)
+
+	return exporter, redactEndpointInError(err, endpoint)
 }

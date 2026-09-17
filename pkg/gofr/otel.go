@@ -40,12 +40,17 @@ func (a *App) initTracer() {
 		)
 	}
 
-	otel.SetErrorHandler(&otelErrorHandler{
-		logger: a.container.Logger,
-	})
-
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
+
+	// The handler is given the endpoint so it can redact it: the SDK reports a
+	// failed export as `request to <TRACER_URL> failed: …`, at runtime rather
+	// than at startup, and would otherwise put a credential in the log on every
+	// batch a collector rejects.
+	otel.SetErrorHandler(&otelErrorHandler{
+		logger:   a.container.Logger,
+		endpoint: tracerURL,
+	})
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
@@ -195,8 +200,10 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		a.Logger().Warnf("invalid TRACER_INSECURE %q: expected a boolean; defaulting to plaintext for a "+
-			"schemeless TRACER_URL", v)
+		// The raw value is not echoed. Tracer config reaches a log only through
+		// exporters.RedactURL, redactExporterName or as a matched constant.
+		a.Logger().Warn("invalid TRACER_INSECURE: expected true or false; defaulting to plaintext for a " +
+			"schemeless TRACER_URL")
 
 		return true, false
 	}
@@ -212,13 +219,17 @@ func buildGoFrExporter(_ context.Context, cfg *exporters.Config, logger exporter
 		url = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	logger.Infof("Exporting traces to GoFr at %s", url)
+	logger.Infof("Exporting traces to GoFr at %s", exporters.RedactURL(url))
 
 	return NewExporter(url, logging.NewLogger(logging.INFO)), nil
 }
 
 type otelErrorHandler struct {
 	logger logging.Logger
+
+	// endpoint is the configured TRACER_URL, kept so it can be redacted out of
+	// the SDK's own messages, which quote it verbatim.
+	endpoint string
 }
 
 func (o *otelErrorHandler) Handle(e error) {
@@ -233,5 +244,5 @@ func (o *otelErrorHandler) Handle(e error) {
 		return
 	}
 
-	o.logger.Error(msg)
+	o.logger.Error(exporters.RedactMessage(msg, o.endpoint))
 }

@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -316,10 +317,11 @@ func TestApp_getTracerHeaders_NoConfig(t *testing.T) {
 }
 
 var (
-	errOtelStatus200 = errors.New("rpc error: code = Unknown desc = status 200")
-	errOtelStatus204 = errors.New("rpc error: status 204")
-	errOtelStatus201 = errors.New("status 201: ok")
-	errOtelStatus500 = errors.New("rpc error: status 500")
+	errOtelStatus200    = errors.New("rpc error: code = Unknown desc = status 200")
+	errOtelStatus204    = errors.New("rpc error: status 204")
+	errOtelStatus201    = errors.New("status 201: ok")
+	errOtelStatus500    = errors.New("rpc error: status 500")
+	errOtelExportFailed = errors.New("connection refused")
 )
 
 type captureLogger struct {
@@ -495,4 +497,84 @@ func Test_App_tracerRatio(t *testing.T) {
 			require.InDelta(t, tt.expected, app.tracerRatio(), 0)
 		})
 	}
+}
+
+// Test_initTracer_doesNotLogCredentials drives the real startup path for every
+// exporter that logs its endpoint, and asserts the credentials in TRACER_URL and
+// the raw TRACER_INSECURE value never reach the log.
+//
+// The per-helper tests live with the helpers in traces/exporters; this one is
+// what proves the framework actually routes through them, which is the part a
+// refactor of initTracer can silently undo.
+func Test_initTracer_doesNotLogCredentials(t *testing.T) {
+	const secret = "s3cret-value"
+
+	tests := []struct {
+		name     string
+		exporter string
+		url      string
+		insecure string
+		expected string
+	}{
+		{name: "otlp userinfo", exporter: "otlp", url: "https://user:" + secret + "@localhost:4317",
+			expected: "Exporting traces to otlp at https://REDACTED@localhost:4317"},
+		{name: "jaeger ignored TRACER_INSECURE", exporter: "JAEGER", url: "http://user:" + secret + "@localhost:4317",
+			insecure: "true", expected: "Exporting traces to jaeger at http://REDACTED@localhost:4317"},
+		{name: "otlp invalid TRACER_INSECURE", exporter: "otlp", url: "localhost:4317", insecure: secret,
+			expected: "invalid TRACER_INSECURE"},
+		{name: "zipkin query key", exporter: "zipkin", url: "http://localhost:2005/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at http://localhost:2005/api/v2/spans?REDACTED"},
+		{name: "zipkin schemeless query key", exporter: "zipkin", url: "localhost:9411/api/v2/spans?api-key=" + secret,
+			expected: "Exporting traces to zipkin at localhost:9411/api/v2/spans?REDACTED"},
+		{name: "gofr userinfo", exporter: "gofr", url: "https://user:" + secret + "@tracer.example.com/api/spans",
+			expected: "Exporting traces to GoFr at https://REDACTED@tracer.example.com/api/spans"},
+		{name: "secret pasted into TRACE_EXPORTER", exporter: secret, url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER: REDACTED"},
+		{name: "typo in TRACE_EXPORTER is echoed", exporter: "otpl", url: "localhost:4317",
+			expected: "unsupported TRACE_EXPORTER: otpl"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := map[string]string{"TRACE_EXPORTER": tt.exporter, "TRACER_URL": tt.url, "TRACER_AUTH_KEY": "Bearer x"}
+			if tt.insecure != "" {
+				cfg["TRACER_INSECURE"] = tt.insecure
+			}
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(func() {
+					mockContainer, _ := container.NewMockContainer(t)
+
+					a := App{Config: config.NewMockConfig(cfg), container: mockContainer}
+					a.initTracer()
+				})
+			})
+
+			out := stdout + stderr
+
+			require.Contains(t, out, tt.expected)
+			require.NotContains(t, out, secret)
+		})
+	}
+}
+
+// TestOtelErrorHandler_RedactsTheEndpoint covers the runtime half of the
+// credential-redaction guarantee: the export errors the SDK raises long after
+// startup quote TRACER_URL verbatim, on every batch a collector rejects.
+func TestOtelErrorHandler_RedactsTheEndpoint(t *testing.T) {
+	const (
+		secret   = "s3cret-value"
+		endpoint = "http://tokenuser:" + secret + "@collector:9411/api/v2/spans"
+	)
+
+	cl := &captureLogger{}
+	h := &otelErrorHandler{logger: cl, endpoint: endpoint}
+
+	h.Handle(fmt.Errorf("request to %s failed: %w", endpoint, errOtelExportFailed))
+
+	require.Len(t, cl.loggedErrors, 1)
+	require.NotContains(t, cl.loggedErrors[0], secret)
+	require.Contains(t, cl.loggedErrors[0], "http://REDACTED@collector:9411/api/v2/spans")
 }
