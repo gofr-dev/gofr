@@ -1,13 +1,11 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin" //nolint:staticcheck // deprecated but kept for backward compatibility
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -76,7 +74,19 @@ func (a *App) initTracer() {
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 	if err != nil {
-		a.container.Error(err)
+		// Errorf, not Error: the logger JSON-marshals a bare error value, and an
+		// errors.errorString has no exported fields, so Error(err) logs
+		// {"message":{}} and the reason is lost.
+		a.container.Errorf("failed to build trace exporter: %v", err)
+	}
+
+	// getExporter can return a nil exporter without an error -- an unsupported
+	// TRACE_EXPORTER takes that path, and so does any exporter this build omits.
+	// A BatchSpanProcessor over a nil exporter panics on its first flush, on the
+	// processor's own goroutine, so tracing stays off instead. The provider is
+	// already installed above, which keeps trace and span IDs on every request.
+	if exporter == nil {
+		return
 	}
 
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
@@ -208,107 +218,6 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	}
 
 	return exporter, err
-}
-
-// otlpTransport is the resolved transport-security decision for the OTLP trace
-// exporter: which endpoint option to use, whether to apply WithInsecure, and
-// whether the resulting connection carries traffic in the clear.
-type otlpTransport struct {
-	// useEndpointURL selects WithEndpointURL (the endpoint carries a scheme)
-	// over WithEndpoint. The two are never combined.
-	useEndpointURL bool
-
-	// insecure applies WithInsecure(). Only ever true for a schemeless endpoint —
-	// WithEndpointURL derives transport security from the scheme itself.
-	insecure bool
-
-	// plaintext reports whether spans will leave the process unencrypted,
-	// regardless of which option expressed it.
-	plaintext bool
-}
-
-// resolveOtlpTransport derives transport security from the TRACER_URL scheme
-// when it has one, and from TRACER_INSECURE only when it does not.
-//
-// Before this change the exporter passed the raw TRACER_URL to WithEndpoint,
-// which stores it verbatim as the gRPC target. A scheme-bearing value is not a
-// valid target ("too many colons in address"), so the dialer never opened a
-// socket and no span was ever exported — the endpoint was unusable rather than
-// downgraded.
-//
-// WithEndpointURL is what reads the scheme, and it must never be paired with
-// WithInsecure(): the SDK applies options in slice order, so a WithInsecure()
-// appended afterwards would override the scheme and downgrade the connection to
-// plaintext. Hence the two are mutually exclusive below.
-//
-// Precedence: the SDK applies OTEL_EXPORTER_OTLP_INSECURE (and
-// OTEL_EXPORTER_OTLP_TRACES_INSECURE) before any explicit option, so whatever
-// GoFr passes here wins over them. TRACER_URL's scheme, then TRACER_INSECURE,
-// then the OTel standard variables.
-//
-// Deliberate divergence from the metrics exporter (metrics/exporters/otlp.go),
-// which defaults a schemeless METRICS_URL to TLS: every TRACER_URL=host:4317
-// deployment in the wild points at a plaintext collector today, because this
-// exporter hardcoded WithInsecure(). Defaulting a schemeless endpoint to TLS
-// would break all of them silently in a minor release, so traces default a
-// schemeless endpoint to plaintext and TRACER_INSECURE=false is the opt-in.
-func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureSet bool) otlpTransport {
-	const (
-		schemeHTTP  = "http://"
-		schemeHTTPS = "https://"
-	)
-
-	// Scheme comparison is case-insensitive per RFC 3986 §3.1, and url.Parse
-	// inside WithEndpointURL treats it that way — so HTTPS://host:4317 must not
-	// fall through to WithEndpoint, where it would be an invalid gRPC target.
-	scheme := strings.ToLower(url)
-
-	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
-		if insecureSet {
-			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
-				"from the URL scheme", url)
-		}
-
-		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
-	}
-
-	return otlpTransport{insecure: insecure, plaintext: insecure}
-}
-
-// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
-// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string,
-	insecure, insecureSet bool) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	transport := resolveOtlpTransport(logger, url, insecure, insecureSet)
-
-	if transport.plaintext && len(headers) > 0 {
-		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
-			"headers (including auth credentials) will be sent in the clear", url)
-	}
-
-	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
-
-	var opts []otlptracegrpc.Option
-
-	if transport.useEndpointURL {
-		opts = append(opts, otlptracegrpc.WithEndpointURL(url))
-	} else {
-		opts = append(opts, otlptracegrpc.WithEndpoint(url))
-
-		if transport.insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
-	}
-
-	if len(headers) > 0 {
-		opts = append(opts, otlptracegrpc.WithHeaders(headers))
-	}
-
-	return otlptracegrpc.New(context.Background(), opts...)
 }
 
 func buildZipkinExporter(logger logging.Logger, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {

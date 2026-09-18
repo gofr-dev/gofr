@@ -606,9 +606,60 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
+      # gofr_nogrpc is scoped to ./pkg/... on purpose. Unlike the other tags it
+      # removes exported methods -- RegisterService and the AddGRPC* setters name
+      # grpc types and cannot exist without the import -- so the gRPC examples do
+      # not compile under it, which is the intended behaviour and not a failure.
+      - name: Build and test with the gRPC server omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nogrpc ./pkg/...
+          go vet   -tags gofr_nogrpc ./pkg/gofr/
+          go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
+
+      # gofr_nodgraph drops the Dgraph migrator, the one place in GoFr that imports
+      # dgo. The stub has to keep implementing migrator, so a change to that
+      # interface must update both halves; without this step only the real one
+      # would ever be compiled.
+      - name: Build and test with the Dgraph migrator omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nodgraph ./...
+          go vet   -tags gofr_nodgraph ./pkg/gofr/migration/
+          go test  -tags gofr_nodgraph -count=1 ./pkg/gofr/migration/
+
+      # gofr_nootlp drops the OTLP exporters, which pin google.golang.org/grpc --
+      # otlpmetrichttp included -- so gofr_nogrpc pays off only once this is set
+      # too. It is not sufficient on its own: measured against gofr.dev/pkg/gofr,
+      # gofr_nogrpc alone leaves 82 grpc packages, adding gofr_nootlp and
+      # gofr_nodgraph leaves 81, and only adding gofr_nopubsub reaches 0, because
+      # the Google Pub/Sub client pins grpc through cloud.google.com/go. A shared
+      # dependency goes when its last importer does. Both halves of the trace and
+      # metric transports have tests that exist only under the tag.
+      - name: Build and test with the OTLP exporters omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nootlp ./...
+          go vet   -tags gofr_nootlp ./pkg/gofr/ ./pkg/gofr/metrics/exporters/
+          go test  -tags gofr_nootlp -count=1 ./pkg/gofr/metrics/exporters/
+          go test  -tags gofr_nootlp -count=1 -run 'TestOTLPTracesOmitted|Test_initTracer' ./pkg/gofr/
+
+      # Each tag above is built in isolation, which cannot catch a symbol that
+      # resolves under one and breaks under two -- a stub referring to something
+      # another tag removed compiles in every single-tag job and fails only for the
+      # user who sets both. Tags are meant to compose, so the combination is built
+      # as well. Scoped to ./pkg/... because gofr_nogrpc is (see above).
+      - name: Build with every optional subsystem omitted at once
+        run: |
+          set -euo pipefail
+          ALL="gofr_nosqldrivers gofr_nopubsub gofr_nographql gofr_nogrpc gofr_nodgraph gofr_nootlp"
+          go build -tags "$ALL" ./pkg/...
+          go vet   -tags "$ALL" ./pkg/gofr/ ./pkg/gofr/container/ ./pkg/gofr/migration/
+          go test  -tags "$ALL" -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/ ./pkg/gofr/migration/
+
       # Lint under the tags too. The tagged files are half of what these tags add
       # and the default lint job never sees them -- moving noopResponder and
-      # configTrue in this PR was prompted by a tagged-build lint failure that
+      # configTrue in #4167 was prompted by a tagged-build lint failure that
       # nothing in CI would have caught.
       - name: Lint with optional subsystems omitted
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -618,7 +669,9 @@ jobs:
           # introduces, not the ones the repo already carries. Without it the step
           # reports every pre-existing goconst and exhaustive finding in the tree.
           only-new-issues: true
-          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql" --timeout 9m0s
+          args: >-
+            --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp"
+            --timeout 9m0s
 
       # The tags are opt-in, so the default build must link exactly what it linked
       # before. This compares the package list rather than asserting it compiles:
