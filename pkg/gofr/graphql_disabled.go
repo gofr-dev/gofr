@@ -21,13 +21,13 @@ type disabledGraphQL struct{ c *container.Container }
 const graphQLDisabledMsg = "GraphQL resolver %q was registered, but this binary was built with " +
 	"-tags gofr_nographql, which omits the GraphQL engine. Rebuild without the tag to use it."
 
+// graphQLLinked is false here, which is what keeps App from registering /graphql
+// and the playground route against a handler this build cannot provide.
+const graphQLLinked = false
+
 func newGraphQLRunner(c *container.Container) graphQLRunner {
 	return &disabledGraphQL{c: c}
 }
-
-// enabled is false, which is what keeps App from registering /graphql and the
-// playground route against a handler this build cannot provide.
-func (*disabledGraphQL) enabled() bool { return false }
 
 func (d *disabledGraphQL) RegisterQuery(name string, _ Handler) {
 	d.c.Logger.Errorf(graphQLDisabledMsg, name)
@@ -37,7 +37,7 @@ func (d *disabledGraphQL) RegisterMutation(name string, _ Handler) {
 	d.c.Logger.Errorf(graphQLDisabledMsg, name)
 }
 
-// buildSchema is never reached -- App checks enabled() first -- and reports
+// buildSchema is never reached -- App checks graphQLLinked first -- and reports
 // success so that no path can turn a missing engine into a Fatalf.
 func (*disabledGraphQL) buildSchema() error { return nil }
 
