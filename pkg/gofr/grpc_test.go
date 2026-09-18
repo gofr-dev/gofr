@@ -578,3 +578,51 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 
 	wg.Wait()
 }
+
+// TestGRPCSetters_NoServerIsANoOp pins the panic-to-log fix on every method that
+// reaches the gRPC server through App.
+//
+// newGRPCRunner fails on an out-of-range GRPC_PORT and factory.go logs and
+// continues, so App runs on with no gRPC server at all. Before grpcSrv these
+// setters dereferenced the field blind and took the process down in exactly that
+// case -- a config typo turning into a nil-pointer panic in the user's own setup
+// code. Four methods share the guard, so all four are asserted: a later edit is
+// as likely to reintroduce it in one of them as in the one that was reported.
+func TestGRPCSetters_NoServerIsANoOp(t *testing.T) {
+	// 99999 is out of range, so newGRPCRunner returns an error and App is left
+	// without a server. This is the state the guard exists for.
+	t.Setenv("GRPC_PORT", "99999")
+	t.Setenv("METRICS_PORT", "0")
+
+	app := New()
+	app.container.Logger = logging.NewMockLogger(logging.ERROR)
+
+	require.Nil(t, app.grpcSrv(), "the premise: this app has no gRPC server to configure")
+
+	calls := map[string]func(){
+		"AddGRPCServerOptions": func() {
+			app.AddGRPCServerOptions(grpc.MaxRecvMsgSize(1 << 20))
+		},
+		"AddGRPCUnaryInterceptors": func() {
+			app.AddGRPCUnaryInterceptors(func(ctx context.Context, req any,
+				_ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+				return handler(ctx, req)
+			})
+		},
+		"AddGRPCServerStreamInterceptors": func() {
+			app.AddGRPCServerStreamInterceptors(func(srv any, ss grpc.ServerStream,
+				_ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+				return handler(srv, ss)
+			})
+		},
+		"RegisterService": func() {
+			app.RegisterService(&grpc.ServiceDesc{ServiceName: "test.Service"}, struct{}{})
+		},
+	}
+
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			assert.NotPanics(t, call, "%s must log and return when there is no server", name)
+		})
+	}
+}

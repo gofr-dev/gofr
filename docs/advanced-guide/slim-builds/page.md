@@ -17,7 +17,7 @@ A service that uses none of them still pays for them in binary size and, in one 
 memory. The `gofr_no*` build tags let you leave those out:
 
 ```bash
-go build -tags "gofr_nopubsub gofr_nosqldrivers gofr_nographql" ./...
+go build -tags "gofr_nopubsub gofr_nosqldrivers gofr_nographql gofr_nogrpc gofr_nodgraph gofr_nootlp" ./...
 ```
 
 Tags compose, so use as many as apply.
@@ -29,6 +29,9 @@ Tags compose, so use as many as apply.
 | `gofr_nopubsub` | the Kafka, Google Pub/Sub and MQTT clients | `PUBSUB_BACKEND=KAFKA`, `=GOOGLE`, `=MQTT` |
 | `gofr_nosqldrivers` | the PostgreSQL and SQLite drivers | `DB_DIALECT=postgres`, `=sqlite`, `=supabase`, `=cockroachdb` |
 | `gofr_nographql` | the GraphQL engine | `app.GraphQLQuery`, `app.GraphQLMutation` |
+| `gofr_nogrpc` | the gRPC server | `app.RegisterService`, `app.AddGRPC*`, `GRPC_PORT` |
+| `gofr_nodgraph` | the Dgraph migration driver | Dgraph migrations |
+| `gofr_nootlp` | the OTLP trace and metric exporters | `TRACER_URL`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 
 Two things are deliberately **not** affected. `PUBSUB_BACKEND=REDIS` keeps working under
 `gofr_nopubsub`, because the Redis client is linked for caching anyway and removing it would buy
@@ -37,6 +40,28 @@ driver for its configuration types rather than only for registration, so it is l
 
 `supabase` and `cockroachdb` are in the table because they connect through the PostgreSQL driver, so
 the tag that omits that driver omits them too.
+
+`gofr_nogrpc` is the one tag that changes the API surface: `app.RegisterService` and the `AddGRPC*`
+setters name gRPC types, so they cannot exist without the import. Code calling them does not compile
+under that tag -- which is the point, since a service that registers a gRPC service is not one that
+wanted the gRPC server removed.
+
+## Tags share dependencies, so they compose
+
+A library goes out of the binary when its LAST importer does, not when the first tag that mentions
+it is set. `google.golang.org/grpc` is the clearest case -- measured against `gofr.dev/pkg/gofr`:
+
+| Tags | `google.golang.org/grpc` packages linked |
+|---|---|
+| none | 82 |
+| `gofr_nogrpc` | 82 |
+| `gofr_nogrpc gofr_nootlp` | 81 |
+| `gofr_nogrpc gofr_nootlp gofr_nodgraph` | 81 |
+| + `gofr_nopubsub` | **0** |
+
+The OTLP exporters pin gRPC, and so does the Google Pub/Sub client through `cloud.google.com/go`. So
+setting one tag and measuring no change does not mean the tag did nothing -- it means something else
+still imports the same tree. Set the tags for everything you do not use, then measure.
 
 ## Nothing in your code changes
 
@@ -93,5 +118,6 @@ reports them as present whatever tags you pass:
 go list -deps -tags gofr_nopubsub ./cmd/my-service | grep pubsub/kafka   # no output: not linked
 ```
 
-For scale, against `gofr.dev/pkg/gofr` itself: 829 packages by default, 617 with `gofr_nopubsub`,
-785 with `gofr_nosqldrivers`, 809 with `gofr_nographql`, and 553 with all three.
+For scale, against `gofr.dev/pkg/gofr` itself: 829 packages by default; 617 with `gofr_nopubsub`,
+787 with `gofr_nootlp`, 785 with `gofr_nosqldrivers`, 819 with `gofr_nogrpc`, 809 with
+`gofr_nographql`, 827 with `gofr_nodgraph` -- and **412 with all six**, half the default.
