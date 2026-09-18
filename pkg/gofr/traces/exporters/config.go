@@ -9,8 +9,12 @@ import (
 // configs and passed to Build. Custom exporters registered via Register receive
 // the same Config, so they can honor the shared endpoint/headers knobs.
 type Config struct {
-	AppName    string
-	AppVersion string
+	// AppName becomes the resource's service.name. It always wins over
+	// OTEL_SERVICE_NAME and over service.name in OTEL_RESOURCE_ATTRIBUTES; see
+	// buildResource. There is deliberately no AppVersion beside it: nothing in
+	// this package reads one, and the instrumentation version already travels on
+	// the resource as framework_version.
+	AppName string
 
 	// Exporter selects the span exporter: "" (tracing disabled), one of the
 	// built-ins ("otlp", "jaeger", "zipkin", "gofr"), or any name registered via

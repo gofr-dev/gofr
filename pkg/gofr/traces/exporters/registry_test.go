@@ -3,12 +3,15 @@ package exporters
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 var errBuilder = errors.New("builder failed")
@@ -101,4 +104,45 @@ func Test_knownExternalExporters_pointsAtTheSubmodule(t *testing.T) {
 	if path != "gofr.dev/pkg/gofr/traces/exporters/gcp" {
 		t.Errorf("unexpected import path hint: %q", path)
 	}
+}
+
+// Register and RegisterResourceDetector are public, so nothing stops a caller from
+// registering off the sanctioned init()-before-main path while another goroutine is
+// inside Build. The maps are guarded, but nothing exercised that under -race: this
+// fails with a concurrent map read/write if either lock is dropped.
+func Test_registry_concurrentRegisterAndBuild(t *testing.T) {
+	const goroutines = 8
+
+	var wg sync.WaitGroup
+
+	wg.Add(goroutines * 3)
+
+	for i := range goroutines {
+		// Letters, not digits: redactExporterName redacts any name carrying a digit,
+		// so a numbered name would turn the degrade log into "REDACTED" noise.
+		name := "test-concurrent-" + string(rune('a'+i))
+
+		go func() {
+			defer wg.Done()
+
+			Register(name, stubBuilder)
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			RegisterResourceDetector(name, stubDetector{})
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			cfg := Config{AppName: "app", Exporter: name, Ratio: 1}
+
+			shutdown, _ := Build(t.Context(), &cfg, logging.NewMockLogger(logging.ERROR))
+			_ = shutdown(t.Context())
+		}()
+	}
+
+	wg.Wait()
 }

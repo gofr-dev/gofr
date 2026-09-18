@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -101,8 +102,10 @@ func Test_buildResource(t *testing.T) {
 	tests := []struct {
 		name       string
 		cfg        Config
+		env        map[string]string
 		wantAttrs  map[string]string
 		absentKeys []string
+		wantLog    string
 	}{
 		{
 			name: "resource carries service name, framework version and OTEL_RESOURCE_ATTRIBUTES",
@@ -119,35 +122,90 @@ func Test_buildResource(t *testing.T) {
 			wantAttrs:  map[string]string{"service.name": "app"},
 			absentKeys: []string{"vendor.attr"},
 		},
+		// service.name is the one key the environment cannot set, and the case above
+		// cannot see that: deployment.environment does not collide with anything GoFr
+		// supplies. These two pin the precedence itself — reordering the resource.Option
+		// slice fails them — and pin that the discarded value is at least logged.
+		{
+			name:      "OTEL_SERVICE_NAME loses to APP_NAME and is reported",
+			cfg:       Config{AppName: "app", Exporter: "test-build-ok"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "from-env"},
+			wantAttrs: map[string]string{"service.name": "app"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
+		},
+		{
+			name: "service.name in OTEL_RESOURCE_ATTRIBUTES loses, its siblings do not",
+			cfg:  Config{AppName: "app", Exporter: "test-build-ok"},
+			env: map[string]string{
+				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-env,deployment.environment=prod",
+			},
+			wantAttrs: map[string]string{"service.name": "app", "deployment.environment": "prod"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
+		},
+		{
+			name:      "no warning when the environment agrees with APP_NAME",
+			cfg:       Config{AppName: "app", Exporter: "test-build-ok"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "app"},
+			wantAttrs: map[string]string{"service.name": "app"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Register("test-build-ok", stubBuilder)
 
-			res := buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.ERROR))
-
-			got := map[string]string{}
-			for _, kv := range res.Attributes() {
-				got[string(kv.Key)] = kv.Value.AsString()
+			for k, v := range tt.env {
+				t.Setenv(k, v)
 			}
 
-			for k, v := range tt.wantAttrs {
-				if got[k] != v {
-					t.Errorf("resource attribute %q = %q, want %q", k, got[k], v)
-				}
-			}
+			var res *resource.Resource
 
-			for _, k := range tt.absentKeys {
-				if _, ok := got[k]; ok {
-					t.Errorf("resource attribute %q should not be present", k)
-				}
-			}
+			// Warnf goes to stdout: the framework logger reserves stderr for ERROR
+			// and above.
+			out := testutil.StdoutOutputForFunc(func() {
+				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.WARN))
+			})
 
-			if _, ok := got["framework_version"]; !ok {
-				t.Error("expected framework_version on the resource")
-			}
+			assertServiceNameWarning(t, out, tt.wantLog)
+			assertResourceAttrs(t, res, tt.wantAttrs, tt.absentKeys)
 		})
+	}
+}
+
+func assertServiceNameWarning(t *testing.T, out, wantLog string) {
+	t.Helper()
+
+	if wantLog != "" && !strings.Contains(out, wantLog) {
+		t.Errorf("expected log to mention %q, got: %q", wantLog, out)
+	}
+
+	if wantLog == "" && strings.Contains(out, "from the environment is ignored") {
+		t.Errorf("unexpected service.name warning: %q", out)
+	}
+}
+
+func assertResourceAttrs(t *testing.T, res *resource.Resource, wantAttrs map[string]string, absentKeys []string) {
+	t.Helper()
+
+	got := map[string]string{}
+	for _, kv := range res.Attributes() {
+		got[string(kv.Key)] = kv.Value.AsString()
+	}
+
+	for k, v := range wantAttrs {
+		if got[k] != v {
+			t.Errorf("resource attribute %q = %q, want %q", k, got[k], v)
+		}
+	}
+
+	for _, k := range absentKeys {
+		if _, ok := got[k]; ok {
+			t.Errorf("resource attribute %q should not be present", k)
+		}
+	}
+
+	if _, ok := got["framework_version"]; !ok {
+		t.Error("expected framework_version on the resource")
 	}
 }
 

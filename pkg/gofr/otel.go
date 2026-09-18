@@ -11,7 +11,6 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/traces/exporters"
-	"gofr.dev/pkg/gofr/version"
 )
 
 // The gofr exporter stays in this package rather than moving to
@@ -57,13 +56,12 @@ func (a *App) initTracer() {
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	cfg := exporters.Config{
-		AppName:    a.container.GetAppName(),
-		AppVersion: version.Framework,
-		Endpoint:   tracerURL,
-		Host:       tracerHost,
-		Port:       tracerPort,
-		Headers:    a.getTracerHeaders(),
-		Ratio:      a.tracerRatio(),
+		AppName:  a.container.GetAppName(),
+		Endpoint: tracerURL,
+		Host:     tracerHost,
+		Port:     tracerPort,
+		Headers:  a.getTracerHeaders(),
+		Ratio:    a.tracerRatio(),
 	}
 
 	// An empty Exporter is what makes Build install the NeverSample provider, so

@@ -46,6 +46,16 @@ func (a *App) runCMD() {
 // shutdownWaitMargin is the extra time Run gives the graceful-shutdown goroutine on top of the
 // shutdown timeout that goroutine already bounds itself by. The wait is a safety net against a
 // shutdown step that ignores its context, not a second deadline competing with the first one.
+//
+// One second because this value only ever decides how long a process hangs *after* it has already
+// misbehaved, and both directions of error are bounded by that framing: too small and Run reports
+// a shutdown that was about to finish as failed; too large and a pod that will never finish sits
+// there until Kubernetes SIGKILLs it at terminationGracePeriodSeconds. A second is long enough to
+// cover the scheduling and log-flush tail after the last shutdown step returns — the only work
+// that legitimately happens past the deadline — and short enough to stay well inside the gap
+// operators leave between SHUTDOWN_GRACE_PERIOD and terminationGracePeriodSeconds. It is
+// deliberately not configurable: a knob here would be a second shutdown deadline to reason about,
+// and SHUTDOWN_GRACE_PERIOD is the one that should move.
 const shutdownWaitMargin = time.Second
 
 // Run starts the application. If it is an HTTP server, it will start the server.

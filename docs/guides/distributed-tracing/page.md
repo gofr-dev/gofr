@@ -66,6 +66,31 @@ The host, port and path are kept, so the line still tells you where spans are
 going. A secret pasted into `TRACE_EXPORTER` is redacted too, while a plain typo
 (`otpl`) is echoed back so you can spot it.
 
+### Resource attributes from the environment
+
+Every exported span carries a resource — the attributes that describe *which* service emitted it.
+GoFr fills it with `service.name` (from `APP_NAME`) and `framework_version`, and merges in the
+standard `OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the
+backend without a code change:
+
+```bash
+OTEL_RESOURCE_ATTRIBUTES="deployment.environment=prod,cloud.region=asia-south1"
+```
+
+**`service.name` is the one exception.** GoFr always takes it from `APP_NAME`, so
+`OTEL_SERVICE_NAME` — and a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES` — is
+discarded. Setting either logs a warning naming the value that was dropped:
+
+```
+traces: service.name="checkout-from-env" from the environment is ignored; GoFr sets it from APP_NAME ("checkout"). Set APP_NAME to rename the service.
+```
+
+Rename the service with `APP_NAME`. The reason for the exception is consistency across signals:
+GoFr's metrics resource resolves `service.name` from `APP_NAME` the same way, and letting only
+traces follow `OTEL_SERVICE_NAME` would report one service name to your trace backend and a
+different one to your metric backend — breaking the join between a service's traces and its
+metrics exactly where you need it.
+
 ## End-to-end example
 
 Service A receives an HTTP request, calls Service B over HTTP, which writes to a database. With GoFr defaults, the trace contains:
