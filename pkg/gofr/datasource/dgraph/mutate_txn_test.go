@@ -31,6 +31,11 @@ type recordingTxn struct {
 	mutations int
 	commits   int
 	discards  int
+
+	// discardCtxErr is whatever the context handed to Discard reported. Mutate
+	// detaches cancellation for the discard alone, so this stays nil even when
+	// the caller's context is already done.
+	discardCtxErr error
 }
 
 func (r *recordingTxn) Mutate(_ context.Context, _ *api.Mutation) (*api.Response, error) {
@@ -49,8 +54,9 @@ func (r *recordingTxn) Commit(context.Context) error {
 	return r.commitErr
 }
 
-func (r *recordingTxn) Discard(context.Context) error {
+func (r *recordingTxn) Discard(ctx context.Context) error {
 	r.discards++
+	r.discardCtxErr = ctx.Err()
 
 	return r.discardErr
 }
@@ -72,7 +78,7 @@ func (*recordingTxn) QueryRDFWithVars(context.Context, string,
 
 func (*recordingTxn) Do(context.Context, *api.Request) (*api.Response, error) { return nil, nil }
 
-func setupWithTxn(t *testing.T, txn Txn) (*Client, *MockLogger) {
+func setupWithTxn(t *testing.T, txn Txn) *Client {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -96,7 +102,7 @@ func setupWithTxn(t *testing.T, txn Txn) (*Client, *MockLogger) {
 	dgraphClient.EXPECT().NewTxn().Return(txn).AnyTimes()
 	client.client = dgraphClient
 
-	return client, logger
+	return client
 }
 
 func Test_Mutate_TransactionHandling(t *testing.T) {
@@ -152,7 +158,7 @@ func Test_Mutate_TransactionHandling(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			txn := tc.txn
-			client, _ := setupWithTxn(t, &txn)
+			client := setupWithTxn(t, &txn)
 
 			resp, err := client.Mutate(t.Context(), &api.Mutation{
 				SetJson:   []byte(`{"name":"GoFr"}`),
@@ -172,4 +178,24 @@ func Test_Mutate_TransactionHandling(t *testing.T) {
 			require.Equal(t, tc.wantDiscards, txn.discards, "Discard calls")
 		})
 	}
+}
+
+// Test_Mutate_DiscardSurvivesCallerCancellation pins that the deferred discard does not
+// inherit the caller's cancellation.
+//
+// Discard runs after the commit has already returned. If it took the caller's context, a
+// request canceled in that window would log "discard failed" for a write that was persisted
+// -- an error line describing a success, which is the kind of log that sends someone looking
+// for a data-loss bug that is not there.
+func Test_Mutate_DiscardSurvivesCallerCancellation(t *testing.T) {
+	txn := recordingTxn{}
+	client := setupWithTxn(t, &txn)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, _ = client.Mutate(ctx, &api.Mutation{SetJson: []byte(`{"name":"GoFr"}`)})
+
+	require.Equal(t, 1, txn.discards, "the transaction is still discarded")
+	require.NoError(t, txn.discardCtxErr, "the discard must not inherit the caller's cancellation")
 }

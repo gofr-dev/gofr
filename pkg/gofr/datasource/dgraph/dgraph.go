@@ -254,8 +254,15 @@ func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.
 
 	// Discard is a no-op once the transaction is finished (dgo v210 txn.go:289), so this only
 	// does anything on the paths that did not reach a commit.
+	//
+	// The cancellation is dropped for the discard alone: a caller whose context is canceled
+	// between the commit returning and this deferred call would otherwise have a successful
+	// write report a discard failure in the logs. The deadline-free context only ever covers
+	// the abort of a transaction that is already being abandoned.
+	discardCtx := context.WithoutCancel(ctx)
+
 	defer func() {
-		if err := txn.Discard(ctx); err != nil {
+		if err := txn.Discard(discardCtx); err != nil {
 			d.logger.Error("dgraph mutation transaction discard failed: ", err)
 		}
 	}()
