@@ -434,11 +434,34 @@ func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
 
+// GetPublisher returns the pub/sub client, or nil when none is usable.
+//
+// Same filter, same reason as GetSubscriber below -- a handler calling
+// ctx.GetPublisher().Publish(...) against a typed-nil client hits the identical
+// nil receiver, it just surfaces on a request instead of at startup.
 func (c *Container) GetPublisher() pubsub.Publisher {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 
+// GetSubscriber returns the pub/sub client, or nil when none is usable.
+//
+// The nil check is isNil rather than a plain comparison because the pub/sub
+// constructors assign the result of google.New or kafka.New straight into the
+// interface, and those return a TYPED nil when they reject an incomplete
+// config. A typed nil is not equal to nil, so returning c.PubSub unfiltered let
+// every caller's own nil guard pass and then call a method on a nil receiver.
+// Filtering here fixes all of them at once, including App.Subscribe, where the
+// panic escaped an errgroup with no recover and killed the process at startup
+// rather than on a request.
 func (c *Container) GetSubscriber() pubsub.Subscriber {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 
