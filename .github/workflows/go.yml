@@ -578,6 +578,10 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v7
+        with:
+          # The package-list check below diffs against the merge base, so it
+          # needs the history to find one.
+          fetch-depth: 0
 
       - name: Set up Go environment
         uses: actions/setup-go@v7
@@ -602,12 +606,41 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
-      # The tags are opt-in, so the default build must stay exactly as it was.
-      # This is the assertion that keeps that true.
+      # Lint under the tags too. The tagged files are half of what these tags add
+      # and the default lint job never sees them -- moving noopResponder and
+      # configTrue in this PR was prompted by a tagged-build lint failure that
+      # nothing in CI would have caught.
+      - name: Lint with optional subsystems omitted
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql" --timeout 9m0s
+
+      # The tags are opt-in, so the default build must link exactly what it linked
+      # before. This compares the package list rather than asserting it compiles:
+      # a build that quietly started pulling in a tagged-out dependency, or one
+      # that stopped linking a package it used to, passes `go build` either way.
+      #
+      # The baseline is the merge base rather than a committed file, so it cannot
+      # go stale and needs no upkeep.
       - name: Default build links the same packages as before
         run: |
           set -euo pipefail
-          go build ./...
+
+          go list -deps ./... | sort > /tmp/deps.head
+
+          git worktree add /tmp/base "$(git merge-base HEAD origin/${{ github.base_ref || 'development' }})"
+          (cd /tmp/base && go list -deps ./... | sort) > /tmp/deps.base
+
+          if ! diff -u /tmp/deps.base /tmp/deps.head > /tmp/deps.diff; then
+            echo "::error::The default build's linked package set changed. The gofr_no* tags are"
+            echo "::error::opt-in, so an untagged build must link exactly what it linked before."
+            cat /tmp/deps.diff
+            exit 1
+          fi
+
+          echo "default build links $(wc -l < /tmp/deps.head) packages, unchanged"
+
           go test -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
   code_quality:
     name: Code Quality🎖️

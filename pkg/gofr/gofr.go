@@ -465,7 +465,7 @@ func (a *App) OnStart(hook func(ctx *Context) error) {
 // graphQLActive reports whether this app has GraphQL resolvers registered AND was
 // built with the engine linked in.
 func (a *App) graphQLActive() bool {
-	return a.graphqlManager != nil && a.graphqlManager.enabled()
+	return graphQLLinked && a.graphqlManager != nil
 }
 
 func (a *App) setupGraphQL() {

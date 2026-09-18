@@ -19,11 +19,12 @@ import "net/http"
 // in graphql_enabled.go, a stub in graphql_disabled.go. It is a plain function
 // rather than a variable assigned in init() so the choice is the compiler's and
 // there is no package-level state to reason about.
+//
+// Whether the engine is linked at all is a constant, graphQLLinked, not a method
+// on this interface: it is a property of the build rather than of any instance,
+// the compiler can fold the branch away, and it matches pubsubBackendsLinked,
+// which the pub/sub tag already uses for exactly the same question.
 type graphQLRunner interface {
-	// enabled reports whether this build carries the GraphQL engine. It is false
-	// only under -tags gofr_nographql, where App must skip the /graphql and
-	// playground routes rather than register a handler that cannot serve.
-	enabled() bool
 	RegisterQuery(name string, handler Handler)
 	RegisterMutation(name string, handler Handler)
 	buildSchema() error
