@@ -1228,8 +1228,8 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all requests completed successfully. A 503 is the barrier reporting
-	// that this request never overlapped the other four.
+	// Verify all requests completed successfully. A statusNotOverlapped is the
+	// barrier reporting that this request never overlapped the other four.
 	for i := 0; i < numRequests; i++ {
 		require.NoError(t, errors[i], "Request %d should not error", i)
 		assert.Equal(t, http.StatusOK, statuses[i],
