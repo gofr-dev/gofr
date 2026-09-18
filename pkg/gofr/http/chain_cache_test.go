@@ -6,11 +6,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 // TestChainCacheBuildsOncePerRoute pins the optimization itself: the middleware
@@ -314,5 +318,60 @@ func TestSubrouterMiddlewareRunsItsOwnInstance(t *testing.T) {
 	if got[0] == got[1] && got[1] == got[2] {
 		t.Errorf("every request ran the same subrouter middleware instance (%v); the chain "+
 			"cache pinned the first request's wrapper", got)
+	}
+}
+
+// TestLateMiddlewareRegistrationIsReported pins that the lifecycle assumption
+// announces itself when it is broken.
+//
+// Memoizing per route makes registration order load-bearing: a middleware added
+// after a route has served never runs for that route, and nothing about the
+// symptom points at the router. GoFr registers everything before Run, so this
+// can only be reached by an application holding the router itself -- which is
+// precisely the case that had no way to find out.
+func TestLateMiddlewareRegistrationIsReported(t *testing.T) {
+	t.Setenv(RouterEnvVar, MatcherTrie)
+
+	out := testutil.StderrOutputForFunc(func() {
+		r := NewRouter()
+		r.UseLogger(logging.NewLogger(logging.ERROR))
+		r.Add(http.MethodGet, "/ping", chainOKHandler())
+
+		// Before the first request there is nothing cached, so this is the ordinary
+		// startup path and must stay silent.
+		r.UseMiddleware(func(inner http.Handler) http.Handler { return inner })
+
+		serveBody(t, r, "/ping")
+
+		// After it, the route's chain is fixed and this middleware will never run.
+		r.UseMiddleware(func(inner http.Handler) http.Handler { return inner })
+	})
+
+	if !strings.Contains(out, "registered after the router began serving") {
+		t.Errorf("a middleware registered after the first request must be reported, got: %q", out)
+	}
+
+	if strings.Count(out, "registered after the router began serving") != 1 {
+		t.Errorf("only the late registration should be reported, got: %q", out)
+	}
+}
+
+// TestLateMiddlewareRegistrationSilentInMuxMode pins the other half: mux composes
+// the chain per request, so a late registration takes effect there and there is
+// nothing to warn about. Warning anyway would train users to ignore the message.
+func TestLateMiddlewareRegistrationSilentInMuxMode(t *testing.T) {
+	t.Setenv(RouterEnvVar, MatcherMux)
+
+	out := testutil.StderrOutputForFunc(func() {
+		r := NewRouter()
+		r.UseLogger(logging.NewLogger(logging.ERROR))
+		r.Add(http.MethodGet, "/ping", chainOKHandler())
+
+		serveBody(t, r, "/ping")
+		r.UseMiddleware(func(inner http.Handler) http.Handler { return inner })
+	})
+
+	if strings.Contains(out, "registered after the router began serving") {
+		t.Errorf("mux mode applies late middleware, so it must not warn, got: %q", out)
 	}
 }

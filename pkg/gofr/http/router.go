@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -91,6 +92,15 @@ type Router struct {
 	// own records the routes registered through Add, whose handler is the one Add
 	// installed and never changes. Only those may use the chain cache.
 	own sync.Map
+
+	// cached reports whether any chain has been memoized yet, which is to say
+	// whether the lifecycle assumption above has started to bite. It exists so
+	// Use can say so rather than leaving a middleware silently not running.
+	cached atomic.Bool
+
+	// logger is optional and set by the server. Nothing on the request path uses
+	// it; it exists so Use can report a late registration.
+	logger logging.Logger
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -290,6 +300,8 @@ func (rou *Router) chainFor(route *mux.Route, h http.Handler) http.Handler {
 	// lands first is the one everyone uses.
 	actual, _ := rou.chains.LoadOrStore(route, composed)
 
+	rou.cached.Store(true)
+
 	if h, ok := actual.(http.Handler); ok {
 		return h
 	}
@@ -302,8 +314,40 @@ func (rou *Router) chainFor(route *mux.Route, h http.Handler) http.Handler {
 // to the embedded mux router, leaving the default (mux) path unchanged. It
 // shadows mux.Router.Use for calls made on *Router.
 func (rou *Router) Use(mwf ...mux.MiddlewareFunc) {
+	rou.reportLateRegistration(len(mwf))
+
 	rou.mws = append(rou.mws, mwf...)
 	rou.Router.Use(mwf...)
+}
+
+// UseLogger gives the router somewhere to report a late middleware registration.
+// It is optional: a router without one behaves identically, it just cannot say
+// anything. Nothing on the request path reads it.
+func (rou *Router) UseLogger(l logging.Logger) {
+	rou.logger = l
+}
+
+// reportLateRegistration turns a silent misconfiguration into a logged one.
+//
+// Memoizing the chain per route makes registration order load-bearing in trie
+// mode: a middleware registered after a route has served does not appear in that
+// route's cached chain and simply never runs for it, with nothing anywhere
+// saying so. GoFr registers everything before Run, so this cannot fire from
+// framework code -- it fires for an application that reached the router itself,
+// which is exactly the case that used to debug badly.
+//
+// It is an error rather than a panic because the router may already be serving
+// traffic, and it is trie-only: in mux mode the chain is composed per request, so
+// a late registration takes effect and there is nothing to report. The atomic
+// read costs nothing against a call made a handful of times at startup.
+func (rou *Router) reportLateRegistration(n int) {
+	if n == 0 || !rou.useTrie || !rou.cached.Load() || rou.logger == nil {
+		return
+	}
+
+	rou.logger.Errorf("%d middleware(s) registered after the router began serving: they will NOT run "+
+		"for any route that has already been requested, because %s memoises each route's chain. "+
+		"Register every middleware before starting the server.", n, RouterEnvVar)
 }
 
 // Matcher reports which route matcher this router uses: MatcherTrie for the

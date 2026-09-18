@@ -20,9 +20,11 @@ import (
 // invisible from the outside. So a revert of any of them keeps the suite green
 // and gives the allocations back silently. This counts them instead.
 //
-// The ceiling is a ceiling, not the measurement: it sits above the figure the
-// commit quotes so ordinary variation in the runtime or a dependency does not
-// fail the build, while a regression of the size these changes made does.
+// The count it pins is 7, while the commit's table quotes 8 allocs/op. They are
+// different fixtures, not an inconsistency: this guard drives five middlewares
+// and a nopWriter, the benchmark three and a real response writer. The guard's
+// job is to notice change, so it is measured where the signal is cleanest rather
+// than where the headline number comes from.
 func TestTrieRequestAllocationsDoNotRegress(t *testing.T) {
 	t.Setenv(RouterEnvVar, MatcherTrie)
 

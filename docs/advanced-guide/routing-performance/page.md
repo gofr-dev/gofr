@@ -65,6 +65,13 @@ that declares no path parameters the trie leaves it `nil` where `mux` returns an
 Every read behaves the same -- indexing gives the zero value, `len` is 0, and ranging does nothing --
 but an explicit `mux.Vars(r) != nil` check answers differently.
 
+Middleware registration becomes order-sensitive. Each route's middleware chain is composed once,
+on its first request, and reused, so a middleware registered *after* a route has served does not
+run for that route. Registering everything before starting the server — which is what `app.Run`
+does, and what an application normally does — keeps this invisible. An application that reaches the
+router itself and registers late gets an error in the log saying so rather than a middleware that
+silently never runs.
+
 ## The one thing to check in your own code
 
 The trie serves matched requests without going through `mux`'s own `ServeHTTP`, which is what
