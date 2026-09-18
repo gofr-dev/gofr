@@ -2,9 +2,13 @@
 
 // No driver registration in a build made with -tags gofr_nosqldrivers.
 //
-// DB_DIALECT=postgres or =sqlite then fails at startup: NewSQL's registerOtel
-// call reports database/sql's own "unknown driver" error naming the dialect, and
-// returns a nil DB. That is an already-supported state -- it is what an
+// DB_DIALECT=postgres, =sqlite, =supabase or =cockroachdb then fails at startup.
+// The last two are affected because registerOtel registers them under the
+// postgres driver (sql.go:268), so they need exactly the driver this file omits
+// -- listing only postgres and sqlite would surprise a supabase user.
+//
+// The failure is loud: NewSQL's registerOtel call reports database/sql's own
+// "unknown driver" error naming the dialect, and returns a nil DB. That is an already-supported state -- it is what an
 // unconfigured database produces, and the container guards it with isNil -- so
 // the service still starts, with one error line saying exactly what is missing.
 // A loud, immediate complaint is the point of doing this with a tag rather than

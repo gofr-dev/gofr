@@ -100,8 +100,6 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 	}
 }
 
-func (*graphQLManager) enabled() bool { return true }
-
 func (m *graphQLManager) RegisterQuery(name string, handler Handler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

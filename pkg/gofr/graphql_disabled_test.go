@@ -27,14 +27,14 @@ func TestGraphQLDisabled_RegisterDoesNotPanic(t *testing.T) {
 	})
 
 	require.NotNil(t, app.graphqlManager, "the runner is still constructed, so the calls have somewhere to land")
-	assert.False(t, app.graphqlManager.enabled())
+	assert.False(t, graphQLLinked, "this file only builds under the tag, so the engine is not linked")
 	assert.False(t, app.graphQLActive(), "no GraphQL routes may be registered in this build")
 	assert.Nil(t, app.graphqlManager.GetHandler())
 	require.NoError(t, app.graphqlManager.buildSchema(), "buildSchema must not turn a missing engine into a Fatalf")
 }
 
 // setupGraphQL is the function that would register a nil handler on /graphql if
-// enabled() were not consulted, which would panic on the first request.
+// graphQLLinked were not consulted, which would panic on the first request.
 func TestGraphQLDisabled_SetupRegistersNoRoute(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
 
@@ -43,7 +43,7 @@ func TestGraphQLDisabled_SetupRegistersNoRoute(t *testing.T) {
 
 	require.NotPanics(t, app.setupGraphQL)
 
-	req := httptest.NewRequest(http.MethodPost, "/graphql", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", http.NoBody)
 	match := &mux.RouteMatch{}
 	assert.False(t, app.httpServer.router.Match(req, match), "/graphql must not be routed in this build")
 }
