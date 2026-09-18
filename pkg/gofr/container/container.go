@@ -434,7 +434,16 @@ func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
 
+// GetPublisher returns the pub/sub client, or nil when none is usable.
+//
+// Same filter, same reason as GetSubscriber below -- a handler calling
+// ctx.GetPublisher().Publish(...) against a typed-nil client hits the identical
+// nil receiver, it just surfaces on a request instead of at startup.
 func (c *Container) GetPublisher() pubsub.Publisher {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 

@@ -204,6 +204,11 @@ func (c *Container) checkPrimaryDatasources(ctx context.Context, collector *heal
 	// is not equal to nil, so a plain check admits it and the Health call below
 	// runs on a nil receiver. SQL and Redis above already use isNil for the same
 	// reason; this guard was the odd one out.
+	//
+	// runCheck recovers, so this was never a crash here -- it surfaced as a
+	// "pubsub": DOWN entry reading "health check panicked", which put the whole
+	// app into DEGRADED over a dependency it does not have. The crash is on the
+	// GetSubscriber path, where App.Subscribe's errgroup has no recover.
 	if !isNil(c.PubSub) {
 		runCheck(wg, collector, pubsubKey, func() {
 			health := c.PubSub.Health()
