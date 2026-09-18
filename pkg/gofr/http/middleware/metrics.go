@@ -44,12 +44,59 @@ type routeMethodKey struct {
 // metrics, so recording app_http_response for it would double-count.
 const graphqlPath = "/graphql"
 
+// MetricsOption configures the Metrics middleware.
+type MetricsOption func(*metricsOptions)
+
+type metricsOptions struct {
+	untemplatedLimit int64
+}
+
+// WithCardinalityLimit sizes the budget for caller-controlled label sets from
+// the meter provider's per-instrument datapoint ceiling, so that unmatched
+// traffic can take at most a quarter of it and the route table keeps the rest.
+// A ceiling of zero or less means unlimited, and the budget stays at
+// untemplatedLabelLimit because memory still needs a bound. A ceiling below
+// untemplatedCeilingShare gives a budget of zero: every caller-controlled
+// request collapses from the first one.
+//
+// The budget belongs to this Metrics instance, while the admitted set is shared
+// process-wide (see untemplatedLabels). Two instances built with different
+// ceilings each stop admitting at their own budget, so both stay bounded.
+func WithCardinalityLimit(limit int) MetricsOption {
+	return func(o *metricsOptions) {
+		o.untemplatedLimit = untemplatedBudget(limit)
+	}
+}
+
+// untemplatedCeilingShare is the inverse of the fraction of the provider ceiling
+// that caller-controlled label sets may occupy. The budget counts the same unit
+// the ceiling counts -- distinct (path, method, status) attribute sets -- so it
+// really is a quarter of the datapoints, not a quarter of the (path, method)
+// pairs. On top of it sit only the collapsed __unmatched__ / __other__ series,
+// one per status the handlers return.
+const untemplatedCeilingShare = 4
+
+func untemplatedBudget(ceiling int) int64 {
+	if ceiling <= 0 {
+		return untemplatedLabelLimit
+	}
+
+	return min(int64(untemplatedLabelLimit), int64(ceiling/untemplatedCeilingShare))
+}
+
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
-func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
+func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) http.Handler {
 	// The recording strategy is selected once, here, from what the metrics
 	// backend supports. The per-request path then makes a single call and
 	// carries none of that branching itself.
 	recorder := newHistogramRecorder(metrics)
+
+	options := metricsOptions{untemplatedLimit: untemplatedLabelLimit}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	untemplatedLimit := options.untemplatedLimit
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,12 +126,131 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			// nothing, net/http implicit-200) to http.StatusOK so neither the
 			// histogram nor any status cache is poisoned with status=0.
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				recorder.record(path, req.Method, res.Status(), time.Since(start).Seconds(), templated)
+				status := res.Status()
+				pathLabel, methodLabel := metricLabels(path, req.Method, status, templated, untemplatedLimit)
+				recorder.record(pathLabel, methodLabel, status,
+					time.Since(start).Seconds(), templated)
 			}(srw, r)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
+}
+
+// The labels recorded for a request whose path or method is caller-controlled
+// rather than drawn from the route table.
+//
+// A histogram retains one datapoint per distinct attribute set for the life of
+// the process, and the set is keyed on the (path, method, status) triple. Both
+// halves of that key come off the request for anything that does not resolve to
+// a route template: net/http accepts any RFC 7230 token as a method, and GoFr's
+// PathPrefix("/") catch-all -- registered with no .Methods() restriction -- means
+// an unmatched request still runs this middleware rather than being turned away.
+//
+// The meter provider caps datapoints per instrument: the SDK default of 2000,
+// OTEL_GO_X_CARDINALITY_LIMIT, or METRICS_CARDINALITY_LIMIT, which takes
+// precedence. Datapoints past that ceiling are folded into a single overflow
+// series, so junk arriving first evicts nothing but occupies the slots, and the
+// REAL routes registered afterwards are the ones that vanish from the dashboard.
+// Collapsing caller-controlled labels keeps the junk to one series and leaves the
+// ceiling for routes that matter.
+//
+// It is also the only bound on memory when that ceiling is configured away
+// (METRICS_CARDINALITY_LIMIT=0 means unlimited): every series pins a datapoint,
+// and exporters re-send every held series on every interval.
+const (
+	unmatchedPathLabel = "__unmatched__"
+	otherMethodLabel   = "__other__"
+
+	// untemplatedLabelLimit is the most distinct caller-controlled
+	// (path, method, status) label sets recorded verbatim before path and method
+	// collapse. WithCardinalityLimit lowers it to a quarter of a smaller provider
+	// ceiling; it never raises it.
+	//
+	// It bounds the whole attribute set rather than each label separately,
+	// because independent ceilings multiply: 4096 paths and 64 methods is a
+	// quarter of a million possible series, and every status a pair is seen with
+	// multiplies that again. The attribute set is the quantity the provider
+	// ceiling counts, so it is the one bounded here.
+	//
+	// The value is a quarter of the SDK default provider ceiling (2000),
+	// so caller-controlled series cannot crowd out the route table. It also sits
+	// below routeCacheLimit on purpose: this check fires first, so routeCache's
+	// own refusal to store past its limit never triggers for this set.
+	untemplatedLabelLimit = 500
+)
+
+// untemplatedLabels is the set of caller-controlled (path, method, status)
+// label sets admitted verbatim.
+//
+// It is process-wide, unlike the per-Metrics() recorder caches, because the
+// resource it protects -- the meter provider's datapoint table -- is also
+// process-wide. The budget checked against it is per Metrics() instance; see
+// WithCardinalityLimit.
+//
+// Admission is check-then-act, so concurrent first sightings can overshoot by
+// roughly the number of requests in flight. The overshoot is bounded by
+// concurrency rather than by the caller, and the population stays finite.
+//
+// Admission is first-come and nothing is ever evicted. That mirrors the
+// resource: exporters.Build always installs the Prometheus reader, and
+// Prometheus is cumulative, so at least one pipeline keeps every recorded
+// series for the life of the process whatever temporality a push exporter
+// uses. Evicting a label set here would free nothing there, and admitting a
+// new one in its place would mint another datapoint -- this set would stop
+// bounding anything. (Only if the Prometheus reader failed to initialize and a
+// delta push reader were the sole pipeline would the SDK free datapoints that
+// this set still holds; that is narrow enough to accept.) The accepted cost is that
+// a burst of junk early in the process fills the set, after which other
+// untemplated traffic, static assets included, is recorded as __unmatched__. It
+// is still counted and timed, only not per path. Templated routes never reach
+// the set and are unaffected.
+//
+// Tests that assert on this set reset it and must not call t.Parallel().
+//
+//nolint:gochecknoglobals // process-wide by necessity: see above.
+var untemplatedLabels routeCache[struct{}]
+
+// untemplatedKey identifies one caller-controlled attribute set.
+type untemplatedKey struct {
+	path, method string
+	status       int
+}
+
+// metricLabels returns the path and method labels to record.
+//
+// A templated path and a standard method are bounded by construction and are
+// always recorded as themselves. Anything else is recorded verbatim until the
+// ceiling and collapses afterwards, which keeps existing behavior -- recording
+// the raw path for unrouted and static requests, and the verbatim method
+// including custom verbs, are both deliberately tested -- while stopping a
+// caller from filling the datapoint table.
+func metricLabels(path, method string, status int, templated bool, limit int64) (pathLabel, methodLabel string) {
+	standardMethod := cacheableMethod(method)
+	if templated && standardMethod {
+		return path, method
+	}
+
+	key := untemplatedKey{path: path, method: method, status: status}
+	if _, admitted := untemplatedLabels.load(key); admitted {
+		return path, method
+	}
+
+	if untemplatedLabels.len() >= limit {
+		if !templated {
+			path = unmatchedPathLabel
+		}
+
+		if !standardMethod {
+			method = otherMethodLabel
+		}
+
+		return path, method
+	}
+
+	untemplatedLabels.store(key, struct{}{})
+
+	return path, method
 }
 
 // metricsPath resolves the path label and reports whether it is a bounded route
