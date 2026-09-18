@@ -34,6 +34,8 @@ When that context is canceled, a goroutine creates a timeout context using `SHUT
 6. `container.ShutdownMetrics(ctx)` and `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
 7. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
 
+`App.Run` does not return until that goroutine has finished, so a `main` that does nothing but call `app.Run()` cannot let the process exit halfway through the drain. The wait is bounded: if shutdown has not finished one second after `SHUTDOWN_GRACE_PERIOD` expires, GoFr logs `graceful shutdown did not finish` and returns anyway rather than holding the process open until Kubernetes `SIGKILL`s it.
+
 The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers finish in-progress queries. It runs second-to-last on purpose: every producer of datasource traffic — handlers, streams, cron jobs — is drained before the connections they use are torn down. Application code does not need to coordinate this order.
 
 ## OnStart hooks vs shutdown hooks
@@ -110,6 +112,6 @@ You should see `Shutting down server with a timeout of 30s` followed by `Applica
 Yes, on Kubernetes. The preStop sleep covers the brief window before kube-proxy updates iptables on every node — without it, pods can receive new connections after SIGTERM has already started the drain.
 {% /faq-item %}
 {% faq-item question="What happens if shutdown takes longer than SHUTDOWN_GRACE_PERIOD?" %}
-The shutdown context expires, `App.Shutdown` returns the deadline error, and Kubernetes will eventually `SIGKILL` the process when `terminationGracePeriodSeconds` elapses.
+The shutdown context expires, `App.Shutdown` returns the deadline error, and Kubernetes will eventually `SIGKILL` the process when `terminationGracePeriodSeconds` elapses. `App.Run` stops waiting one second after that deadline and returns, so the process exits on its own rather than waiting for the `SIGKILL`.
 {% /faq-item %}
 {% /faq %}
