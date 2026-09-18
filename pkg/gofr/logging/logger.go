@@ -184,6 +184,14 @@ func (l *logger) LogEnabled() bool {
 // there would break every external implementation. Callers reach it through an
 // optional interface assertion, exactly as LogEnabled is reached, so a logger
 // that does not provide it keeps working unchanged.
+//
+// The contract is narrower than the signature suggests: entry is taken as one
+// already-built message and is NOT put through the trace-marker extraction and
+// argument filtering Log performs. Passing a traceIDMarker, or a map[string]any
+// carrying the marker key, therefore produces different output from Log -- the
+// top-level trace_id field is not populated and the marker is not filtered out
+// of the message. Pass a plain entry value, as the request logger does; anything
+// that depends on marker handling must go through Log.
 func (l *logger) LogEntry(entry any) {
 	l.logEntry(INFO, entry)
 }

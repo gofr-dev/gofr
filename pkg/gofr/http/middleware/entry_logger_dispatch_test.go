@@ -75,3 +75,30 @@ func TestFallbackForLoggerWithoutFastPath(t *testing.T) {
 
 	assert.Equal(t, 1, logger.logCalls, "a logger without the fast path must still be logged through")
 }
+
+// gatedEntryLogger offers both optional interfaces, so newLogSink must resolve
+// both of them.
+type gatedEntryLogger struct{ countingEntryLogger }
+
+func (*gatedEntryLogger) LogEnabled() bool { return true }
+
+// TestLogSinkResolvesOptionalInterfacesOnce pins the hoist: the assertions
+// happen when the middleware is built, not per request.
+//
+// The dispatch tests above prove the fast path is reached; they cannot tell
+// where it was selected, so a move back into the request path would keep them
+// green. Asserting on the resolved sink is what fixes the construction-time
+// contract, which is the one newHistogramRecorder and remotelogger.New already
+// follow.
+func TestLogSinkResolvesOptionalInterfacesOnce(t *testing.T) {
+	both := newLogSink(&gatedEntryLogger{})
+	assert.NotNil(t, both.entries, "a logger with LogEntry/ErrorEntry must resolve the entry fast path")
+	assert.NotNil(t, both.enabler, "a logger with LogEnabled must resolve the level gate")
+
+	plain := newLogSink(&plainOnlyLogger{})
+	assert.Nil(t, plain.entries, "a plain logger must leave the fast path unresolved")
+	assert.Nil(t, plain.enabler, "a plain logger must leave the level gate unresolved")
+	assert.NotNil(t, plain.logger, "the base contract is always kept")
+
+	assert.Nil(t, newLogSink(nil).logger, "a nil logger must not be wrapped into a non-nil sink")
+}

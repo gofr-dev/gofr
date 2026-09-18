@@ -172,6 +172,39 @@ type entryLogger interface {
 	ErrorEntry(any)
 }
 
+// logSink is the logger together with the optional interfaces it turned out to
+// satisfy, resolved once when the middleware is built.
+//
+// Both assertions answer a question about the logger's type, which cannot change
+// between requests, so asking per request is asking the same question repeatedly.
+// newHistogramRecorder and remotelogger.New both resolve their optional
+// interfaces at construction for the same reason; this keeps the three
+// consistent. A logger providing neither leaves both fields nil and takes the
+// Log/Error path exactly as before.
+type logSink struct {
+	logger  logger
+	enabler logEnabler
+	entries entryLogger
+}
+
+func newLogSink(l logger) logSink {
+	s := logSink{logger: l}
+
+	if l == nil {
+		return s
+	}
+
+	if e, ok := l.(logEnabler); ok {
+		s.enabler = e
+	}
+
+	if e, ok := l.(entryLogger); ok {
+		s.entries = e
+	}
+
+	return s
+}
+
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
 //
 // The StatusResponseWriter wrapper allocated per request is pooled in a
@@ -184,6 +217,10 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	pool := sync.Pool{
 		New: func() any { return &StatusResponseWriter{} },
 	}
+
+	// The optional interfaces are resolved once, here, from what the logger
+	// supports. The per-request path then carries none of that branching.
+	sink := newLogSink(logger)
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +271,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			defer handleRequestLog(srw, r, start, traceID, spanID, sink)
 
 			inner.ServeHTTP(srw, r)
 		})
@@ -242,14 +279,14 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time,
-	traceID, spanID string, logger logger) {
+	traceID, spanID string, sink logSink) {
 	status := srw.Status()
 
 	// A server error is reported through Error, which survives every level below
 	// FATAL, so gating it on the informational level would be wrong. Only the
 	// informational path can be skipped.
 	if status < http.StatusInternalServerError {
-		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
+		if sink.enabler != nil && !sink.enabler.LogEnabled() {
 			return
 		}
 	}
@@ -266,24 +303,24 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		Response:     status,
 	}
 
-	if logger == nil {
+	if sink.logger == nil {
 		return
 	}
 
-	if e, ok := logger.(entryLogger); ok {
+	if sink.entries != nil {
 		if status >= http.StatusInternalServerError {
-			e.ErrorEntry(l)
+			sink.entries.ErrorEntry(l)
 		} else {
-			e.LogEntry(l)
+			sink.entries.LogEntry(l)
 		}
 
 		return
 	}
 
 	if status >= http.StatusInternalServerError {
-		logger.Error(l)
+		sink.logger.Error(l)
 	} else {
-		logger.Log(l)
+		sink.logger.Log(l)
 	}
 }
 
@@ -380,12 +417,17 @@ func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string) {
 
 	tid, sid := sc.TraceID(), sc.SpanID()
 
+	// The buffer is sized from the zero-string constants because those are the
+	// wire widths this function has to reproduce. The split, though, comes from
+	// what hex.Encode reports it wrote, not from restating a constant: editing
+	// either constant then changes the buffer and the offset together instead of
+	// silently moving one slice bound past the other.
 	var b [len(zeroTraceID) + len(zeroSpanID)]byte
 
-	hex.Encode(b[:len(zeroTraceID)], tid[:])
-	hex.Encode(b[len(zeroTraceID):], sid[:])
+	n := hex.Encode(b[:], tid[:])
+	hex.Encode(b[n:], sid[:])
 
 	s := string(b[:])
 
-	return s[:len(zeroTraceID)], s[len(zeroTraceID):]
+	return s[:n], s[n:]
 }

@@ -520,7 +520,7 @@ func TestRequestLogEmittedWhenLevelAllows(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", zeroSpanID, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.logCalls, "an allowed level must still emit the request log")
 }
@@ -531,7 +531,7 @@ func TestRequestLogSkippedWhenLevelDiscards(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", zeroSpanID, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Zero(t, lg.logCalls, "a discarded level must not be handed an entry")
 }
@@ -543,7 +543,7 @@ func TestRequestLogAlwaysEmittedForServerErrors(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusInternalServerError}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", zeroSpanID, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.errCalls, "a server error must be logged regardless of the informational level")
 }
@@ -555,7 +555,7 @@ func TestRequestLogUngatedLoggerUnaffected(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", zeroSpanID, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.logCalls, "a logger without the gate must still receive the entry")
 }
@@ -652,7 +652,7 @@ func TestRequestLogGateWithRealLoggers(t *testing.T) {
 					srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 					req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
 
-					handleRequestLog(srw, req, time.Now(), "tid", zeroSpanID, build.make(tt.level))
+					handleRequestLog(srw, req, time.Now(), "tid", zeroSpanID, newLogSink(build.make(tt.level)))
 				})
 
 				assert.Equal(t, tt.emitted, strings.Contains(out, "/x"),
@@ -674,7 +674,7 @@ func TestRequestLogGateNeverSuppresses5xx(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/boom", http.NoBody)
 
 		handleRequestLog(srw, req, time.Now(), "tid", zeroSpanID,
-			remotelogger.New(logging.ERROR, "", time.Second))
+			newLogSink(remotelogger.New(logging.ERROR, "", time.Second)))
 	})
 
 	assert.Contains(t, out, "/boom", "a 5xx must be logged even at ERROR")
@@ -1903,7 +1903,7 @@ func Test_LoggingContract_HandleRequestLogNilLogger(t *testing.T) {
 	req := logCharNewRequest(t, http.MethodGet, "http://dummy/nil-logger")
 
 	assert.NotPanics(t, func() {
-		handleRequestLog(srw, req, time.Now(), zeroTraceID, zeroSpanID, nil)
+		handleRequestLog(srw, req, time.Now(), zeroTraceID, zeroSpanID, newLogSink(nil))
 	})
 }
 
