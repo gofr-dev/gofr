@@ -9,11 +9,12 @@ import (
 // configs and passed to Build. Custom exporters registered via Register receive
 // the same Config, so they can honor the shared endpoint/headers knobs.
 type Config struct {
-	// AppName becomes the resource's service.name. It always wins over
-	// OTEL_SERVICE_NAME and over service.name in OTEL_RESOURCE_ATTRIBUTES; see
-	// buildResource. There is deliberately no AppVersion beside it: nothing in
-	// this package reads one, and the instrumentation version already travels on
-	// the resource as framework_version.
+	// AppName is the default for the resource's service.name. The environment
+	// overrides it: OTEL_SERVICE_NAME, or a non-empty service.name entry in
+	// OTEL_RESOURCE_ATTRIBUTES, wins — see resolveServiceName. There is
+	// deliberately no AppVersion beside it: nothing in this package reads one, and
+	// the instrumentation version already travels on the resource as
+	// framework_version.
 	AppName string
 
 	// Exporter selects the span exporter: "" (tracing disabled), one of the

@@ -36,8 +36,14 @@ type ShutdownFunc func(ctx context.Context) error
 // Multiple readers share the same instruments with no double-counting, so the
 // Prometheus /metrics endpoint and an OTLP push exporter can run together.
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
-// (Prometheus-only, or no readers) rather than crashing app start.
+// (Prometheus-only, or no readers) rather than crashing app start. A nil logger is
+// substituted with noopLogger, so a caller that does not want the diagnostics --
+// the deprecated Prometheus helper is one -- does not have to supply one.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
+	if logger == nil {
+		logger = noopLogger{}
+	}
+
 	// Resolve the resource first and publish it on cfg: pushReader runs after this,
 	// and a builder needs to see the resource its backend will actually receive.
 	cfg.Resource = buildResource(ctx, cfg, logger)
@@ -59,6 +65,11 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	}
 
 	mp := metricSdk.NewMeterProvider(opts...)
+
+	// APP_NAME, not the resolved service.name: this is the instrumentation *scope*
+	// name, which by OTel convention names the library producing the instruments and
+	// surfaces as the otel_scope_name label on every series. Following
+	// OTEL_SERVICE_NAME here would silently rename a label on all metrics.
 	meter := mp.Meter(cfg.AppName, metric.WithInstrumentationVersion(cfg.AppVersion))
 
 	shutdown := func(shutdownCtx context.Context) error {
@@ -72,9 +83,49 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	return shutdown, meter
 }
 
+// resolveServiceName returns the service name the resource will carry. The
+// environment wins: OTEL_SERVICE_NAME, or service.name inside
+// OTEL_RESOURCE_ATTRIBUTES, overrides APP_NAME -- the SDK already ranks those two
+// against each other (OTEL_SERVICE_NAME first), so reading resource.Environment()
+// inherits that precedence rather than reimplementing it. Environment() runs only
+// the fromEnv detector, so it carries no unknown_service: default to mistake for
+// an operator's value.
+//
+// An empty environment value is not an override: OTEL_RESOURCE_ATTRIBUTES=
+// "service.name=" parses to a valid attribute with an empty value, and shipping
+// that would leave the backend with a nameless service.
+//
+// Kept identical to traces/exporters.resolveServiceName -- the two must agree, or
+// a service reports one name to its trace backend and another to its metric
+// backend, breaking the join between them.
+func resolveServiceName(appName string, logger Logger) string {
+	for _, kv := range resource.Environment().Attributes() {
+		// GoFr pins semconv v1.17.0 while the SDK's fromEnv detector pins a newer
+		// one; ServiceNameKey is the identical attribute.Key("service.name") in
+		// both, so comparing across the two versions is safe.
+		if kv.Key != semconv.ServiceNameKey {
+			continue
+		}
+
+		name := strings.TrimSpace(kv.Value.AsString())
+		if name == "" {
+			continue
+		}
+
+		if name != appName {
+			logger.Infof("metrics: service.name=%q from the environment overrides APP_NAME (%q)",
+				name, appName)
+		}
+
+		return name
+	}
+
+	return appName
+}
+
 func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(cfg.AppName),
+		semconv.ServiceNameKey.String(resolveServiceName(cfg.AppName, logger)),
 		attribute.String("framework_version", version.Framework),
 	}
 
@@ -87,6 +138,12 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// is not what makes the variable work. It is here so buildResource returns a
 		// complete resource on its own rather than one that is only correct once a
 		// particular consumer merges it.
+		//
+		// The order stays WithFromEnv first: resource.New merges each later option
+		// as the winner, so WithAttributes last is what keeps framework_version out
+		// of the environment's reach. service.name is not defended by that order --
+		// it is resolved above, and re-merging the same value here is a no-op when
+		// the environment supplied it.
 		resource.WithFromEnv(),
 		resource.WithAttributes(attrs...),
 	}

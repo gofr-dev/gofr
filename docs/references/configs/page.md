@@ -21,7 +21,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  APP_NAME
--  Name of the application
+-  Name of the application. It is also the default `service.name` on the resource attached to exported traces and metrics, where OTEL_SERVICE_NAME overrides it.
 -  gofr-app
 
 ---
@@ -111,7 +111,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  OTEL_RESOURCE_ATTRIBUTES
--  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric and span. A service.name= entry here overrides APP_NAME (OTEL_SERVICE_NAME outranks it when both are set); an empty value is ignored. framework_version cannot be overridden. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
+-  OTEL_SERVICE_NAME
+-  Standard OpenTelemetry service name. Overrides APP_NAME as the service.name resource attribute on exported traces and metrics together, and is logged once per signal at startup. It does not change anything outside the OTel resource: the health endpoint, the MCP server and the startup telemetry keep reporting APP_NAME, since those describe the application rather than the resource.
 
 ---
 
