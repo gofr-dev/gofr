@@ -10,7 +10,7 @@ nextjs:
 
 GoFr compiles several optional subsystems into every binary so they work from configuration alone —
 set `PUBSUB_BACKEND=KAFKA` and the Kafka client is there, set `DB_DIALECT=postgres` and the driver is
-registered, call `app.GraphQLQuery(...)` and the engine is linked. That is the behaviour most
+registered, call `app.GraphQLQuery(...)` and the engine is linked. That is the behavior most
 services want, and it is the default.
 
 A service that uses none of them still pays for them in binary size and, in one case, in resident

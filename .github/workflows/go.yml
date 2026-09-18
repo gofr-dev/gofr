@@ -665,6 +665,10 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
+          # Same scoping as the code_quality job: this reports issues THIS branch
+          # introduces, not the ones the repo already carries. Without it the step
+          # reports every pre-existing goconst and exhaustive finding in the tree.
+          only-new-issues: true
           args: >-
             --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp"
             --timeout 9m0s
