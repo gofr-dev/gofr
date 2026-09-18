@@ -62,8 +62,8 @@ to disable the server while keeping in-process tools available.
 ### If the port is unavailable
 
 Calling `app.EnableMCP()` says you want the MCP transport, so GoFr treats a port it cannot claim as
-a startup failure rather than coming up without it. `app.Run()` reports the problem and returns
-instead of serving:
+a startup failure rather than coming up without it. `app.Run()` reports the problem, releases what
+startup opened, and exits non-zero instead of serving:
 
 ```
 ERROR  MCP server cannot start on port 8200: listen tcp 127.0.0.1:8200: bind: address already in
@@ -84,9 +84,11 @@ way to say so — tools stay callable in-process through `ctx.LLM().Tools()`, be
 independent of the transport.
 
 `MCP_PORT` is read as a number, so `0`, `00`, `+0` and ` 0 ` all disable the transport. A value that
-is not a number, or one outside the valid port range `1`–`65535`, is reported and falls back to the
-default `8200` — an unbindable port would otherwise stop the whole service, every transport
-included, with a message about occupancy that does not describe the problem.
+is not a number, or one outside the valid port range `1`–`65535`, refuses startup with a message
+naming the problem — it is not folded to `8200`. Falling back would put the service on the port that
+collides with Vault for an operator who typed one digit too many, and it would apply the gentler
+policy to the less ambiguous mistake: an occupied port can be a transient condition of the
+environment, while `99999` will be just as wrong on the next start.
 
 ## Building an agent
 

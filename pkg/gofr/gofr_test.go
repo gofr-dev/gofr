@@ -1715,26 +1715,26 @@ func TestHandleStartupHooks(t *testing.T) {
 	tests := []struct {
 		name     string
 		hooks    []func(ctx *Context) error
-		expected bool
+		expected startupOutcome
 	}{
 		{
-			name:     "No hooks returns true",
+			name:     "No hooks continues",
 			hooks:    nil,
-			expected: true,
+			expected: startupOK,
 		},
 		{
-			name: "Successful hook returns true",
+			name: "Successful hook continues",
 			hooks: []func(ctx *Context) error{
 				func(_ *Context) error { return nil },
 			},
-			expected: true,
+			expected: startupOK,
 		},
 		{
-			name: "Failed hook returns false",
+			name: "Failed hook is a startup failure",
 			hooks: []func(ctx *Context) error{
 				func(_ *Context) error { return errHookFailed },
 			},
-			expected: false,
+			expected: startupFailed,
 		},
 	}
 
@@ -1768,7 +1768,9 @@ func TestHandleStartupHooks_ContextCanceled(t *testing.T) {
 
 	result := app.handleStartupHooks(t.Context())
 
-	assert.False(t, result, "should return false on context.Canceled")
+	// Canceled, not failed: an operator stopping the process during startup got what they asked
+	// for, and Run must not report a non-zero exit status for it.
+	assert.Equal(t, startupCanceled, result, "context.Canceled is a graceful stop, not a failure")
 }
 
 func Test_add_RequestTimeout(t *testing.T) {
@@ -1975,9 +1977,11 @@ func TestHandleStartupHooks_FailureReleasesDatasources(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
+		// The cleanup is the same either way; only what the process reports differs.
+		want startupOutcome
 	}{
-		{name: "hook error", err: errHookFailed},
-		{name: "context canceled", err: context.Canceled},
+		{name: "hook error", err: errHookFailed, want: startupFailed},
+		{name: "context canceled", err: context.Canceled, want: startupCanceled},
 	}
 
 	for _, tt := range tests {
@@ -1985,7 +1989,7 @@ func TestHandleStartupHooks_FailureReleasesDatasources(t *testing.T) {
 			t.Setenv("METRICS_PORT", "0")
 			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
 
-			var proceed bool
+			var proceed startupOutcome
 
 			// Shutdown logs its completion at INFO, on stdout.
 			logs := testutil.StdoutOutputForFunc(func() {
@@ -1995,9 +1999,9 @@ func TestHandleStartupHooks_FailureReleasesDatasources(t *testing.T) {
 				proceed = app.handleStartupHooks(t.Context())
 			})
 
-			require.False(t, proceed)
+			require.Equal(t, tt.want, proceed)
 			assert.Contains(t, logs, "Application shutdown complete",
-				"a failed startup hook must release what the container opened")
+				"an abandoned startup must release what the container opened, either way")
 		})
 	}
 }

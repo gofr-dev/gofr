@@ -352,7 +352,7 @@ func TestBindMCPServer_OccupiedPortAbortsStartup(t *testing.T) {
 	port := occupied.Addr().(*net.TCPAddr).Port
 	t.Setenv("MCP_PORT", strconv.Itoa(port))
 
-	var proceed bool
+	var proceed startupOutcome
 
 	// ERROR goes to the logger's errorOut, which is os.Stderr — and the logger captures it at
 	// construction, so the app has to be built inside the capture.
@@ -364,7 +364,7 @@ func TestBindMCPServer_OccupiedPortAbortsStartup(t *testing.T) {
 		proceed = app.bindMCPServer(t.Context())
 	})
 
-	assert.False(t, proceed, "startup must not continue when the MCP port cannot be claimed")
+	assert.Equal(t, startupFailed, proceed, "startup must not continue when the MCP port cannot be claimed")
 	assert.Contains(t, logs, "MCP server cannot start on port")
 	// Deliberately not asserting the OS error text: Windows words EADDRINUSE differently
 	// ("Only one usage of each socket address..."), and the framework's own remedy is the part of
@@ -384,7 +384,7 @@ func TestBindMCPServer_FreePortProceeds(t *testing.T) {
 	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 	app.EnableMCP()
 
-	require.True(t, app.bindMCPServer(t.Context()))
+	require.Equal(t, startupOK, app.bindMCPServer(t.Context()))
 	require.NotNil(t, app.mcpServer.listener)
 
 	t.Cleanup(func() { _ = app.mcpServer.listener.Close() })
@@ -405,7 +405,7 @@ func TestBindMCPServer_NoServerIsNotAFailure(t *testing.T) {
 	app.EnableMCP()
 
 	require.Nil(t, app.mcpServer)
-	assert.True(t, app.bindMCPServer(t.Context()))
+	assert.Equal(t, startupOK, app.bindMCPServer(t.Context()))
 }
 
 // TestMCPServer_Run_ServesOnTheBoundListener pins that Run serves the listener bind claimed, rather
@@ -537,10 +537,12 @@ func TestMCPPort_Resolution(t *testing.T) {
 		port     string
 		wantPort int
 		wantOK   bool
-		// wantLog is matched against stdout for the disable notice (Logf) and against stderr for the
-		// fold warnings (Errorf); onStderr says which.
-		wantLog  string
-		onStderr bool
+		// wantErr is the sentinel a value that can never be served must report. Run turns it into a
+		// refused startup; see TestBindMCPServer_UnservablePortAbortsStartup.
+		wantErr error
+		// wantLog is matched against stdout for the disable notice (Logf); nothing else here logs,
+		// because an unservable value is reported by Run rather than at the parse.
+		wantLog string
 	}{
 		{name: "unset falls back to the default", port: "", wantPort: defaultMCPPort, wantOK: true},
 		{name: "explicit port is honored", port: "9310", wantPort: 9310, wantOK: true},
@@ -554,18 +556,15 @@ func TestMCPPort_Resolution(t *testing.T) {
 		{name: "signed zero disables", port: "+0", wantLog: "MCP server is disabled"},
 		{name: "whitespace around zero disables", port: " 0 ", wantLog: "MCP server is disabled"},
 
-		// Out of range: net.Listen rejects these permanently, which is a different failure from a busy
-		// port and must not abort the whole service.
-		{name: "extra digit folds to the default", port: "99999", wantPort: defaultMCPPort, wantOK: true,
-			wantLog: "outside the valid port range", onStderr: true},
-		{name: "negative folds to the default", port: "-1", wantPort: defaultMCPPort, wantOK: true,
-			wantLog: "outside the valid port range", onStderr: true},
+		// Out of range. net.Listen rejects these permanently, so folding to the default would start
+		// the service on 8200 -- the port documented as colliding with Vault -- for an operator who
+		// typed one digit too many. It is reported as unservable instead.
+		{name: "extra digit is unservable", port: "99999", wantErr: errMCPPortOutOfRange},
+		{name: "negative is unservable", port: "-1", wantErr: errMCPPortOutOfRange},
 
 		// Not a number at all.
-		{name: "typo folds to the default", port: "82oo", wantPort: defaultMCPPort, wantOK: true,
-			wantLog: "is not a number", onStderr: true},
-		{name: "pasted host:port folds to the default", port: "127.0.0.1:8200", wantPort: defaultMCPPort,
-			wantOK: true, wantLog: "is not a number", onStderr: true},
+		{name: "typo is unservable", port: "82oo", wantErr: errMCPPortNotANumber},
+		{name: "pasted host:port is unservable", port: "127.0.0.1:8200", wantErr: errMCPPortNotANumber},
 	}
 
 	for _, tt := range tests {
@@ -576,18 +575,23 @@ func TestMCPPort_Resolution(t *testing.T) {
 			var (
 				gotPort int
 				gotOK   bool
+				gotErr  error
 			)
 
-			capture := testutil.StdoutOutputForFunc
-			if tt.onStderr {
-				capture = testutil.StderrOutputForFunc
-			}
-
-			logs := capture(func() {
+			logs := testutil.StdoutOutputForFunc(func() {
 				app := New()
-				gotPort, gotOK = app.mcpPort()
+				gotPort, gotOK, gotErr = app.mcpPort()
 			})
 
+			if tt.wantErr != nil {
+				require.ErrorIs(t, gotErr, tt.wantErr)
+				assert.False(t, gotOK, "an unservable value must not enable the transport")
+				assert.Zero(t, gotPort, "an unservable value must not resolve to a port")
+
+				return
+			}
+
+			require.NoError(t, gotErr)
 			assert.Equal(t, tt.wantPort, gotPort)
 			assert.Equal(t, tt.wantOK, gotOK)
 
@@ -598,23 +602,54 @@ func TestMCPPort_Resolution(t *testing.T) {
 	}
 }
 
-// TestEnableMCP_OutOfRangePortDoesNotAbortStartup is the regression test for the fold.
+// TestEnableMCP_UnservablePortRefusesStartup pins the policy the folding behavior contradicted.
 //
-// An out-of-range MCP_PORT used to reach net.Listen, which rejects it permanently rather than
-// transiently. bindMCPServer treats any bind error as fatal, so a single extra digit stopped the
-// entire service - every transport, not just MCP - from starting at all, and the emitted remedy
-// talked about port occupancy, which was not the problem.
-func TestEnableMCP_OutOfRangePortDoesNotAbortStartup(t *testing.T) {
+// An out-of-range MCP_PORT used to resolve to the default, so an operator who typed one extra digit
+// got a running service on 8200 -- the port this package documents as colliding with Vault -- having
+// only logged an error. That applied the gentler policy to the less ambiguous mistake: an occupied
+// port can be a transient condition of the environment, while 99999 is wrong on every restart.
+//
+// EnableMCP records it instead of acting on it, because it runs in the application's own setup where
+// there is nothing to abort, and Run reports it where it reports a port it could not claim.
+func TestEnableMCP_UnservablePortRefusesStartup(t *testing.T) {
 	testutil.NewServerConfigs(t)
 	t.Setenv("MCP_PORT", "99999")
 
+	var (
+		proceed startupOutcome
+		app     *App
+	)
+
+	// The logger captures its writers at construction, so the app has to be built inside the
+	// capture for its ERROR line to be observable.
+	logs := testutil.StderrOutputForFunc(func() {
+		app = New()
+		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+		app.EnableMCP()
+
+		proceed = app.bindMCPServer(t.Context())
+	})
+
+	require.Nil(t, app.mcpServer, "an unservable port must not resolve to a server on the default port")
+	require.ErrorIs(t, app.mcpConfigErr, errMCPPortOutOfRange)
+
+	assert.Equal(t, startupFailed, proceed, "a port that can never be served must refuse startup")
+	assert.Contains(t, logs, "outside the valid port range")
+	assert.Contains(t, logs, "MCP_PORT=0 to run without the MCP transport",
+		"the message has to carry the way out, not just the rejection")
+}
+
+// TestEnableMCP_UnparseablePortRefusesStartup is the same policy for a value that is not a number at
+// all. It used to fold to 8200 too, which is the outcome this PR argues against everywhere else.
+func TestEnableMCP_UnparseablePortRefusesStartup(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", "82oo")
+
 	app := New()
-	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 	app.EnableMCP()
 
-	require.NotNil(t, app.mcpServer)
-	assert.Equal(t, defaultMCPPort, app.mcpServer.port,
-		"an unbindable port must fold to the default, not be handed to net.Listen")
+	require.Nil(t, app.mcpServer)
+	require.ErrorIs(t, app.mcpConfigErr, errMCPPortNotANumber)
 }
 
 // TestBindMCPServer_CanceledContextReportsGracefulShutdown pins the other half of the bind-failure
@@ -628,7 +663,7 @@ func TestBindMCPServer_CanceledContextReportsGracefulShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	var proceed bool
+	var proceed startupOutcome
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		app := New()
@@ -638,7 +673,8 @@ func TestBindMCPServer_CanceledContextReportsGracefulShutdown(t *testing.T) {
 		proceed = app.bindMCPServer(ctx)
 	})
 
-	assert.False(t, proceed)
+	assert.Equal(t, startupCanceled, proceed,
+		"a signal during the bind window is a graceful stop, not a startup failure")
 	assert.Contains(t, logs, "Startup canceled by context")
 	assert.NotContains(t, logs, "Set MCP_PORT to a free port",
 		"a canceled bind is not a port conflict and must not suggest the port remedy")
@@ -661,7 +697,7 @@ func TestBindMCPServer_FailedBindReleasesDatasources(t *testing.T) {
 
 	t.Setenv("MCP_PORT", strconv.Itoa(occupied.Addr().(*net.TCPAddr).Port))
 
-	var proceed bool
+	var proceed startupOutcome
 
 	// Shutdown logs at INFO, which goes to stdout — the bind error itself goes to stderr and is
 	// asserted by TestBindMCPServer_OccupiedPortAbortsStartup.
@@ -673,7 +709,7 @@ func TestBindMCPServer_FailedBindReleasesDatasources(t *testing.T) {
 		proceed = app.bindMCPServer(t.Context())
 	})
 
-	require.False(t, proceed)
+	require.Equal(t, startupFailed, proceed)
 	assert.Contains(t, logs, "Application shutdown complete",
 		"a failed bind must release what startup opened, not return and leave it to process exit")
 }
@@ -745,4 +781,59 @@ func TestRouterTools_Call_QueryWithPathParamAndBody(t *testing.T) {
 	body, _ := res.JSON()
 	assert.Contains(t, string(body), `"index":"books"`)
 	assert.Contains(t, string(body), `"q":"go"`)
+}
+
+// TestRun_FailedStartupExitsNonZero pins the exit status, which is the only thing an orchestrator
+// reads.
+//
+// Replacing Logger.Fatalf with an unwound abort was right, but it also turned a refused startup into
+// exit 0: under restartPolicy: OnFailure, or in a Job, a service that would not start was recorded
+// as having succeeded and was never retried. That is the process-level version of the silent partial
+// startup this package exists to prevent.
+//
+// The exit is indirected through App.exit so this can observe the status without the test binary
+// going with it. The real path is os.Exit at the bottom of Run, after shutdownAfterFailedStartup has
+// released everything -- not the mid-setup os.Exit that Fatalf was.
+func TestRun_FailedStartupExitsNonZero(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	occupied, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = occupied.Close() })
+
+	t.Setenv("MCP_PORT", strconv.Itoa(occupied.Addr().(*net.TCPAddr).Port))
+
+	var codes []int
+
+	_ = testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+		app.EnableMCP()
+		app.exit = func(code int) { codes = append(codes, code) }
+
+		app.Run()
+	})
+
+	require.Equal(t, []int{exitCodeStartupFailed}, codes,
+		"a startup that was refused must report failure to the process")
+}
+
+// TestRun_CanceledStartupExitsZero is the boundary the exit status has to respect: an operator
+// stopping the process during startup got what they asked for. Reporting that as a failure would
+// have every orchestrator retrying a deliberate stop.
+func TestRun_CanceledStartupExitsZero(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	var exited bool
+
+	_ = testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.OnStart(func(*Context) error { return context.Canceled })
+		app.exit = func(int) { exited = true }
+
+		app.Run()
+	})
+
+	assert.False(t, exited, "a startup canceled by signal is a clean stop, not a failure")
 }

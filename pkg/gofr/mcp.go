@@ -50,8 +50,17 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 	// Registering the tools (in-process capability) is separate from serving them over MCP (transport).
 	tools := a.registerTools(cfg)
 
-	port, ok := a.mcpPort()
-	if !ok {
+	port, enabled, err := a.mcpPort()
+	if err != nil {
+		// Recorded, not logged and not acted on: this runs in the application's own setup, where
+		// there is no server to stop and no datasources to release yet. Run reports it, and aborts,
+		// at the same point it reports a port it could not claim.
+		a.mcpConfigErr = err
+
+		return
+	}
+
+	if !enabled {
 		return
 	}
 
@@ -61,14 +70,20 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 	a.mcpServer = newMCPServer(port, server)
 }
 
-// mcpPort resolves the port to serve MCP on from configuration. It reports false only when the
-// server is switched off outright with MCP_PORT=0.
+// mcpPort resolves the port to serve MCP on from configuration. It reports enabled=false only when
+// the server is switched off outright with MCP_PORT=0, and an error for a value that could never be
+// served.
 //
-// Every other malformed value resolves to the default rather than aborting: the port is claimed for
-// real later, in mcpServer.bind, and a value that could never be bound (a typo, an out-of-range
-// number) would otherwise turn into a permanent startup failure that the bind-time remedy - "set
-// MCP_PORT to a free port" - does not describe. Folding loudly keeps the failure at the one place
-// that can distinguish a busy port from an impossible one.
+// That error is not softened into the default port. The same policy applies to a port that cannot
+// be claimed: MCP was asked for, and a service that comes up silently lacking a transport it was
+// configured to expose is the worse outcome. Folding to 8200 would apply the gentler policy to the
+// less ambiguous mistake -- an occupied port can be a transient condition of the environment, while
+// 99999 is wrong now and will be wrong on every restart -- and would land the service on the one
+// port this package documents as colliding with Vault, having only logged an error.
+//
+// The caller records it rather than acting on it, because EnableMCP runs during the application's
+// own setup where there is nothing to abort. Run reports it at the same point it reports a port it
+// could not claim. See App.bindMCPServer.
 //
 // It deliberately does not check whether the port can be bound. The previous dial-based probe did,
 // and answered with Logger.Fatalf — os.Exit from library code, during setup, with no chance to clean
@@ -79,23 +94,19 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 //
 // mcpServer.bind takes the port for real instead, and does it where a failure can abort the run
 // properly.
-func (a *App) mcpPort() (int, bool) {
+func (a *App) mcpPort() (port int, enabled bool, err error) {
 	portStr := strings.TrimSpace(a.Config.Get("MCP_PORT"))
 	if portStr == "" {
-		return defaultMCPPort, true
+		return defaultMCPPort, true, nil
 	}
 
 	// The configured value is deliberately not echoed back. It comes from Config.Get, which CodeQL
 	// treats as a potentially sensitive source - a config store holds secrets as well as ports - and
 	// a log line is the wrong place to reproduce one. The operator knows what they set; what they
 	// need from this message is which variable was rejected and what happened instead.
-	port, err := strconv.Atoi(portStr)
+	port, err = strconv.Atoi(portStr)
 	if err != nil {
-		a.container.Logger.Errorf("MCP_PORT is not a number; serving MCP on the default port %d instead. "+
-			"Set MCP_PORT to a valid port, or MCP_PORT=0 to run without the MCP transport while keeping "+
-			"tools available in-process.", defaultMCPPort)
-
-		return defaultMCPPort, true
+		return 0, false, errMCPPortNotANumber
 	}
 
 	// Comparing the parsed number rather than the raw string is what makes "00", "+0" and " 0 " mean
@@ -107,18 +118,14 @@ func (a *App) mcpPort() (int, bool) {
 		// the raw config value for the reason given above.
 		a.container.Logger.Logf("MCP server is disabled (MCP_PORT=0)")
 
-		return 0, false
+		return 0, false, nil
 	}
 
 	if port < minTCPPort || port > maxTCPPort {
-		a.container.Logger.Errorf("MCP_PORT=%d is outside the valid port range %d-%d; serving MCP on the "+
-			"default port %d instead. Set MCP_PORT=0 to run without the MCP transport while keeping tools "+
-			"available in-process.", port, minTCPPort, maxTCPPort, defaultMCPPort)
-
-		return defaultMCPPort, true
+		return 0, false, fmt.Errorf("%w: %d is outside %d-%d", errMCPPortOutOfRange, port, minTCPPort, maxTCPPort)
 	}
 
-	return port, true
+	return port, true, nil
 }
 
 type mcpServer struct {
