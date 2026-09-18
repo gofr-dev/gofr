@@ -1079,6 +1079,23 @@ func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 // - and the whole timeout is spent only on a run that was going to fail anyway.
 const barrierTimeout = 15 * time.Second
 
+// statusNotOverlapped is what a handler answers when it waited out the barrier
+// instead of meeting its peers -- the failure these two tests exist to report.
+//
+// It is deliberately NOT a 5xx. The circuit breaker under test counts any status
+// above 500 as a failure (circuit_breaker.go:89) and opens once failureCount
+// exceeds the threshold (circuit_breaker.go:174), so answering 503 here would
+// feed the breaker the very signal this test emits when it fails. On a run where
+// serialization pushed the count past the threshold, the remaining requests
+// would come back as errors rather than statuses, require.NoError would fire
+// first, and the operator would read a generic circuit-open error instead of
+// "the requests were serialized, not parallel".
+//
+// Neither test can reach that today -- the thresholds are 10 and 5 against at
+// most 5 requests -- but the diagnostic should not depend on that arithmetic
+// staying true.
+const statusNotOverlapped = http.StatusConflict
+
 // concurrencyBarrier proves that n requests were in flight at the same instant,
 // without measuring how long anything took.
 //
@@ -1154,10 +1171,11 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 		mu.Unlock()
 
 		// Releases only when all five requests are inside the handler at once.
-		// If they were serialized, the first one waits alone and answers 503,
-		// which the status assertion below turns into a failure.
+		// If they were serialized, the first one waits alone and answers
+		// statusNotOverlapped, which the status assertion below turns into a
+		// failure.
 		if !barrier.arrive(barrierTimeout) {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			w.WriteHeader(statusNotOverlapped)
 
 			return
 		}
@@ -1286,10 +1304,10 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 	barrier := newConcurrencyBarrier(numMethods)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		// See TestCircuitBreaker_ParallelExecution: 503 means this request never
-		// overlapped its peers.
+		// See TestCircuitBreaker_ParallelExecution: statusNotOverlapped means this
+		// request never overlapped its peers.
 		if !barrier.arrive(barrierTimeout) {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			w.WriteHeader(statusNotOverlapped)
 
 			return
 		}
@@ -1324,8 +1342,14 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 		func() (*http.Response, error) { return httpSvc.Delete(t.Context(), "test", []byte(`{}`)) },
 	}
 
-	// The barrier is sized for exactly this many participants, so a method added
-	// above without widening numMethods would leave every handler waiting.
+	// The barrier is sized for exactly this many participants, so the slice and
+	// numMethods have to agree. This runs before any request is dispatched, so
+	// either direction -- a method added, or one removed -- fails here in
+	// milliseconds with a length mismatch rather than through a handler that
+	// waits out barrierTimeout.
+	//
+	// It cannot move any earlier: every entry in methods closes over httpSvc,
+	// which needs server.URL, so the server necessarily exists by this point.
 	require.Len(t, methods, numMethods)
 
 	errs := make([]error, numMethods)
