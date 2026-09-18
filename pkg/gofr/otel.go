@@ -3,8 +3,10 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -83,19 +85,19 @@ func (a *App) initTracer() {
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
-	if url == "" && name == "" {
+func isValidConfig(logger logging.Logger, name, endpoint, host, port string) bool {
+	if endpoint == "" && name == "" {
 		logger.Debug("tracing is disabled, as configs are not provided")
 		return false
 	}
 
-	if url != "" && name == "" {
+	if endpoint != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
 	}
 
 	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
-	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
+	if endpoint == "" && name != "" && !strings.EqualFold(name, "gofr") {
 		if host != "" && port != "" {
 			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 		} else {
@@ -170,8 +172,10 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		a.Logger().Warnf("invalid TRACER_INSECURE %q: expected a boolean; defaulting to plaintext for a "+
-			"schemeless TRACER_URL", v)
+		// The raw value is not echoed. Tracer config reaches a log only through
+		// redactURL, redactExporterName or as a matched constant.
+		a.Logger().Warn("invalid TRACER_INSECURE: expected true or false; defaulting to plaintext for a " +
+			"schemeless TRACER_URL")
 
 		return true, false
 	}
@@ -179,7 +183,7 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 	return b, true
 }
 
-func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
+func (a *App) getExporter(name, host, port, endpoint string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
 		err      error
@@ -188,26 +192,36 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	headers := a.getTracerHeaders()
 
 	switch strings.ToLower(name) {
-	case "otlp", "jaeger":
-		// Resolved inside the case, not above the switch: TRACER_INSECURE means
-		// nothing to zipkin or gofr, and evaluating it for them would warn about a
-		// malformed value under an exporter that never reads it.
-		insecure, insecureSet := a.tracerInsecure()
-
-		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers, insecure, insecureSet)
-	case "zipkin":
+	case otlpTraceExporter:
+		exporter, err = a.buildOtlpFamilyExporter(otlpTraceExporter, endpoint, host, port, headers)
+	case jaegerTraceExporter:
+		exporter, err = a.buildOtlpFamilyExporter(jaegerTraceExporter, endpoint, host, port, headers)
+	case zipkinTraceExporter:
 		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
 			"Zipkin supports OTLP natively (v2.24+) — to migrate, switch to TRACE_EXPORTER=otlp " +
 			"and point TRACER_URL to your Zipkin OTLP gRPC endpoint (default: <host>:4317)")
 
-		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, headers)
+		exporter, err = buildZipkinExporter(a.Logger(), endpoint, host, port, headers)
 	case gofrTraceExporter:
-		exporter = buildGoFrExporter(a.Logger(), url)
+		exporter = buildGoFrExporter(a.Logger(), endpoint)
 	default:
-		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
+		a.container.Errorf("unsupported TRACE_EXPORTER=%s: expected one of otlp, jaeger, zipkin or gofr",
+			redactExporterName(name))
 	}
 
 	return exporter, err
+}
+
+// buildOtlpFamilyExporter builds the OTLP exporter for otlp and jaeger. The
+// exporter name is passed as the matched constant rather than the configured
+// string, so only a known name is ever logged.
+func (a *App) buildOtlpFamilyExporter(name, endpoint, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
+	// Resolved here, not in getExporter above the switch: TRACER_INSECURE means
+	// nothing to zipkin or gofr, and evaluating it for them would warn about a
+	// malformed value under an exporter that never reads it.
+	insecure, insecureSet := a.tracerInsecure()
+
+	return buildOtlpExporter(a.Logger(), name, endpoint, host, port, headers, insecure, insecureSet)
 }
 
 // otlpTransport is the resolved transport-security decision for the OTLP trace
@@ -252,7 +266,7 @@ type otlpTransport struct {
 // exporter hardcoded WithInsecure(). Defaulting a schemeless endpoint to TLS
 // would break all of them silently in a minor release, so traces default a
 // schemeless endpoint to plaintext and TRACER_INSECURE=false is the opt-in.
-func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureSet bool) otlpTransport {
+func resolveOtlpTransport(logger logging.Logger, endpoint string, insecure, insecureSet bool) otlpTransport {
 	const (
 		schemeHTTP  = "http://"
 		schemeHTTPS = "https://"
@@ -261,12 +275,12 @@ func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureS
 	// Scheme comparison is case-insensitive per RFC 3986 §3.1, and url.Parse
 	// inside WithEndpointURL treats it that way — so HTTPS://host:4317 must not
 	// fall through to WithEndpoint, where it would be an invalid gRPC target.
-	scheme := strings.ToLower(url)
+	scheme := strings.ToLower(endpoint)
 
 	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
 		if insecureSet {
 			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
-				"from the URL scheme", url)
+				"from the URL scheme", redactURL(endpoint))
 		}
 
 		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
@@ -277,27 +291,27 @@ func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureS
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
 // jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string,
+func buildOtlpExporter(logger logging.Logger, name, endpoint, host, port string, headers map[string]string,
 	insecure, insecureSet bool) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	transport := resolveOtlpTransport(logger, url, insecure, insecureSet)
+	transport := resolveOtlpTransport(logger, endpoint, insecure, insecureSet)
 
 	if transport.plaintext && len(headers) > 0 {
 		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
-			"headers (including auth credentials) will be sent in the clear", url)
+			"headers (including auth credentials) will be sent in the clear", redactURL(endpoint))
 	}
 
-	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
+	logger.Infof("Exporting traces to %s at %s", name, redactURL(endpoint))
 
 	var opts []otlptracegrpc.Option
 
 	if transport.useEndpointURL {
-		opts = append(opts, otlptracegrpc.WithEndpointURL(url))
+		opts = append(opts, otlptracegrpc.WithEndpointURL(endpoint))
 	} else {
-		opts = append(opts, otlptracegrpc.WithEndpoint(url))
+		opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
 
 		if transport.insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
@@ -311,29 +325,136 @@ func buildOtlpExporter(logger logging.Logger, name, url, host, port string, head
 	return otlptracegrpc.New(context.Background(), opts...)
 }
 
-func buildZipkinExporter(logger logging.Logger, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+func buildZipkinExporter(logger logging.Logger, endpoint, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
 	}
 
-	logger.Infof("Exporting traces to zipkin at %s", url)
+	logger.Infof("Exporting traces to zipkin at %s", redactURL(endpoint))
 
 	var opts []zipkin.Option
 	if len(headers) > 0 {
 		opts = append(opts, zipkin.WithHeaders(headers))
 	}
 
-	return zipkin.New(url, opts...)
+	return zipkin.New(endpoint, opts...)
 }
 
-func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter {
-	if url == "" {
-		url = "https://tracer-api.gofr.dev/api/spans"
+func buildGoFrExporter(logger logging.Logger, endpoint string) sdktrace.SpanExporter {
+	if endpoint == "" {
+		endpoint = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	logger.Infof("Exporting traces to GoFr at %s", url)
+	logger.Infof("Exporting traces to GoFr at %s", redactURL(endpoint))
 
-	return NewExporter(url, logging.NewLogger(logging.INFO))
+	return NewExporter(endpoint, logging.NewLogger(logging.INFO))
+}
+
+// redactedPlaceholder stands in for credentials when a tracer endpoint is logged.
+const redactedPlaceholder = "REDACTED"
+
+// redactURL returns a tracer endpoint that is safe to write to a log.
+//
+// A scheme-bearing TRACER_URL is a real URL, so it can carry credentials in its
+// userinfo (https://user:token@collector:4317) or its query
+// (https://collector/api/v2/spans?api-key=...). Both are replaced rather than
+// dropped, so the log still shows that something was configured there.
+//
+// Secrets placed in path segments (https://host/v1/TOKEN/spans) are not
+// redacted: no tracer backend GoFr supports takes credentials there, and
+// hiding the path would hide the part of the endpoint an operator debugs.
+//
+// Control characters are escaped on the unparsed path only: url.Parse rejects
+// them, so such a value always lands there, and a raw newline would otherwise
+// forge a second log line in the terminal's pretty output.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return escapeControlChars(redactUnparsedURL(raw))
+	}
+
+	if u.User != nil {
+		u.User = url.User(redactedPlaceholder)
+	}
+
+	if u.RawQuery != "" {
+		u.RawQuery = redactedPlaceholder
+	}
+
+	u.Fragment = ""
+
+	return u.String()
+}
+
+// escapeControlChars replaces every control character with its \x or \u
+// escape, so a logged value always stays on one line.
+func escapeControlChars(s string) string {
+	if strings.IndexFunc(s, unicode.IsControl) < 0 {
+		return s
+	}
+
+	var b strings.Builder
+
+	for _, r := range s {
+		switch {
+		case !unicode.IsControl(r):
+			b.WriteRune(r)
+		case r <= unicode.MaxLatin1:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		}
+	}
+
+	return b.String()
+}
+
+// maxEchoedExporterNameLen bounds how much of an unsupported TRACE_EXPORTER is
+// echoed back; every supported name is at most 6 characters.
+const maxEchoedExporterNameLen = 16
+
+// redactExporterName returns an unsupported TRACE_EXPORTER value in a form safe
+// to log. A typo of a real exporter name -- short, letters and '-' or '_' only
+// -- is echoed so it can be spotted; anything else, which is more likely a
+// value pasted into the wrong variable, is replaced.
+func redactExporterName(name string) string {
+	if name == "" || len(name) > maxEchoedExporterNameLen {
+		return redactedPlaceholder
+	}
+
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '-' && r != '_' {
+			return redactedPlaceholder
+		}
+	}
+
+	return name
+}
+
+// redactUnparsedURL redacts an endpoint that url.Parse cannot split into a host
+// and the rest: a schemeless host:port, host/path or user:pass@host, or input
+// that does not parse at all. It works on the raw string and over-redacts
+// rather than risk a leak.
+//
+// Userinfo is handled first, up to the last '@'. A '?' in a password, or an
+// '@' in a query value, then falls inside the replaced prefix instead of
+// splitting the credential. The query and fragment are handled after that.
+func redactUnparsedURL(raw string) string {
+	redacted := raw
+
+	if i := strings.LastIndex(redacted, "@"); i >= 0 {
+		redacted = redactedPlaceholder + redacted[i:]
+	}
+
+	if i := strings.IndexByte(redacted, '#'); i >= 0 {
+		redacted = redacted[:i]
+	}
+
+	if i := strings.IndexByte(redacted, '?'); i >= 0 {
+		redacted = redacted[:i+1] + redactedPlaceholder
+	}
+
+	return redacted
 }
 
 type otelErrorHandler struct {
