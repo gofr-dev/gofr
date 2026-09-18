@@ -82,7 +82,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 		middleware.Tracer,
 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics()),
+		middleware.Metrics(c.Metrics(), middleware.WithCardinalityLimit(middlewareConfigs.MetricsCardinalityLimit)),
 	)
 
 	return &httpServer{
