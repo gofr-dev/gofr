@@ -92,15 +92,16 @@ func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
-	TraceID      string `json:"trace_id,omitempty"`
-	SpanID       string `json:"span_id,omitempty"`
-	StartTime    string `json:"start_time,omitempty"`
-	ResponseTime int64  `json:"response_time,omitempty"`
-	Method       string `json:"method,omitempty"`
-	UserAgent    string `json:"user_agent,omitempty"`
-	IP           string `json:"ip,omitempty"`
-	URI          string `json:"uri,omitempty"`
-	Response     int    `json:"response,omitempty"`
+	TraceID         string `json:"trace_id,omitempty"`
+	SpanID          string `json:"span_id,omitempty"`
+	StartTime       string `json:"start_time,omitempty"`
+	ResponseTime    int64  `json:"response_time,omitempty"`
+	ResponseTimeUnit string `json:"response_time_unit,omitempty"`
+	Method          string `json:"method,omitempty"`
+	UserAgent       string `json:"user_agent,omitempty"`
+	IP              string `json:"ip,omitempty"`
+	URI             string `json:"uri,omitempty"`
+	Response        int    `json:"response,omitempty"`
 }
 
 // zeroTraceID is the canonical 32-zero string the W3C trace-context
@@ -251,15 +252,16 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 	}
 
 	l := &RequestLog{
-		TraceID:      traceID,
-		SpanID:       spanID,
-		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-		ResponseTime: time.Since(start).Nanoseconds() / 1000,
-		Method:       r.Method,
-		UserAgent:    r.UserAgent(),
-		IP:           getIPAddress(r),
-		URI:          r.RequestURI,
-		Response:     status,
+		TraceID:          traceID,
+		SpanID:           spanID,
+		StartTime:        start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime:     time.Since(start).Nanoseconds() / 1000,
+		ResponseTimeUnit: "µs",
+		Method:           r.Method,
+		UserAgent:        r.UserAgent(),
+		IP:               getIPAddress(r),
+		URI:              r.RequestURI,
+		Response:         status,
 	}
 
 	if logger != nil {
