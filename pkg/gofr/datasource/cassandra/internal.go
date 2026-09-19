@@ -30,6 +30,12 @@ func (c *cassandraIterator) numRows() int {
 	return c.iter.NumRows()
 }
 
+// close releases the iterator and returns any error the query failed with.
+// This method wraps the `Close` method of the underlying `iter` object.
+func (c *cassandraIterator) close() error {
+	return c.iter.Close()
+}
+
 // cassandraQuery implements query interface.
 type cassandraQuery struct {
 	query *gocql.Query

@@ -33,6 +33,11 @@ func (s *scylladbIterator) NumRows() int {
 	return s.iter.NumRows()
 }
 
+// Close releases the iterator and returns any error the query failed with.
+func (s *scylladbIterator) Close() error {
+	return s.iter.Close()
+}
+
 // scylladbQuery implements query interface.
 type scylladbQuery struct {
 	query *gocql.Query
