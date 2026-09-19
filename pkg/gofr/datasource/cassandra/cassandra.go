@@ -123,7 +123,7 @@ func (c *Client) NewBatch(name string, batchType int) error {
 // QueryWithCtx executes a CQL query in the Cassandra database and returns the result.
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) (err error) {
 	span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
@@ -137,6 +137,18 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 
 	rv := rvo.Elem()
 	iter := c.cassandra.session.query(stmt, values...).iter()
+
+	// gocql only reports a failed query through Close, scan/numRows just look
+	// like an empty result set. Close on every path and keep the first error.
+	defer func() {
+		if closeErr := iter.close(); closeErr != nil {
+			c.logger.Errorf("cassandra query failed: %v", closeErr)
+
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}()
 
 	switch rv.Kind() {
 	case reflect.Slice:
