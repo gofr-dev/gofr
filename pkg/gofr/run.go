@@ -17,13 +17,21 @@ import (
 // indefinitely waiting on an unreachable collector.
 const telemetryFlushTimeout = 10 * time.Second
 
+// osExit is a seam over os.Exit so runCMD's non-zero exit on a failed command
+// can be exercised in tests without terminating the test binary. Reassigned only
+// from tests via t.Cleanup.
+//
+//nolint:gochecknoglobals // Test seam — see doc above.
+var osExit = os.Exit
+
 // runCMD runs a CMD application's subcommand and then flushes telemetry: the
 // final metric window and the pending span batch would otherwise be dropped when
 // the process exits, which for a CLI invocation is every window and every batch.
 // The flush is bounded by telemetryFlushTimeout so an unreachable collector
-// cannot hang the invocation.
+// cannot hang the invocation. If the command failed, it exits non-zero after the
+// flush so shells and CI can detect the failure.
 func (a *App) runCMD() {
-	a.cmd.Run(a.container)
+	failed := a.cmd.Run(a.container)
 
 	if a.container != nil {
 		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
@@ -40,6 +48,12 @@ func (a *App) runCMD() {
 
 	if closer, ok := a.container.Logger.(io.Closer); ok {
 		closer.Close()
+	}
+
+	// Exit non-zero only after telemetry is flushed and the logger is closed, so a
+	// failed command still reports its final metrics/traces before the process ends.
+	if failed {
+		osExit(1)
 	}
 }
 

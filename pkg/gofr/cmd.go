@@ -34,30 +34,36 @@ func (e ErrCommandNotFound) Error() string {
 	return fmt.Sprintf("'%s' is not a valid command.", e.Command)
 }
 
-func (cmd *cmd) Run(c *container.Container) {
+// Run executes the sub-command parsed from os.Args and returns true if the
+// handler (or command resolution) responded with an error, so the caller can
+// exit with a non-zero status.
+func (cmd *cmd) Run(c *container.Container) bool {
 	args := os.Args[1:] // First one is command itself
 	subCommand, showHelp, firstArg := parseArgs(args)
 
 	if showHelp && subCommand == "" {
 		cmd.printHelp()
-		return
+		return false
 	}
 
 	r := cmd.handler(subCommand)
-	ctx := newCMDContext(&cmd2.Responder{}, cmd2.NewRequest(args), c, cmd.out)
+	responder := &cmd2.Responder{}
+	ctx := newCMDContext(responder, cmd2.NewRequest(args), c, cmd.out)
 
 	commandForError := getCommandForError(subCommand, firstArg)
 
 	if cmd.noCommandResponse(r, ctx, commandForError) {
-		return
+		return responder.Errored()
 	}
 
 	if showHelp {
 		cmd.out.Println(r.help)
-		return
+		return false
 	}
 
 	ctx.responder.Respond(r.handler(ctx))
+
+	return responder.Errored()
 }
 
 // parseArgs parses command line arguments and returns subCommand, showHelp flag, and firstArg.
