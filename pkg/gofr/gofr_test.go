@@ -38,20 +38,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewCMD(t *testing.T) {
-	// An unknown command responds with an error, which now also sets a non-zero
-	// exit code. Stub osExit so the error path doesn't terminate the test binary.
-	originalExit := osExit
-	exitCode := 0
-	osExit = func(code int) { exitCode = code }
-
-	t.Cleanup(func() { osExit = originalExit })
-
 	a := NewCMD()
 	// Without args we should get error on stderr.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
 
 	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
-	assert.Equal(t, 1, exitCode, "an unknown command should exit with a non-zero status")
 }
 
 func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {

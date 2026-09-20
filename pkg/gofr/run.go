@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"testing"
 	"time"
 )
 
@@ -16,13 +17,6 @@ import (
 // after a CMD app's handler returns, so a CLI invocation cannot hang
 // indefinitely waiting on an unreachable collector.
 const telemetryFlushTimeout = 10 * time.Second
-
-// osExit is a seam over os.Exit so runCMD's non-zero exit on a failed command
-// can be exercised in tests without terminating the test binary. Reassigned only
-// from tests via t.Cleanup.
-//
-//nolint:gochecknoglobals // Test seam — see doc above.
-var osExit = os.Exit
 
 // runCMD runs a CMD application's subcommand and then flushes telemetry: the
 // final metric window and the pending span batch would otherwise be dropped when
@@ -33,27 +27,38 @@ var osExit = os.Exit
 func (a *App) runCMD() {
 	failed := a.cmd.Run(a.container)
 
-	if a.container != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
-		defer cancel()
-
-		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush metrics: %v", err)
-		}
-
-		if err := a.shutdownTraces(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush traces: %v", err)
-		}
-	}
+	a.flushCMDTelemetry()
 
 	if closer, ok := a.container.Logger.(io.Closer); ok {
 		closer.Close()
 	}
 
-	// Exit non-zero only after telemetry is flushed and the logger is closed, so a
-	// failed command still reports its final metrics/traces before the process ends.
-	if failed {
-		osExit(1)
+	// Exit non-zero (after telemetry is flushed and the logger is closed) so a failed
+	// command is detectable by shells and CI. Skipped under `go test` so in-process
+	// tests that invoke Run — including apps' own main() tests — are not terminated.
+	if failed && !testing.Testing() {
+		//nolint:revive // exit status 1 signals the failed command to shells and CI
+		os.Exit(1)
+	}
+}
+
+// flushCMDTelemetry flushes the final metric window and pending span batch after a
+// CMD app's handler returns. Kept separate so its deferred cancel runs before
+// runCMD's os.Exit on the failure path.
+func (a *App) flushCMDTelemetry() {
+	if a.container == nil {
+		return
+	}
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+	defer cancel()
+
+	if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush metrics: %v", err)
+	}
+
+	if err := a.shutdownTraces(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush traces: %v", err)
 	}
 }
 
