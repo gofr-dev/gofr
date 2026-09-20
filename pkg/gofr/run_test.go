@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -158,6 +159,47 @@ func TestApp_Run_waitsForShutdown(t *testing.T) {
 	assert.Contains(t, out.String(), shutdownWaited,
 		"Run returned before the graceful shutdown completed:\n%s", out)
 	assert.NotContains(t, out.String(), shutdownRaced)
+}
+
+// TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed pins the warning for the
+// metrics-only startup: an app that registers readiness checks but no HTTP routes skips the HTTP
+// server without a word, and /.well-known/health is unreachable for no logged reason.
+func TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed(t *testing.T) {
+	runStart := func(setup func(*App)) string {
+		// The app must be created INSIDE the capture: the container logger stores
+		// os.Stdout at construction, so an app built before the swap would log
+		// past the pipe and the capture would come back empty.
+		return testutil.StdoutOutputForFunc(func() {
+			app := New()
+
+			// New() marks the HTTP server for startup whenever the working directory
+			// happens to hold a static directory, so pin the state under test instead
+			// of inheriting whatever the CI/workspace checkout looks like.
+			app.httpRegistered = false
+
+			setup(app)
+
+			var wg sync.WaitGroup
+
+			app.startHTTPServer(&wg)
+			wg.Wait()
+		})
+	}
+
+	t.Run("readiness checks registered but no routes", func(t *testing.T) {
+		out := runStart(func(app *App) {
+			app.AddReadinessCheck(func(*Context) error { return nil })
+		})
+
+		assert.Contains(t, out, "readiness:", "the metrics-only startup must say why health is unreachable:\n%s", out)
+		assert.Contains(t, out, "the HTTP server will not start", "the warning must name the consequence:\n%s", out)
+	})
+
+	t.Run("no readiness checks and no routes stays silent", func(t *testing.T) {
+		out := runStart(func(*App) {})
+
+		assert.NotContains(t, out, "the HTTP server will not start", "an app without readiness checks has nothing to explain:\n%s", out)
+	})
 }
 
 // TestShutdownHelperProcess is the app under test for TestApp_Run_waitsForShutdown, run as its own
