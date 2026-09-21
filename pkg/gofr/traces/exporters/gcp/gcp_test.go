@@ -1,31 +1,49 @@
 package gcp
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"gofr.dev/pkg/gofr/traces/exporters"
 	"golang.org/x/oauth2/google"
 )
 
-type testLogger struct{ warnings []string }
+type testLogger struct {
+	warnings []string
+	infos    []string
+}
 
-func (*testLogger) Debug(...any)         {}
-func (*testLogger) Infof(string, ...any) {}
+func (*testLogger) Debug(...any) {}
+func (l *testLogger) Infof(format string, args ...any) {
+	l.infos = append(l.infos, fmt.Sprintf(format, args...))
+}
 func (l *testLogger) Warnf(format string, args ...any) {
 	l.warnings = append(l.warnings, fmt.Sprintf(format, args...))
 }
 func (*testLogger) Errorf(string, ...any) {}
 
 func (l *testLogger) warnedAbout(substr string) bool {
-	for _, w := range l.warnings {
-		if strings.Contains(w, substr) {
+	return containsSubstr(l.warnings, substr)
+}
+
+func (l *testLogger) infoedAbout(substr string) bool {
+	return containsSubstr(l.infos, substr)
+}
+
+func containsSubstr(lines []string, substr string) bool {
+	for _, line := range lines {
+		if strings.Contains(line, substr) {
 			return true
 		}
 	}
@@ -71,23 +89,111 @@ func resolvedADC(project string) *adc {
 	return a
 }
 
+func Test_resolveEndpoint(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		want     string
+		wantErr  bool
+	}{
+		{name: "unset falls back to the default", endpoint: "", want: defaultEndpoint},
+		{
+			name:     "regional endpoint is used verbatim",
+			endpoint: "telemetry.europe-west1.rep.googleapis.com:443",
+			want:     "telemetry.europe-west1.rep.googleapis.com:443",
+		},
+		{name: "host:port is not a scheme", endpoint: "telemetry.googleapis.com:443", want: "telemetry.googleapis.com:443"},
+		{name: "https is rejected", endpoint: "https://telemetry.googleapis.com:443", wantErr: true},
+		{name: "http is rejected", endpoint: "http://telemetry.googleapis.com:443", wantErr: true},
+		{name: "scheme match is case-insensitive", endpoint: "HTTPS://telemetry.googleapis.com:443", wantErr: true},
+		{name: "any other scheme is rejected too", endpoint: "grpc://telemetry.googleapis.com:443", wantErr: true},
+		// RFC 3986 §3.1 allows digits, '+', '-' and '.' after the first ALPHA.
+		{name: "scheme with the full RFC 3986 charset", endpoint: "g2rpc+w-x.y://telemetry.googleapis.com:443", wantErr: true},
+		// "://" alone is not a scheme: the prefix has to be a well-formed one, or
+		// a malformed endpoint gets an error naming a scheme nobody wrote.
+		{
+			name:     "leading digit is not a scheme",
+			endpoint: "2grpc://telemetry.googleapis.com:443",
+			want:     "2grpc://telemetry.googleapis.com:443",
+		},
+		{
+			name:     "a separator inside the prefix is not a scheme",
+			endpoint: "host/path://telemetry.googleapis.com:443",
+			want:     "host/path://telemetry.googleapis.com:443",
+		},
+		{name: "a leading :// is not a scheme", endpoint: "://telemetry.googleapis.com:443", want: "://telemetry.googleapis.com:443"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveEndpoint(&exporters.Config{Endpoint: tt.endpoint})
+
+			if tt.wantErr {
+				if !errors.Is(err, errSchemeInEndpoint) {
+					t.Fatalf("expected errSchemeInEndpoint, got %v", err)
+				}
+
+				if got != "" {
+					t.Errorf("expected no endpoint alongside the error, got %q", got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("endpoint = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Test_resolveEndpoint_errorRedactsCredentials guards the same rule as the
+// startup log line: the rejected value is operator input, the registry writes
+// the returned error to a log, and TRACER_URL routinely carries a credential.
+func Test_resolveEndpoint_errorRedactsCredentials(t *testing.T) {
+	const secret = "s3cr3t"
+
+	_, err := resolveEndpoint(&exporters.Config{Endpoint: "https://svc:" + secret + "@telemetry.googleapis.com:443"})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	if strings.Contains(err.Error(), secret) {
+		t.Errorf("error leaked the credential: %s", err)
+	}
+}
+
 func Test_buildExporter_endpoint(t *testing.T) {
 	writeADC(t)
 
 	tests := []struct {
 		name string
 		cfg  exporters.Config
+		want string
 	}{
-		{name: "default endpoint", cfg: exporters.Config{}},
-		{name: "TRACER_URL overrides", cfg: exporters.Config{Endpoint: "telemetry.europe-west1.rep.googleapis.com:443"}},
-		{name: "headers are forwarded", cfg: exporters.Config{Headers: map[string]string{"X-Tenant": "a"}}},
+		{name: "default endpoint", cfg: exporters.Config{}, want: defaultEndpoint},
+		{
+			name: "TRACER_URL overrides",
+			cfg:  exporters.Config{Endpoint: "telemetry.europe-west1.rep.googleapis.com:443"},
+			want: "telemetry.europe-west1.rep.googleapis.com:443",
+		},
+		{
+			name: "headers are forwarded",
+			cfg:  exporters.Config{Headers: map[string]string{"X-Tenant": "a"}},
+			want: defaultEndpoint,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.cfg.Resource = resource.NewSchemaless(attribute.String(projectIDKey, "p"))
+			logger := &testLogger{}
 
-			exp, err := buildExporter(t.Context(), &tt.cfg, &testLogger{})
+			exp, err := buildExporter(t.Context(), &tt.cfg, logger)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -96,8 +202,182 @@ func Test_buildExporter_endpoint(t *testing.T) {
 				t.Fatal("expected a non-nil exporter")
 			}
 
+			// otlptracegrpc keeps the target in an unexported field, so the startup
+			// log is the observable that binds it. Without an assertion here the
+			// table covers buildExporter's lines without constraining the endpoint
+			// at all -- discarding cfg.Endpoint entirely still passes.
+			if !logger.infoedAbout(tt.want) {
+				t.Errorf("expected the startup log to name %q, got %v", tt.want, logger.infos)
+			}
+
 			_ = exp.Shutdown(t.Context())
 		})
+	}
+}
+
+// Test_buildExporter_dialsTheResolvedEndpoint is the assertion that constrains
+// the endpoint rather than merely covering the line. otlptracegrpc keeps the
+// target in an unexported field and the startup log reads the same variable, so
+// neither can tell that WithEndpoint received the resolved value -- discarding
+// cfg.Endpoint inside the option call survives both.
+//
+// A listener on an ephemeral port is the one observable that cannot: a
+// connection arriving there proves the dialer was given this address. The TLS
+// handshake then fails against a bare TCP socket, which is fine -- the socket is
+// the assertion, not the export.
+func Test_buildExporter_dialsTheResolvedEndpoint(t *testing.T) {
+	writeADC(t)
+
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ln.Close()
+
+	dialed := make(chan struct{}, 1)
+
+	go func() {
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+
+		dialed <- struct{}{}
+
+		conn.Close()
+	}()
+
+	cfg := exporters.Config{
+		Endpoint: ln.Addr().String(),
+		Resource: resource.NewSchemaless(attribute.String(projectIDKey, "p")),
+	}
+
+	exp, err := buildExporter(t.Context(), &cfg, &testLogger{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() { _ = exp.Shutdown(context.Background()) }()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	// The export is expected to fail against a bare socket ("authentication
+	// handshake failed: EOF"); it exists only to force the lazy gRPC dial. Its
+	// deadline is spent by the time it returns, so the wait below needs a timer
+	// of its own rather than this context.
+	_ = exp.ExportSpans(ctx, tracetest.SpanStubs{{Name: "probe"}}.Snapshots())
+
+	select {
+	case <-dialed:
+	case <-time.After(time.Second):
+		t.Fatalf("no connection reached %s; the resolved endpoint was not the dial target", ln.Addr())
+	}
+}
+
+// Test_buildExporter_rejectsSchemeBearingEndpoint pins the failure to startup.
+// otlptracegrpc.WithEndpoint stores a scheme-bearing value verbatim as the gRPC
+// target, which is invalid ("too many colons in address"), so the app boots
+// healthy and silently exports nothing until the ~30s export timeout elapses.
+func Test_buildExporter_rejectsSchemeBearingEndpoint(t *testing.T) {
+	writeADC(t)
+
+	cfg := exporters.Config{
+		Endpoint: "https://telemetry.googleapis.com:443",
+		Resource: resource.NewSchemaless(attribute.String(projectIDKey, "p")),
+	}
+
+	exp, err := buildExporter(t.Context(), &cfg, &testLogger{})
+	if !errors.Is(err, errSchemeInEndpoint) {
+		t.Fatalf("expected errSchemeInEndpoint, got %v", err)
+	}
+
+	if exp != nil {
+		t.Error("expected no exporter when the endpoint is rejected")
+	}
+}
+
+// Test_buildExporter_redactsEndpointInLog guards the rule RedactURL's own doc
+// comment states for a Builder registered from outside that package: TRACER_URL
+// is operator input and routinely carries a credential.
+func Test_buildExporter_redactsEndpointInLog(t *testing.T) {
+	writeADC(t)
+
+	tests := []struct {
+		name     string
+		endpoint string
+		unwanted string
+		want     string
+	}{
+		{
+			name:     "userinfo",
+			endpoint: "svc:s3cr3t@telemetry.googleapis.com:443",
+			unwanted: "s3cr3t",
+			want:     "REDACTED@telemetry.googleapis.com:443",
+		},
+		{
+			name:     "query",
+			endpoint: "telemetry.googleapis.com:443?api-key=AIzaLIVEKEY",
+			unwanted: "AIzaLIVEKEY",
+			want:     "telemetry.googleapis.com:443?REDACTED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := exporters.Config{
+				Endpoint: tt.endpoint,
+				Resource: resource.NewSchemaless(attribute.String(projectIDKey, "p")),
+			}
+			logger := &testLogger{}
+
+			exp, err := buildExporter(t.Context(), &cfg, logger)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			defer func() { _ = exp.Shutdown(t.Context()) }()
+
+			if !logger.infoedAbout(tt.want) {
+				t.Errorf("expected the log to contain %q, got %v", tt.want, logger.infos)
+			}
+
+			for _, line := range logger.infos {
+				if strings.Contains(line, tt.unwanted) {
+					t.Errorf("log line leaked %q: %s", tt.unwanted, line)
+				}
+			}
+		})
+	}
+}
+
+// Test_buildExporter_redactsEndpointInError covers the endpoint the SDK quotes
+// back in its own error. otlptracegrpc.New prepends "dns:///" and parses the
+// result, so a control character -- which is what a forged log line needs --
+// never reaches the startup log at all; it fails construction, and the error
+// carries the raw value into whatever logs it.
+func Test_buildExporter_redactsEndpointInError(t *testing.T) {
+	writeADC(t)
+
+	cfg := exporters.Config{
+		Endpoint: "svc:s3cr3t@telemetry.googleapis.com:443\nlevel=INFO msg=\"forged\"",
+		Resource: resource.NewSchemaless(attribute.String(projectIDKey, "p")),
+	}
+
+	exp, err := buildExporter(t.Context(), &cfg, &testLogger{})
+	if err == nil {
+		_ = exp.Shutdown(t.Context())
+
+		t.Fatal("expected an error")
+	}
+
+	for _, leak := range []string{"s3cr3t", "\n"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("error leaked %q: %s", leak, err)
+		}
 	}
 }
 

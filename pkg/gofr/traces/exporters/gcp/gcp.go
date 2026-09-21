@@ -8,19 +8,27 @@
 //
 // On Cloud Run this authenticates via the attached service account, with no key
 // file and no Collector sidecar. Grant that service account
-// roles/telemetry.tracesWriter (or the broader roles/telemetry.writer) on the
-// project receiving the spans.
+// roles/telemetry.tracesWriter on the project receiving the spans: it is the
+// least-privilege role carrying telemetry.traces.write, the permission this
+// endpoint checks. roles/telemetry.writer and roles/cloudtrace.agent also carry
+// it, and grant more besides — verified with gcloud iam roles describe on
+// 2026-09-21; the permission an endpoint checks is Google's to change, so treat
+// the mapping as documentation rather than as a guarantee.
 //
-// roles/cloudtrace.agent is NOT sufficient: it authorizes the older Cloud Trace
-// API (cloudtrace.googleapis.com), which this exporter never calls.
+// With a service account attached, the quota project resolves automatically.
+// User credentials do not carry one: grant roles/serviceusage.serviceUsageConsumer
+// on the quota project and set GOOGLE_CLOUD_QUOTA_PROJECT.
 //
 // TRACER_URL is optional and defaults to telemetry.googleapis.com:443. Set it to
 // a regional endpoint (telemetry.<region>.rep.googleapis.com:443) when data
-// residency requires one.
+// residency requires one. It must be a schemeless host:port — this destination
+// is always TLS on 443, so there is no transport to select and a scheme is
+// rejected at startup rather than interpreted.
 package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -146,8 +154,13 @@ func withProjectID(res *resource.Resource, project string) *resource.Resource {
 		return attrs
 	}
 
+	// Merge returns the combined set alongside a schema-conflict error, so the
+	// error branch keeps that set rather than falling back to attrs alone --
+	// which would drop every platform attribute the detector resolved. It is
+	// unreachable at the pinned otel/sdk (Merge cannot fail when b is
+	// schemaless), and this is what it should do if that ever changes.
 	merged, err := resource.Merge(res, attrs)
-	if err != nil {
+	if err != nil && merged == nil {
 		return attrs
 	}
 
@@ -165,14 +178,14 @@ func buildExporter(ctx context.Context, cfg *exporters.Config, logger exporters.
 	// operator can be told before spans quietly go to the wrong place or nowhere.
 	warnMissingProject(cfg, logger)
 
+	endpoint, err := resolveEndpoint(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	creds, err := defaultADC.get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("gcp traces: resolving application default credentials: %w", err)
-	}
-
-	endpoint := cfg.Endpoint
-	if endpoint == "" {
-		endpoint = defaultEndpoint
 	}
 
 	opts := []otlptracegrpc.Option{
@@ -194,12 +207,82 @@ func buildExporter(ctx context.Context, cfg *exporters.Config, logger exporters.
 
 	exporter, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("gcp traces: creating OTLP exporter: %w", err)
+		// The SDK quotes the endpoint back in its own error ("parse
+		// \"dns:///<endpoint>\": …"), so redacting at the log line above is not
+		// enough -- this error is logged too. %w would re-expose it through
+		// Error(), which is why the message is rewritten rather than wrapped.
+		//nolint:err113 // a third-party constructor's message is being redacted, not wrapped.
+		return nil, errors.New(exporters.RedactMessage(
+			fmt.Sprintf("gcp traces: creating OTLP exporter: %s", err), endpoint))
 	}
 
-	logger.Infof("exporting traces to Google Cloud at %s via keyless ADC", endpoint)
+	logger.Infof("exporting traces to Google Cloud at %s via keyless ADC", exporters.RedactURL(endpoint))
 
 	return exporter, nil
+}
+
+// errSchemeInEndpoint reports a TRACER_URL that carries a scheme. It is a
+// sentinel so the rejection is testable without matching on message text.
+var errSchemeInEndpoint = errors.New("gcp traces: TRACER_URL must be a schemeless host:port")
+
+// resolveEndpoint returns the gRPC target for the OTLP dialer: TRACER_URL when
+// set, otherwise defaultEndpoint.
+//
+// A scheme is rejected rather than interpreted. otlptracegrpc.WithEndpoint
+// stores its argument verbatim as the gRPC target, and a scheme-bearing value is
+// not a valid one -- "invalid target address https://…:443, too many colons in
+// address". That failure lands at export, not at startup, so the app boots
+// healthy, logs that it is exporting, and drops every span; under a context
+// shorter than the ~30s export timeout the operator sees only "context deadline
+// exceeded", which points at the network rather than at the config.
+//
+// The sibling otlp builder resolves a scheme instead (resolveOtlpTransport in
+// the parent package, gofr-dev/gofr#4205), because there the scheme genuinely
+// selects a transport. Here it cannot: Google's OTLP ingest is always TLS on
+// 443, so the only honest readings of a scheme are "redundant" and "wrong", and
+// failing at startup with the fix in the message beats guessing between them.
+func resolveEndpoint(cfg *exporters.Config) (string, error) {
+	if cfg.Endpoint == "" {
+		return defaultEndpoint, nil
+	}
+
+	if scheme := schemeOf(cfg.Endpoint); scheme != "" {
+		return "", fmt.Errorf("%w, not %q: %s carries a %q scheme and Google's OTLP ingest is always TLS on 443",
+			errSchemeInEndpoint, scheme+"://…", exporters.RedactURL(cfg.Endpoint), scheme)
+	}
+
+	return cfg.Endpoint, nil
+}
+
+// schemeOf returns the lowercased URI scheme of raw, or "" when it has none.
+//
+// A schemeless host:port also contains a colon, so the "://" separator is what
+// distinguishes the two. The prefix is then validated against RFC 3986 §3.1
+// (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )) so that a stray "://" inside some
+// other malformed value is not reported as a scheme the operator never wrote.
+func schemeOf(raw string) string {
+	i := strings.Index(raw, "://")
+	if i <= 0 {
+		return ""
+	}
+
+	for j, r := range raw[:i] {
+		if !isSchemeRune(r, j == 0) {
+			return ""
+		}
+	}
+
+	return strings.ToLower(raw[:i])
+}
+
+// isSchemeRune reports whether r is allowed at this position of a URI scheme.
+// Only the first rune is restricted to ALPHA.
+func isSchemeRune(r rune, first bool) bool {
+	if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
+		return true
+	}
+
+	return !first && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.')
 }
 
 // warnMissingProject reports that no destination project could be resolved.
