@@ -27,6 +27,11 @@ last about an hour, so a static `TRACER_AUTH_KEY` or `TRACER_HEADERS` value
 authenticates once and then stops working. TLS is always on, and
 `TRACER_INSECURE` does not apply.
 
+For the same reason `TRACER_URL` must be a schemeless `host:port`: there is no
+transport to select, so a `http://`/`https://` value is rejected at startup
+rather than interpreted. Unlike the `otlp` exporter, where the scheme is
+meaningful, here it would be silently dropped by the gRPC dialer.
+
 ## Deploy to Cloud Run (keyless)
 
 1. Grant the service's runtime service account permission to write traces:
@@ -37,15 +42,24 @@ authenticates once and then stops working. TLS is always on, and
      --role="roles/telemetry.tracesWriter"
    ```
 
-   `roles/telemetry.tracesWriter` (or the broader `roles/telemetry.writer`) is
-   the role for `telemetry.googleapis.com`, which is what this exporter pushes
-   to. **`roles/cloudtrace.agent` is not sufficient** — it authorizes the older
-   Cloud Trace API (`cloudtrace.googleapis.com`), a different API that this
-   exporter never calls.
+   `telemetry.googleapis.com` — what this exporter pushes to — checks the
+   `telemetry.traces.write` permission. `roles/telemetry.tracesWriter` is the
+   least-privilege predefined role carrying it; `roles/telemetry.writer` and
+   `roles/cloudtrace.agent` carry it as well and grant more besides. Verified
+   with `gcloud iam roles describe` on 2026-09-21:
+
+   ```bash
+   gcloud iam roles describe roles/telemetry.tracesWriter   # telemetry.traces.write
+   gcloud iam roles describe roles/telemetry.writer         # + logging, monitoring writes
+   gcloud iam roles describe roles/cloudtrace.agent         # + cloudtrace.traces.patch
+   ```
 
    With a service account attached, the quota project is resolved automatically.
-   Do not pass `x-goog-user-project` as a tracer header; Google documents that
-   this is not the supported route, and the exporter warns if you do.
+   If you authenticate with **user** credentials instead, also grant
+   `roles/serviceusage.serviceUsageConsumer` on the quota project and set
+   `GOOGLE_CLOUD_QUOTA_PROJECT`. Do not pass `x-goog-user-project` as a tracer
+   header; Google documents that this is not the supported route, and the
+   exporter warns if you do.
 
 2. Deploy — no credentials mounted, no `GOOGLE_APPLICATION_CREDENTIALS`:
 

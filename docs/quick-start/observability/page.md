@@ -448,9 +448,11 @@ TRACER_RATIO=1.0
 ```
 
 Grant the workload's service account `roles/telemetry.tracesWriter` on the project receiving the
-spans. `roles/cloudtrace.agent` is **not** sufficient — it authorizes the older Cloud Trace API,
-which this exporter does not call. Locally, run `gcloud auth application-default login` and set
+spans — the least-privilege predefined role carrying `telemetry.traces.write`, which is what
+`telemetry.googleapis.com` checks. Locally, run `gcloud auth application-default login` and set
 `GOOGLE_CLOUD_PROJECT`, since a user credential carries no project.
+
+`TRACER_URL` must be a schemeless `host:port` for `gcp`; a scheme is rejected at startup.
 
 See `examples/using-gcp-traces` for a full Cloud Run deployment.
 

@@ -39,7 +39,7 @@ GoFr reads tracing config from environment variables. The relevant keys (verifie
 | Variable | Purpose | Default |
 |---|---|---|
 | `TRACE_EXPORTER` | One of `otlp`, `jaeger`, `gcp`, `zipkin`, `gofr` | unset (tracing disabled) |
-| `TRACER_URL` | Endpoint for the chosen exporter | unset |
+| `TRACER_URL` | Endpoint for the chosen exporter. `gcp` requires a schemeless `host:port` | unset |
 | `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme | `true` |
 | `TRACER_HOST` | **Deprecated** — use `TRACER_URL` | unset |
 | `TRACER_PORT` | **Deprecated** — use `TRACER_URL` | `9411` |
@@ -80,6 +80,10 @@ GoFr deployment points at. Set `TRACER_INSECURE: "false"` to upgrade it to TLS w
 endpoint. `TRACER_INSECURE` is ignored (with a warning) when the URL already carries a scheme, and
 GoFr warns when credentials from `TRACER_HEADERS`/`TRACER_AUTH_KEY` would travel over a plaintext
 connection.
+
+None of this applies to `gcp`, whose destination is always TLS on 443: there is no transport to
+select, so a scheme-bearing `TRACER_URL` is rejected at startup rather than interpreted. See the
+Google Cloud section below.
 
 Precedence is `TRACER_URL`'s scheme, then `TRACER_INSECURE`, then the OTel standard
 `OTEL_EXPORTER_OTLP_INSECURE` / `OTEL_EXPORTER_OTLP_TRACES_INSECURE`. The SDK applies its
@@ -133,9 +137,16 @@ TRACER_RATIO: "0.1"
 ```
 
 Authentication uses Application Default Credentials, so on Cloud Run, GKE or GCE the attached
-service account is enough. Grant it `roles/telemetry.tracesWriter` (or the broader
-`roles/telemetry.writer`) on the project receiving the spans. **`roles/cloudtrace.agent` is not
-sufficient**: it authorizes the older Cloud Trace API, which this exporter never calls.
+service account is enough. Grant it `roles/telemetry.tracesWriter` on the project receiving the
+spans: `telemetry.googleapis.com` checks `telemetry.traces.write`, and that is the least-privilege
+predefined role carrying it. `roles/telemetry.writer` and `roles/cloudtrace.agent` carry it too and
+grant more besides — verified with `gcloud iam roles describe` on 2026-09-21.
+
+`TRACER_URL` must be a schemeless `host:port` here; a scheme is rejected at startup.
+
+With a service account attached, the quota project resolves automatically. User credentials do not
+carry one: grant `roles/serviceusage.serviceUsageConsumer` on the quota project and set
+`GOOGLE_CLOUD_QUOTA_PROJECT`.
 
 The token refresh is the reason this is a distinct exporter rather than a `TRACER_HEADERS` value:
 Google's tokens last about an hour, so a static header authenticates once and then stops.
