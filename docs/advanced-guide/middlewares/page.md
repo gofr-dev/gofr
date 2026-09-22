@@ -125,8 +125,10 @@ func main() {
 		PerIP:             true, // Enable per-IP limiting
 	}
 
-	// Add rate limiter middleware
-	app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics()))
+	// Add rate limiter middleware. WithRateLimiterLogger is optional; it reports an
+	// invalid config through the app's logger instead of the default stderr logger.
+	app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics(),
+		middleware.WithRateLimiterLogger(app.Logger())))
 
 	app.GET("/api/resource", handler)
 	app.Run()
@@ -139,6 +141,10 @@ func main() {
 - `Burst`: Maximum number of requests that can be made in a burst (allows temporary spikes)
 - `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for global rate limit across all clients
 - `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` headers for IP extraction. Only enable when behind a trusted reverse proxy.
+
+> **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero. If they are not, GoFr logs
+> the error at `ERROR` level and the middleware passes every request through **without rate limiting** (the app does not
+> crash). To fail fast at startup instead, call `rateLimiterConfig.Validate()` and handle the returned error yourself.
 
 > **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.). 
 > Without a trusted proxy, clients can spoof headers to bypass rate limits.

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	httpmw "gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 const (
@@ -162,10 +163,11 @@ func streamRateLimitExhaustedError(ss grpc.ServerStream, retryAfter time.Duratio
 }
 
 // newRateLimiterStore validates the config, initializes a default in-memory store
-// if none is provided, and starts the background cleanup goroutine.
-func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) {
+// if none is provided, and starts the background cleanup goroutine. It returns the
+// validation error, without creating a store, if the config is invalid.
+func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) error {
 	if err := cfg.Validate(); err != nil {
-		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
+		return err
 	}
 
 	if cfg.Store == nil {
@@ -173,6 +175,18 @@ func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) {
 	}
 
 	cfg.Store.StartCleanup(ctx)
+
+	return nil
+}
+
+// logInvalidRateLimiterConfig reports an invalid rate limiter config. It falls back to a
+// GoFr stderr logger when l is nil so the misconfiguration is never silent.
+func logInvalidRateLimiterConfig(l Logger, err error) {
+	if l == nil {
+		l = logging.NewLogger(logging.ERROR)
+	}
+
+	l.Errorf("invalid rate limiter config: %v; rate limiting is disabled", err)
 }
 
 // resolveRateLimitKey determines the rate limit bucket key based on config.
@@ -210,10 +224,19 @@ func recordRateLimitViolation(ctx context.Context, l Logger, m Metrics, key, met
 // UnaryRateLimitInterceptor returns a gRPC unary server interceptor that enforces
 // rate limiting using the provided configuration. Pass app.Logger() and app.Metrics()
 // for logging and Prometheus counter support.
+//
+// If cfg is invalid (see RateLimiterConfig.Validate), the error is logged and the
+// returned interceptor passes every request through without rate limiting.
 func UnaryRateLimitInterceptor(
 	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
 ) grpc.UnaryServerInterceptor {
-	newRateLimiterStore(ctx, &cfg)
+	if err := newRateLimiterStore(ctx, &cfg); err != nil {
+		logInvalidRateLimiterConfig(l, err)
+
+		return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			return handler(ctx, req)
+		}
+	}
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {
@@ -240,10 +263,19 @@ func UnaryRateLimitInterceptor(
 // StreamRateLimitInterceptor returns a gRPC stream server interceptor that enforces
 // rate limiting on stream creation using the provided configuration. Pass app.Logger()
 // and app.Metrics() for logging and Prometheus counter support.
+//
+// If cfg is invalid (see RateLimiterConfig.Validate), the error is logged and the
+// returned interceptor passes every stream through without rate limiting.
 func StreamRateLimitInterceptor(
 	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
 ) grpc.StreamServerInterceptor {
-	newRateLimiterStore(ctx, &cfg)
+	if err := newRateLimiterStore(ctx, &cfg); err != nil {
+		logInvalidRateLimiterConfig(l, err)
+
+		return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			return handler(srv, ss)
+		}
+	}
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {

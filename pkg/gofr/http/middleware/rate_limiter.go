@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	gofrHttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 var (
@@ -109,11 +110,57 @@ func getRemoteAddr(r *http.Request) string {
 	return ip
 }
 
+// RateLimiterOption configures the RateLimiter middleware.
+type RateLimiterOption func(*rateLimiterOptions)
+
+type rateLimiterOptions struct {
+	logger rateLimiterLogger
+}
+
+// rateLimiterLogger is the logging contract RateLimiter needs; app.Logger() satisfies it.
+type rateLimiterLogger interface {
+	Errorf(format string, args ...any)
+}
+
+// WithRateLimiterLogger sets the logger RateLimiter uses to report an invalid
+// RateLimiterConfig. l is any value with an Errorf(format string, args ...any) method,
+// typically app.Logger(). Without this option, or when l is nil, the error is still
+// logged to stderr by a GoFr logger.
+func WithRateLimiterLogger(l rateLimiterLogger) RateLimiterOption {
+	return func(o *rateLimiterOptions) {
+		if l != nil {
+			o.logger = l
+		}
+	}
+}
+
+// logInvalidConfig reports an invalid config at ERROR level, falling back to a GoFr
+// stderr logger when none was provided so the misconfiguration is never silent.
+func (o *rateLimiterOptions) logInvalidConfig(err error) {
+	if o.logger == nil {
+		o.logger = logging.NewLogger(logging.ERROR)
+	}
+
+	o.logger.Errorf("invalid rate limiter config: %v; rate limiting is disabled", err)
+}
+
 // RateLimiter creates a middleware that limits requests based on the configuration.
-func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Handler {
-	// Validate configuration
+//
+// If the configuration is invalid (see RateLimiterConfig.Validate), the error is logged
+// and the returned middleware passes every request through without rate limiting.
+// Pass WithRateLimiterLogger(app.Logger()) to report it through the app's logger, or
+// call config.Validate() at startup to fail fast instead.
+func RateLimiter(config RateLimiterConfig, m metrics, opts ...RateLimiterOption) func(http.Handler) http.Handler {
+	var options rateLimiterOptions
+
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	if err := config.Validate(); err != nil {
-		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
+		options.logInvalidConfig(err)
+
+		return func(next http.Handler) http.Handler { return next }
 	}
 
 	// Use in-memory store if none provided

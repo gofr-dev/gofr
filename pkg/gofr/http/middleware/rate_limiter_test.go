@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 type rateLimiterMockMetrics struct {
@@ -769,4 +771,153 @@ func TestMemoryRateLimiterStore_CleanupDecrementsKeyCount(t *testing.T) {
 
 	// Verify key count is decremented
 	assert.Equal(t, int64(0), atomic.LoadInt64(&store.keyCount), "Key count should be 0 after cleanup")
+}
+
+// errorfRecorder captures Errorf calls for asserting RateLimiter's invalid-config log.
+type errorfRecorder struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (r *errorfRecorder) Errorf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.logs = append(r.logs, fmt.Sprintf(format, args...))
+}
+
+func (r *errorfRecorder) entries() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return append([]string(nil), r.logs...)
+}
+
+func TestRateLimiter_InvalidConfigPassesThrough(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  RateLimiterConfig
+		wantErr error
+	}{
+		{"zero values", RateLimiterConfig{}, errInvalidRequestsPerSecond},
+		{"negative RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: -1, Burst: 5}, errInvalidRequestsPerSecond},
+		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0}, errInvalidBurst},
+		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -1}, errInvalidBurst},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &errorfRecorder{}
+			metrics := newRateLimiterMockMetrics()
+
+			var mw func(http.Handler) http.Handler
+
+			require.NotPanics(t, func() {
+				mw = RateLimiter(tc.config, metrics, WithRateLimiterLogger(logger))
+			})
+
+			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			for i := 0; i < 10; i++ {
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+				assert.Equal(t, http.StatusOK, rr.Code, "request %d should pass through", i+1)
+			}
+
+			assert.Zero(t, metrics.GetCounter("app_http_rate_limit_exceeded_total"))
+
+			logs := logger.entries()
+			require.Len(t, logs, 1)
+			assert.Contains(t, logs[0], "invalid rate limiter config")
+			assert.Contains(t, logs[0], tc.wantErr.Error())
+			assert.Contains(t, logs[0], "rate limiting is disabled")
+		})
+	}
+}
+
+func TestRateLimiter_InvalidConfigWithoutLoggerLogsToStderr(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []RateLimiterOption
+	}{
+		{"no option", nil},
+		{"nil logger option", []RateLimiterOption{WithRateLimiterLogger(nil)}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var mw func(http.Handler) http.Handler
+
+			logs := testutil.StderrOutputForFunc(func() {
+				mw = RateLimiter(RateLimiterConfig{}, nil, tc.opts...)
+			})
+
+			assert.Contains(t, logs, "invalid rate limiter config")
+			assert.Contains(t, logs, errInvalidRequestsPerSecond.Error())
+
+			rr := httptest.NewRecorder()
+			mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+			assert.Equal(t, http.StatusOK, rr.Code)
+		})
+	}
+}
+
+func TestRateLimiter_ValidConfigWithLoggerStillLimits(t *testing.T) {
+	logger := &errorfRecorder{}
+	config := RateLimiterConfig{RequestsPerSecond: 1, Burst: 1}
+	config.Store = NewMemoryRateLimiterStore(config)
+
+	t.Cleanup(config.Store.StopCleanup)
+
+	handler := RateLimiter(config, nil, WithRateLimiterLogger(logger))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	codes := make([]int, 0, 2)
+
+	for i := 0; i < 2; i++ {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+		codes = append(codes, rr.Code)
+	}
+
+	assert.Equal(t, []int{http.StatusOK, http.StatusTooManyRequests}, codes)
+	assert.Empty(t, logger.entries())
+}
+
+// countingStore records calls so tests can assert a store is left untouched.
+type countingStore struct {
+	allowCalls   atomic.Int32
+	cleanupCalls atomic.Int32
+}
+
+func (s *countingStore) Allow(context.Context, string, RateLimiterConfig) (bool, time.Duration, error) {
+	s.allowCalls.Add(1)
+
+	return true, 0, nil
+}
+
+func (s *countingStore) StartCleanup(context.Context) { s.cleanupCalls.Add(1) }
+
+func (*countingStore) StopCleanup() {}
+
+func TestRateLimiter_InvalidConfigLeavesStoreUntouched(t *testing.T) {
+	store := &countingStore{}
+	config := RateLimiterConfig{RequestsPerSecond: 10, Burst: 0, Store: store}
+
+	handler := RateLimiter(config, nil, WithRateLimiterLogger(&errorfRecorder{}))(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
+	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
 }
