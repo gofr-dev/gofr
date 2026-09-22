@@ -1083,13 +1083,14 @@ const barrierTimeout = 15 * time.Second
 // instead of meeting its peers -- the failure these two tests exist to report.
 //
 // It is deliberately NOT a 5xx. The circuit breaker under test counts any status
-// above 500 as a failure (circuit_breaker.go:89) and opens once failureCount
-// exceeds the threshold (circuit_breaker.go:174), so answering 503 here would
-// feed the breaker the very signal this test emits when it fails. On a run where
-// serialization pushed the count past the threshold, the remaining requests
-// would come back as errors rather than statuses, require.NoError would fire
-// first, and the operator would read a generic circuit-open error instead of
-// "the requests were serialized, not parallel".
+// above 500 as a failure -- the result.StatusCode > 500 check in
+// executeWithCircuitBreaker -- and opens once failureCount exceeds the threshold
+// in handleFailure, so answering 503 here would feed the breaker the very signal
+// this test emits when it fails. On a run where serialization pushed the count
+// past the threshold, the remaining requests would come back as errors rather
+// than statuses, require.NoError would fire first, and the operator would read a
+// generic circuit-open error instead of "the requests were serialized, not
+// parallel".
 //
 // Neither test can reach that today -- the thresholds are 10 and 5 against at
 // most 5 requests -- but the diagnostic should not depend on that arithmetic
@@ -1108,6 +1109,13 @@ const statusNotOverlapped = http.StatusConflict
 // A barrier asserts the property itself. Every handler blocks until all n
 // handlers are inside it together, which is reachable only if the client
 // dispatched them concurrently, and is unreachable if it did not - at any speed.
+//
+// container/health_concurrency_test.go carries the same idea as checkBarrier,
+// and deliberately stays separate: that one is a plain release gate, while this
+// one reports the timeout to its caller and broadcasts the give-up so a
+// serialized run costs one timeout instead of n. Two uses do not justify a
+// shared testutil package; a third would, and unifying them means keeping the
+// reporting and the broadcast.
 type concurrencyBarrier struct {
 	n       int
 	all     chan struct{} // closed once every participant has arrived
