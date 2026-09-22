@@ -300,11 +300,17 @@ func (idx *routeIndex) insert(tpl string, e *routeEntry) {
 // (backtracking). This is O(path length × small branching), never O(route
 // count). A route the trie omits here could not have matched path anyway, so
 // omitting it does not change the final result.
-func (n *trieNode) collect(rest string, out *[]*routeEntry) {
+// collect appends every route reachable along rest to out and returns the
+// extended slice.
+//
+// It returns the slice rather than taking a *[]*routeEntry. Both shapes are
+// correct, but handing a pointer-to-slice into a recursive function defeats
+// escape analysis: the compiler cannot prove the callee does not retain it, so
+// the caller's backing array is heap-allocated on every request. Returning the
+// slice is also the ordinary Go idiom for an append-accumulator.
+func (n *trieNode) collect(rest string, out []*routeEntry) []*routeEntry {
 	if rest == "" {
-		*out = append(*out, n.routes...)
-
-		return
+		return append(out, n.routes...)
 	}
 
 	var seg, tail string
@@ -315,12 +321,14 @@ func (n *trieNode) collect(rest string, out *[]*routeEntry) {
 	}
 
 	if child, ok := n.children[seg]; ok {
-		child.collect(tail, out)
+		out = child.collect(tail, out)
 	}
 
 	if n.paramChild != nil {
-		n.paramChild.collect(tail, out)
+		out = n.paramChild.collect(tail, out)
 	}
+
+	return out
 }
 
 // match narrows candidates via the trie, adds the fallback routes, orders the
@@ -337,8 +345,7 @@ func (n *trieNode) collect(rest string, out *[]*routeEntry) {
 func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 	var buf [12]*routeEntry
 
-	cands := buf[:0]
-	idx.root.collect(strings.Trim(req.URL.Path, "/"), &cands)
+	cands := idx.root.collect(strings.Trim(req.URL.Path, "/"), buf[:0])
 
 	// mux matches the escaped path when the router is in UseEncodedPath mode,
 	// where the escaped and decoded forms can split into different segments.
@@ -346,7 +353,7 @@ func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 	// both and take the union. Over-producing candidates is always safe (mux
 	// filters them); missing one would not be.
 	if esc := req.URL.EscapedPath(); esc != req.URL.Path {
-		idx.root.collect(strings.Trim(esc, "/"), &cands)
+		cands = idx.root.collect(strings.Trim(esc, "/"), cands)
 	}
 
 	if len(idx.fallback) > 0 {
