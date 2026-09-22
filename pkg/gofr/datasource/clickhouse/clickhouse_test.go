@@ -3,12 +3,15 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
 
@@ -197,4 +200,79 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10")
 
 	require.NoError(t, err)
+}
+
+var errClickhouseOp = errors.New("clickhouse operation failed")
+
+func Test_ClickHouse_UseTracer(t *testing.T) {
+	tracer := noop.NewTracerProvider().Tracer("gofr-clickhouse")
+
+	tests := []struct {
+		desc      string
+		tracer    any
+		expTracer trace.Tracer
+	}{
+		{desc: "valid tracer is set", tracer: tracer, expTracer: tracer},
+		{desc: "non-tracer is ignored", tracer: "not a tracer", expTracer: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := New(Config{})
+
+			c.UseTracer(tc.tracer)
+
+			assert.Equal(t, tc.expTracer, c.tracer)
+		})
+	}
+}
+
+func Test_ClickHouse_OperationsWithTracer(t *testing.T) {
+	const query = "INSERT INTO users (id) VALUES (?)"
+
+	tests := []struct {
+		desc     string
+		mockCall func(conn *MockConn)
+		call     func(ctx context.Context, c *Client) error
+		expErr   error
+	}{
+		{
+			desc:     "exec",
+			mockCall: func(conn *MockConn) { conn.EXPECT().Exec(gomock.Any(), query, "1").Return(nil) },
+			call:     func(ctx context.Context, c *Client) error { return c.Exec(ctx, query, "1") },
+		},
+		{
+			desc:     "exec error",
+			mockCall: func(conn *MockConn) { conn.EXPECT().Exec(gomock.Any(), query, "1").Return(errClickhouseOp) },
+			call:     func(ctx context.Context, c *Client) error { return c.Exec(ctx, query, "1") },
+			expErr:   errClickhouseOp,
+		},
+		{
+			desc:     "select error",
+			mockCall: func(conn *MockConn) { conn.EXPECT().Select(gomock.Any(), nil, query, "1").Return(errClickhouseOp) },
+			call:     func(ctx context.Context, c *Client) error { return c.Select(ctx, nil, query, "1") },
+			expErr:   errClickhouseOp,
+		},
+		{
+			desc:     "async insert",
+			mockCall: func(conn *MockConn) { conn.EXPECT().AsyncInsert(gomock.Any(), query, false, "1").Return(nil) },
+			call:     func(ctx context.Context, c *Client) error { return c.AsyncInsert(ctx, query, false, "1") },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
+			c.UseTracer(noop.NewTracerProvider().Tracer("gofr-clickhouse"))
+
+			tc.mockCall(mockConn)
+			mockLogger.EXPECT().Debug(gomock.Any())
+			mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_clickhouse_stats", gomock.Any(), "hosts", c.config.Hosts,
+				"database", c.config.Database, "type", "INSERT")
+
+			err := tc.call(t.Context(), &c)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
 }
