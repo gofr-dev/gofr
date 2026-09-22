@@ -33,6 +33,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	gcpdetect "go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel/attribute"
@@ -65,6 +66,21 @@ const (
 	quotaProjectHeader = "x-goog-user-project"
 )
 
+// metadataTimeout bounds each call that may reach the GCE metadata server during
+// startup: the platform detector, and the ADC lookup.
+//
+// 5s is the metadata client's own idea of "too slow" (its default HTTP client is
+// built with Timeout: 5s over a 2s dialer, compute/metadata@v0.9.0
+// metadata.go:74-83), so this neither pre-empts a healthy probe nor invents a
+// budget of its own. At most two of these run before the server binds, so the
+// worst case a wedged metadata server can add to boot is 2*metadataTimeout,
+// against the unbounded wait it costs today.
+//
+// It is a var only so tests can shrink it; nothing outside this package can.
+//
+//nolint:gochecknoglobals // shrunk by tests so the timeout path costs milliseconds, not seconds.
+var metadataTimeout = 5 * time.Second
+
 //nolint:gochecknoinits // self-registration on blank import is the intended usage.
 func init() {
 	exporters.Register(exporterName, buildExporter)
@@ -83,10 +99,65 @@ type adc struct {
 
 func (a *adc) get(ctx context.Context) (*google.Credentials, error) {
 	a.once.Do(func() {
-		a.creds, a.err = google.FindDefaultCredentials(ctx, cloudPlatformScope)
+		// The deadline is on the WAIT, and the lookup keeps an uncancellable
+		// context, because oauth2/google stores the context it is handed inside
+		// the Credentials it returns and reuses it for every later token refresh
+		// (oauth2@v0.37.0 google/google.go:171,223). A context.WithTimeout here
+		// would resolve credentials fine and then expire the refresh roughly an
+		// hour into the process's life -- spans would stop exporting long after
+		// anything pointed at startup.
+		a.creds, a.err = awaitWithin(metadataTimeout, errMetadataTimeout,
+			func() (*google.Credentials, error) {
+				return google.FindDefaultCredentials(context.WithoutCancel(ctx), cloudPlatformScope)
+			})
 	})
 
 	return a.creds, a.err
+}
+
+// errMetadataTimeout reports that a startup call to the GCE metadata server did
+// not answer within metadataTimeout. It is a sentinel so the timeout is
+// distinguishable from a credentials or detector failure.
+var errMetadataTimeout = errors.New("gcp traces: the GCE metadata server did not respond before the startup deadline")
+
+// awaitWithin runs fn and returns its result, or timeoutErr when fn has not
+// finished within d.
+//
+// A context deadline is the obvious shape and does not work for either caller.
+// The platform detector DISCARDS its context argument outright
+// (contrib/detectors/gcp@v1.46.0 detector.go:35 -- the parameter is unnamed, and
+// it calls the context-free metadata.OnGCE()), so a deadline on the context it
+// is given bounds nothing at all. The credentials lookup does use its context,
+// but keeps it (see adc.get). Bounding the wait is what is correct for both.
+//
+// The abandoned goroutine outlives the wait: that is the cost of calling a
+// library that cannot be canceled. It is one goroutine, it ends when the
+// metadata server answers or its socket dies, and the buffered channel means it
+// never blocks on a receiver that has gone away.
+func awaitWithin[T any](d time.Duration, timeoutErr error, fn func() (T, error)) (T, error) {
+	type result struct {
+		val T
+		err error
+	}
+
+	ch := make(chan result, 1)
+
+	go func() {
+		val, err := fn()
+		ch <- result{val: val, err: err}
+	}()
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case r := <-ch:
+		return r.val, r.err
+	case <-timer.C:
+		var zero T
+
+		return zero, timeoutErr
+	}
 }
 
 //nolint:gochecknoglobals // one ADC resolution per process, shared by the detector and the builder.
@@ -107,9 +178,19 @@ type cachingDetector struct {
 	res  *resource.Resource
 	err  error
 
-	// adc is overridable so tests can drive project resolution without touching
-	// the process-wide credentials.
-	adc *adc
+	// adc and platform are overridable so tests can drive project resolution and
+	// the metadata probe without touching the process-wide credentials or a real
+	// metadata server.
+	adc      *adc
+	platform resource.Detector
+}
+
+func (d *cachingDetector) platformDetector() resource.Detector {
+	if d.platform != nil {
+		return d.platform
+	}
+
+	return gcpdetect.NewDetector()
 }
 
 // Detect satisfies resource.Detector. Off Google Cloud the underlying detector
@@ -118,7 +199,18 @@ type cachingDetector struct {
 // an application that will not boot.
 func (d *cachingDetector) Detect(ctx context.Context) (*resource.Resource, error) {
 	d.once.Do(func() {
-		d.res, d.err = gcpdetect.NewDetector().Detect(ctx)
+		// This runs before the HTTP server binds -- exporters.Build is called from
+		// App.initTracer with context.Background() (pkg/gofr/otel.go:74), so there
+		// is no deadline anywhere above this line. A metadata server that REFUSES
+		// the connection answers instantly and costs nothing, which is why the
+		// off-GCP path is fast today; one that ACCEPTS and never replies would
+		// block boot for as long as it hangs, and a container that never binds its
+		// port never passes its startup probe. Registering the first trace
+		// detector is what puts a socket on this path at all, so the bound belongs
+		// here.
+		d.res, d.err = awaitWithin(metadataTimeout, errMetadataTimeout, func() (*resource.Resource, error) {
+			return d.platformDetector().Detect(ctx)
+		})
 
 		if project := d.projectID(ctx); project != "" {
 			d.res = withProjectID(d.res, project)
@@ -173,15 +265,17 @@ func withProjectID(res *resource.Resource, project string) *resource.Resource {
 // refreshes automatically, which Google's direct OTLP ingest requires (~1h token
 // lifetime) and which no static TRACER_HEADERS value can do.
 func buildExporter(ctx context.Context, cfg *exporters.Config, logger exporters.Logger) (sdktrace.SpanExporter, error) {
-	// The destination project comes off the resource, and the resource is already
-	// built by the time a builder runs, so this is the last point at which an
-	// operator can be told before spans quietly go to the wrong place or nowhere.
-	warnMissingProject(cfg, logger)
-
 	endpoint, err := resolveEndpoint(cfg)
 	if err != nil {
 		return nil, err
 	}
+
+	// The destination project comes off the resource, and the resource is already
+	// built by the time a builder runs, so this is the last point at which an
+	// operator can be told before spans quietly go to the wrong place or nowhere.
+	// It follows the endpoint check so that a rejected TRACER_URL is not preceded
+	// by a warning about a project that is no longer going to be used.
+	warnMissingProject(cfg, logger)
 
 	creds, err := defaultADC.get(ctx)
 	if err != nil {
@@ -242,16 +336,29 @@ var errSchemeInEndpoint = errors.New("gcp traces: TRACER_URL must be a schemeles
 // 443, so the only honest readings of a scheme are "redundant" and "wrong", and
 // failing at startup with the fix in the message beats guessing between them.
 func resolveEndpoint(cfg *exporters.Config) (string, error) {
-	if cfg.Endpoint == "" {
+	// Nothing upstream trims. config.Get is a bare os.Getenv
+	// (pkg/gofr/config/godotenv.go:93-95), and godotenv trims an unquoted .env
+	// value but not a quoted one -- while the plain environment path this
+	// exporter exists for (Cloud Run, GKE, a K8s manifest with a stray space
+	// after the colon) has no trimming anywhere. Untrimmed, a single space is
+	// enough to make the value unusable as a gRPC target with no startup
+	// diagnostic: " host:port" resolves the port as a service name, and
+	// " https://host:port" walks past the scheme check below, because a space
+	// fails isSchemeRune at position 0 and schemeOf then reports no scheme.
+	// Either way the app boots healthy, logs that it is exporting, and drops
+	// every span. Trimming is also what this file already does for the other
+	// operator-supplied value, in cachingDetector.projectID.
+	endpoint := strings.TrimSpace(cfg.Endpoint)
+	if endpoint == "" {
 		return defaultEndpoint, nil
 	}
 
-	if scheme := schemeOf(cfg.Endpoint); scheme != "" {
+	if scheme := schemeOf(endpoint); scheme != "" {
 		return "", fmt.Errorf("%w, not %q: %s carries a %q scheme and Google's OTLP ingest is always TLS on 443",
-			errSchemeInEndpoint, scheme+"://…", exporters.RedactURL(cfg.Endpoint), scheme)
+			errSchemeInEndpoint, scheme+"://…", exporters.RedactURL(endpoint), scheme)
 	}
 
-	return cfg.Endpoint, nil
+	return endpoint, nil
 }
 
 // schemeOf returns the lowercased URI scheme of raw, or "" when it has none.

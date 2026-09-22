@@ -40,7 +40,7 @@ GoFr reads tracing config from environment variables. The relevant keys (verifie
 |---|---|---|
 | `TRACE_EXPORTER` | One of `otlp`, `jaeger`, `gcp`, `zipkin`, `gofr` | unset (tracing disabled) |
 | `TRACER_URL` | Endpoint for the chosen exporter. `gcp` requires a schemeless `host:port` | unset |
-| `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme | `true` |
+| `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme — except for `gcp`, which rejects a scheme at startup rather than ignoring it | `true` |
 | `TRACER_HOST` | **Deprecated** — use `TRACER_URL` | unset |
 | `TRACER_PORT` | **Deprecated** — use `TRACER_URL` | `9411` |
 | `TRACER_RATIO` | Head-based sampling ratio (0.0–1.0) | `1` |

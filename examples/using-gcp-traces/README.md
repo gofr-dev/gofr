@@ -30,7 +30,30 @@ authenticates once and then stops working. TLS is always on, and
 For the same reason `TRACER_URL` must be a schemeless `host:port`: there is no
 transport to select, so a `http://`/`https://` value is rejected at startup
 rather than interpreted. Unlike the `otlp` exporter, where the scheme is
-meaningful, here it would be silently dropped by the gRPC dialer.
+meaningful, here it would be silently dropped by the gRPC dialer. Surrounding
+whitespace is trimmed before either check, because nothing between the
+environment and this exporter trims it and a single stray space is enough to
+make the value unusable as a gRPC target with no startup diagnostic.
+
+## Startup cost
+
+Selecting this exporter puts two calls to the GCE metadata server on the startup
+path, before the HTTP server binds its port: the platform resource detector, and
+the Application Default Credentials lookup. Off Google Cloud the connection is
+refused instantly and neither costs anything measurable.
+
+Each is bounded at 5 seconds, so a metadata server that accepts the connection
+and never replies cannot hold the app short of serving. A container that never
+binds its port never passes its startup probe, which is a worse failure than the
+spans it would have exported.
+
+On a timeout the app binds either way, and the two degrade differently:
+
+- the **detector** timing out logs `traces: resource detection was incomplete`
+  and tracing continues on a partial resource — the destination project is still
+  resolvable from `GOOGLE_CLOUD_PROJECT`;
+- the **credentials** lookup timing out logs `failed to initialize "gcp" trace
+  exporter … tracing is disabled`, since there is no token to authenticate with.
 
 ## Deploy to Cloud Run (keyless)
 

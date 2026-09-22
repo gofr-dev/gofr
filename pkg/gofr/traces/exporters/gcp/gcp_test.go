@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -122,6 +123,23 @@ func Test_resolveEndpoint(t *testing.T) {
 			want:     "host/path://telemetry.googleapis.com:443",
 		},
 		{name: "a leading :// is not a scheme", endpoint: "://telemetry.googleapis.com:443", want: "://telemetry.googleapis.com:443"},
+		// Surrounding whitespace survives every path that reaches cfg.Endpoint, and
+		// untrimmed it defeats both halves of this function: a leading space makes
+		// schemeOf report no scheme, so a scheme-bearing value is accepted; a
+		// trailing one leaves a target whose port cannot be parsed. Neither fails
+		// until export, ~30s after the app has logged that it is exporting.
+		{
+			name:     "a padded scheme-bearing value is still rejected",
+			endpoint: " https://telemetry.googleapis.com:443 ",
+			wantErr:  true,
+		},
+		{name: "a padded tab-and-newline scheme is still rejected", endpoint: "\t\nhttps://telemetry.googleapis.com:443", wantErr: true},
+		{
+			name:     "a padded schemeless value resolves to its trimmed form",
+			endpoint: "  telemetry.googleapis.com:443  ",
+			want:     "telemetry.googleapis.com:443",
+		},
+		{name: "whitespace only falls back to the default", endpoint: "   ", want: defaultEndpoint},
 	}
 
 	for _, tt := range tests {
@@ -226,6 +244,22 @@ func Test_buildExporter_endpoint(t *testing.T) {
 // handshake then fails against a bare TCP socket, which is fine -- the socket is
 // the assertion, not the export.
 func Test_buildExporter_dialsTheResolvedEndpoint(t *testing.T) {
+	// The padded case is the one a log line cannot catch: untrimmed, a trailing
+	// space leaves a target whose port parses as a service name, so the app logs
+	// that it is exporting and no connection is ever made. Only the socket
+	// distinguishes the two.
+	for _, pad := range []struct{ name, prefix, suffix string }{
+		{name: "bare"},
+		{name: "padded", prefix: " ", suffix: " "},
+	} {
+		t.Run(pad.name, func(t *testing.T) {
+			assertDialsEndpoint(t, pad.prefix, pad.suffix)
+		})
+	}
+}
+
+func assertDialsEndpoint(t *testing.T, prefix, suffix string) {
+	t.Helper()
 	writeADC(t)
 
 	var lc net.ListenConfig
@@ -251,7 +285,7 @@ func Test_buildExporter_dialsTheResolvedEndpoint(t *testing.T) {
 	}()
 
 	cfg := exporters.Config{
-		Endpoint: ln.Addr().String(),
+		Endpoint: prefix + ln.Addr().String() + suffix,
 		Resource: resource.NewSchemaless(attribute.String(projectIDKey, "p")),
 	}
 
@@ -487,6 +521,182 @@ func Test_cachingDetector_Detect_addsProjectID(t *testing.T) {
 	if again != res {
 		t.Error("expected Detect to cache its result")
 	}
+}
+
+// hangingDetector stands in for the real platform detector under a metadata
+// server that accepts the connection and never replies. It ignores its context
+// on purpose: so does the real one (contrib/detectors/gcp detector.go:35 takes
+// an unnamed context.Context and calls the context-free metadata.OnGCE()), which
+// is why a context deadline cannot bound it and the wait has to be bounded
+// instead. A stub that honored its context would make this test pass against a
+// fix that does nothing in production.
+type hangingDetector struct{ released chan struct{} }
+
+func (d hangingDetector) Detect(context.Context) (*resource.Resource, error) {
+	<-d.released
+
+	return resource.NewSchemaless(attribute.String("late", "arrival")), nil
+}
+
+// shrinkMetadataTimeout keeps the timeout paths in milliseconds. The production
+// value is a startup budget, not a unit-test one.
+func shrinkMetadataTimeout(t *testing.T) {
+	t.Helper()
+
+	previous := metadataTimeout
+	metadataTimeout = 50 * time.Millisecond
+
+	t.Cleanup(func() { metadataTimeout = previous })
+}
+
+// Test_cachingDetector_Detect_isBoundedByTheStartupDeadline pins the failure the
+// deadline exists for. exporters.Build is handed context.Background()
+// (pkg/gofr/otel.go:74) and runs before the HTTP server binds, so without a
+// bound here a wedged metadata server holds boot open for as long as it hangs --
+// and a container that never binds its port never passes its startup probe.
+func Test_cachingDetector_Detect_isBoundedByTheStartupDeadline(t *testing.T) {
+	writeADC(t)
+	shrinkMetadataTimeout(t)
+
+	released := make(chan struct{})
+	defer close(released)
+
+	d := &cachingDetector{adc: resolvedADC("creds-project"), platform: hangingDetector{released: released}}
+
+	start := time.Now()
+	res, err := d.Detect(t.Context())
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, errMetadataTimeout) {
+		t.Fatalf("expected errMetadataTimeout, got %v", err)
+	}
+
+	// Generous against CI scheduling, and still two orders of magnitude below the
+	// unbounded wait: what is under test is that it returns at all.
+	if elapsed > time.Second {
+		t.Errorf("Detect blocked for %s; the startup deadline did not bound it", elapsed)
+	}
+
+	// Startup continues on a partial resource rather than failing: the project is
+	// still resolvable from the credentials, and a dropped span beats an app that
+	// will not boot.
+	if got := resolvedProject(res); got != "creds-project" {
+		t.Errorf("gcp.project_id = %q, want %q", got, "creds-project")
+	}
+}
+
+// Test_adc_get_isBoundedByTheStartupDeadline covers the second call on the same
+// startup path. Its deadline is on the wait rather than on the context because
+// oauth2/google keeps the context inside the Credentials it returns and reuses
+// it for every later token refresh -- a context.WithTimeout would expire export
+// about an hour in, long after anything pointed at startup.
+func Test_adc_get_isBoundedByTheStartupDeadline(t *testing.T) {
+	shrinkMetadataTimeout(t)
+
+	// A credentials file that cannot be read makes FindDefaultCredentials fall
+	// through to the metadata server, which here is a listener that accepts and
+	// never answers.
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ln.Close()
+
+	// Accept and hold: the connection is deliberately never answered, which is the
+	// shape of a wedged metadata server. Held ones are closed when the test ends
+	// -- t.Cleanup cannot be called from this goroutine, which outlives it.
+	var (
+		mu   sync.Mutex
+		held []net.Conn
+	)
+
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		for _, conn := range held {
+			conn.Close()
+		}
+	})
+
+	go func() {
+		for {
+			conn, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+
+			mu.Lock()
+
+			held = append(held, conn)
+
+			mu.Unlock()
+		}
+	}()
+
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	t.Setenv("GCE_METADATA_HOST", ln.Addr().String())
+	t.Setenv("HOME", t.TempDir())
+
+	var a adc
+
+	start := time.Now()
+	_, err = a.get(t.Context())
+
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("adc.get blocked for %s; the startup deadline did not bound it", elapsed)
+	}
+
+	if err == nil {
+		t.Fatal("expected an error from a metadata server that never replies")
+	}
+}
+
+// Static test sentinels: err113 forbids defining them inline.
+var (
+	errAwaitTimedOut = errors.New("timed out")
+	errFromFn        = errors.New("from fn")
+)
+
+func Test_awaitWithin(t *testing.T) {
+	sentinel := errAwaitTimedOut
+
+	t.Run("returns the result when fn finishes in time", func(t *testing.T) {
+		got, err := awaitWithin(time.Second, sentinel, func() (string, error) { return "value", nil })
+		if err != nil || got != "value" {
+			t.Errorf("awaitWithin() = %q, %v; want \"value\", nil", got, err)
+		}
+	})
+
+	t.Run("propagates fn's own error", func(t *testing.T) {
+		own := errFromFn
+
+		if _, err := awaitWithin(time.Second, sentinel, func() (string, error) { return "", own }); !errors.Is(err, own) {
+			t.Errorf("err = %v, want %v", err, own)
+		}
+	})
+
+	t.Run("returns the timeout error and the zero value when fn overruns", func(t *testing.T) {
+		released := make(chan struct{})
+		defer close(released)
+
+		got, err := awaitWithin(50*time.Millisecond, sentinel, func() (string, error) {
+			<-released
+
+			return "too late", nil
+		})
+
+		if !errors.Is(err, sentinel) {
+			t.Errorf("err = %v, want %v", err, sentinel)
+		}
+
+		if got != "" {
+			t.Errorf("value = %q, want the zero value", got)
+		}
+	})
 }
 
 func Test_withProjectID(t *testing.T) {
