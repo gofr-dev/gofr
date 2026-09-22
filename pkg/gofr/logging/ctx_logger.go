@@ -26,6 +26,7 @@ type ContextLogger struct {
 	// pays exactly what it did before; one logging repeatedly pays per call,
 	// which is the deliberate trade for making the silent path free.
 	spanCtx trace.SpanContext
+	traceID string
 }
 
 // NewContextLogger creates a new ContextLogger that wraps the provided base logger
@@ -57,7 +58,11 @@ func (l *ContextLogger) withTraceInfo(args ...any) []any {
 		return args
 	}
 
-	return append(args, traceIDMarker(l.spanCtx.TraceID().String()))
+	if l.traceID == "" {
+		l.traceID = l.spanCtx.TraceID().String()
+	}
+
+	return append(args, traceIDMarker(l.traceID))
 }
 
 func (l *ContextLogger) logWithTraceID(lf func(args ...any), args ...any) {

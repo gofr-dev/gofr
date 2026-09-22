@@ -37,6 +37,10 @@ type Context struct {
 	Out terminal.Output
 
 	logging.ContextLogger
+
+	// traceID lazily caches the string representation of the request's TraceID
+	// so GetCorrelationID incurs 0 allocations on repeated calls.
+	traceID string
 }
 
 type AuthInfo interface {
@@ -44,6 +48,9 @@ type AuthInfo interface {
 	GetUsername() string
 	GetAPIKey() string
 }
+
+//nolint:gochecknoglobals // contextTracer avoids mutex contention on global tracer provider on every Trace call.
+var contextTracer = otel.Tracer("gofr-context")
 
 /*
 Trace returns an open telemetry span. We have to always close the span after corresponding work is done. Usages:
@@ -62,8 +69,7 @@ but End will be called after function ends.
 Developer Note: If you chain methods in a defer statement, everything except the last function will be evaluated at call time.
 */
 func (c *Context) Trace(name string) trace.Span {
-	tr := otel.GetTracerProvider().Tracer("gofr-context")
-	ctx, span := tr.Start(c.Context, name)
+	ctx, span := contextTracer.Start(c.Context, name)
 	// TODO: If we don't close the span using `defer` and run the http-server example by hitting `/trace` endpoint, we are
 	// getting incomplete redis spans when viewing the trace using correlationID. If we remove assigning the ctx to GoFr
 	// context then spans are coming correct but then parent-child span relationship is being hindered.
@@ -229,6 +235,25 @@ func newCMDContext(w Responder, r Request, c *container.Container, out terminal.
 	}
 }
 
+const zeroTraceID = "00000000000000000000000000000000"
+
 func (c *Context) GetCorrelationID() string {
-	return trace.SpanFromContext(c).SpanContext().TraceID().String()
+	if c.traceID != "" {
+		return c.traceID
+	}
+
+	if c.Context == nil {
+		c.traceID = zeroTraceID
+		return zeroTraceID
+	}
+
+	sc := trace.SpanFromContext(c.Context).SpanContext()
+	if !sc.IsValid() {
+		c.traceID = zeroTraceID
+		return zeroTraceID
+	}
+
+	c.traceID = sc.TraceID().String()
+
+	return c.traceID
 }

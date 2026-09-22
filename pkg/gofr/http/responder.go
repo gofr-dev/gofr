@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"reflect"
+	"strconv"
 	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
@@ -41,14 +42,35 @@ var respBufPool = sync.Pool{
 	New: func() any { return newRespEncoder() },
 }
 
-// Canonical key and shared value for the JSON content type, resolved once so no
+// Canonical keys and shared values for response headers, resolved once so no
 // response pays for canonicalization or a value-slice allocation.
 //
-//nolint:gochecknoglobals // immutable, process-wide header constants.
+//nolint:gochecknoglobals // immutable, process-wide header constants and lookup caches.
 var (
-	canonicalContentType = textproto.CanonicalMIMEHeaderKey("Content-Type")
-	jsonContentType      = []string{contentTypeJSON}
+	canonicalContentType   = textproto.CanonicalMIMEHeaderKey("Content-Type")
+	canonicalContentLength = textproto.CanonicalMIMEHeaderKey("Content-Length")
+	jsonContentType        = []string{contentTypeJSON}
+	smallContentLengths    = buildSmallContentLengthCache()
 )
+
+const maxSmallContentLength = 128
+
+func buildSmallContentLengthCache() [maxSmallContentLength][]string {
+	var cache [maxSmallContentLength][]string
+	for i := 0; i < maxSmallContentLength; i++ {
+		cache[i] = []string{strconv.Itoa(i)}
+	}
+
+	return cache
+}
+
+func smallContentLengthSlice(n int) []string {
+	if n >= 0 && n < maxSmallContentLength {
+		return smallContentLengths[n]
+	}
+
+	return []string{strconv.Itoa(n)}
+}
 
 // respEncoder pairs a reusable buffer with the encoder bound to it, plus the
 // response envelope itself.
@@ -135,15 +157,25 @@ func (r Responder) Respond(data any, err error) {
 	if encodeErr := re.enc.Encode(resp); encodeErr != nil {
 		putRespBuf(re)
 
+		errBody := []byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n")
+		if len(header[canonicalContentLength]) == 0 {
+			header[canonicalContentLength] = smallContentLengthSlice(len(errBody))
+		}
+
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
+		_, _ = r.w.Write(errBody)
 
 		return
 	}
 
+	bodyBytes := buf.Bytes()
+	if len(header[canonicalContentLength]) == 0 {
+		header[canonicalContentLength] = smallContentLengthSlice(len(bodyBytes))
+	}
+
 	r.w.WriteHeader(statusCode)
-	_, _ = r.w.Write(buf.Bytes())
+	_, _ = r.w.Write(bodyBytes)
 
 	putRespBuf(re)
 }
@@ -202,6 +234,9 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
+		if len(v.Content) > 0 && r.w.Header().Get("Content-Length") == "" {
+			r.w.Header().Set("Content-Length", strconv.Itoa(len(v.Content)))
+		}
 		r.w.WriteHeader(statusCode)
 		_, _ = r.w.Write(v.Content)
 
@@ -222,6 +257,9 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 		}
 
 		r.w.Header().Set("Content-Type", contentType)
+		if len(v.Content) > 0 && r.w.Header().Get("Content-Length") == "" {
+			r.w.Header().Set("Content-Length", strconv.Itoa(len(v.Content)))
+		}
 		r.w.WriteHeader(statusCode)
 
 		if len(v.Content) > 0 {
