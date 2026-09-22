@@ -333,3 +333,110 @@ func TestMockSQL_HealthCheck(t *testing.T) {
 
 	assert.Equal(t, expectedHealth, resultHealth)
 }
+
+func TestExpectSelect_MismatchCases(t *testing.T) {
+	tests := []struct {
+		desc      string
+		expQuery  string
+		expArgs   []any
+		query     string
+		args      []any
+		expLogFmt string
+	}{
+		{
+			desc:      "query text mismatch",
+			expQuery:  "SELECT id FROM users",
+			query:     "SELECT name FROM users",
+			expLogFmt: "expected query: %q, actual query: %q",
+		},
+		{
+			desc:      "argument count mismatch",
+			expQuery:  "SELECT id FROM users WHERE id=?",
+			expArgs:   []any{1},
+			query:     "SELECT id FROM users WHERE id=?",
+			args:      []any{1, 2},
+			expLogFmt: "expected %d args, actual %d",
+		},
+		{
+			desc:      "argument value mismatch",
+			expQuery:  "SELECT id FROM users WHERE id=?",
+			expArgs:   []any{1},
+			query:     "SELECT id FROM users WHERE id=?",
+			args:      []any{2},
+			expLogFmt: "expected arg %d, actual arg %d",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockDB, sqlMock, _ := sql.NewSQLMocks(t)
+			ctrl := gomock.NewController(t)
+			expectation := expectedQuery{}
+			mockLogger := NewMockLogger(ctrl)
+			sqlMockWrapper := &mockSQL{sqlMock, &expectation}
+			sqlDB := &sqlMockDB{mockDB, &expectation, mockLogger}
+
+			mockLogger.EXPECT().Errorf(tc.expLogFmt, gomock.Any(), gomock.Any())
+
+			var passed, actual []string
+
+			expected := []string{"1"}
+
+			sqlMockWrapper.ExpectSelect(t.Context(), &passed, tc.expQuery, tc.expArgs...).ReturnsResponse(expected)
+
+			sqlDB.Select(t.Context(), &actual, tc.query, tc.args...)
+
+			// the response is assigned before the query/args are validated.
+			assert.Equal(t, expected, actual)
+		})
+	}
+}
+
+func TestMockSQL_NoExpectations(t *testing.T) {
+	tests := []struct {
+		desc   string
+		expLog string
+		call   func(db *sqlMockDB) any
+		expRes any
+	}{
+		{
+			desc:   "health check without expectation",
+			expLog: "Did not expect any mock calls for HealthCheck",
+			call:   func(db *sqlMockDB) any { return db.HealthCheck() },
+			expRes: (*datasource.Health)(nil),
+		},
+		{
+			desc:   "dialect without expectation",
+			expLog: "Did not expect any mock calls for Dialect",
+			call:   func(db *sqlMockDB) any { return db.Dialect() },
+			expRes: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockDB, _, _ := sql.NewSQLMocks(t)
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			sqlDB := &sqlMockDB{mockDB, &expectedQuery{}, mockLogger}
+
+			mockLogger.EXPECT().Error(tc.expLog)
+
+			assert.Equal(t, tc.expRes, tc.call(sqlDB))
+		})
+	}
+}
+
+func TestMockSQL_NewResult(t *testing.T) {
+	_, mock := NewMockContainer(t)
+
+	res := mock.SQL.NewResult(7, 3)
+
+	lastID, err := res.LastInsertId()
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), lastID)
+
+	affected, err := res.RowsAffected()
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), affected)
+}
