@@ -20,9 +20,9 @@ var (
 //
 // A gomock Txn cannot answer "was Commit called?" in this package: setupDB runs ctrl.Finish()
 // when it returns, which marks the controller finished before the test body starts, so the
-// t.Cleanup verification gomock.NewController installs short-circuits (mock v0.6.0
-// controller.go:268) and an unmet expectation is never reported. Counting here asserts on what
-// happened rather than on the mock library's bookkeeping.
+// t.Cleanup verification gomock.NewController installs short-circuits on Controller.finish's
+// already-finished branch, and an unmet expectation is never reported. Counting here asserts on
+// what happened rather than on the mock library's bookkeeping.
 type recordingTxn struct {
 	mutateErr  error
 	commitErr  error

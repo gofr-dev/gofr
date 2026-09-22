@@ -243,17 +243,17 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 
 // mutateInTxn runs the mutation and resolves the transaction it opens.
 //
-// dgo only finishes the transaction when the caller set CommitNow on the mutation — it copies
-// the field into the request (dgo v210 txn.go:157) and marks the transaction finished only when
-// it is set (txn.go:206). Mutating without it therefore staged the write into a transaction that
+// dgo only finishes the transaction when the caller set CommitNow on the mutation — Txn.Mutate
+// copies the field into the api.Request it builds, and Txn.Do marks the transaction finished only
+// when that field is set. Mutating without it therefore staged the write into a transaction that
 // was then abandoned to the garbage collector: nothing was persisted, no error was returned, and
 // the transaction stayed open on the server until Dgraph timed it out. Committing here makes a
 // single Mutate call atomic whichever way the caller wrote it.
 func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.Response, error) {
 	txn := d.client.NewTxn()
 
-	// Discard is a no-op once the transaction is finished (dgo v210 txn.go:289), so this only
-	// does anything on the paths that did not reach a commit.
+	// Discard delegates to Txn.commitOrAbort, which returns immediately once the transaction is
+	// finished, so this only does anything on the paths that did not reach a commit.
 	//
 	// The cancellation is dropped for the discard alone: a caller whose context is canceled
 	// between the commit returning and this deferred call would otherwise have a successful
@@ -272,8 +272,8 @@ func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.
 		return nil, err
 	}
 
-	// dgo already committed and marked the transaction finished; calling Commit again returns
-	// ErrFinished (txn.go:239).
+	// dgo already committed and marked the transaction finished; Txn.Commit returns ErrFinished
+	// for a finished transaction.
 	if mutation.CommitNow {
 		return resp, nil
 	}
