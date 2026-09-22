@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1030,4 +1031,240 @@ func TestValidateSeekOffset_SeekCurrentBeyondLength_ReturnsErrOutOfRange(t *test
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrOutOfRange)
+}
+
+func TestCommonFileSystem_Connect(t *testing.T) {
+	tests := []struct {
+		name         string
+		provider     func(p *MockStorageProvider) StorageProvider
+		connected    bool
+		setupMocks   func(p *MockStorageProvider, l *MockLogger)
+		expErr       error
+		expConnected bool
+	}{
+		{
+			name:         "nil provider returns error",
+			provider:     func(*MockStorageProvider) StorageProvider { return nil },
+			setupMocks:   func(*MockStorageProvider, *MockLogger) {},
+			expErr:       errProviderNil,
+			expConnected: false,
+		},
+		{
+			name:         "already connected skips provider connect",
+			provider:     func(p *MockStorageProvider) StorageProvider { return p },
+			connected:    true,
+			setupMocks:   func(*MockStorageProvider, *MockLogger) {},
+			expConnected: true,
+		},
+		{
+			name:     "provider connect error is returned",
+			provider: func(p *MockStorageProvider) StorageProvider { return p },
+			setupMocks: func(p *MockStorageProvider, _ *MockLogger) {
+				p.EXPECT().Connect(gomock.Any()).Return(errTest)
+			},
+			expErr:       errTest,
+			expConnected: false,
+		},
+		{
+			name:     "successful connect logs and marks connected",
+			provider: func(p *MockStorageProvider) StorageProvider { return p },
+			setupMocks: func(p *MockStorageProvider, l *MockLogger) {
+				p.EXPECT().Connect(gomock.Any()).Return(nil)
+				l.EXPECT().Infof("connected to %s", "test-bucket")
+			},
+			expConnected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockProvider := NewMockStorageProvider(ctrl)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().NewHistogram(AppFileStats, gomock.Any(), gomock.Any()).Times(1)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
+
+			fs := &CommonFileSystem{
+				Provider: tt.provider(mockProvider),
+				Location: "test-bucket",
+				Logger:   mockLogger,
+				Metrics:  mockMetrics,
+			}
+			fs.SetConnected(tt.connected)
+
+			tt.setupMocks(mockProvider, mockLogger)
+
+			err := fs.Connect(t.Context())
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expConnected, fs.IsConnected())
+		})
+	}
+}
+
+func TestCommonFileSystem_RetryAndConnectedState(t *testing.T) {
+	tests := []struct {
+		name            string
+		disableRetry    bool
+		connected       bool
+		expRetryOff     bool
+		expIsConnection bool
+	}{
+		{name: "retry enabled and disconnected", disableRetry: false, connected: false, expRetryOff: false, expIsConnection: false},
+		{name: "retry disabled and connected", disableRetry: true, connected: true, expRetryOff: true, expIsConnection: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &CommonFileSystem{}
+
+			fs.SetDisableRetry(tt.disableRetry)
+			fs.SetConnected(tt.connected)
+
+			assert.Equal(t, tt.expRetryOff, fs.IsRetryDisabled())
+			assert.Equal(t, tt.expIsConnection, fs.IsConnected())
+		})
+	}
+}
+
+// dirWriteCloser simulates a local provider whose writer fails because the target is a directory.
+type dirWriteCloser struct{}
+
+func (dirWriteCloser) Write([]byte) (int, error) { return 0, errIsADirectory }
+func (dirWriteCloser) Close() error              { return nil }
+
+var errIsADirectory = errors.New("write testdir/: is a directory")
+
+func TestCommonFileSystem_Mkdir_ExistingAndWriterEdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMocks func(p *MockStorageProvider)
+		expErr     error
+	}{
+		{
+			name: "directory marker already exists",
+			setupMocks: func(p *MockStorageProvider) {
+				p.EXPECT().StatObject(gomock.Any(), "testdir/").Return(&ObjectInfo{Name: "testdir/", IsDir: true}, nil)
+			},
+		},
+		{
+			name: "provider returns nil writer",
+			setupMocks: func(p *MockStorageProvider) {
+				p.EXPECT().StatObject(gomock.Any(), "testdir/").Return(nil, errTest)
+				p.EXPECT().NewWriter(gomock.Any(), "testdir/").Return(nil)
+			},
+			expErr: errWriterNil,
+		},
+		{
+			name: "write reports is a directory treated as existing",
+			setupMocks: func(p *MockStorageProvider) {
+				p.EXPECT().StatObject(gomock.Any(), "testdir/").Return(nil, errTest)
+				p.EXPECT().NewWriter(gomock.Any(), "testdir/").Return(dirWriteCloser{})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, mockProvider, fs := setupCommonFS(t)
+
+			tt.setupMocks(mockProvider)
+
+			err := fs.Mkdir("testdir", DefaultDirMode)
+
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
+}
+
+func TestCommonFileSystem_OpenFile_RDWRLocalOpenFails(t *testing.T) {
+	missing := t.TempDir() + "/missing-dir/file.txt"
+
+	tests := []struct {
+		name       string
+		flag       int
+		setupMocks func(p *MockStorageProvider)
+		expErr     error
+	}{
+		{
+			name:       "read-write without create falls back to unsupported flags",
+			flag:       os.O_RDWR,
+			setupMocks: func(*MockStorageProvider) {},
+			expErr:     errUnsupportedFlags,
+		},
+		{
+			name: "read-write append falls back to provider writer which is nil",
+			flag: os.O_RDWR | os.O_APPEND,
+			setupMocks: func(p *MockStorageProvider) {
+				p.EXPECT().NewWriter(gomock.Any(), missing).Return(nil)
+			},
+			expErr: errWriterNil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, mockProvider, fs := setupCommonFS(t)
+
+			tt.setupMocks(mockProvider)
+
+			f, err := fs.OpenFile(missing, tt.flag, DefaultFileMode)
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Nil(t, f)
+		})
+	}
+}
+
+func TestCommonFileSystem_CreateWithOptions_ProviderWithoutMetadata(t *testing.T) {
+	tests := []struct {
+		name       string
+		opts       *FileOptions
+		setupMocks func(p *MockStorageProvider, l *MockLogger, w *MockWriteCloser)
+		expErr     error
+		expFile    bool
+	}{
+		{
+			name: "metadata requested but unsupported logs warning",
+			opts: &FileOptions{ContentType: "text/csv"},
+			setupMocks: func(p *MockStorageProvider, l *MockLogger, w *MockWriteCloser) {
+				l.EXPECT().Warnf(gomock.Any(), "TEST", "obj.csv")
+				p.EXPECT().NewWriter(gomock.Any(), "obj.csv").Return(w)
+			},
+			expFile: true,
+		},
+		{
+			name: "no metadata requested creates file without warning",
+			setupMocks: func(p *MockStorageProvider, _ *MockLogger, w *MockWriteCloser) {
+				p.EXPECT().NewWriter(gomock.Any(), "obj.csv").Return(w)
+			},
+			expFile: true,
+		},
+		{
+			name: "nil writer returns error",
+			setupMocks: func(p *MockStorageProvider, _ *MockLogger, _ *MockWriteCloser) {
+				p.EXPECT().NewWriter(gomock.Any(), "obj.csv").Return(nil)
+			},
+			expErr:  errWriterNil,
+			expFile: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl, mockProvider, fs := setupCommonFS(t)
+			fs.ProviderName = "TEST"
+
+			mockWriter := NewMockWriteCloser(ctrl)
+			tt.setupMocks(mockProvider, fs.Logger.(*MockLogger), mockWriter)
+
+			f, err := fs.CreateWithOptions(t.Context(), "obj.csv", tt.opts)
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expFile, f != nil)
+		})
+	}
 }
