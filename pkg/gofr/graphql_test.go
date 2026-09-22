@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +13,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errWriteFailed = errors.New("write failed")
+
+// errWriter is an http.ResponseWriter whose body writes always fail, simulating a client
+// that disconnected before the response could be written.
+type errWriter struct {
+	header http.Header
+	status int
+}
+
+func (e *errWriter) Header() http.Header { return e.header }
+
+func (*errWriter) Write([]byte) (int, error) { return 0, errWriteFailed }
+
+func (e *errWriter) WriteHeader(status int) { e.status = status }
 
 func setupSchema(t *testing.T, content string) string {
 	t.Helper()
@@ -430,4 +450,100 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, result.Errors)
+}
+
+func Test_respondWithErrors(t *testing.T) {
+	tests := []struct {
+		desc    string
+		status  int
+		message string
+	}{
+		{"internal server error", http.StatusInternalServerError, "Internal Server Error"},
+		{"unsupported media type", http.StatusUnsupportedMediaType, "Content-Type must be application/json"},
+		{"bad request", http.StatusBadRequest, "invalid JSON request body"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			resp := httptest.NewRecorder()
+
+			logs := testutil.StderrOutputForFunc(func() {
+				m := &graphQLManager{container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}}
+				m.respondWithErrors(resp, tc.status, tc.message)
+			})
+
+			assert.Empty(t, logs)
+			assert.Equal(t, tc.status, resp.Code)
+			assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+
+			var body struct {
+				Errors []struct {
+					Message string `json:"message"`
+				} `json:"errors"`
+			}
+
+			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+			require.Len(t, body.Errors, 1)
+			assert.Equal(t, tc.message, body.Errors[0].Message)
+		})
+	}
+}
+
+func Test_respondWithErrors_WriteFailureIsLogged(t *testing.T) {
+	w := &errWriter{header: http.Header{}}
+
+	logs := testutil.StderrOutputForFunc(func() {
+		m := &graphQLManager{container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}}
+		m.respondWithErrors(w, http.StatusBadRequest, "invalid JSON request body")
+	})
+
+	assert.Contains(t, logs, "error encoding GraphQL error response")
+	assert.Contains(t, logs, errWriteFailed.Error())
+	assert.Equal(t, http.StatusBadRequest, w.status)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+}
+
+func TestGraphQL_RequestErrors(t *testing.T) {
+	tests := []struct {
+		desc        string
+		contentType string
+		body        string
+		status      int
+		message     string
+	}{
+		{"unsupported content type", "text/plain", `{"query": "{ hello }"}`,
+			http.StatusUnsupportedMediaType, "Content-Type must be application/json"},
+		{"invalid JSON body", "application/json", `{bad`,
+			http.StatusBadRequest, "invalid JSON request body"},
+	}
+
+	tmpDir := setupSchema(t, `type Query { hello: String }`)
+	t.Chdir(tmpDir)
+
+	app := New()
+	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "ok", nil })
+
+	require.NoError(t, app.graphqlManager.buildSchema())
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", tc.contentType)
+
+			resp := httptest.NewRecorder()
+
+			app.graphqlManager.Handle(resp, req)
+
+			var result struct {
+				Errors []struct {
+					Message string `json:"message"`
+				} `json:"errors"`
+			}
+
+			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
+			assert.Equal(t, tc.status, resp.Code)
+			require.Len(t, result.Errors, 1)
+			assert.Equal(t, tc.message, result.Errors[0].Message)
+		})
+	}
 }
