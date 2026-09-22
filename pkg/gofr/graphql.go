@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 var (
@@ -71,6 +72,7 @@ func (l *GraphQLLog) PrettyPrint(writer io.Writer) {
 
 type graphQLManager struct {
 	container *container.Container
+	logger    logging.Logger
 	queries   map[string]Handler
 	mutations map[string]Handler
 	schema    graphql.Schema
@@ -90,6 +92,7 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 
 	return &graphQLManager{
 		container: c,
+		logger:    c.Logger,
 		queries:   make(map[string]Handler),
 		mutations: make(map[string]Handler),
 		tracer:    otel.Tracer("gofr-graphql"),
@@ -510,16 +513,19 @@ func (*graphQLManager) parseOperation(query, operationName string) (opName, opTy
 	return opName, opType
 }
 
-func (*graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
+func (m *graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"errors": []map[string]any{
 			{"message": message},
 		},
-	})
+	}); err != nil {
+		m.logger.Errorf("error encoding GraphQL error response: %v", err)
+	}
 }
+
 func (m *graphQLManager) GetHandler() http.Handler {
 	return http.HandlerFunc(m.Handle)
 }

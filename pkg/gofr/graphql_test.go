@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func setupSchema(t *testing.T, content string) string {
@@ -430,4 +434,38 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, result.Errors)
+}
+
+// erroringResponseWriter fails every Write, simulating a client that is gone
+// or a broken connection while the error body is being encoded.
+type erroringResponseWriter struct {
+	header http.Header
+}
+
+func (w *erroringResponseWriter) Header() http.Header { return w.header }
+func (w *erroringResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("disk full")
+}
+func (w *erroringResponseWriter) WriteHeader(int) {}
+
+// captureErrorLogger records only Errorf output; every other method of the
+// embedded nil interface is never called by the code under test.
+type captureErrorLogger struct {
+	logging.Logger
+
+	msg string
+}
+
+func (l *captureErrorLogger) Errorf(format string, args ...any) {
+	l.msg = fmt.Sprintf(format, args...)
+}
+
+func TestGraphQL_RespondWithErrors_LogsEncodeFailure(t *testing.T) {
+	logger := &captureErrorLogger{}
+	mgr := &graphQLManager{logger: logger}
+
+	mgr.respondWithErrors(&erroringResponseWriter{header: http.Header{}},
+		http.StatusInternalServerError, "boom")
+
+	assert.Equal(t, "error encoding GraphQL error response: disk full", logger.msg)
 }
