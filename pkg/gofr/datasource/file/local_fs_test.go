@@ -1,9 +1,12 @@
 package file
 
 import (
+	"context"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -202,4 +205,57 @@ func TestFailWriter_WriteAndCloseReturnError(t *testing.T) {
 	require.ErrorIs(t, wErr, errExample)
 	require.Error(t, fw.Close())
 	require.ErrorIs(t, fw.Close(), errExample)
+}
+
+func TestLocalProvider_Health(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	require.NoError(t, (&localProvider{}).Health(t.Context()))
+}
+
+func TestLocalProvider_Health_ContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := (&localProvider{}).Health(ctx)
+
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestLocalProvider_Health_WorkingDirRemoved(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the current working directory cannot be removed on windows")
+	}
+
+	dir := filepath.Join(t.TempDir(), "gone")
+	require.NoError(t, os.Mkdir(dir, 0o700))
+
+	t.Chdir(dir)
+	require.NoError(t, os.Remove(dir))
+
+	err := (&localProvider{}).Health(t.Context())
+
+	require.ErrorIs(t, err, errLocalHealthCheck)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+}
+
+func TestLocalProvider_Health_WorkingDirNotAccessible(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permission bits are not enforced on windows")
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission checks")
+	}
+
+	dir := t.TempDir()
+
+	t.Chdir(dir)
+	require.NoError(t, os.Chmod(dir, 0))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	err := (&localProvider{}).Health(t.Context())
+
+	require.ErrorIs(t, err, errLocalHealthCheck)
+	require.ErrorIs(t, err, fs.ErrPermission)
 }

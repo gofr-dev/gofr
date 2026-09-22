@@ -1,6 +1,8 @@
 package scylladb
 
 import (
+	"context"
+
 	"github.com/gocql/gocql"
 )
 
@@ -19,6 +21,7 @@ type iterator interface {
 // query defines methods for interacting with a ScyllaDB query.
 type query interface {
 	Exec() error
+	ExecWithCtx(ctx context.Context) error
 	Iter() iterator
 	MapScanCAS(dest map[string]any) (applied bool, err error)
 	ScanCAS(dest ...any) (applied bool, err error)

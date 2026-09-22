@@ -359,7 +359,7 @@ type Health struct {
 }
 
 // HealthCheck checks the health of the Cassandra.
-func (c *Client) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUp   = "UP"
@@ -379,7 +379,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 		return &h, errStatusDown
 	}
 
-	err := c.cassandra.session.query("SELECT now() FROM system.local").exec()
+	err := c.cassandra.session.query("SELECT now() FROM system.local").execWithCtx(ctx)
 	if err != nil {
 		h.Status = statusDown
 		h.Details["message"] = err.Error()
