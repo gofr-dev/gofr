@@ -113,6 +113,19 @@ detector supplies `faas.instance` per revision instance, and the region for
 
 The exporter warns separately at startup for whichever of the two is missing.
 
+## Request size
+
+The Telemetry API rejects any request carrying more than **200 points**, and it
+rejects the *whole* request, not just the points past the limit. Because GMP
+needs cumulative temporality, every attribute set a process has ever recorded is
+re-sent on every interval, so a long-lived process grows past 200 points with
+uptime rather than with load.
+
+The `gcp` exporter therefore splits each collection into requests of at most 200
+points and sends them in turn. A failed request is reported, and the rest of the
+collection is still delivered. There is nothing to configure: a high-cardinality
+service needs no `METRICS_CARDINALITY_LIMIT` tuning just to stay under the cap.
+
 ## Local run
 
 Locally, ADC comes from `gcloud auth application-default login`. To avoid a real

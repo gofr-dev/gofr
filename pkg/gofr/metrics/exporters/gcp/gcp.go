@@ -11,6 +11,9 @@
 // receiving the data, plus roles/serviceusage.serviceUsageConsumer on the quota
 // project. roles/monitoring.metricWriter is not sufficient: it authorizes
 // monitoring.googleapis.com, which this exporter never calls.
+//
+// Each collection is sent as requests of at most 200 points, the per-request
+// ceiling the Telemetry API enforces by rejecting the whole request.
 package gcp
 
 import (
@@ -181,7 +184,7 @@ func buildReader(ctx context.Context, cfg *exporters.Config, logger exporters.Lo
 
 	logger.Infof("exporting metrics to Google Cloud at %s every %s via keyless ADC", endpoint, cfg.Interval)
 
-	return metricSdk.NewPeriodicReader(exporter, metricSdk.WithInterval(cfg.Interval)), nil
+	return newReader(exporter, cfg.Interval), nil
 }
 
 // warnUnresolved reports any required prometheus_target label the resource
