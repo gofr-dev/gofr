@@ -3,17 +3,22 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/cmd/terminal"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -182,5 +187,141 @@ func TestShutdownHelperProcess(t *testing.T) {
 		t.Log(shutdownWaited)
 	default:
 		t.Log(shutdownRaced)
+	}
+}
+
+var errTraceFlush = errors.New("trace flush failed")
+
+func TestApp_runCMD_FlushErrorIsLogged(t *testing.T) {
+	tests := []struct {
+		desc       string
+		shutdown   func(context.Context) error
+		setupMocks func(l *container.MockLogger)
+	}{
+		{
+			desc:       "trace flush succeeds silently",
+			shutdown:   func(context.Context) error { return nil },
+			setupMocks: func(*container.MockLogger) {},
+		},
+		{
+			desc:     "trace flush error is logged",
+			shutdown: func(context.Context) error { return errTraceFlush },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Errorf("failed to flush traces: %v", errTraceFlush)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			oldArgs := os.Args
+
+			t.Cleanup(func() { os.Args = oldArgs })
+
+			os.Args = []string{"", "flush"}
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+
+			var ran bool
+
+			a := &App{
+				cmd:            &cmd{out: terminal.New()},
+				container:      &container.Container{Logger: logger},
+				shutdownTracer: tc.shutdown,
+			}
+			a.SubCommand("flush", func(*Context) (any, error) {
+				ran = true
+				return nil, nil
+			})
+
+			a.Run()
+
+			assert.True(t, ran)
+		})
+	}
+}
+
+func TestApp_Run_StartupHookFailure(t *testing.T) {
+	tests := []struct {
+		desc    string
+		hookErr error
+		capture func(func()) string
+		expLog  string
+	}{
+		{
+			desc:    "hook error aborts startup",
+			hookErr: errHookFailed,
+			capture: testutil.StderrOutputForFunc,
+			expLog:  "Startup failed: hook failed",
+		},
+		{
+			desc:    "canceled hook shuts down gracefully",
+			hookErr: context.Canceled,
+			capture: testutil.StdoutOutputForFunc,
+			expLog:  "Startup canceled by context, shutting down gracefully.",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+
+			var hookCalled bool
+
+			out := tc.capture(func() {
+				app := New()
+				app.OnStart(func(*Context) error {
+					hookCalled = true
+					return tc.hookErr
+				})
+
+				// Run must return on its own: no server is started after a failed hook.
+				app.Run()
+			})
+
+			assert.True(t, hookCalled)
+			assert.Contains(t, out, tc.expLog)
+		})
+	}
+}
+
+func TestApp_startMCPServer(t *testing.T) {
+	tests := []struct {
+		desc       string
+		mcp        func(port int) *mcpServer
+		setupMocks func(l *container.MockLogger, port int)
+	}{
+		{
+			desc:       "no MCP server configured",
+			mcp:        func(int) *mcpServer { return nil },
+			setupMocks: func(*container.MockLogger, int) {},
+		},
+		{
+			desc: "MCP server shut down before it started",
+			mcp: func(port int) *mcpServer {
+				return &mcpServer{port: port, handler: http.NotFoundHandler(), stopped: true}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting MCP server on port: %d", port)
+				l.EXPECT().Logf("MCP server was shut down before it started on port: %d", port)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger, port)
+
+			a := &App{container: &container.Container{Logger: logger}, mcpServer: tc.mcp(port)}
+
+			var wg sync.WaitGroup
+
+			a.startMCPServer(&wg)
+			wg.Wait()
+		})
 	}
 }
