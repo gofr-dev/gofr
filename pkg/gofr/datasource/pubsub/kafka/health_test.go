@@ -175,3 +175,69 @@ func (*mockLogger) Logf(string, ...any)   {}
 func (*mockLogger) Log(...any)            {}
 func (*mockLogger) Error(...any)          {}
 func (*mockLogger) Debug(...any)          {}
+
+func TestKafkaHealth_SkipsNilConnections(t *testing.T) {
+	client := &kafkaClient{
+		conn: &multiConn{
+			conns: []Connection{
+				nil,
+				&MockConn{addr: "127.0.0.1:9092", isHealthy: true, isControl: true},
+			},
+		},
+		reader: make(map[string]Reader),
+		writer: &mockWriter{},
+		logger: &mockLogger{},
+	}
+
+	health := client.Health()
+
+	assert.Equal(t, datasource.StatusUp, health.Status)
+	assert.Equal(t, []map[string]any{{
+		"broker":       "127.0.0.1:9092",
+		"status":       "UP",
+		"isController": true,
+		"error":        nil,
+	}}, health.Details["brokers"])
+}
+
+func TestConvertStructToMap(t *testing.T) {
+	intTarget := 0
+
+	tests := []struct {
+		desc   string
+		input  any
+		output any
+		expErr bool
+		expOut any
+	}{
+		{
+			desc:   "struct converted to map",
+			input:  struct{ Name string }{Name: "broker"},
+			output: &map[string]any{},
+			expOut: &map[string]any{"Name": "broker"},
+		},
+		{
+			desc:   "input cannot be marshaled",
+			input:  make(chan int),
+			output: &map[string]any{},
+			expErr: true,
+			expOut: &map[string]any{},
+		},
+		{
+			desc:   "output type does not match",
+			input:  struct{ Name string }{Name: "broker"},
+			output: &intTarget,
+			expErr: true,
+			expOut: &intTarget,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := convertStructToMap(tc.input, tc.output)
+
+			assert.Equal(t, tc.expErr, err != nil)
+			assert.Equal(t, tc.expOut, tc.output)
+		})
+	}
+}

@@ -17,7 +17,9 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
@@ -1473,4 +1475,247 @@ func TestGoogleClient_Subscribe_ConcurrentTopics(t *testing.T) {
 
 	assert.Len(t, g.subStarted, len(topics))
 	assert.Len(t, g.receiveChan, len(topics))
+}
+
+// newTestServer starts an in-process pstest server with the given reactor options.
+func newTestServer(t *testing.T, opts ...pstest.ServerReactorOption) *pstest.Server {
+	t.Helper()
+
+	srv := pstest.NewServer(opts...)
+
+	t.Cleanup(func() { _ = srv.Close() })
+
+	return srv
+}
+
+// newClientForServer returns a pubsub client connected to the given pstest server.
+func newClientForServer(t *testing.T, srv *pstest.Server) *gcPubSub.Client {
+	t.Helper()
+
+	conn, err := grpc.NewClient(srv.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	client, err := gcPubSub.NewClient(t.Context(), "test-project", option.WithGRPCConn(conn))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	return client
+}
+
+func TestConnect(t *testing.T) {
+	tests := []struct {
+		desc      string
+		opts      []pstest.ServerReactorOption
+		topics    []string
+		expCode   codes.Code
+		expClient bool
+		expLog    string
+	}{
+		{
+			desc:      "no topics present",
+			expCode:   codes.OK,
+			expClient: true,
+			expLog:    "no topics found in Google PubSub",
+		},
+		{
+			desc:      "topics present",
+			topics:    []string{"existing-topic"},
+			expCode:   codes.OK,
+			expClient: true,
+			expLog:    "connected to google pubsub client, projectID: test-project",
+		},
+		{
+			desc:    "listing topics fails",
+			opts:    []pstest.ServerReactorOption{pstest.WithErrorInjection("ListTopics", codes.PermissionDenied, "denied")},
+			expCode: codes.PermissionDenied,
+			expLog:  "google pubsub connection validation failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			srv := newTestServer(t, tc.opts...)
+			t.Setenv("PUBSUB_EMULATOR_HOST", srv.Addr)
+
+			setupClient := newClientForServer(t, srv)
+
+			for _, topic := range tc.topics {
+				_, err := setupClient.CreateTopic(t.Context(), topic)
+				require.NoError(t, err)
+			}
+
+			var (
+				client *gcPubSub.Client
+				err    error
+			)
+
+			var stdout string
+
+			stderr := testutil.StderrOutputForFunc(func() {
+				stdout = testutil.StdoutOutputForFunc(func() {
+					client, err = connect(Config{ProjectID: "test-project", SubscriptionName: "sub"},
+						logging.NewMockLogger(logging.DEBUG))
+				})
+			})
+
+			t.Cleanup(func() { closeClient(client) })
+
+			assert.Equal(t, tc.expCode, status.Code(err))
+			assert.Equal(t, tc.expClient, client != nil)
+			assert.Contains(t, stdout+stderr, tc.expLog)
+		})
+	}
+}
+
+// closeClient closes a pubsub client created by the code under test, if any.
+func closeClient(client *gcPubSub.Client) {
+	if client != nil {
+		_ = client.Close()
+	}
+}
+
+func TestGoogleClient_New_Connected(t *testing.T) {
+	srv := newTestServer(t)
+	t.Setenv("PUBSUB_EMULATOR_HOST", srv.Addr)
+
+	ctrl := gomock.NewController(t)
+
+	config := Config{ProjectID: "test-project", SubscriptionName: "sub"}
+
+	g := New(config, logging.NewMockLogger(logging.DEBUG), NewMockMetrics(ctrl))
+
+	require.NotNil(t, g)
+	assert.NotNil(t, g.client)
+	assert.Equal(t, config, g.Config)
+
+	require.NoError(t, g.Close())
+}
+
+func TestRetryConnect_Success(t *testing.T) {
+	srv := newTestServer(t)
+	t.Setenv("PUBSUB_EMULATOR_HOST", srv.Addr)
+
+	config := Config{ProjectID: "test-project", SubscriptionName: "sub"}
+	g := &googleClient{Config: config}
+
+	out := testutil.StdoutOutputForFunc(func() {
+		retryConnect(config, logging.NewMockLogger(logging.DEBUG), g)
+	})
+
+	require.NotNil(t, g.client)
+	assert.Contains(t, out, "connected to google pubsub client, projectID: test-project")
+
+	require.NoError(t, g.Close())
+}
+
+func TestGoogleClient_getSubscription_ClientNil(t *testing.T) {
+	client := newClientForServer(t, newTestServer(t))
+
+	g := &googleClient{Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	sub, err := g.getSubscription(t.Context(), client.Topic("some-topic"))
+
+	assert.Nil(t, sub)
+	require.ErrorIs(t, err, errClientNotConnected)
+}
+
+func TestGoogleClient_InjectedServerErrors(t *testing.T) {
+	const topic = "injected-topic"
+
+	tests := []struct {
+		desc       string
+		opt        pstest.ServerReactorOption
+		setupMocks func(m *MockMetrics)
+		call       func(ctx context.Context, g *googleClient) error
+		expCode    codes.Code
+	}{
+		{
+			desc: "publish result returns error",
+			opt:  pstest.WithErrorInjection("Publish", codes.PermissionDenied, "publish denied"),
+			setupMocks: func(m *MockMetrics) {
+				m.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", topic)
+			},
+			call: func(ctx context.Context, g *googleClient) error {
+				return g.Publish(ctx, topic, []byte("hello"))
+			},
+			expCode: codes.PermissionDenied,
+		},
+		{
+			desc: "subscribe fails checking subscription existence",
+			opt:  pstest.WithErrorInjection("GetSubscription", codes.PermissionDenied, "get denied"),
+			setupMocks: func(m *MockMetrics) {
+				m.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+					"topic", topic, "subscription_name", "sub")
+			},
+			call: func(ctx context.Context, g *googleClient) error {
+				_, err := g.Subscribe(ctx, topic)
+				return err
+			},
+			expCode: codes.PermissionDenied,
+		},
+		{
+			desc: "subscribe fails creating subscription",
+			opt:  pstest.WithErrorInjection("CreateSubscription", codes.PermissionDenied, "create denied"),
+			setupMocks: func(m *MockMetrics) {
+				m.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+					"topic", topic, "subscription_name", "sub")
+			},
+			call: func(ctx context.Context, g *googleClient) error {
+				_, err := g.Subscribe(ctx, topic)
+				return err
+			},
+			expCode: codes.PermissionDenied,
+		},
+		{
+			desc:       "query fails getting subscription",
+			opt:        pstest.WithErrorInjection("GetSubscription", codes.PermissionDenied, "get denied"),
+			setupMocks: func(*MockMetrics) {},
+			call: func(ctx context.Context, g *googleClient) error {
+				_, err := g.Query(ctx, topic)
+				return err
+			},
+			expCode: codes.PermissionDenied,
+		},
+		{
+			desc:       "delete topic not found is ignored",
+			opt:        pstest.WithErrorInjection("DeleteTopic", codes.NotFound, "Topic not found"),
+			setupMocks: func(*MockMetrics) {},
+			call: func(ctx context.Context, g *googleClient) error {
+				return g.DeleteTopic(ctx, topic)
+			},
+			expCode: codes.OK,
+		},
+		{
+			desc:       "delete topic other error is returned",
+			opt:        pstest.WithErrorInjection("DeleteTopic", codes.PermissionDenied, "delete denied"),
+			setupMocks: func(*MockMetrics) {},
+			call: func(ctx context.Context, g *googleClient) error {
+				return g.DeleteTopic(ctx, topic)
+			},
+			expCode: codes.PermissionDenied,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			tc.setupMocks(mockMetrics)
+
+			g := &googleClient{
+				client:      newClientForServer(t, newTestServer(t, tc.opt)),
+				logger:      logging.NewMockLogger(logging.DEBUG),
+				metrics:     mockMetrics,
+				Config:      Config{ProjectID: "test-project", SubscriptionName: "sub"},
+				receiveChan: make(map[string]chan *pubsub.Message),
+				subStarted:  make(map[string]struct{}),
+			}
+
+			err := tc.call(t.Context(), g)
+
+			assert.Equal(t, tc.expCode, status.Code(err))
+		})
+	}
 }
