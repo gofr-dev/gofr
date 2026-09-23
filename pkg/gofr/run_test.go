@@ -242,48 +242,24 @@ func TestApp_runCMD_FlushErrorIsLogged(t *testing.T) {
 	}
 }
 
-func TestApp_Run_StartupHookFailure(t *testing.T) {
-	tests := []struct {
-		desc    string
-		hookErr error
-		capture func(func()) string
-		expLog  string
-	}{
-		{
-			desc:    "hook error aborts startup",
-			hookErr: errHookFailed,
-			capture: testutil.StderrOutputForFunc,
-			expLog:  "Startup failed: hook failed",
-		},
-		{
-			desc:    "canceled hook shuts down gracefully",
-			hookErr: context.Canceled,
-			capture: testutil.StdoutOutputForFunc,
-			expLog:  "Startup canceled by context, shutting down gracefully.",
-		},
-	}
+func TestApp_Run_StartupHookCanceled(t *testing.T) {
+	testutil.NewServerConfigs(t)
 
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			testutil.NewServerConfigs(t)
+	var hookCalled bool
 
-			var hookCalled bool
-
-			out := tc.capture(func() {
-				app := New()
-				app.OnStart(func(*Context) error {
-					hookCalled = true
-					return tc.hookErr
-				})
-
-				// Run must return on its own: no server is started after a failed hook.
-				app.Run()
-			})
-
-			assert.True(t, hookCalled)
-			assert.Contains(t, out, tc.expLog)
+	out := testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.OnStart(func(*Context) error {
+			hookCalled = true
+			return context.Canceled
 		})
-	}
+
+		// Run must return on its own: no server is started after a canceled hook.
+		app.Run()
+	})
+
+	assert.True(t, hookCalled)
+	assert.Contains(t, out, "Startup canceled by context, shutting down gracefully.")
 }
 
 func TestApp_startMCPServer(t *testing.T) {

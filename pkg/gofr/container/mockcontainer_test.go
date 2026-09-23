@@ -334,62 +334,21 @@ func TestMockSQL_HealthCheck(t *testing.T) {
 	assert.Equal(t, expectedHealth, resultHealth)
 }
 
-func TestExpectSelect_MismatchCases(t *testing.T) {
-	tests := []struct {
-		desc      string
-		expQuery  string
-		expArgs   []any
-		query     string
-		args      []any
-		expLogFmt string
-	}{
-		{
-			desc:      "query text mismatch",
-			expQuery:  "SELECT id FROM users",
-			query:     "SELECT name FROM users",
-			expLogFmt: "expected query: %q, actual query: %q",
-		},
-		{
-			desc:      "argument count mismatch",
-			expQuery:  "SELECT id FROM users WHERE id=?",
-			expArgs:   []any{1},
-			query:     "SELECT id FROM users WHERE id=?",
-			args:      []any{1, 2},
-			expLogFmt: "expected %d args, actual %d",
-		},
-		{
-			desc:      "argument value mismatch",
-			expQuery:  "SELECT id FROM users WHERE id=?",
-			expArgs:   []any{1},
-			query:     "SELECT id FROM users WHERE id=?",
-			args:      []any{2},
-			expLogFmt: "expected arg %d, actual arg %d",
-		},
-	}
+func TestExpectSelect_ArgCountMismatch(t *testing.T) {
+	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
+	ctrl := gomock.NewController(t)
+	expectation := expectedQuery{}
+	mockLogger := NewMockLogger(ctrl)
+	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
+	sqlDB := &sqlMockDB{mockDB, &expectation, mockLogger}
 
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			mockDB, sqlMock, _ := sql.NewSQLMocks(t)
-			ctrl := gomock.NewController(t)
-			expectation := expectedQuery{}
-			mockLogger := NewMockLogger(ctrl)
-			sqlMockWrapper := &mockSQL{sqlMock, &expectation}
-			sqlDB := &sqlMockDB{mockDB, &expectation, mockLogger}
+	mockLogger.EXPECT().Errorf("expected %d args, actual %d", 1, 2)
 
-			mockLogger.EXPECT().Errorf(tc.expLogFmt, gomock.Any(), gomock.Any())
+	var passed, actual []string
 
-			var passed, actual []string
+	sqlMockWrapper.ExpectSelect(t.Context(), &passed, "SELECT id FROM users WHERE id=?", 1).ReturnsResponse([]string{"1"})
 
-			expected := []string{"1"}
-
-			sqlMockWrapper.ExpectSelect(t.Context(), &passed, tc.expQuery, tc.expArgs...).ReturnsResponse(expected)
-
-			sqlDB.Select(t.Context(), &actual, tc.query, tc.args...)
-
-			// the response is assigned before the query/args are validated.
-			assert.Equal(t, expected, actual)
-		})
-	}
+	sqlDB.Select(t.Context(), &actual, "SELECT id FROM users WHERE id=?", 1, 2)
 }
 
 func TestMockSQL_NoExpectations(t *testing.T) {

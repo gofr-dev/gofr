@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
+	grpcstatus "google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
@@ -1561,7 +1561,7 @@ func TestConnect(t *testing.T) {
 
 			t.Cleanup(func() { closeClient(client) })
 
-			assert.Equal(t, tc.expCode, status.Code(err))
+			assert.Equal(t, tc.expCode, grpcstatus.Code(err))
 			assert.Equal(t, tc.expClient, client != nil)
 			assert.Contains(t, stdout+stderr, tc.expLog)
 		})
@@ -1715,7 +1715,7 @@ func TestGoogleClient_InjectedServerErrors(t *testing.T) {
 
 			err := tc.call(t.Context(), g)
 
-			assert.Equal(t, tc.expCode, status.Code(err))
+			assert.Equal(t, tc.expCode, grpcstatus.Code(err))
 		})
 	}
 }

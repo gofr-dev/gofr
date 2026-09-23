@@ -71,12 +71,17 @@ func TestKafkaHealth_AllBrokersUp(t *testing.T) {
 
 	assert.Equal(t, datasource.StatusUp, health.Status)
 	assert.Len(t, health.Details["brokers"], 2)
-	assert.Contains(t, health.Details["brokers"], map[string]any{
-		"broker":       "127.0.0.1:9092",
+	assert.Contains(t, health.Details["brokers"], healthyControllerStatus("127.0.0.1:9092"))
+}
+
+// healthyControllerStatus is the health entry reported for a reachable controller broker.
+func healthyControllerStatus(addr string) map[string]any {
+	return map[string]any{
+		"broker":       addr,
 		"status":       "UP",
 		"isController": true,
 		"error":        nil,
-	})
+	}
 }
 
 func TestKafkaHealth_SomeBrokersUpSomeDown(t *testing.T) {
@@ -192,12 +197,7 @@ func TestKafkaHealth_SkipsNilConnections(t *testing.T) {
 	health := client.Health()
 
 	assert.Equal(t, datasource.StatusUp, health.Status)
-	assert.Equal(t, []map[string]any{{
-		"broker":       "127.0.0.1:9092",
-		"status":       "UP",
-		"isController": true,
-		"error":        nil,
-	}}, health.Details["brokers"])
+	assert.Equal(t, []map[string]any{healthyControllerStatus("127.0.0.1:9092")}, health.Details["brokers"])
 }
 
 func TestConvertStructToMap(t *testing.T) {
