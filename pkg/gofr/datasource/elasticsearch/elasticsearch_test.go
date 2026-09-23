@@ -2,11 +2,14 @@ package elasticsearch
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/stretchr/testify/require"
@@ -748,4 +751,93 @@ func TestClient_Connect_Success(t *testing.T) {
 	client.Connect()
 
 	require.NotNil(t, client.client, "Elasticsearch client should be initialized")
+}
+
+func TestClient_HealthCheck_HonorsContext(t *testing.T) {
+	// release unblocks the info handler if the client never cancels the request, so a failing
+	// run ends instead of hanging on server.Close.
+	release := make(chan struct{})
+
+	var releaseOnce sync.Once
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+
+		if r.Method == http.MethodGet {
+			// Cluster info: answer only once the request is canceled.
+			select {
+			case <-r.Context().Done():
+			case <-release:
+			}
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	es, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+	require.NoError(t, err)
+
+	client := New(Config{Addresses: []string{server.URL}})
+	client.client = es
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tests := []struct {
+		name    string
+		ctx     func(t *testing.T) context.Context
+		wantErr error
+	}{
+		{
+			name:    "canceled context fails the ping",
+			ctx:     func(*testing.T) context.Context { return canceled },
+			wantErr: errHealthCheckFailed,
+		},
+		{
+			name: "deadline during cluster info returns promptly",
+			ctx: func(t *testing.T) context.Context {
+				t.Helper()
+
+				ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+				t.Cleanup(cancel)
+
+				return ctx
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			type result struct {
+				health any
+				err    error
+			}
+
+			done := make(chan result, 1)
+			ctx := tc.ctx(t)
+
+			go func() {
+				h, err := client.HealthCheck(ctx)
+				done <- result{health: h, err: err}
+			}()
+
+			var res result
+
+			select {
+			case res = <-done:
+			case <-time.After(2 * time.Second):
+				releaseOnce.Do(func() { close(release) })
+				t.Fatal("HealthCheck did not return after its context was done")
+			}
+
+			require.ErrorIs(t, res.err, tc.wantErr)
+
+			h, ok := res.health.(*Health)
+			require.True(t, ok)
+			require.NotContains(t, h.Details, "cluster_name")
+		})
+	}
 }

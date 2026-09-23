@@ -59,8 +59,8 @@ const (
 	opentsdbOperationTotalName    = "app_opentsdb_operation_total"
 )
 
-//nolint:gochecknoglobals // this variable is being set again with a mockserver response for testing HealthCheck endpoint.
-var dialTimeout = net.DialTimeout
+//nolint:gochecknoglobals // this dialer is replaced with a mock connection for testing HealthCheck endpoint.
+var dialContext = (&net.Dialer{}).DialContext
 
 // Client is the implementation of the OpenTSDBClient interface,
 // which includes context-aware functionality.
@@ -425,7 +425,12 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		Details: make(map[string]any),
 	}
 
-	conn, err := dialTimeout("tcp", c.config.Host, defaultDialTime)
+	// The dial timeout lives on the context rather than the dialer, so the caller's
+	// deadline or cancellation still cuts a slow dial short.
+	dialCtx, cancel := context.WithTimeout(ctx, defaultDialTime)
+	defer cancel()
+
+	conn, err := dialContext(dialCtx, "tcp", c.config.Host)
 	if err != nil {
 		h.Status = "DOWN"
 		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)

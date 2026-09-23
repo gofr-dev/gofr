@@ -24,6 +24,7 @@ type mockDependencies struct {
 	mockBatch   *Mockbatch
 	mockIter    *Mockiterator
 	mockLogger  *MockLogger
+	ctrl        *gomock.Controller
 }
 
 func initTest(t *testing.T) (*Client, *mockDependencies) {
@@ -58,7 +59,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
-		mockIter: mockiter, mockLogger: mockLogger}
+		mockIter: mockiter, mockLogger: mockLogger, ctrl: ctrl}
 }
 
 func TestScyllaDB_Connect(t *testing.T) {
@@ -555,4 +556,5 @@ func Test_HealthCheck_PropagatesContext(t *testing.T) {
 	_, err := client.HealthCheck(ctx)
 
 	require.NoError(t, err)
+	require.True(t, mockDeps.ctrl.Satisfied(), "health-check query was not executed")
 }

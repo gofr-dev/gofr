@@ -220,6 +220,7 @@ func TestLocalProvider_Health_ContextCanceled(t *testing.T) {
 	err := (&localProvider{}).Health(ctx)
 
 	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorIs(t, err, errLocalHealthCheck)
 }
 
 func TestLocalProvider_Health_WorkingDirRemoved(t *testing.T) {
@@ -248,14 +249,34 @@ func TestLocalProvider_Health_WorkingDirNotAccessible(t *testing.T) {
 		t.Skip("root bypasses permission checks")
 	}
 
-	dir := t.TempDir()
+	tests := []struct {
+		name     string
+		clearPWD bool
+	}{
+		{name: "PWD set by chdir"},
+		// With PWD cleared, os.Getwd falls back to the getcwd syscall, which on Linux
+		// succeeds for a directory without search permission, so only the os.Stat(".")
+		// check reports the failure there. On macOS os.Getwd itself fails with EACCES.
+		{name: "PWD cleared", clearPWD: true},
+	}
 
-	t.Chdir(dir)
-	require.NoError(t, os.Chmod(dir, 0))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
 
-	err := (&localProvider{}).Health(t.Context())
+			t.Chdir(dir)
 
-	require.ErrorIs(t, err, errLocalHealthCheck)
-	require.ErrorIs(t, err, fs.ErrPermission)
+			if tc.clearPWD {
+				t.Setenv("PWD", "")
+			}
+
+			require.NoError(t, os.Chmod(dir, 0))
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+			err := (&localProvider{}).Health(t.Context())
+
+			require.ErrorIs(t, err, errLocalHealthCheck)
+			require.ErrorIs(t, err, fs.ErrPermission)
+		})
+	}
 }

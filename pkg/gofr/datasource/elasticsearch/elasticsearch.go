@@ -301,7 +301,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	}
 
 	// 2) Fetch cluster info for more details
-	infoRes, err := c.client.Info()
+	infoRes, err := c.client.Info(c.client.Info.WithContext(ctx))
 	if err == nil {
 		defer infoRes.Body.Close()
 

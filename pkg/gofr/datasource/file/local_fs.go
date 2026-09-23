@@ -54,7 +54,7 @@ func (*localProvider) Connect(_ context.Context) error {
 // alone does not detect on POSIX systems).
 func (*localProvider) Health(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errLocalHealthCheck, err)
 	}
 
 	if _, err := os.Stat("."); err != nil {
