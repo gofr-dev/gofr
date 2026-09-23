@@ -116,7 +116,7 @@ func (a *App) mcpPort() (port int, enabled bool, err error) {
 	if port == 0 {
 		// The literal, not portStr: the parsed value is known to be zero, and this avoids echoing
 		// the raw config value for the reason given above.
-		a.container.Logger.Logf("MCP server is disabled (MCP_PORT=0)")
+		a.Logger().Logf("MCP server is disabled (MCP_PORT=0)")
 
 		return 0, false, nil
 	}
