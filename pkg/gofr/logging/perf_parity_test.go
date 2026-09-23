@@ -2,6 +2,8 @@ package logging
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 )
@@ -92,6 +94,55 @@ func TestLogEntryFollowsChangeLevel(t *testing.T) {
 	if buf.Len() != 0 {
 		t.Errorf("entry survived a level raise: %s", buf.String())
 	}
+}
+
+// TestLogEntryOutputMatchesLogOnTerminal pins the parity on the OTHER sink.
+//
+// logEntry branches on isTerminal exactly as logf does, and the tests above all
+// run against a bytes.Buffer, for which checkIfTerminal is false -- so they only
+// ever exercise the JSON half. A developer running `gofr run` locally sees the
+// pretty-printed half, and it is the half that takes the print lock, so a
+// divergence there would show up first for the person least able to attribute
+// it.
+func TestLogEntryOutputMatchesLogOnTerminal(t *testing.T) {
+	var viaLog, viaEntry bytes.Buffer
+
+	newTerminalLoggerAt(INFO, &viaLog).Log("a plain string")
+	newTerminalLoggerAt(INFO, &viaEntry).LogEntry("a plain string")
+
+	if stripClock(viaLog.String()) != stripClock(viaEntry.String()) {
+		t.Errorf("terminal output differs:\n Log:      %q\n LogEntry: %q", viaLog.String(), viaEntry.String())
+	}
+
+	if json.Valid(viaEntry.Bytes()) {
+		t.Error("the terminal branch must emit ANSI text, not JSON -- this is not testing the pretty path")
+	}
+}
+
+// newTerminalLoggerAt builds a logger that takes the pretty-print branch while
+// still writing somewhere a test can read.
+func newTerminalLoggerAt(level Level, out io.Writer) *logger {
+	l := newLoggerAt(level, out, out)
+	l.isTerminal = true
+
+	return l
+}
+
+// stripClock removes the [HH:MM:SS] the pretty printer emits, which can differ
+// between two calls that straddle a second boundary and is not what the parity
+// test is comparing.
+func stripClock(s string) string {
+	i := strings.Index(s, "[")
+	if i < 0 {
+		return s
+	}
+
+	j := strings.Index(s[i:], "]")
+	if j < 0 {
+		return s
+	}
+
+	return s[:i] + s[i+j+1:]
 }
 
 // stripTime removes the timestamp field, which necessarily differs between two
