@@ -357,10 +357,12 @@ func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 // holding a nil pointer.
 //
 // The Kind check is not optional. reflect.Value.IsNil PANICS on a value whose
-// kind cannot be nil, and a datasource field can legitimately hold one: an
-// implementation of pubsub.Client, Redis or DB may be a struct value rather than
-// a pointer, which is ordinary Go and something GoFr's own tests do. Calling
-// IsNil on that took the process down.
+// kind cannot be nil, and a datasource field can legitimately hold one:
+// App.AddPubSub, App.AddMongo and the rest take an interface, so a caller whose
+// implementation has value receivers can hand over a struct rather than a
+// pointer -- ordinary Go, and nothing in the signature discourages it. The
+// unguarded IsNil panicked on that, and Container.Close reaches it from the
+// shutdown goroutine in startShutdownHandler, which has no recover.
 //
 // Anything not nillable is present by definition, so it reports false.
 func isNil(i any) bool {

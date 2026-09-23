@@ -131,10 +131,12 @@ func TestGetPublisherFiltersTypedNil(t *testing.T) {
 // whose kind cannot be nil.
 //
 // reflect.Value.IsNil panics for a struct, a string, an int and so on, and a
-// datasource field can legitimately hold one: implementing pubsub.Client, Redis
-// or DB on a value receiver is ordinary Go, and GoFr's own tests do it. Before
-// the Kind check, every caller of isNil -- Close, Health, GetSubscriber -- took
-// the process down for those users.
+// datasource field can legitimately hold one: App.AddPubSub and friends take an
+// interface, so an implementation with value receivers can be handed over as a
+// struct rather than a pointer. GoFr writes such implementations itself --
+// sqlMockDB's methods are on a value receiver -- it just happens to pass them by
+// address. Before the Kind check, isNil panicked on every one of those; in
+// Container.Close that reached the shutdown goroutine, which has no recover.
 func TestIsNilHandlesNonNillableKinds(t *testing.T) {
 	type valueImpl struct{ name string }
 

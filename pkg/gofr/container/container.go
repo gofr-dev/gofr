@@ -454,9 +454,13 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 // interface, and those return a TYPED nil when they reject an incomplete
 // config. A typed nil is not equal to nil, so returning c.PubSub unfiltered let
 // every caller's own nil guard pass and then call a method on a nil receiver.
-// Filtering here fixes all of them at once, including App.Subscribe, where the
-// panic escaped an errgroup with no recover and killed the process at startup
-// rather than on a request.
+// Filtering here fixes all of them at once, the worst being App.Subscribe: its
+// `GetSubscriber() == nil` guard admitted the typed nil, registered the
+// subscription, and handleSubscription then called Subscribe on the nil
+// receiver. That call sits outside the recover it installs around the handler,
+// and errgroup does not recover either -- x/sync v0.23.0 says so in
+// errgroup.go, "It is tempting to propagate panics from f() [...]" -- so the
+// panic killed the process at startup rather than surfacing on a request.
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	if isNil(c.PubSub) {
 		return nil
