@@ -109,11 +109,37 @@ func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(metricsFlushTimeout + 5*time.Second):
+	case <-time.After(telemetryFlushTimeout + 5*time.Second):
 		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
 	}
 
 	assert.True(t, handlerCalled, "expected the subcommand handler to run")
+}
+
+// TestApp_Shutdown_flushesTraces pins the trace half of the shutdown path
+// (closes #3771): the TracerProvider was never shut down, so the pending
+// BatchSpanProcessor batch was dropped at exit — routine for a container
+// scaling to zero, and enough to make a working exporter look broken.
+// Shutdown is public API, so it must also survive being called twice.
+func TestApp_Shutdown_flushesTraces(t *testing.T) {
+	flushed := 0
+
+	c := container.NewContainer(config.NewMockConfig(map[string]string{}))
+	c.Logger = logging.NewMockLogger(logging.ERROR)
+
+	a := &App{
+		container: c,
+		shutdownTracer: func(context.Context) error {
+			flushed++
+			return nil
+		},
+	}
+
+	require.NoError(t, a.Shutdown(t.Context()))
+	require.Equal(t, 1, flushed, "expected Shutdown to flush traces")
+
+	require.NoError(t, a.Shutdown(t.Context()))
+	require.Equal(t, 2, flushed, "shutdownTracer owns its own idempotency; Shutdown must still call it")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -836,7 +862,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		config             config.Config
 		expectedLogMessage string
 	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc; tracing is disabled"},
 		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
 		{"miss tracer_url ", mockConfig3,
 			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},

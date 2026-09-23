@@ -24,6 +24,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/traces/exporters"
 )
 
 const (
@@ -56,6 +57,10 @@ type App struct {
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
+
+	// shutdownTracer flushes the pending span batch and shuts the TracerProvider
+	// down. Set by initTracer; nil when tracing was never initialized.
+	shutdownTracer exporters.ShutdownFunc
 
 	grpcRegistered      bool
 	httpRegistered      bool
@@ -172,6 +177,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 	if a.mcpServer != nil {
 		err = errors.Join(err, a.mcpServer.Shutdown(ctx))
 	}
+
+	// Flush telemetry before the container's connections go: the final span batch
+	// and metric window are the ones describing the shutdown itself.
+	err = errors.Join(err, a.shutdownTraces(ctx))
 
 	if a.container != nil {
 		err = errors.Join(err, a.container.ShutdownMetrics(ctx))
@@ -521,7 +530,7 @@ func (a *App) setupGraphQL() {
 		}
 
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
-		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
+		a.httpServer.router.Add(http.MethodPost, "/graphql", a.graphqlManager.GetHandler())
 	}
 }
 

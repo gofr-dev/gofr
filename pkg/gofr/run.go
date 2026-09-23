@@ -12,30 +12,56 @@ import (
 	"time"
 )
 
-// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
-// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
-// on an unreachable metrics collector.
-const metricsFlushTimeout = 10 * time.Second
+// telemetryFlushTimeout bounds the metrics and traces flush/shutdown performed
+// after a CMD app's handler returns, so a CLI invocation cannot hang
+// indefinitely waiting on an unreachable collector.
+const telemetryFlushTimeout = 10 * time.Second
+
+// runCMD runs a CMD application's subcommand and then flushes telemetry: the
+// final metric window and the pending span batch would otherwise be dropped when
+// the process exits, which for a CLI invocation is every window and every batch.
+// The flush is bounded by telemetryFlushTimeout so an unreachable collector
+// cannot hang the invocation.
+func (a *App) runCMD() {
+	a.cmd.Run(a.container)
+
+	if a.container != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+		defer cancel()
+
+		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush metrics: %v", err)
+		}
+
+		if err := a.shutdownTraces(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush traces: %v", err)
+		}
+	}
+
+	if closer, ok := a.container.Logger.(io.Closer); ok {
+		closer.Close()
+	}
+}
+
+// shutdownWaitMargin is the extra time Run gives the graceful-shutdown goroutine on top of the
+// shutdown timeout that goroutine already bounds itself by. The wait is a safety net against a
+// shutdown step that ignores its context, not a second deadline competing with the first one.
+//
+// One second because this value only ever decides how long a process hangs *after* it has already
+// misbehaved, and both directions of error are bounded by that framing: too small and Run reports
+// a shutdown that was about to finish as failed; too large and a pod that will never finish sits
+// there until Kubernetes SIGKILLs it at terminationGracePeriodSeconds. A second is long enough to
+// cover the scheduling and log-flush tail after the last shutdown step returns — the only work
+// that legitimately happens past the deadline — and short enough to stay well inside the gap
+// operators leave between SHUTDOWN_GRACE_PERIOD and terminationGracePeriodSeconds. It is
+// deliberately not configurable: a knob here would be a second shutdown deadline to reason about,
+// and SHUTDOWN_GRACE_PERIOD is the one that should move.
+const shutdownWaitMargin = time.Second
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
-		a.cmd.Run(a.container)
-
-		if a.container != nil {
-			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
-
-			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-				a.Logger().Errorf("failed to flush metrics: %v", err)
-			}
-
-			cancel()
-		}
-
-		if closer, ok := a.container.Logger.(io.Closer); ok {
-			closer.Close()
-		}
-
+		a.runCMD()
 		return
 	}
 
@@ -63,9 +89,10 @@ func (a *App) Run() {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
 	}
 
-	a.startShutdownHandler(ctx, timeout)
+	shutdownDone := a.startShutdownHandler(ctx, timeout)
 	a.startTelemetryIfEnabled()
 	a.startAllServers(ctx)
+	a.awaitShutdown(ctx, shutdownDone, timeout)
 }
 
 // startupOutcome is what a pre-server startup step reports back to Run.
@@ -123,15 +150,21 @@ func (a *App) handleStartupHooks(ctx context.Context) startupOutcome {
 	return outcome
 }
 
-// startShutdownHandler starts a goroutine to handle graceful shutdown.
-func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+// startShutdownHandler starts a goroutine to handle graceful shutdown. The returned channel is
+// closed once that goroutine has finished, so Run can wait for it instead of letting the process
+// exit while shutdown is still in flight.
+func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
+		defer close(done)
+
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), timeout)
-		defer done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		defer cancel()
 
 		if a.hasTelemetry() {
 			a.sendTelemetry(http.DefaultClient, false)
@@ -144,6 +177,27 @@ func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
 		}
 	}()
+
+	return done
+}
+
+// awaitShutdown blocks until the graceful shutdown started by startShutdownHandler has finished,
+// so a main that only calls Run does not return — and let the process exit — while the datasources
+// are still being closed.
+//
+// It returns at once when the servers stopped for a reason other than a termination signal: no
+// shutdown is running in that case, and the handler goroutine is still parked on a context that is
+// canceled only once Run returns.
+func (a *App) awaitShutdown(ctx context.Context, done <-chan struct{}, timeout time.Duration) {
+	if ctx.Err() == nil {
+		return
+	}
+
+	select {
+	case <-done:
+	case <-time.After(timeout + shutdownWaitMargin):
+		a.Logger().Errorf("graceful shutdown did not finish within %v, exiting anyway", timeout+shutdownWaitMargin)
+	}
 }
 
 // startTelemetryIfEnabled starts telemetry if it's enabled.
