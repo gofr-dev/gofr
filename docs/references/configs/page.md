@@ -157,7 +157,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_RATIO
--  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1.
+-  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1. A value that is not a valid number is rejected with an error log and also resolves to 1, so a typo over-samples rather than silently disabling tracing.
 
 ---
 
