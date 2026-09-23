@@ -18,6 +18,49 @@ updates:
       - "/pkg/gofr/metrics/exporters/*"
     schedule:
       interval: "weekly"
+    # Without a `groups:` block every bumped module gets its own PR, and with
+    # `directories:` covering 32 modules a single dependency bumped in four of
+    # them becomes four PRs. The 2026-09-22 run produced 21 gomod PRs this way,
+    # while the grouped github-actions and docker entries produced one each.
+    #
+    # Grouping with `directories:` (plural) emits ONE cross-directory PR per
+    # group — "bump the <group> group across N directories" — so these six
+    # groups turn a week like that into roughly five reviewable PRs.
+    #
+    # Grouped by vendor rather than into one bucket on purpose: when an AWS SDK
+    # bump has to be reverted it should not take the OpenTelemetry and Azure
+    # bumps out with it. `go-deps` is the catch-all and must stay last; a
+    # dependency matches the first group whose patterns it satisfies.
+    #
+    # Only minor and patch are grouped. Major bumps stay ungrouped and so still
+    # arrive as one PR each, which is what a major deserves.
+    groups:
+      aws-sdk:
+        patterns:
+          - "github.com/aws/aws-sdk-go-v2*"
+        update-types: ["minor", "patch"]
+      azure-sdk:
+        patterns:
+          - "github.com/Azure/*"
+          - "github.com/AzureAD/*"
+        update-types: ["minor", "patch"]
+      google:
+        patterns:
+          - "cloud.google.com/*"
+          - "google.golang.org/*"
+        update-types: ["minor", "patch"]
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+        update-types: ["minor", "patch"]
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+        update-types: ["minor", "patch"]
+      go-deps:
+        patterns:
+          - "*"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     open-pull-requests-limit: 10  # avoid spam, if no one reacts
