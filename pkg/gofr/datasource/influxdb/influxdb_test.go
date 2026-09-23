@@ -882,157 +882,302 @@ func Test_Connect(t *testing.T) {
 	}
 }
 
-// fakeOrganizationsAPI records calls made through the organization wrapper.
+// upstreamCall is one call recorded by the fake upstream APIs below.
+type upstreamCall struct {
+	method string
+	args   []any
+}
+
+// wrapperCase is one wrapper method under test: call invokes it, and the wrapper must forward exactly one
+// upstream call named method with args expArgs(ctx), passing back the upstream value (expRes) and error.
+type wrapperCase[W any] struct {
+	desc    string
+	call    func(ctx context.Context, w W) (any, error)
+	expArgs func(ctx context.Context) []any
+	expRes  any
+	method  string
+}
+
+// runWrapperCases runs every case against a fresh fake, once succeeding and once failing with baseErr.
+func runWrapperCases[W any](t *testing.T, tests []wrapperCase[W], baseErr error,
+	newWrapper func(fail bool) (W, *[]upstreamCall)) {
+	t.Helper()
+
+	modes := []struct {
+		fail    bool
+		baseErr error
+		expErr  func(method string) error
+	}{
+		{fail: false, baseErr: nil, expErr: func(string) error { return nil }},
+		{fail: true, baseErr: baseErr, expErr: func(method string) error { return fmt.Errorf("%w: %s", baseErr, method) }},
+	}
+
+	for _, tc := range tests {
+		for _, mode := range modes {
+			t.Run(fmt.Sprintf("%s/fail=%t", tc.desc, mode.fail), func(t *testing.T) {
+				w, calls := newWrapper(mode.fail)
+				ctx := t.Context()
+
+				res, err := tc.call(ctx, w)
+
+				require.Equal(t, []upstreamCall{{method: tc.method, args: tc.expArgs(ctx)}}, *calls)
+				assert.Equal(t, tc.expRes, res)
+				require.ErrorIs(t, err, mode.baseErr)
+				assert.Equal(t, mode.expErr(tc.method), err)
+			})
+		}
+	}
+}
+
+// fakeOrganizationsAPI records every upstream call made through the organization wrapper and
+// returns a value (and, when fail is set, an error) that is distinct for each upstream method.
 type fakeOrganizationsAPI struct {
 	api.OrganizationsAPI
-	org  *domain.Organization
-	orgs *[]domain.Organization
-	err  error
+	fail  bool
+	calls []upstreamCall
 }
 
-func (f *fakeOrganizationsAPI) GetOrganizations(context.Context, ...api.PagingOption) (*[]domain.Organization, error) {
-	return f.orgs, f.err
+func (f *fakeOrganizationsAPI) record(method string, args ...any) error {
+	f.calls = append(f.calls, upstreamCall{method: method, args: args})
+
+	if f.fail {
+		return fmt.Errorf("%w: %s", errOrgOp, method)
+	}
+
+	return nil
 }
 
-func (f *fakeOrganizationsAPI) FindOrganizationByName(_ context.Context, _ string) (*domain.Organization, error) {
-	return f.org, f.err
+func (f *fakeOrganizationsAPI) GetOrganizations(ctx context.Context, opts ...api.PagingOption) (*[]domain.Organization, error) {
+	err := f.record("GetOrganizations", ctx, len(opts))
+
+	return &[]domain.Organization{{Name: "GetOrganizations"}}, err
 }
 
-func (f *fakeOrganizationsAPI) CreateOrganizationWithName(_ context.Context, _ string) (*domain.Organization, error) {
-	return f.org, f.err
+func (f *fakeOrganizationsAPI) FindOrganizationByName(ctx context.Context, orgName string) (*domain.Organization, error) {
+	err := f.record("FindOrganizationByName", ctx, orgName)
+
+	return &domain.Organization{Name: "FindOrganizationByName"}, err
 }
 
-func (f *fakeOrganizationsAPI) DeleteOrganizationWithID(_ context.Context, _ string) error {
-	return f.err
+func (f *fakeOrganizationsAPI) CreateOrganizationWithName(ctx context.Context, orgName string) (*domain.Organization, error) {
+	err := f.record("CreateOrganizationWithName", ctx, orgName)
+
+	return &domain.Organization{Name: "CreateOrganizationWithName"}, err
+}
+
+func (f *fakeOrganizationsAPI) DeleteOrganizationWithID(ctx context.Context, orgID string) error {
+	return f.record("DeleteOrganizationWithID", ctx, orgID)
 }
 
 func Test_OrganizationAPIWrapper(t *testing.T) {
-	name := "org"
-	org := &domain.Organization{Name: name}
-	orgs := &[]domain.Organization{*org}
-
-	tests := []struct {
-		desc   string
-		fake   *fakeOrganizationsAPI
-		expOrg *domain.Organization
-		expAll *[]domain.Organization
-		expErr error
-	}{
-		{desc: "success", fake: &fakeOrganizationsAPI{org: org, orgs: orgs}, expOrg: org, expAll: orgs},
-		{desc: "failure", fake: &fakeOrganizationsAPI{err: errOrgOp}, expErr: errOrgOp},
+	tests := []wrapperCase[organization]{
+		{
+			desc: "GetOrganizations",
+			call: func(ctx context.Context, w organization) (any, error) {
+				return w.GetOrganizations(ctx, api.PagingWithLimit(5), api.PagingWithOffset(1))
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, 2} },
+			expRes:  &[]domain.Organization{{Name: "GetOrganizations"}},
+			method:  "GetOrganizations",
+		},
+		{
+			desc: "FindOrganizationByName",
+			call: func(ctx context.Context, w organization) (any, error) {
+				return w.FindOrganizationByName(ctx, "org-find")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "org-find"} },
+			expRes:  &domain.Organization{Name: "FindOrganizationByName"},
+			method:  "FindOrganizationByName",
+		},
+		{
+			desc: "CreateOrganizationWithName",
+			call: func(ctx context.Context, w organization) (any, error) {
+				return w.CreateOrganizationWithName(ctx, "org-create")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "org-create"} },
+			expRes:  &domain.Organization{Name: "CreateOrganizationWithName"},
+			method:  "CreateOrganizationWithName",
+		},
+		{
+			desc: "DeleteOrganizationWithID",
+			call: func(ctx context.Context, w organization) (any, error) {
+				return nil, w.DeleteOrganizationWithID(ctx, "org-id")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "org-id"} },
+			method:  "DeleteOrganizationWithID",
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			w := NewInfluxdbOrganizationAPI(tc.fake)
+	runWrapperCases(t, tests, errOrgOp, func(fail bool) (organization, *[]upstreamCall) {
+		fake := &fakeOrganizationsAPI{fail: fail}
 
-			all, err := w.GetOrganizations(t.Context())
-			require.ErrorIs(t, err, tc.expErr)
-			assert.Equal(t, tc.expAll, all)
-
-			found, err := w.FindOrganizationByName(t.Context(), name)
-			require.ErrorIs(t, err, tc.expErr)
-			assert.Equal(t, tc.expOrg, found)
-
-			created, err := w.CreateOrganizationWithName(t.Context(), name)
-			require.ErrorIs(t, err, tc.expErr)
-			assert.Equal(t, tc.expOrg, created)
-
-			require.ErrorIs(t, w.DeleteOrganizationWithID(t.Context(), "id"), tc.expErr)
-		})
-	}
+		return NewInfluxdbOrganizationAPI(fake), &fake.calls
+	})
 }
 
-// fakeBucketsAPI records calls made through the bucket wrapper.
+// fakeBucketsAPI records every upstream call made through the bucket wrapper and returns a value
+// (and, when fail is set, an error) that is distinct for each upstream method.
 type fakeBucketsAPI struct {
 	api.BucketsAPI
-	bucket  *domain.Bucket
-	buckets *[]domain.Bucket
-	err     error
+	fail  bool
+	calls []upstreamCall
 }
 
-func (f *fakeBucketsAPI) GetBuckets(context.Context, ...api.PagingOption) (*[]domain.Bucket, error) {
-	return f.buckets, f.err
+func (f *fakeBucketsAPI) record(method string, args ...any) error {
+	f.calls = append(f.calls, upstreamCall{method: method, args: args})
+
+	if f.fail {
+		return fmt.Errorf("%w: %s", errBucketOp, method)
+	}
+
+	return nil
 }
 
-func (f *fakeBucketsAPI) FindBucketsByOrgName(context.Context, string, ...api.PagingOption) (*[]domain.Bucket, error) {
-	return f.buckets, f.err
+func (f *fakeBucketsAPI) GetBuckets(ctx context.Context, opts ...api.PagingOption) (*[]domain.Bucket, error) {
+	err := f.record("GetBuckets", ctx, len(opts))
+
+	return &[]domain.Bucket{{Name: "GetBuckets"}}, err
 }
 
-func (f *fakeBucketsAPI) FindBucketByName(context.Context, string) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) FindBucketsByOrgName(ctx context.Context, orgName string, opts ...api.PagingOption) (*[]domain.Bucket, error) {
+	err := f.record("FindBucketsByOrgName", ctx, orgName, len(opts))
+
+	return &[]domain.Bucket{{Name: "FindBucketsByOrgName"}}, err
 }
 
-func (f *fakeBucketsAPI) FindBucketByID(context.Context, string) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) FindBucketByName(ctx context.Context, bucketName string) (*domain.Bucket, error) {
+	err := f.record("FindBucketByName", ctx, bucketName)
+
+	return &domain.Bucket{Name: "FindBucketByName"}, err
 }
 
-func (f *fakeBucketsAPI) CreateBucket(context.Context, *domain.Bucket) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) FindBucketByID(ctx context.Context, bucketID string) (*domain.Bucket, error) {
+	err := f.record("FindBucketByID", ctx, bucketID)
+
+	return &domain.Bucket{Name: "FindBucketByID"}, err
 }
 
-func (f *fakeBucketsAPI) CreateBucketWithName(context.Context, *domain.Organization, string,
-	...domain.RetentionRule) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) CreateBucket(ctx context.Context, b *domain.Bucket) (*domain.Bucket, error) {
+	err := f.record("CreateBucket", ctx, b)
+
+	return &domain.Bucket{Name: "CreateBucket"}, err
 }
 
-func (f *fakeBucketsAPI) CreateBucketWithNameWithID(context.Context, string, string,
-	...domain.RetentionRule) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) CreateBucketWithName(ctx context.Context, org *domain.Organization, bucketName string,
+	rules ...domain.RetentionRule) (*domain.Bucket, error) {
+	err := f.record("CreateBucketWithName", ctx, org, bucketName, rules)
+
+	return &domain.Bucket{Name: "CreateBucketWithName"}, err
 }
 
-func (f *fakeBucketsAPI) UpdateBucket(context.Context, *domain.Bucket) (*domain.Bucket, error) {
-	return f.bucket, f.err
+func (f *fakeBucketsAPI) CreateBucketWithNameWithID(ctx context.Context, orgID, bucketName string,
+	rules ...domain.RetentionRule) (*domain.Bucket, error) {
+	err := f.record("CreateBucketWithNameWithID", ctx, orgID, bucketName, rules)
+
+	return &domain.Bucket{Name: "CreateBucketWithNameWithID"}, err
 }
 
-func (f *fakeBucketsAPI) DeleteBucketWithID(context.Context, string) error {
-	return f.err
+func (f *fakeBucketsAPI) UpdateBucket(ctx context.Context, b *domain.Bucket) (*domain.Bucket, error) {
+	err := f.record("UpdateBucket", ctx, b)
+
+	return &domain.Bucket{Name: "UpdateBucket"}, err
+}
+
+func (f *fakeBucketsAPI) DeleteBucketWithID(ctx context.Context, bucketID string) error {
+	return f.record("DeleteBucketWithID", ctx, bucketID)
 }
 
 func Test_BucketAPIWrapper(t *testing.T) {
-	bkt := &domain.Bucket{Name: "b"}
-	bkts := &[]domain.Bucket{*bkt}
+	in := &domain.Bucket{Name: "in-bucket"}
+	org := &domain.Organization{Name: "in-org"}
+	rules := []domain.RetentionRule{{EverySeconds: 3600}}
 
-	tests := []struct {
-		desc      string
-		fake      *fakeBucketsAPI
-		expBucket *domain.Bucket
-		expAll    *[]domain.Bucket
-		expErr    error
-	}{
-		{desc: "success", fake: &fakeBucketsAPI{bucket: bkt, buckets: bkts}, expBucket: bkt, expAll: bkts},
-		{desc: "failure", fake: &fakeBucketsAPI{err: errBucketOp}, expErr: errBucketOp},
+	tests := []wrapperCase[bucket]{
+		{
+			desc: "GetBuckets",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.GetBuckets(ctx, api.PagingWithLimit(5))
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, 1} },
+			expRes:  &[]domain.Bucket{{Name: "GetBuckets"}},
+			method:  "GetBuckets",
+		},
+		{
+			desc: "FindBucketsByOrgName",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.FindBucketsByOrgName(ctx, "org-name", api.PagingWithLimit(5), api.PagingWithOffset(1))
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "org-name", 2} },
+			expRes:  &[]domain.Bucket{{Name: "FindBucketsByOrgName"}},
+			method:  "FindBucketsByOrgName",
+		},
+		{
+			desc: "FindBucketByName",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.FindBucketByName(ctx, "bucket-name")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "bucket-name"} },
+			expRes:  &domain.Bucket{Name: "FindBucketByName"},
+			method:  "FindBucketByName",
+		},
+		{
+			desc: "FindBucketByID",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.FindBucketByID(ctx, "bucket-id")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "bucket-id"} },
+			expRes:  &domain.Bucket{Name: "FindBucketByID"},
+			method:  "FindBucketByID",
+		},
+		{
+			desc: "CreateBucket",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.CreateBucket(ctx, in)
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, in} },
+			expRes:  &domain.Bucket{Name: "CreateBucket"},
+			method:  "CreateBucket",
+		},
+		{
+			desc: "CreateBucketWithName",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.CreateBucketWithName(ctx, org, "bucket-name", rules...)
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, org, "bucket-name", rules} },
+			expRes:  &domain.Bucket{Name: "CreateBucketWithName"},
+			method:  "CreateBucketWithName",
+		},
+		{
+			desc: "CreateBucketWithNameWithID",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.CreateBucketWithNameWithID(ctx, "org-id", "bucket-name", rules...)
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "org-id", "bucket-name", rules} },
+			expRes:  &domain.Bucket{Name: "CreateBucketWithNameWithID"},
+			method:  "CreateBucketWithNameWithID",
+		},
+		{
+			desc: "UpdateBucket",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return w.UpdateBucket(ctx, in)
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, in} },
+			expRes:  &domain.Bucket{Name: "UpdateBucket"},
+			method:  "UpdateBucket",
+		},
+		{
+			desc: "DeleteBucketWithID",
+			call: func(ctx context.Context, w bucket) (any, error) {
+				return nil, w.DeleteBucketWithID(ctx, "bucket-id")
+			},
+			expArgs: func(ctx context.Context) []any { return []any{ctx, "bucket-id"} },
+			method:  "DeleteBucketWithID",
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			w := NewInfluxdbBucketAPI(tc.fake)
-			ctx := t.Context()
+	runWrapperCases(t, tests, errBucketOp, func(fail bool) (bucket, *[]upstreamCall) {
+		fake := &fakeBucketsAPI{fail: fail}
 
-			singleCalls := []func() (*domain.Bucket, error){
-				func() (*domain.Bucket, error) { return w.FindBucketByName(ctx, "b") },
-				func() (*domain.Bucket, error) { return w.FindBucketByID(ctx, "id") },
-				func() (*domain.Bucket, error) { return w.CreateBucket(ctx, bkt) },
-				func() (*domain.Bucket, error) { return w.CreateBucketWithName(ctx, &domain.Organization{}, "b") },
-				func() (*domain.Bucket, error) { return w.CreateBucketWithNameWithID(ctx, "org", "b") },
-				func() (*domain.Bucket, error) { return w.UpdateBucket(ctx, bkt) },
-			}
-
-			for _, call := range singleCalls {
-				res, err := call()
-				require.ErrorIs(t, err, tc.expErr)
-				assert.Equal(t, tc.expBucket, res)
-			}
-
-			all, err := w.GetBuckets(ctx)
-			require.ErrorIs(t, err, tc.expErr)
-			assert.Equal(t, tc.expAll, all)
-
-			all, err = w.FindBucketsByOrgName(ctx, "org")
-			require.ErrorIs(t, err, tc.expErr)
-			assert.Equal(t, tc.expAll, all)
-
-			require.ErrorIs(t, w.DeleteBucketWithID(ctx, "id"), tc.expErr)
-		})
-	}
+		return NewInfluxdbBucketAPI(fake), &fake.calls
+	})
 }

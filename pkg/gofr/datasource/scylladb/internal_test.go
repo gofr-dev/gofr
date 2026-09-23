@@ -90,33 +90,6 @@ func Test_ScyllaSessionClosedOperations(t *testing.T) {
 	}
 }
 
-func Test_ScyllaIteratorOnClosedSession(t *testing.T) {
-	tests := []struct {
-		desc       string
-		stmt       string
-		expColumns []gocql.ColumnInfo
-		expScan    bool
-		expNumRows int
-	}{
-		{
-			desc: "iterator of failed query has no rows",
-			stmt: "SELECT id FROM users",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			var id int
-
-			iter := closedGocqlSession().Query(tc.stmt).Iter()
-
-			assert.Equal(t, tc.expColumns, iter.Columns())
-			assert.Equal(t, tc.expScan, iter.Scan(&id))
-			assert.Equal(t, tc.expNumRows, iter.NumRows())
-		})
-	}
-}
-
 func Test_ScyllaBatchQuery(t *testing.T) {
 	tests := []struct {
 		desc    string

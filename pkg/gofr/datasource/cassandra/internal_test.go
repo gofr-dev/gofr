@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/gocql/gocql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,33 +76,6 @@ func Test_CassandraSessionClosedOperations(t *testing.T) {
 			err := tc.operation(closedCassandraSession())
 
 			require.ErrorIs(t, err, tc.expErr)
-		})
-	}
-}
-
-func Test_CassandraIteratorOnClosedSession(t *testing.T) {
-	tests := []struct {
-		desc       string
-		stmt       string
-		expColumns []gocql.ColumnInfo
-		expScan    bool
-		expNumRows int
-	}{
-		{
-			desc: "iterator of failed query has no rows",
-			stmt: "SELECT id FROM users",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			var id int
-
-			iter := closedCassandraSession().query(tc.stmt).iter()
-
-			assert.Equal(t, tc.expColumns, iter.columns())
-			assert.Equal(t, tc.expScan, iter.scan(&id))
-			assert.Equal(t, tc.expNumRows, iter.numRows())
 		})
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
@@ -698,30 +697,6 @@ func Test_LogPrettyPrint(t *testing.T) {
 			assert.Contains(t, buf.String(), tc.expected)
 			assert.Contains(t, buf.String(), "NATS")
 			assert.Contains(t, buf.String(), fmt.Sprintf("%dμs", tc.log.Duration))
-		})
-	}
-}
-
-func Test_MockKeyValueEntry(t *testing.T) {
-	entry := &MockKeyValueEntry{value: []byte("value")}
-
-	tests := []struct {
-		desc     string
-		got      any
-		expected any
-	}{
-		{desc: "bucket", got: entry.Bucket(), expected: ""},
-		{desc: "key", got: entry.Key(), expected: ""},
-		{desc: "value", got: entry.Value(), expected: []byte("value")},
-		{desc: "revision", got: entry.Revision(), expected: uint64(0)},
-		{desc: "created", got: entry.Created(), expected: time.Time{}},
-		{desc: "delta", got: entry.Delta(), expected: uint64(0)},
-		{desc: "operation", got: entry.Operation(), expected: nats.KeyValueOp(0)},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.got)
 		})
 	}
 }

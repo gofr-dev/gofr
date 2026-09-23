@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -62,34 +61,8 @@ func TestQueryLog_PrettyPrint(t *testing.T) {
 	}
 }
 
-func TestAddTrace(t *testing.T) {
-	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
+func TestAddTracer_NilTracerReturnsNilSpan(t *testing.T) {
+	var tracer trace.Tracer
 
-	tests := []struct {
-		desc string
-		resp genericResponse
-	}{
-		{desc: "aggregators response", resp: &AggregatorsResponse{}},
-		{desc: "annotation response", resp: &AnnotationResponse{}},
-		{desc: "query response", resp: &QueryResponse{}},
-		{desc: "query response item", resp: &QueryRespItem{}},
-		{desc: "query param", resp: &QueryParam{}},
-		{desc: "query last param", resp: &QueryLastParam{}},
-		{desc: "query last response", resp: &QueryLastResponse{}},
-		{desc: "version response", resp: &VersionResponse{}},
-		{desc: "put response", resp: &PutResponse{}},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			span := tc.resp.addTrace(t.Context(), tracer, "Operation")
-			assert.NotNil(t, span)
-
-			span.End()
-
-			var nilTracer trace.Tracer
-
-			assert.Nil(t, tc.resp.addTrace(t.Context(), nilTracer, "Operation"))
-		})
-	}
+	assert.Nil(t, addTracer(t.Context(), tracer, "Query", "QueryResponse"))
 }

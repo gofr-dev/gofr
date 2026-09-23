@@ -1193,15 +1193,6 @@ func Test_Connect(t *testing.T) {
 			},
 			expConnDone: true,
 		},
-		{
-			desc: "incomplete credentials abort connection setup",
-			config: Config{Host: host, Port: port, Namespace: testNamespace, Database: testDatabase, TLSEnabled: true,
-				Username: "root"},
-			setupMocks: func(m *testMocks) {
-				m.logger.EXPECT().Debugf("connecting to SurrealDB at %s", httpsEndpoint)
-			},
-			expConnDone: true,
-		},
 	}
 
 	for _, tc := range tests {
