@@ -32,6 +32,17 @@ import (
 // A dependency bump that changed this error, or made Register succeed for an
 // unknown driver, would turn the tag's loud failure into a silent one. That is
 // what this catches.
+//
+// The other half -- that -tags gofr_nosqldrivers really does leave postgres and
+// sqlite unregistered in a user's binary -- is not observable from inside a test
+// binary that imports the drivers itself. It is asserted from outside, by the
+// "Each tag removes the packages it claims to" step in .github/workflows/go.yml,
+// which fails if github.com/lib/pq or modernc.org/sqlite is still linked under
+// the tag.
+//
+// This file deliberately has no build tag: both halves of the mechanism it pins
+// -- the aliasing and the unknown-driver error -- are the same in either build,
+// and a tagged copy would only run in one job.
 func TestRegisterOtel_UnregisteredDialectFailsLoudly(t *testing.T) {
 	_, err := registerOtel("gofr-no-such-driver", logging.NewMockLogger(logging.DEBUG))
 

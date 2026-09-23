@@ -703,6 +703,69 @@ jobs:
           only-new-issues: true
           args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql" --timeout 9m0s
 
+      # Building and testing under a tag proves the tagged code still compiles. It
+      # does not prove the tag REMOVED anything, which is the only reason the tag
+      # exists. Dropping the `//go:build !gofr_nosqldrivers` constraint from
+      # drivers.go, or adding an import elsewhere that pulls lib/pq back in by
+      # another path, leaves every other step in this job green while the tag
+      # silently does nothing.
+      #
+      # This is also the assertion the sql package cannot make from a test. Its
+      # suite blank-imports pq and modernc.org/sqlite as fixtures
+      # (drivers_testdeps_test.go) because TestNewSQL_GetDBDialect opens a
+      # postgres DSN, so the test binary has those drivers registered in both
+      # configurations. What the *library* links is only observable from outside
+      # the test binary, and this step is where that is observed.
+      #
+      # `go list -deps` is given the PACKAGE PATH, never `./...`: with a pattern,
+      # every matched package is listed whether or not anything links it, so
+      # `./...` reports a tagged-out package as still present.
+      - name: Each tag removes the packages it claims to
+        run: |
+          set -euo pipefail
+
+          # Written to files rather than piped: `grep -q` exits on its first match,
+          # which SIGPIPEs `go list` and trips `pipefail` depending on where in the
+          # list the match happens to fall.
+          go list -deps gofr.dev/pkg/gofr > /tmp/deps.default
+
+          check() {
+            tag=$1
+            pattern=$2
+
+            # Also fails when the packages are absent from the DEFAULT build, so a
+            # renamed or dropped module cannot make this check pass vacuously.
+            if ! grep -Eq "$pattern" /tmp/deps.default; then
+              echo "::error::the default build does not link $pattern, so '-tags $tag' cannot be shown to remove it"
+              exit 1
+            fi
+
+            go list -tags "$tag" -deps gofr.dev/pkg/gofr > "/tmp/deps.$tag"
+
+            if grep -E "$pattern" "/tmp/deps.$tag"; then
+              echo "::error::-tags $tag still links the packages listed above; the tag is not removing what it claims to"
+              exit 1
+            fi
+
+            echo "-tags $tag: $(wc -l < /tmp/deps.default) packages -> $(wc -l < "/tmp/deps.$tag")"
+          }
+
+          check gofr_nosqldrivers '^(github\.com/lib/pq|modernc\.org/sqlite)($|/)'
+          check gofr_nopubsub     '^(github\.com/segmentio/kafka-go|cloud\.google\.com/go/pubsub|github\.com/eclipse/paho\.mqtt\.golang)($|/)'
+          check gofr_nographql    '^github\.com/graphql-go/graphql($|/)'
+
+          go list -tags gofr_nosqldrivers,gofr_nopubsub,gofr_nographql -deps gofr.dev/pkg/gofr > /tmp/deps.slim
+
+          full=$(wc -l < /tmp/deps.default)
+          slim=$(wc -l < /tmp/deps.slim)
+
+          echo "gofr.dev/pkg/gofr links $full packages by default and $slim with all three tags"
+
+          if [ "$slim" -ge "$full" ]; then
+            echo "::error::all three tags together removed no packages"
+            exit 1
+          fi
+
       # The tags are opt-in, so the default build must link exactly what it linked
       # before. This compares the package list rather than asserting it compiles:
       # a build that quietly started pulling in a tagged-out dependency, or one
