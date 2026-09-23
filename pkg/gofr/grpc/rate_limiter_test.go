@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -137,7 +138,7 @@ func (f *fakeStore) Allow(context.Context, string, httpmw.RateLimiterConfig) (bo
 }
 
 func (f *fakeStore) StartCleanup(context.Context) { f.cleanupCalls.Add(1) }
-func (*fakeStore) StopCleanup()                 {}
+func (*fakeStore) StopCleanup()                   {}
 
 type fakeAddr string
 
@@ -308,6 +309,16 @@ func TestUnaryRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 			name:    "negative Burst",
 			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: -1},
 			wantErr: "burst must be positive",
+		},
+		{
+			name:    "NaN RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
+		},
+		{
+			name:    "negative MaxKeys",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1},
+			wantErr: "maxKeys must not be negative",
 		},
 	}
 
@@ -694,6 +705,16 @@ func TestStreamRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 			name:    "negative Burst",
 			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: -1},
 			wantErr: "burst must be positive",
+		},
+		{
+			name:    "NaN RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
+		},
+		{
+			name:    "negative MaxKeys",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1},
+			wantErr: "maxKeys must not be negative",
 		},
 	}
 

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -344,65 +345,24 @@ func TestRateLimiter_RetryAfterHeader(t *testing.T) {
 
 func TestRateLimiterConfig_Validate(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  RateLimiterConfig
-		wantErr bool
+		name   string
+		config RateLimiterConfig
+		expErr error
 	}{
-		{
-			name: "valid config",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "zero RequestsPerSecond",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 0,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative RequestsPerSecond",
-			config: RateLimiterConfig{
-				RequestsPerSecond: -5,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "zero Burst",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             0,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative Burst",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             -5,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
+		{"valid config", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, PerIP: true}, nil},
+		{"infinite RequestsPerSecond is unlimited", RateLimiterConfig{RequestsPerSecond: math.Inf(1), Burst: 1}, nil},
+		{"zero MaxKeys selects the default", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: 0}, nil},
+		{"zero RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: 0, Burst: 20, PerIP: true}, errInvalidRequestsPerSecond},
+		{"negative RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: -5, Burst: 20, PerIP: true}, errInvalidRequestsPerSecond},
+		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 20}, errInvalidRequestsPerSecond},
+		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0, PerIP: true}, errInvalidBurst},
+		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -5, PerIP: true}, errInvalidBurst},
+		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: -1}, errInvalidMaxKeys},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.Equal(t, tt.expErr, tt.config.Validate())
 		})
 	}
 }
@@ -803,6 +763,8 @@ func TestRateLimiter_InvalidConfigPassesThrough(t *testing.T) {
 		{"negative RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: -1, Burst: 5}, errInvalidRequestsPerSecond},
 		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0}, errInvalidBurst},
 		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -1}, errInvalidBurst},
+		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5}, errInvalidRequestsPerSecond},
+		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1}, errInvalidMaxKeys},
 	}
 
 	for _, tc := range tests {
@@ -920,4 +882,24 @@ func TestRateLimiter_InvalidConfigLeavesStoreUntouched(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
 	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
+}
+
+func TestNewMemoryRateLimiterStore_MaxKeysDefault(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxKeys    int64
+		expMaxKeys int64
+	}{
+		{"unset uses default", 0, defaultMaxKeys},
+		{"negative uses default instead of unbounded", -1, defaultMaxKeys},
+		{"positive is kept", 5, 5},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewMemoryRateLimiterStore(RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: tc.maxKeys})
+
+			assert.Equal(t, tc.expMaxKeys, store.(*memoryRateLimiterStore).maxKeys)
+		})
+	}
 }

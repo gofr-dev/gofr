@@ -14,11 +14,14 @@ import (
 )
 
 var (
-	// errInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive.
+	// errInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive (or is NaN).
 	errInvalidRequestsPerSecond = errors.New("requestsPerSecond must be positive")
 
 	// errInvalidBurst is returned when Burst is not positive.
 	errInvalidBurst = errors.New("burst must be positive")
+
+	// errInvalidMaxKeys is returned when MaxKeys is negative.
+	errInvalidMaxKeys = errors.New("maxKeys must not be negative")
 )
 
 // RateLimiterConfig holds configuration for rate limiting.
@@ -41,17 +44,25 @@ type RateLimiterConfig struct {
 	PerIP             bool
 	Store             RateLimiterStore // Optional: defaults to in-memory store
 	TrustedProxies    bool             // If true, trust X-Forwarded-For and X-Real-IP headers
-	MaxKeys           int64            // Maximum unique rate limit keys (0 = default 100000)
+	MaxKeys           int64            // Maximum unique rate limit keys (0 = default 100000; negative is invalid)
 }
 
 // Validate checks if the configuration values are valid.
+//
+// RequestsPerSecond must be positive and not NaN (a NaN rate would let every request
+// through silently). +Inf is allowed and means unlimited, as in golang.org/x/time/rate.
+// Burst must be positive. MaxKeys must not be negative; 0 selects the default bound.
 func (c RateLimiterConfig) Validate() error {
-	if c.RequestsPerSecond <= 0 {
+	if c.RequestsPerSecond <= 0 || math.IsNaN(c.RequestsPerSecond) {
 		return errInvalidRequestsPerSecond
 	}
 
 	if c.Burst <= 0 {
 		return errInvalidBurst
+	}
+
+	if c.MaxKeys < 0 {
+		return errInvalidMaxKeys
 	}
 
 	return nil

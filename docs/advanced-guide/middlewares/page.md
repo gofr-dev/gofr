@@ -142,9 +142,13 @@ func main() {
 - `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for global rate limit across all clients
 - `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` headers for IP extraction. Only enable when behind a trusted reverse proxy.
 
-> **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero. If they are not, GoFr logs
+> **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero (a `NaN` rate is also
+> rejected), and `MaxKeys` must not be negative (`0` selects the default of 100000). If the config is invalid, GoFr logs
 > the error at `ERROR` level and the middleware passes every request through **without rate limiting** (the app does not
 > crash). To fail fast at startup instead, call `rateLimiterConfig.Validate()` and handle the returned error yourself.
+>
+> A disabled limiter is only reported once, at startup. A zero `app_http_rate_limit_exceeded_total` therefore does not
+> prove the limiter is active: check the startup logs, or call `Validate()` so a bad config never reaches production.
 
 > **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.). 
 > Without a trusted proxy, clients can spoof headers to bypass rate limits.
