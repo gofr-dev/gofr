@@ -253,7 +253,10 @@ func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.
 	txn := d.client.NewTxn()
 
 	// Discard delegates to Txn.commitOrAbort, which returns immediately once the transaction is
-	// finished, so this only does anything on the paths that did not reach a commit.
+	// finished. Every path out of this function leaves it finished — Txn.Do finishes a CommitNow
+	// mutation, Txn.Commit below finishes the rest, and Txn.Do discards the transaction itself
+	// when the mutation fails — so the discard costs no round trip. It is here so that a
+	// transaction is still released if any of those paths stops finishing it.
 	//
 	// The cancellation is dropped for the discard alone: a caller whose context is canceled
 	// between the commit returning and this deferred call would otherwise have a successful
