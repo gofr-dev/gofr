@@ -83,7 +83,7 @@ func assertPlainNil[T any](t *testing.T, got T, msgAndArgs ...any) {
 // called Health() on the nil receiver.
 //
 // The assertion is on the health map, not on NotPanics. runCheck already recovers
-// (health.go:276), so the panic never escaped -- it was converted into a pubsub
+// in its deferred func, so the panic never escaped -- it was converted into a pubsub
 // entry reading "health check panicked", which is the visible defect: an app with
 // no usable pub/sub reported a DOWN dependency, and any aggregator watching the
 // endpoint saw a degraded service with a stack fragment for a reason. With the
