@@ -83,6 +83,14 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 
 	result, err := f(ctx)
 
+	// A request its own caller abandoned never got a verdict from the upstream, so it is
+	// neither a failure nor a success: counting it would let callers who hang up open the
+	// breaker for every other caller of a healthy upstream, and resetting on it would erase
+	// a real failure streak.
+	if canceledByCaller(ctx, err) {
+		return result, err
+	}
+
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -174,6 +182,20 @@ func (cb *circuitBreaker) handleFailure() {
 	if cb.failureCount > cb.threshold {
 		cb.openCircuit()
 	}
+}
+
+// canceledByCaller reports whether err is the caller canceling ctx rather than an outcome
+// of the upstream. The transport returns context.Cause(ctx), so a caller that canceled with
+// context.WithCancelCause sees its own cause instead of context.Canceled; both are matched.
+//
+// context.DeadlineExceeded is deliberately not matched: a request that ran out of time is
+// evidence of a slow upstream and keeps counting as a failure.
+func canceledByCaller(ctx context.Context, err error) bool {
+	if err == nil || !errors.Is(ctx.Err(), context.Canceled) {
+		return false
+	}
+
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.Cause(ctx))
 }
 
 // resetFailureCount resets the failure count to zero.
