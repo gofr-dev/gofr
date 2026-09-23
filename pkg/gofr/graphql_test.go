@@ -21,8 +21,10 @@ import (
 
 var errWriteFailed = errors.New("write failed")
 
-// errWriter is an http.ResponseWriter whose body writes always fail, simulating a client
-// that disconnected before the response could be written.
+// errWriter is an http.ResponseWriter whose body writes always fail. It is a synthetic
+// failure used to exercise the logging path in respondWithErrors, not a reproduction of a
+// client disconnect: net/http buffers these small bodies, so a disconnect does not surface
+// as a write error inside the handler.
 type errWriter struct {
 	header http.Header
 	status int
@@ -532,7 +534,7 @@ func TestGraphQL_RequestErrors(t *testing.T) {
 
 			resp := httptest.NewRecorder()
 
-			app.graphqlManager.Handle(resp, req)
+			app.graphqlManager.GetHandler().ServeHTTP(resp, req)
 
 			var result struct {
 				Errors []struct {
