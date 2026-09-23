@@ -400,11 +400,15 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 // traceSpanIDs renders both IDs into ONE allocation.
 //
-// otel's TraceID.String() and SpanID.String() are each a hex.EncodeToString, so
-// each costs its own string allocation, and a logged request always needs both --
-// the trace ID for the correlation header, both for the log entry. Encoding them
-// into a single buffer and slicing the result gives byte-identical strings for
-// one allocation instead of two.
+// otel's TraceID.String() and SpanID.String() each render the hex into a stack
+// array and then convert it with string(...). At the pinned
+// go.opentelemetry.io/otel/trace v1.46.0 that array is built from a nibble
+// lookup table rather than hex.EncodeToString -- trace.go:60 and trace.go:111 --
+// so neither call is wasteful in itself: each simply costs the one string
+// allocation its own result needs. The waste is that there are two results. A
+// logged request always needs both -- the trace ID for the correlation header,
+// both for the log entry -- so rendering them into a single buffer and slicing it
+// gives byte-identical strings for one allocation instead of two.
 //
 // The span ID is now formatted before the level gate rather than after it, so a
 // request whose entry is discarded pays for 16 bytes it does not use. That costs
