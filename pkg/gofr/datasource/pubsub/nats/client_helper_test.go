@@ -287,6 +287,7 @@ func TestProcessBatch(t *testing.T) {
 			assert.Equal(t, tt.expResult, result)
 			assert.Equal(t, tt.expCollected, collected)
 			assert.Equal(t, tt.expMore, more)
+			assert.Equal(t, tt.expStdout == "", stdout == "", "log output must appear only when expected: %q", stdout)
 			assert.Contains(t, stdout, tt.expStdout)
 		})
 	}
@@ -349,6 +350,7 @@ func TestCollectMessages(t *testing.T) {
 
 			require.ErrorIs(t, err, tt.expErr)
 			assert.Equal(t, tt.expResult, result)
+			assert.Equal(t, tt.expStdout == "", stdout == "", "log output must appear only when expected: %q", stdout)
 			assert.Contains(t, stdout, tt.expStdout)
 		})
 	}
@@ -441,6 +443,7 @@ func TestClient_cleanupConsumer(t *testing.T) {
 				client.cleanupConsumer(js, "test-stream", cons)
 			})
 
+			assert.Equal(t, tt.expStdout == "", stdout == "", "log output must appear only when expected: %q", stdout)
 			assert.Contains(t, stdout, tt.expStdout)
 		})
 	}

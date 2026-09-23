@@ -276,7 +276,19 @@ func TestStartRetryConnect_ExitsImmediately(t *testing.T) {
 			fs.CommonFileSystem.SetConnected(tc.connected)
 			fs.CommonFileSystem.SetDisableRetry(tc.disabled)
 
-			fs.startRetryConnect()
+			done := make(chan struct{})
+
+			go func() {
+				fs.startRetryConnect()
+				close(done)
+			}()
+
+			// Without the early return, startRetryConnect blocks on its one-minute ticker.
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("startRetryConnect did not return immediately")
+			}
 
 			assert.Equal(t, tc.connected, fs.CommonFileSystem.IsConnected())
 		})
