@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"testing"
 	"time"
 )
 
@@ -18,12 +17,21 @@ import (
 // indefinitely waiting on an unreachable collector.
 const telemetryFlushTimeout = 10 * time.Second
 
+// exitCodeCommandFailed is what a CMD app reports to the process when its subcommand failed: the
+// handler returned an error, or the subcommand was missing or unknown. Shells and CI read the exit
+// status and nothing else, so a failed command that exited 0 would be recorded as a success.
+const exitCodeCommandFailed = 1
+
 // runCMD runs a CMD application's subcommand and then flushes telemetry: the
 // final metric window and the pending span batch would otherwise be dropped when
 // the process exits, which for a CLI invocation is every window and every batch.
 // The flush is bounded by telemetryFlushTimeout so an unreachable collector
-// cannot hang the invocation. If the command failed, it exits non-zero after the
-// flush so shells and CI can detect the failure.
+// cannot hang the invocation.
+//
+// If the command failed, runCMD then exits the process with exitCodeCommandFailed,
+// after the flush and after the logger is closed. Because that is os.Exit, functions
+// deferred in the application's main() do not run on the failure path; cleanup that
+// must happen either way should not rely on a defer in main().
 func (a *App) runCMD() {
 	failed := a.cmd.Run(a.container)
 
@@ -33,18 +41,30 @@ func (a *App) runCMD() {
 		closer.Close()
 	}
 
-	// Exit non-zero (after telemetry is flushed and the logger is closed) so a failed
-	// command is detectable by shells and CI. Skipped under `go test` so in-process
-	// tests that invoke Run — including apps' own main() tests — are not terminated.
-	if failed && !testing.Testing() {
-		//nolint:revive // exit status 1 signals the failed command to shells and CI
-		os.Exit(1)
+	if failed {
+		a.exitProcess(exitCodeCommandFailed)
 	}
+}
+
+// exitProcess reports code to the process through a.exit, or os.Exit when it is nil.
+func (a *App) exitProcess(code int) {
+	if a.exit != nil {
+		a.exit(code)
+
+		return
+	}
+
+	// deep-exit is the right rule and this is the exception it exists to make you argue for: runCMD
+	// is the last thing a CMD app's main does (app.Run), telemetry has been flushed and the logger
+	// closed, and the exit status is the only channel a shell or CI job reads to learn the command
+	// failed. The logger's Fatal carries the same exemption for the same kind of reason.
+	//nolint:revive // deep-exit: see above -- top of the call stack, after cleanup, nothing skipped.
+	os.Exit(code)
 }
 
 // flushCMDTelemetry flushes the final metric window and pending span batch after a
 // CMD app's handler returns. Kept separate so its deferred cancel runs before
-// runCMD's os.Exit on the failure path.
+// runCMD exits the process on the failure path.
 func (a *App) flushCMDTelemetry() {
 	if a.container == nil {
 		return

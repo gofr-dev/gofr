@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -182,5 +183,95 @@ func TestShutdownHelperProcess(t *testing.T) {
 		t.Log(shutdownWaited)
 	default:
 		t.Log(shutdownRaced)
+	}
+}
+
+// TestApp_runCMD_exitCode drives runCMD end to end and records what it reports to the process
+// through the exit seam: a failed command must exit with exitCodeCommandFailed, and anything else
+// must not exit at all (returning from main is exit status 0). The expected code is the literal 1,
+// not the constant, because it is the contract shells and CI branch on.
+func TestApp_runCMD_exitCode(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		args       []string
+		handler    Handler
+		wantExits  []int
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			desc:       "handler returns nil error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  nil,
+			wantStdout: "ok\n",
+		},
+		{
+			desc:       "handler returns error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return nil, errTest },
+			wantExits:  []int{1},
+			wantStderr: errTest.Error() + "\n",
+		},
+		{
+			desc:       "handler returns data and error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return "partial", errTest },
+			wantExits:  []int{1},
+			wantStdout: "partial\n",
+			wantStderr: errTest.Error() + "\n",
+		},
+		{
+			desc:       "unknown command",
+			args:       []string{"", "does-not-exist"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  []int{1},
+			wantStdout: "Available commands:",
+			wantStderr: "'does-not-exist' is not a valid command.\n",
+		},
+		{
+			desc:       "missing command",
+			args:       []string{""},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  []int{1},
+			wantStdout: "Available commands:",
+			wantStderr: "'' is not a valid command.\n",
+		},
+		{
+			desc:       "help flag",
+			args:       []string{"", "--help"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  nil,
+			wantStdout: "Available commands:",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			original := os.Args
+
+			t.Cleanup(func() { os.Args = original })
+
+			os.Args = tc.args
+
+			var exits []int
+
+			app := &App{
+				cmd:       &cmd{},
+				container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+				exit:      func(code int) { exits = append(exits, code) },
+			}
+			app.cmd.addRoute("run", tc.handler)
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(app.runCMD)
+			})
+
+			assert.Equal(t, tc.wantExits, exits, "exit codes reported to the process")
+			assert.Contains(t, stdout, tc.wantStdout, "stdout")
+			assert.Equal(t, tc.wantStderr, stderr, "stderr")
+		})
 	}
 }

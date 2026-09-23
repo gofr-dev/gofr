@@ -84,4 +84,20 @@ go build -o mycli
 ./mycli --help
 ```
 
+## Exit Codes
+
+Scripts and CI read the exit status of a CLI application to tell whether it succeeded:
+
+| Outcome | Exit code |
+|---|---|
+| The handler returns a `nil` error | `0` |
+| The handler returns a non-nil error (its data, if any, is still printed) | `1` |
+| The subcommand is missing or not registered | `1` |
+| `-h` / `--help` on its own or after a registered subcommand | `0` |
+
+The error is written to stderr before the process exits. When a command fails, GoFr flushes
+telemetry and closes the logger, then calls `os.Exit(1)`. Because of that, functions deferred in
+your `main()` (for example `defer db.Close()`) do not run when a command fails. Put cleanup that
+must always happen inside the handler rather than in a `defer` in `main()`.
+
 For more details, see the [sample-cmd example](https://github.com/gofr-dev/gofr/tree/main/examples/sample-cmd).

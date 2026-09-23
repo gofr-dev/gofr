@@ -64,6 +64,10 @@ type App struct {
 	// evaluated in registration order; empty means the endpoint keeps its default behavior.
 	// Guarded by mu: registration is documented as pre-Run, but probes run concurrently.
 	readinessChecks []readinessCheck
+
+	// exit is os.Exit, indirected so a test can observe the status a failed command reports without
+	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
+	exit func(int)
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
