@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1211,7 +1212,7 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	errors := make([]error, numRequests)
+	reqErrs := make([]error, numRequests)
 	statuses := make([]int, numRequests)
 
 	// Launch 5 concurrent requests
@@ -1222,7 +1223,7 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 			defer wg.Done()
 
 			resp, err := httpSvc.Get(t.Context(), "test", nil)
-			errors[index] = err
+			reqErrs[index] = err
 
 			if err == nil && resp != nil {
 				statuses[index] = resp.StatusCode
@@ -1239,7 +1240,7 @@ func TestCircuitBreaker_ParallelExecution(t *testing.T) {
 	// Verify all requests completed successfully. A statusNotOverlapped is the
 	// barrier reporting that this request never overlapped the other four.
 	for i := 0; i < numRequests; i++ {
-		require.NoError(t, errors[i], "Request %d should not error", i)
+		require.NoError(t, reqErrs[i], "Request %d should not error", i)
 		assert.Equal(t, http.StatusOK, statuses[i],
 			"Request %d did not overlap the others: requests were serialized, not parallel", i)
 	}
@@ -1738,4 +1739,349 @@ func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 	state := cb.state
 	cb.mu.RUnlock()
 	assert.Equal(t, ClosedState, state, "circuit should be closed after successful recovery")
+}
+
+// errClientWentAway is the cause a caller attaches with context.WithCancelCause. net/http
+// returns context.Cause(ctx) rather than ctx.Err() when a request is canceled, so the error
+// such a caller sees is this one and not context.Canceled.
+var errClientWentAway = errors.New("client went away")
+
+// cancelTestUpstream is a healthy upstream for the cancellation tests:
+//   - /hang signals arrived (when anyone is listening) and then blocks until the request
+//     context ends, so a test can cancel a request that is genuinely in flight;
+//   - /unavailable answers 503, which the breaker counts as a failure;
+//   - everything else answers 200.
+func cancelTestUpstream(t *testing.T) (server *httptest.Server, arrived chan struct{}) {
+	t.Helper()
+
+	arrived = make(chan struct{})
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/hang":
+			select {
+			case arrived <- struct{}{}:
+			case <-r.Context().Done():
+			}
+
+			<-r.Context().Done()
+		case "/unavailable":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	return server, arrived
+}
+
+func cancelTestMetrics(t *testing.T) *MockMetrics {
+	t.Helper()
+
+	mockMetric := NewMockMetrics(gomock.NewController(t))
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	return mockMetric
+}
+
+func newCancelTestBreaker(t *testing.T, url string, threshold int) *circuitBreaker {
+	t.Helper()
+
+	svc := NewHTTPService(url, logging.NewMockLogger(logging.DEBUG), cancelTestMetrics(t),
+		&CircuitBreakerConfig{Threshold: threshold, Interval: time.Hour})
+
+	cb, ok := svc.(*circuitBreaker)
+	require.True(t, ok, "CircuitBreakerConfig must be the outermost option here")
+
+	return cb
+}
+
+func breakerSnapshot(cb *circuitBreaker) (state, failures int) {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
+	return cb.state, cb.failureCount
+}
+
+// getCanceledInFlight sends GET /hang and cancels the caller's context once the upstream
+// has received the request, so the cancellation happens mid-flight, as when a browser
+// navigates away while the gateway is still waiting on the upstream.
+func getCanceledInFlight(t *testing.T, svc HTTP, arrived <-chan struct{}) error {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go func() {
+		<-arrived
+		cancel()
+	}()
+
+	resp, err := svc.Get(ctx, "hang", nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	return err
+}
+
+func getStatus(ctx context.Context, svc HTTP, path string) (int, error) {
+	resp, err := svc.Get(ctx, path, nil)
+	if resp == nil {
+		return 0, err
+	}
+
+	_ = resp.Body.Close()
+
+	return resp.StatusCode, err
+}
+
+// A request its own caller abandons says nothing about the upstream, so eleven of them in a
+// row against a Threshold of 10 must leave the breaker closed for everyone else. Before the
+// fix the eleventh cancellation opened it.
+func TestCircuitBreaker_CallerCancellationDoesNotOpenCircuit(t *testing.T) {
+	const threshold = 10
+
+	tests := []struct {
+		desc    string
+		call    func(t *testing.T, svc HTTP, arrived <-chan struct{}) error
+		wantErr error
+	}{
+		{
+			desc:    "canceled while in flight",
+			call:    getCanceledInFlight,
+			wantErr: context.Canceled,
+		},
+		{
+			desc: "canceled before it was sent",
+			call: func(t *testing.T, svc HTTP, _ <-chan struct{}) error {
+				t.Helper()
+
+				ctx, cancel := context.WithCancel(t.Context())
+				cancel()
+
+				_, err := getStatus(ctx, svc, "hang")
+
+				return err
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			desc: "canceled with a cause",
+			call: func(t *testing.T, svc HTTP, arrived <-chan struct{}) error {
+				t.Helper()
+
+				ctx, cancel := context.WithCancelCause(t.Context())
+				defer cancel(nil)
+
+				go func() {
+					<-arrived
+					cancel(errClientWentAway)
+				}()
+
+				_, err := getStatus(ctx, svc, "hang")
+
+				return err
+			},
+			wantErr: errClientWentAway,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, arrived := cancelTestUpstream(t)
+			cb := newCancelTestBreaker(t, server.URL, threshold)
+
+			for i := 0; i <= threshold; i++ {
+				err := tc.call(t, cb, arrived)
+				require.ErrorIs(t, err, tc.wantErr, "call %d", i+1)
+				require.NotErrorIs(t, err, ErrCircuitOpen, "call %d", i+1)
+			}
+
+			state, failures := breakerSnapshot(cb)
+			assert.Equal(t, ClosedState, state)
+			assert.Zero(t, failures)
+
+			code, err := getStatus(t.Context(), cb, "ok")
+			require.NoError(t, err, "a healthy upstream must stay reachable for other callers")
+			assert.Equal(t, http.StatusOK, code)
+		})
+	}
+}
+
+// The failures the breaker exists for still open it: a 503, a refused connection, and a
+// request that ran out of time (context.DeadlineExceeded is evidence of a slow upstream,
+// so it keeps counting).
+func TestCircuitBreaker_UpstreamFailuresStillOpenCircuit(t *testing.T) {
+	const threshold = 10
+
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refusedURL := refused.URL
+	refused.Close()
+
+	tests := []struct {
+		desc string
+		url  func(server *httptest.Server) string
+		call func(t *testing.T, svc HTTP) error
+	}{
+		{
+			desc: "503 from the upstream",
+			url:  func(s *httptest.Server) string { return s.URL },
+			call: func(t *testing.T, svc HTTP) error {
+				t.Helper()
+
+				code, err := getStatus(t.Context(), svc, "unavailable")
+				if err == nil {
+					assert.Equal(t, http.StatusServiceUnavailable, code)
+				}
+
+				return err
+			},
+		},
+		{
+			desc: "connection refused",
+			url:  func(*httptest.Server) string { return refusedURL },
+			call: func(t *testing.T, svc HTTP) error {
+				t.Helper()
+
+				_, err := getStatus(t.Context(), svc, "ok")
+				require.Error(t, err)
+
+				return err
+			},
+		},
+		{
+			desc: "deadline exceeded",
+			url:  func(s *httptest.Server) string { return s.URL },
+			call: func(t *testing.T, svc HTTP) error {
+				t.Helper()
+
+				ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+				defer cancel()
+
+				_, err := getStatus(ctx, svc, "hang")
+				require.Error(t, err)
+
+				if !errors.Is(err, ErrCircuitOpen) {
+					require.ErrorIs(t, err, context.DeadlineExceeded)
+				}
+
+				return err
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, _ := cancelTestUpstream(t)
+			cb := newCancelTestBreaker(t, tc.url(server), threshold)
+
+			for i := 0; i < threshold; i++ {
+				err := tc.call(t, cb)
+				require.NotErrorIs(t, err, ErrCircuitOpen, "call %d must not open the circuit yet", i+1)
+			}
+
+			require.ErrorIs(t, tc.call(t, cb), ErrCircuitOpen, "call %d must open the circuit", threshold+1)
+
+			state, _ := breakerSnapshot(cb)
+			assert.Equal(t, OpenState, state)
+		})
+	}
+}
+
+// A cancellation between two real failures is neither a failure nor a success: it must not
+// add to the streak and it must not reset it.
+func TestCircuitBreaker_CallerCancellationKeepsFailureStreak(t *testing.T) {
+	server, arrived := cancelTestUpstream(t)
+	cb := newCancelTestBreaker(t, server.URL, 2)
+
+	code, err := getStatus(t.Context(), cb, "unavailable")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusServiceUnavailable, code)
+
+	require.ErrorIs(t, getCanceledInFlight(t, cb, arrived), context.Canceled)
+
+	code, err = getStatus(t.Context(), cb, "unavailable")
+	require.NoError(t, err, "the cancellation must not have counted as a failure")
+	require.Equal(t, http.StatusServiceUnavailable, code)
+
+	state, failures := breakerSnapshot(cb)
+	assert.Equal(t, ClosedState, state)
+	assert.Equal(t, 2, failures, "the cancellation must not have reset the streak")
+
+	require.ErrorIs(t, getCanceledInFlight(t, cb, arrived), context.Canceled)
+
+	_, err = getStatus(t.Context(), cb, "unavailable")
+	require.ErrorIs(t, err, ErrCircuitOpen, "the third real failure must open the circuit")
+}
+
+// With Retry as the outer layer (the order the docs recommend), every attempt reaches the
+// breaker. A canceled request is retried against an already-canceled context, so before
+// the fix one abandoned request counted MaxRetries+1 failures.
+func TestCircuitBreaker_CallerCancellationThroughRetryDoesNotOpenCircuit(t *testing.T) {
+	server, arrived := cancelTestUpstream(t)
+
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), cancelTestMetrics(t),
+		&CircuitBreakerConfig{Threshold: 2, Interval: time.Hour},
+		&RetryConfig{MaxRetries: 3})
+
+	rp, ok := svc.(*retryProvider)
+	require.True(t, ok)
+
+	cb, ok := rp.HTTP.(*circuitBreaker)
+	require.True(t, ok)
+
+	for i := 0; i < 3; i++ {
+		require.ErrorIs(t, getCanceledInFlight(t, svc, arrived), context.Canceled, "request %d", i+1)
+	}
+
+	state, failures := breakerSnapshot(cb)
+	assert.Equal(t, ClosedState, state)
+	assert.Zero(t, failures)
+}
+
+// Concurrent cancellations share one breaker; run under -race.
+func TestCircuitBreaker_ConcurrentCallerCancellations(t *testing.T) {
+	const callers = 20
+
+	server, _ := cancelTestUpstream(t)
+	cb := newCancelTestBreaker(t, server.URL, 5)
+
+	var wg sync.WaitGroup
+
+	errs := make([]error, callers)
+
+	for i := range callers {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			stop := time.AfterFunc(10*time.Millisecond, cancel)
+			defer stop.Stop()
+
+			resp, err := cb.Get(ctx, "hang", nil)
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+
+			errs[i] = err
+		}()
+	}
+
+	wg.Wait()
+
+	for i, err := range errs {
+		require.ErrorIs(t, err, context.Canceled, "caller %d", i)
+	}
+
+	state, failures := breakerSnapshot(cb)
+	assert.Equal(t, ClosedState, state)
+	assert.Zero(t, failures)
 }
