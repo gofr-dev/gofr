@@ -93,5 +93,12 @@ reports them as present whatever tags you pass:
 go list -deps -tags gofr_nopubsub ./cmd/my-service | grep pubsub/kafka   # no output: not linked
 ```
 
-For scale, against `gofr.dev/pkg/gofr` itself: 829 packages by default, 617 with `gofr_nopubsub`,
-785 with `gofr_nosqldrivers`, 809 with `gofr_nographql`, and 553 with all three.
+For scale, against `gofr.dev/pkg/gofr` itself: 828 packages by default, 616 with `gofr_nopubsub`,
+784 with `gofr_nosqldrivers`, 808 with `gofr_nographql`, and 552 with all three. On
+`examples/http-server` that is a 60,028,914 byte binary by default and 43,357,218 with all three
+tags, a 27.8% reduction.
+
+These figures move with every dependency change, so treat them as a sense of scale rather than a
+contract. Run the command above against your own service for the number that matters to you. What CI
+does enforce is the direction: the `Slim Build Tags` job fails if any of these tags stops removing
+the packages it names.
