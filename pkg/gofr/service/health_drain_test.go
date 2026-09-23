@@ -238,7 +238,9 @@ func TestHealthCheck_ConcurrentChecks(t *testing.T) {
 // TestHealthCheck_ConcurrentChecksShareConnections runs waves of two concurrent checks on one
 // service, the shape of a readiness and a liveness probe fanning out to the same dependency. Two
 // concurrent checks fit the transport's default two idle connections per host, so after the first
-// wave dials, every later wave must reuse them.
+// wave dials, later waves reuse them. Without the drain every check dials: 10 connections. The
+// bound allows one wave's worth of slack, because under heavy load net/http itself may decline to
+// pool a connection whose request write it has not yet seen complete (maxWriteWaitBeforeConnReuse).
 func TestHealthCheck_ConcurrentChecksShareConnections(t *testing.T) {
 	const (
 		waves       = 5
@@ -264,6 +266,6 @@ func TestHealthCheck_ConcurrentChecksShareConnections(t *testing.T) {
 		wg.Wait()
 	}
 
-	assert.LessOrEqual(t, newConns.Load(), int64(concurrency),
+	assert.LessOrEqual(t, newConns.Load(), int64(2*concurrency),
 		"%d waves of %d concurrent checks should reuse the first wave's connections", waves, concurrency)
 }
