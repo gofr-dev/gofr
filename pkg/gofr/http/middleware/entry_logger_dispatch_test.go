@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,5 +102,77 @@ func TestLogSinkResolvesOptionalInterfacesOnce(t *testing.T) {
 	assert.Nil(t, plain.enabler, "a plain logger must leave the level gate unresolved")
 	assert.NotNil(t, plain.logger, "the base contract is always kept")
 
+	// The two optional interfaces are independent, and a logger in the wild can
+	// offer either one alone -- remotelogger gained LogEnabled before it gained
+	// LogEntry, so both partial shapes have actually existed in this repo. The
+	// all-or-nothing cases above would pass even if the two assertions were
+	// accidentally collapsed into one; these are what separate them.
+	entriesOnly := newLogSink(&countingEntryLogger{})
+	assert.NotNil(t, entriesOnly.entries, "LogEntry/ErrorEntry alone must still resolve the fast path")
+	assert.Nil(t, entriesOnly.enabler, "a logger without LogEnabled must leave the level gate unresolved")
+
+	enablerOnly := newLogSink(&levelGateLogger{})
+	assert.Nil(t, enablerOnly.entries, "a logger without LogEntry must leave the fast path unresolved")
+	assert.NotNil(t, enablerOnly.enabler, "LogEnabled alone must still resolve the level gate")
+
 	assert.Nil(t, newLogSink(nil).logger, "a nil logger must not be wrapped into a non-nil sink")
+}
+
+// concurrentEntryLogger counts through atomics so the counters themselves cannot
+// be what a race detector reports.
+type concurrentEntryLogger struct {
+	logCalls, errorCalls           atomic.Int64
+	logEntryCalls, errorEntryCalls atomic.Int64
+}
+
+func (c *concurrentEntryLogger) Log(...any)     { c.logCalls.Add(1) }
+func (c *concurrentEntryLogger) Error(...any)   { c.errorCalls.Add(1) }
+func (c *concurrentEntryLogger) LogEntry(any)   { c.logEntryCalls.Add(1) }
+func (c *concurrentEntryLogger) ErrorEntry(any) { c.errorEntryCalls.Add(1) }
+func (*concurrentEntryLogger) LogEnabled() bool { return true }
+
+// TestSharedLogSinkIsSafeUnderConcurrentRequests exercises the hoisted sink from
+// many requests at once, which is the whole point of resolving it once: one
+// logSink value is now shared by every request the middleware ever serves.
+//
+// Test_LoggingContract_ConcurrentRequestsShareThePool already runs concurrent
+// requests under -race, but its recorder implements only Log/Error, so it
+// exercises the FALLBACK branch and would stay green if the shared fast-path
+// fields were unsafe. This drives the entries and enabler branches instead.
+func TestSharedLogSinkIsSafeUnderConcurrentRequests(t *testing.T) {
+	logger := &concurrentEntryLogger{}
+	mw := Logging(LogProbes{}, logger)
+
+	const (
+		n     = 64
+		half  = n / 2
+		route = "/concurrent"
+	)
+
+	var wg sync.WaitGroup
+
+	for i := range n {
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+
+			status := http.StatusOK
+			if i%2 == 0 {
+				status = http.StatusInternalServerError
+			}
+
+			h := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+
+			h.ServeHTTP(httptest.NewRecorder(),
+				httptest.NewRequestWithContext(context.Background(), http.MethodGet, route, http.NoBody))
+		}(i)
+	}
+
+	wg.Wait()
+
+	assert.Equal(t, int64(half), logger.logEntryCalls.Load(), "every 2xx must reach the shared fast path")
+	assert.Equal(t, int64(half), logger.errorEntryCalls.Load(), "every 5xx must reach the shared fast path")
+	assert.Zero(t, logger.logCalls.Load(), "no request may fall back to the variadic path")
+	assert.Zero(t, logger.errorCalls.Load(), "no request may fall back to the variadic path")
 }

@@ -579,6 +579,71 @@ func TestCorrelationIDHeaderSpellingUnchanged(t *testing.T) {
 	require.Equal(t, canonicalCorrelationID, textproto.CanonicalMIMEHeaderKey("X-Correlation-ID"))
 }
 
+// TestTraceSpanIDsMatchesOtelRendering pins traceSpanIDs against the only
+// contract it has: the strings otel itself would produce.
+//
+// It renders both IDs into one stack array and hands back two slices of one
+// string, so the split offset is the thing that can silently go wrong -- and it
+// would go wrong by shifting the ID boundary, which no output test in this file
+// would notice because both fields would still be hex of the right total length.
+// Comparing field by field against TraceID.String()/SpanID.String() is what
+// catches an off-by-one there.
+//
+// The half-zero rows are the cases worth stating explicitly: a SpanContext with
+// a zero trace ID or a zero span ID is NOT valid by otel's definition
+// (IsValid is HasTraceID && HasSpanID), so both IDs fall back to the zero-string
+// constants together. That is unchanged behavior, and pinning it here stops a
+// future "optimization" from emitting a half-real pair.
+func TestTraceSpanIDsMatchesOtelRendering(t *testing.T) {
+	realTrace := trace.TraceID{
+		0x0a, 0xf7, 0x65, 0x19, 0x16, 0xcd, 0x43, 0xdd,
+		0x84, 0x48, 0xeb, 0x21, 0x1c, 0x80, 0x31, 0x9c,
+	}
+	realSpan := trace.SpanID{0xb7, 0xad, 0x6b, 0x71, 0x69, 0x20, 0x33, 0x31}
+	maxTrace := trace.TraceID{
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}
+	maxSpan := trace.SpanID{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+	tests := []struct {
+		name          string
+		cfg           trace.SpanContextConfig
+		wantTrace     string
+		wantSpan      string
+		expectFromSDK bool
+	}{
+		{"valid pair", trace.SpanContextConfig{TraceID: realTrace, SpanID: realSpan},
+			"0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331", true},
+		{"all 0xff", trace.SpanContextConfig{TraceID: maxTrace, SpanID: maxSpan},
+			"ffffffffffffffffffffffffffffffff", "ffffffffffffffff", true},
+		{"empty span context", trace.SpanContextConfig{},
+			zeroTraceID, zeroSpanID, false},
+		{"zero trace id, real span id", trace.SpanContextConfig{SpanID: realSpan},
+			zeroTraceID, zeroSpanID, false},
+		{"real trace id, zero span id", trace.SpanContextConfig{TraceID: realTrace},
+			zeroTraceID, zeroSpanID, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := trace.NewSpanContext(tt.cfg)
+
+			gotTrace, gotSpan := traceSpanIDs(sc)
+
+			assert.Equal(t, tt.wantTrace, gotTrace)
+			assert.Equal(t, tt.wantSpan, gotSpan)
+			assert.Len(t, gotTrace, len(zeroTraceID), "the trace ID must keep its wire width")
+			assert.Len(t, gotSpan, len(zeroSpanID), "the span ID must keep its wire width")
+
+			if tt.expectFromSDK {
+				assert.Equal(t, sc.TraceID().String(), gotTrace, "must match otel's own rendering")
+				assert.Equal(t, sc.SpanID().String(), gotSpan, "must match otel's own rendering")
+			}
+		})
+	}
+}
+
 // loggingBenchWriter keeps a header map and discards the rest, so the benchmark measures the
 // middleware rather than a recorder.
 type loggingBenchWriter struct{ h http.Header }
