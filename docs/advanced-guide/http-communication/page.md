@@ -181,7 +181,7 @@ echo -n "your-password" | base64
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
-- **RetryConfig** - This option allows the user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried.
+- **RetryConfig** - This option allows the user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried. Retries stop once the caller's context is canceled or past its deadline: the attempt made with the done context is the last, and its error is returned.
 - **RateLimiterConfig** -  This option allows the user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
 **Rate Limiter Store: Customization**
