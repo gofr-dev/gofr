@@ -166,11 +166,9 @@ func pushDBMetrics(conn Conn, metrics Metrics) {
 func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "exec", query)
 
-	err := c.conn.Exec(tracedCtx, query, args...)
-
 	defer c.sendOperationStats(time.Now(), "Exec", query, "exec", span, args...)
 
-	return err
+	return c.conn.Exec(tracedCtx, query, args...)
 }
 
 // Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation.
@@ -189,11 +187,9 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 func (c *Client) Select(ctx context.Context, dest any, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "select", query)
 
-	err := c.conn.Select(tracedCtx, dest, query, args...)
-
 	defer c.sendOperationStats(time.Now(), "Select", query, "select", span, args...)
 
-	return err
+	return c.conn.Select(tracedCtx, dest, query, args...)
 }
 
 // AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
@@ -201,11 +197,9 @@ func (c *Client) Select(ctx context.Context, dest any, query string, args ...any
 func (c *Client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "async-insert", query)
 
-	err := c.conn.AsyncInsert(tracedCtx, query, wait, args...)
-
 	defer c.sendOperationStats(time.Now(), "AsyncInsert", query, "async-insert", span, args...)
 
-	return err
+	return c.conn.AsyncInsert(tracedCtx, query, wait, args...)
 }
 
 // sendOperationStats records the duration of a database operation and logs the query context.
@@ -231,12 +225,16 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query string, m
 		"database", c.config.Database, "type", getOperationType(query))
 }
 
-// getOperationType extracts the operation type (e.g., SELECT, INSERT) from a query.
+// getOperationType extracts the operation type (e.g., SELECT, INSERT) from a query: its first
+// whitespace-separated token, upper-cased, so tab- or newline-formatted queries label cleanly.
 func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
-	words := strings.Split(query, " ")
 
-	return strings.ToUpper(words[0])
+	if query == "" {
+		return ""
+	}
+
+	return strings.ToUpper(strings.Fields(query)[0])
 }
 
 type Health struct {
