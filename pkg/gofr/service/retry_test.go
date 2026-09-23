@@ -406,28 +406,50 @@ func TestRetryProvider_ContextDoneBeforeCall_MakesOneAttempt(t *testing.T) {
 	assert.Equal(t, int32(0), hits.Load())
 }
 
-func TestRetryProvider_CanceledInFlight_StopsAfterNextAttempt(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+func TestRetryProvider_ContextDoneInFlight_StopsAfterNextAttempt(t *testing.T) {
+	tests := []struct {
+		desc     string
+		deadline bool
+		wantErr  error
+	}{
+		{desc: "canceled while attempt 1 is on the wire", wantErr: context.Canceled},
+		{desc: "deadline passes while attempt 1 is on the wire", deadline: true, wantErr: context.DeadlineExceeded},
+	}
 
-	var hits atomic.Int32
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			if tc.deadline {
+				ctx, cancel = context.WithTimeout(t.Context(), 100*time.Millisecond)
+			}
 
-	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		hits.Add(1)
-		cancel()
-		<-r.Context().Done()
-	}))
-	defer server.Close()
+			defer cancel()
 
-	probe := &attemptProbe{}
+			var hits atomic.Int32
 
-	resp, err := newProbedRetryService(server.URL, probe).Get(ctx, "test", nil)
+			// The handler never answers: attempt 1 ends only when the client's context does.
+			server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
 
-	requireNoResponse(t, resp)
-	require.ErrorIs(t, err, context.Canceled)
-	assert.Equal(t, singleAttemptErr(ctx, t, server.URL).Error(), err.Error(), "caller must see the same error as today")
-	assert.Equal(t, int32(2), probe.attempts.Load(), "the attempt made after the cancel must be the last")
-	assert.Equal(t, int32(1), hits.Load())
+				if !tc.deadline {
+					cancel()
+				}
+
+				<-r.Context().Done()
+			}))
+			defer server.Close()
+
+			probe := &attemptProbe{}
+
+			resp, err := newProbedRetryService(server.URL, probe).Get(ctx, "test", nil)
+
+			requireNoResponse(t, resp)
+			require.ErrorIs(t, err, tc.wantErr)
+			assert.Equal(t, singleAttemptErr(ctx, t, server.URL).Error(), err.Error(), "caller must see the same error as today")
+			assert.Equal(t, int32(2), probe.attempts.Load(), "the attempt made after the context ended must be the last")
+			assert.Equal(t, int32(1), hits.Load())
+		})
+	}
 }
 
 func TestRetryProvider_ContextDoneBetweenAttempts_StopsAfterNextAttempt(t *testing.T) {
