@@ -2,6 +2,8 @@ package container
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,7 +23,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -222,6 +226,22 @@ func Test_GetConnectionFromContext(t *testing.T) {
 			name:     "wrong type in context",
 			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
 			setup:    func(*Container) {},
+			expected: nil,
+		},
+		{
+			name: "connection object stored directly in context",
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
+			setup: func(c *Container) {
+				c.WSManager = ws.New()
+			},
+			expected: &ws.Connection{Conn: &websocket.Conn{}},
+		},
+		{
+			name: "wrong type in context with manager",
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
+			setup: func(c *Container) {
+				c.WSManager = ws.New()
+			},
 			expected: nil,
 		},
 	}
@@ -779,5 +799,240 @@ func frameworkMetricContract() map[string]metricContract {
 		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
 		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
 		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
+	}
+}
+
+var errToolCall = errors.New("tool call failed")
+
+func TestContainer_LLMRegistry(t *testing.T) {
+	tests := []struct {
+		desc      string
+		register  []string
+		lookup    []string
+		expHasLLM bool
+		expModel  bool
+		expName   string
+	}{
+		{
+			desc:      "no model registered",
+			register:  nil,
+			lookup:    nil,
+			expHasLLM: false,
+			expModel:  false,
+			expName:   "",
+		},
+		{
+			desc:      "default model registered and looked up",
+			register:  []string{""},
+			lookup:    nil,
+			expHasLLM: true,
+			expModel:  true,
+			expName:   "model-",
+		},
+		{
+			desc:      "named model looked up by name",
+			register:  []string{"", "fast"},
+			lookup:    []string{"fast"},
+			expHasLLM: true,
+			expModel:  true,
+			expName:   "model-fast",
+		},
+		{
+			desc:      "unknown name returns not-configured LLM",
+			register:  []string{"fast"},
+			lookup:    []string{"typo"},
+			expHasLLM: true,
+			expModel:  false,
+			expName:   "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := &Container{}
+
+			for _, n := range tc.register {
+				m := ai.NewMockModel(ctrl)
+				m.EXPECT().Name().Return("model-" + n).AnyTimes()
+				c.SetLLM(m, n)
+			}
+
+			assert.Equal(t, tc.expHasLLM, c.HasLLM())
+			assert.Equal(t, tc.expModel, c.LLMModel(tc.lookup...) != nil)
+			assert.Equal(t, tc.expName, c.LLM(tc.lookup...).Name())
+		})
+	}
+}
+
+func TestContainer_NotConfiguredLLM(t *testing.T) {
+	llm := (&Container{}).LLM("missing")
+
+	tests := []struct {
+		desc   string
+		call   func() (any, error)
+		expErr error
+	}{
+		{
+			desc:   "chat",
+			call:   func() (any, error) { return llm.Chat(t.Context(), nil) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "generate",
+			call:   func() (any, error) { return llm.Generate(t.Context(), "hi") },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "stream",
+			call:   func() (any, error) { return llm.Stream(t.Context(), nil) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "embed",
+			call:   func() (any, error) { return llm.Embed(t.Context(), []string{"a"}) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, err := tc.call()
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, resp)
+		})
+	}
+
+	assert.Equal(t, datasource.Health{Status: datasource.StatusDown}, llm.HealthCheck(t.Context()))
+	assert.Empty(t, llm.Name())
+}
+
+func TestContainer_LLMToolsLazyResolution(t *testing.T) {
+	specs := []ai.ToolSpec{{Name: "a"}, {Name: "b"}}
+	onlySpecs := []ai.ToolSpec{{Name: "a"}}
+
+	tests := []struct {
+		desc      string
+		setup     func(ctrl *gomock.Controller) ai.Tools
+		expList   []ai.ToolSpec
+		expOnly   []ai.ToolSpec
+		expResult ai.Result
+		expErr    error
+	}{
+		{
+			desc:      "no tools installed",
+			setup:     func(*gomock.Controller) ai.Tools { return nil },
+			expList:   nil,
+			expOnly:   nil,
+			expResult: ai.Result{},
+			expErr:    ai.ErrToolNotFound,
+		},
+		{
+			desc: "installed tools are delegated to",
+			setup: func(ctrl *gomock.Controller) ai.Tools {
+				only := ai.NewMockTools(ctrl)
+				only.EXPECT().List().Return(onlySpecs)
+
+				tools := ai.NewMockTools(ctrl)
+				tools.EXPECT().List().Return(specs)
+				tools.EXPECT().Only("a").Return(only)
+				tools.EXPECT().Call(gomock.Any(), "a", json.RawMessage(`{}`)).Return(ai.NewResult("ok"), nil)
+
+				return tools
+			},
+			expList:   specs,
+			expOnly:   onlySpecs,
+			expResult: ai.NewResult("ok"),
+			expErr:    nil,
+		},
+		{
+			desc: "tool call error is propagated",
+			setup: func(ctrl *gomock.Controller) ai.Tools {
+				tools := ai.NewMockTools(ctrl)
+				tools.EXPECT().List().Return(nil)
+
+				only := ai.NewMockTools(ctrl)
+				only.EXPECT().List().Return(nil)
+
+				tools.EXPECT().Only("a").Return(only)
+				tools.EXPECT().Call(gomock.Any(), "a", json.RawMessage(`{}`)).Return(ai.Result{}, errToolCall)
+
+				return tools
+			},
+			expList:   nil,
+			expOnly:   nil,
+			expResult: ai.Result{},
+			expErr:    errToolCall,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := &Container{}
+
+			// Tools are installed after the LLM is obtained, proving they are resolved lazily.
+			tools := c.LLM().Tools()
+			c.SetTools(tc.setup(ctrl))
+
+			assert.Equal(t, tc.expList, tools.List())
+
+			assert.Equal(t, tc.expOnly, tools.Only("a").List())
+
+			res, err := tools.Call(t.Context(), "a", json.RawMessage(`{}`))
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expResult, res)
+		})
+	}
+}
+
+func TestContainer_createKafkaPubSub_InvalidConfigs(t *testing.T) {
+	tests := []struct {
+		desc    string
+		configs map[string]string
+		expLogs []string
+	}{
+		{
+			desc: "invalid partition and offset are logged; security protocol validation fails",
+			configs: map[string]string{
+				"PUBSUB_BROKER":           "localhost:9092",
+				"PARTITION_SIZE":          "abc",
+				"PUBSUB_OFFSET":           "xyz",
+				"KAFKA_SECURITY_PROTOCOL": "BOGUS",
+			},
+			expLogs: []string{
+				"Invalid value for PARTITION_SIZE, using default: 0",
+				"Invalid value for PUBSUB_OFFSET, using default: -1",
+				"could not initialize kafka, error: unsupported security protocol: BOGUS",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			var logs []string
+
+			logger := NewMockLogger(ctrl)
+			logger.EXPECT().Error(gomock.Any()).Do(func(args ...any) {
+				logs = append(logs, fmt.Sprint(args...))
+			}).AnyTimes()
+			logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+				logs = append(logs, fmt.Sprintf(format, args...))
+			}).AnyTimes()
+
+			c := &Container{Logger: logger}
+			c.createKafkaPubSub(config.NewMockConfig(tc.configs))
+
+			assert.Nil(t, c.PubSub)
+			require.Len(t, logs, len(tc.expLogs))
+
+			for i, exp := range tc.expLogs {
+				assert.Contains(t, logs[i], exp)
+			}
+		})
 	}
 }
