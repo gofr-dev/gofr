@@ -76,10 +76,13 @@ func Test_buildReader(t *testing.T) {
 		name         string
 		cfg          exporters.Config
 		wantTemporal bool
+		wantInterval bool
 	}{
-		{"cumulative default endpoint", exporters.Config{Interval: time.Second}, false},
-		{"explicit endpoint", exporters.Config{Endpoint: defaultEndpoint, Interval: time.Second}, false},
-		{"delta preference warns and is ignored", exporters.Config{Interval: time.Second, Temporality: "delta"}, true},
+		{"cumulative default endpoint", exporters.Config{Interval: 30 * time.Second}, false, false},
+		{"explicit endpoint", exporters.Config{Endpoint: defaultEndpoint, Interval: 30 * time.Second}, false, false},
+		{"delta preference warns and is ignored",
+			exporters.Config{Interval: 30 * time.Second, Temporality: "delta"}, true, false},
+		{"interval under the per-series minimum warns", exporters.Config{Interval: time.Second}, false, true},
 	}
 
 	for _, tc := range tests {
@@ -97,6 +100,10 @@ func Test_buildReader(t *testing.T) {
 
 			if got := l.warnedAbout("METRICS_TEMPORALITY"); got != tc.wantTemporal {
 				t.Errorf("temporality warning = %v, want %v", got, tc.wantTemporal)
+			}
+
+			if got := l.warnedAbout("METRICS_EXPORT_INTERVAL"); got != tc.wantInterval {
+				t.Errorf("interval warning = %v, want %v, got: %v", got, tc.wantInterval, l.warnings)
 			}
 
 			if l.warnedAbout("location") {
@@ -153,6 +160,42 @@ func Test_buildReader_warnsOnQuotaProjectHeader(t *testing.T) {
 
 	if !l.warnedAbout("GOOGLE_CLOUD_QUOTA_PROJECT") {
 		t.Errorf("expected a quota-project warning, got: %v", l.warnings)
+	}
+}
+
+func Test_exportInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       time.Duration
+		want     time.Duration
+		wantWarn bool
+	}{
+		// Zero means "SDK default"; it is not a request for a sub-minimum interval.
+		{"unset passes through", 0, 0, false},
+		{"under the minimum is raised", time.Second, minExportInterval, true},
+		{"just under the minimum is raised", minExportInterval - time.Millisecond, minExportInterval, true},
+		{"exactly the minimum is kept", minExportInterval, minExportInterval, false},
+		{"above the minimum is kept", 30 * time.Second, 30 * time.Second, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l := &testLogger{}
+
+			if got := exportInterval(tc.in, l); got != tc.want {
+				t.Errorf("exportInterval(%s) = %s, want %s", tc.in, got, tc.want)
+			}
+
+			if got := len(l.warnings) > 0; got != tc.wantWarn {
+				t.Errorf("warned = %v, want %v, got: %v", got, tc.wantWarn, l.warnings)
+			}
+
+			// The warning must name both knobs that set the interval, so an
+			// operator can find whichever one they used.
+			if tc.wantWarn && (!l.warnedAbout("METRICS_EXPORT_INTERVAL") || !l.warnedAbout("OTEL_METRIC_EXPORT_INTERVAL")) {
+				t.Errorf("warning should name both interval env vars, got: %v", l.warnings)
+			}
+		})
 	}
 }
 
