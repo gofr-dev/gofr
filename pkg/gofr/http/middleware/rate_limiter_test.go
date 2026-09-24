@@ -357,12 +357,12 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 20}, errInvalidRequestsPerSecond},
 		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0, PerIP: true}, errInvalidBurst},
 		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -5, PerIP: true}, errInvalidBurst},
-		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: -1}, errInvalidMaxKeys},
+		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: -1}, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expErr, tt.config.Validate())
+			require.ErrorIs(t, tt.config.Validate(), tt.expErr)
 		})
 	}
 }
@@ -764,7 +764,6 @@ func TestRateLimiter_InvalidConfigPassesThrough(t *testing.T) {
 		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0}, errInvalidBurst},
 		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -1}, errInvalidBurst},
 		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5}, errInvalidRequestsPerSecond},
-		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1}, errInvalidMaxKeys},
 	}
 
 	for _, tc := range tests {
@@ -882,6 +881,40 @@ func TestRateLimiter_InvalidConfigLeavesStoreUntouched(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
 	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
+}
+
+func TestRateLimiter_NegativeMaxKeysStillLimits(t *testing.T) {
+	const correction = "invalid rate limiter MaxKeys -1; falling back to the default key limit"
+
+	tests := []struct {
+		name    string
+		store   RateLimiterStore
+		expLogs []string
+	}{
+		{"default store logs the correction", nil, []string{correction}},
+		{"caller-supplied store owns its bound", NewMemoryRateLimiterStore(RateLimiterConfig{RequestsPerSecond: 1, Burst: 1}), nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &errorfRecorder{}
+			config := RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store}
+
+			handler := RateLimiter(config, nil, WithRateLimiterLogger(logger))(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+			codes := make([]int, 0, 2)
+
+			for i := 0; i < 2; i++ {
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+				codes = append(codes, rr.Code)
+			}
+
+			assert.Equal(t, []int{http.StatusOK, http.StatusTooManyRequests}, codes)
+			assert.Equal(t, tc.expLogs, logger.entries())
+		})
+	}
 }
 
 func TestNewMemoryRateLimiterStore_MaxKeysDefault(t *testing.T) {

@@ -315,11 +315,6 @@ func TestUnaryRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
 			wantErr: "requestsPerSecond must be positive",
 		},
-		{
-			name:    "negative MaxKeys",
-			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1},
-			wantErr: "maxKeys must not be negative",
-		},
 	}
 
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
@@ -711,11 +706,6 @@ func TestStreamRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
 			wantErr: "requestsPerSecond must be positive",
 		},
-		{
-			name:    "negative MaxKeys",
-			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5, MaxKeys: -1},
-			wantErr: "maxKeys must not be negative",
-		},
 	}
 
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
@@ -1059,4 +1049,55 @@ func TestRateLimitInterceptors_InvalidConfigLeavesStoreUntouched(t *testing.T) {
 	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
 	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
 	assert.Len(t, logger.errorLogs(), 2)
+}
+
+func TestRateLimitInterceptors_NegativeMaxKeysStillLimits(t *testing.T) {
+	const correction = "invalid rate limiter MaxKeys -1; falling back to the default key limit"
+
+	tests := []struct {
+		name    string
+		store   func() httpmw.RateLimiterStore
+		expLogs []string
+	}{
+		{"default store logs the correction", func() httpmw.RateLimiterStore { return nil }, []string{correction}},
+		{"caller-supplied store owns its bound", func() httpmw.RateLimiterStore {
+			return httpmw.NewMemoryRateLimiterStore(httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1})
+		}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name+"/unary", func(t *testing.T) {
+			logger := &infoCapturingLogger{}
+			cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store()}
+
+			interceptor := UnaryRateLimitInterceptor(t.Context(), cfg, logger, nil)
+			info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
+			handler := func(context.Context, any) (any, error) { return "ok", nil }
+
+			_, err := interceptor(t.Context(), nil, info, handler)
+			require.NoError(t, err)
+
+			_, err = interceptor(t.Context(), nil, info, handler)
+			assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+
+			assert.Equal(t, tc.expLogs, logger.errorLogs())
+		})
+
+		t.Run(tc.name+"/stream", func(t *testing.T) {
+			logger := &infoCapturingLogger{}
+			cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store()}
+
+			interceptor := StreamRateLimitInterceptor(t.Context(), cfg, logger, nil)
+			info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
+			handler := func(any, grpc.ServerStream) error { return nil }
+
+			err := interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, info, handler)
+			require.NoError(t, err)
+
+			err = interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, info, handler)
+			assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+
+			assert.Equal(t, tc.expLogs, logger.errorLogs())
+		})
+	}
 }

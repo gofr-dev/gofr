@@ -164,13 +164,18 @@ func streamRateLimitExhaustedError(ss grpc.ServerStream, retryAfter time.Duratio
 
 // newRateLimiterStore validates the config, initializes a default in-memory store
 // if none is provided, and starts the background cleanup goroutine. It returns the
-// validation error, without creating a store, if the config is invalid.
-func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) error {
+// validation error, without creating a store, if the config is invalid. A negative
+// MaxKeys on the default store is logged, since the store replaces it with its default.
+func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig, l Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	if cfg.Store == nil {
+		if cfg.MaxKeys < 0 {
+			errorLogger(l).Errorf("invalid rate limiter MaxKeys %d; falling back to the default key limit", cfg.MaxKeys)
+		}
+
 		cfg.Store = httpmw.NewMemoryRateLimiterStore(*cfg)
 	}
 
@@ -179,14 +184,19 @@ func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) err
 	return nil
 }
 
-// logInvalidRateLimiterConfig reports an invalid rate limiter config. It falls back to a
-// GoFr stderr logger when l is nil so the misconfiguration is never silent.
-func logInvalidRateLimiterConfig(l Logger, err error) {
+// errorLogger returns l, or a GoFr stderr logger when l is nil so a rate limiter
+// misconfiguration is never silent.
+func errorLogger(l Logger) Logger {
 	if l == nil {
-		l = logging.NewLogger(logging.ERROR)
+		return logging.NewLogger(logging.ERROR)
 	}
 
-	l.Errorf("invalid rate limiter config: %v; rate limiting is disabled", err)
+	return l
+}
+
+// logInvalidRateLimiterConfig reports an invalid rate limiter config.
+func logInvalidRateLimiterConfig(l Logger, err error) {
+	errorLogger(l).Errorf("invalid rate limiter config: %v; rate limiting is disabled", err)
 }
 
 // resolveRateLimitKey determines the rate limit bucket key based on config.
@@ -230,7 +240,7 @@ func recordRateLimitViolation(ctx context.Context, l Logger, m Metrics, key, met
 func UnaryRateLimitInterceptor(
 	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
 ) grpc.UnaryServerInterceptor {
-	if err := newRateLimiterStore(ctx, &cfg); err != nil {
+	if err := newRateLimiterStore(ctx, &cfg, l); err != nil {
 		logInvalidRateLimiterConfig(l, err)
 
 		return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -269,7 +279,7 @@ func UnaryRateLimitInterceptor(
 func StreamRateLimitInterceptor(
 	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
 ) grpc.StreamServerInterceptor {
-	if err := newRateLimiterStore(ctx, &cfg); err != nil {
+	if err := newRateLimiterStore(ctx, &cfg, l); err != nil {
 		logInvalidRateLimiterConfig(l, err)
 
 		return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

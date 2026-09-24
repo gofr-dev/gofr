@@ -143,9 +143,13 @@ func main() {
 - `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` headers for IP extraction. Only enable when behind a trusted reverse proxy.
 
 > **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero (a `NaN` rate is also
-> rejected), and `MaxKeys` must not be negative (`0` selects the default of 100000). If the config is invalid, GoFr logs
-> the error at `ERROR` level and the middleware passes every request through **without rate limiting** (the app does not
-> crash). To fail fast at startup instead, call `rateLimiterConfig.Validate()` and handle the returned error yourself.
+> rejected). If the config is invalid, GoFr logs the error at `ERROR` level and the middleware passes every request
+> through **without rate limiting** (the app does not crash). To fail fast at startup instead, call
+> `rateLimiterConfig.Validate()` and handle the returned error yourself.
+>
+> `MaxKeys` of `0` selects the default of 100000 keys. A negative `MaxKeys` does not disable the limiter: when GoFr
+> builds the default in-memory store it falls back to the same default of 100000 and logs the correction at `ERROR`
+> level. A custom `Store` is responsible for its own bound.
 >
 > A disabled limiter is only reported once, at startup. A zero `app_http_rate_limit_exceeded_total` therefore does not
 > prove the limiter is active: check the startup logs, or call `Validate()` so a bad config never reaches production.
