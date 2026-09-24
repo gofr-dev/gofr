@@ -38,11 +38,12 @@ type (
 )
 
 var (
-	errInvalidMutation   = errors.New("invalid mutation type")
-	errInvalidOperation  = errors.New("invalid operation type")
-	errHealthCheckFailed = errors.New("dgraph health check failed")
-	errEmptySchema       = errors.New("schema cannot be empty")
-	errEmptyField        = errors.New("field name cannot be empty")
+	errInvalidMutation     = errors.New("invalid mutation type")
+	errInvalidOperation    = errors.New("invalid operation type")
+	errHealthCheckFailed   = errors.New("dgraph health check failed")
+	errEmptyHealthResponse = errors.New("empty response")
+	errEmptySchema         = errors.New("schema cannot be empty")
+	errEmptyField          = errors.New("field name cannot be empty")
 )
 
 // New creates a new Dgraph client with the given configuration.
@@ -297,9 +298,14 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
         }
     }`)
 
-	if err != nil || len(healthResponse.Json) == 0 {
-		d.logger.Error("dgraph health check failed: ", err)
-		return "DOWN", errHealthCheckFailed
+	if err == nil && len(healthResponse.GetJson()) == 0 {
+		err = errEmptyHealthResponse
+	}
+
+	if err != nil {
+		d.logger.Errorf("dgraph health check failed: %v", err)
+
+		return "DOWN", fmt.Errorf("%w: %w", errHealthCheckFailed, err)
 	}
 
 	return "UP", nil
