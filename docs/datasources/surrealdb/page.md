@@ -18,6 +18,10 @@ To connect to `SurrealDB`, you need to provide the following environment variabl
 - `DATABASE`: The name of the database to connect to.
 - `TLSENABLED`: TLS mode (e.g., disable, require)
 
+`USERNAME` and `PASSWORD` must be set together; leave both empty to connect without signing in. If only one of them
+is set, or selecting the namespace/database or signing in fails, GoFr logs the error, closes the connection and the
+SurrealDB health check reports `DOWN`.
+
 ## Setup 
 GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
 using `app.AddSurrealDB()` method, and users can use Surreal DB across application through the `gofr.Context`.
