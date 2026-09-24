@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -2084,4 +2085,70 @@ func TestCircuitBreaker_ConcurrentCallerCancellations(t *testing.T) {
 	state, failures := breakerSnapshot(cb)
 	assert.Equal(t, ClosedState, state)
 	assert.Zero(t, failures)
+}
+
+// closeTrackingBody counts Close calls so a test can tell whether a response nobody returned was
+// nevertheless released.
+type closeTrackingBody struct {
+	io.Reader
+
+	closes *atomic.Int32
+}
+
+func (b closeTrackingBody) Close() error {
+	b.closes.Add(1)
+
+	return nil
+}
+
+// alwaysUnavailableHTTP hands back a fresh 503 with a tracked body on every call. It overrides
+// GetWithHeaders rather than Get because that is what circuitBreaker.Get routes to via doRequest;
+// it embeds mockHTTP only to satisfy the rest of the HTTP interface.
+type alwaysUnavailableHTTP struct {
+	*mockHTTP
+
+	closes *atomic.Int32
+}
+
+func (h *alwaysUnavailableHTTP) GetWithHeaders(context.Context, string, map[string]any,
+	map[string]string) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusServiceUnavailable,
+		Body:       closeTrackingBody{Reader: strings.NewReader(`{"error":"upstream is unwell"}`), closes: h.closes},
+	}, nil
+}
+
+// TestCircuitBreaker_OpeningResponseBodyIsClosed pins that the response which trips the breaker is
+// released rather than dropped.
+//
+// When handleFailure takes the breaker to OpenState the method returns (nil, ErrCircuitOpen), so the
+// caller never sees `result` and nothing outside circuit_breaker.go can close its body. A body that
+// is never closed holds its connection out of the pool permanently, and the breaker opening is
+// exactly when a service is making the most calls it will ever make to a struggling upstream.
+//
+// This asserts the Close directly rather than counting connections against a test server. A
+// connection count cannot see this leak: once the breaker is open no further request is issued, so
+// the abandoned connection is never re-needed within the test and the count looks identical either
+// way. That version of this test passed with the fix reverted, which is why it is not the one here.
+func TestCircuitBreaker_OpeningResponseBodyIsClosed(t *testing.T) {
+	var closes atomic.Int32
+
+	// Threshold 1: the first failure leaves the breaker closed, the second opens it. The second is
+	// therefore the call that returns ErrCircuitOpen while holding a real response.
+	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 1, Interval: time.Hour},
+		&alwaysUnavailableHTTP{mockHTTP: &mockHTTP{}, closes: &closes})
+
+	resp, err := cb.Get(t.Context(), "failing", nil)
+	require.NoError(t, err, "the first failure must not open the breaker")
+	require.NotNil(t, resp)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, int32(1), closes.Load(), "the premise: the caller closed the response it was given")
+
+	//nolint:bodyclose // the open path returns a nil response -- that it has nothing to close is the assertion below.
+	resp, err = cb.Get(t.Context(), "failing", nil)
+	require.ErrorIs(t, err, ErrCircuitOpen, "the second failure must open the breaker")
+	require.Nil(t, resp, "the caller gets no response on the open path, so it cannot close one")
+
+	assert.Equal(t, int32(2), closes.Load(),
+		"the response dropped on the open path must still have been closed")
 }
