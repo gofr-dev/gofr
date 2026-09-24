@@ -791,6 +791,14 @@ jobs:
           check gofr_nosqldrivers '^(github\.com/lib/pq|modernc\.org/sqlite)($|/)'
           check gofr_nopubsub     '^(github\.com/segmentio/kafka-go|cloud\.google\.com/go/pubsub|github\.com/eclipse/paho\.mqtt\.golang)($|/)'
           check gofr_nographql    '^github\.com/graphql-go/graphql($|/)'
+          check gofr_nootlp       '^go\.opentelemetry\.io/otel/exporters/otlp($|/)'
+          check gofr_nodgraph     '^github\.com/dgraph-io/dgo($|/)'
+
+          # gofr_nogrpc is checked against the COMBINED tag set, not on its own. grpc is pinned by
+          # the OTLP exporters, the Dgraph protos and cloud.google.com/go as well as by the server,
+          # so on its own it takes 4 of 86 packages and a "still linked" assertion would fail for
+          # reasons that have nothing to do with the tag working.
+          check gofr_nogrpc,gofr_nootlp,gofr_nodgraph,gofr_nopubsub '^google\.golang\.org/grpc($|/)'
 
           go list -tags gofr_nosqldrivers,gofr_nopubsub,gofr_nographql -deps gofr.dev/pkg/gofr > /tmp/deps.slim
 
