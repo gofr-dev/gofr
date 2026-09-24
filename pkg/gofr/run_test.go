@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -182,5 +183,45 @@ func TestShutdownHelperProcess(t *testing.T) {
 		t.Log(shutdownWaited)
 	default:
 		t.Log(shutdownRaced)
+	}
+}
+
+// TestShutdownAfterFailedStartup_ReportsABadGracePeriod pins that a malformed SHUTDOWN_GRACE_PERIOD
+// is reported on the abandoned-startup path.
+//
+// An earlier revision skipped the error here, reasoning that Run's normal path already logs it. That
+// path is precisely the one an abandoned startup never reaches, so the misconfiguration was silent
+// in the only situation this function runs in -- and the operator whose grace period is a typo finds
+// out by watching a cleanup take the default instead of theirs, with nothing said.
+//
+// The default is still used: a bad grace period must not stop the cleanup, only be mentioned.
+func TestShutdownAfterFailedStartup_ReportsABadGracePeriod(t *testing.T) {
+	tests := []struct {
+		desc      string
+		period    string
+		wantEntry bool
+	}{
+		{desc: "malformed period is reported", period: "not-a-duration", wantEntry: true},
+		{desc: "valid period says nothing", period: "1s", wantEntry: false},
+		{desc: "unset period says nothing", period: "", wantEntry: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			logs := testutil.StderrOutputForFunc(func() {
+				a := New()
+				a.Config = config.NewMockConfig(map[string]string{"SHUTDOWN_GRACE_PERIOD": tc.period})
+
+				a.shutdownAfterFailedStartup()
+			})
+
+			if tc.wantEntry {
+				assert.Contains(t, logs, "invalid SHUTDOWN_GRACE_PERIOD",
+					"a grace period that does not parse must be reported on this path")
+			} else {
+				assert.NotContains(t, logs, "invalid SHUTDOWN_GRACE_PERIOD",
+					"a usable grace period must not be reported as invalid")
+			}
+		})
 	}
 }

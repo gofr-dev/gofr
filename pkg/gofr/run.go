@@ -291,10 +291,15 @@ func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
 // run context may already be canceled (that is one of the ways startup is abandoned), and a
 // shutdown that inherited it would be dead on arrival.
 func (a *App) shutdownAfterFailedStartup() {
-	// The error is ignored deliberately: getShutdownTimeoutFromConfig returns the default timeout
-	// alongside it, and a malformed SHUTDOWN_GRACE_PERIOD has already been reported by the caller
-	// that reaches Run's normal path.
-	timeout, _ := getShutdownTimeoutFromConfig(a.Config)
+	// Reported here rather than assumed to have been reported already. An earlier revision skipped
+	// it on the grounds that Run's normal path logs it -- but that is exactly the path an abandoned
+	// startup never reaches, so a malformed SHUTDOWN_GRACE_PERIOD went unmentioned in the only
+	// situation where this function runs. The default returned alongside the error is still used: a
+	// bad grace period must not stop the cleanup.
+	timeout, err := getShutdownTimeoutFromConfig(a.Config)
+	if err != nil {
+		a.Logger().Errorf("invalid SHUTDOWN_GRACE_PERIOD, using %s to shut down after a failed startup: %v", timeout, err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
