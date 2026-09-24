@@ -109,11 +109,11 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 }
 
 func (c *Client) Exec(stmt string, values ...any) error {
-	return c.ExecWithCtx(context.Background(), stmt, values)
+	return c.ExecWithCtx(context.Background(), stmt, values...)
 }
 
 func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
-	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
+	return c.ExecCASWithCtx(context.Background(), dest, stmt, values...)
 }
 
 func (c *Client) NewBatch(name string, batchType int) error {
@@ -218,7 +218,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 		return false, errUnexpectedMap
 
 	default:
-		applied, err = q.scanCAS(rv.Interface())
+		applied, err = q.scanCAS(dest)
 	}
 
 	return applied, err
