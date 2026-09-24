@@ -86,6 +86,12 @@ func Test_Params(t *testing.T) {
 	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for none-existent query param")
 }
 
+func Test_Params_ValuesWithEquals(t *testing.T) {
+	r := NewRequest([]string{"--q=x=y,z=w"})
+
+	assert.Equal(t, []string{"x=y", "z=w"}, r.Params("q"))
+}
+
 func TestNewRequest_OptionParsing(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -107,13 +113,45 @@ func TestNewRequest_OptionParsing(t *testing.T) {
 			},
 		},
 		{
-			name: "empty values, flags, and non-option arguments",
-			args: []string{"command", "--empty=", "-blank=", "--verbose", "-v", "not-an-option", ""},
+			name: "single dash option preserves trailing equals",
+			args: []string{"-a=="},
 			expectedParams: map[string]string{
-				"empty":   "",
-				"blank":   "",
+				"a": "=",
+			},
+		},
+		{
+			name: "unicode option value preserves additional equals",
+			args: []string{"--name=héllo=wörld"},
+			expectedParams: map[string]string{
+				"name": "héllo=wörld",
+			},
+		},
+		{
+			name: "empty values are supported",
+			args: []string{"--empty=", "-blank="},
+			expectedParams: map[string]string{
+				"empty": "",
+				"blank": "",
+			},
+		},
+		{
+			name: "flags are supported",
+			args: []string{"--verbose", "-v"},
+			expectedParams: map[string]string{
 				"verbose": trueString,
 				"v":       trueString,
+			},
+		},
+		{
+			name: "non-option arguments are ignored",
+			args: []string{"command", "not-an-option", ""},
+			expectedParams: map[string]string{},
+		},
+		{
+			name: "option after command argument is parsed",
+			args: []string{"command", "--env=prod"},
+			expectedParams: map[string]string{
+				"env": "prod",
 			},
 		},
 	}
