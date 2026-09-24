@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1126,6 +1127,51 @@ func TestCommonFileSystem_RetryAndConnectedState(t *testing.T) {
 
 			assert.Equal(t, tt.expRetryOff, fs.IsRetryDisabled())
 			assert.Equal(t, tt.expIsConnection, fs.IsConnected())
+		})
+	}
+}
+
+// TestCommonFileSystem_RetryState_ConcurrentAccess exercises the pattern used by the GCS/FTP/Azure
+// providers: a background retry goroutine calls Connect and polls IsConnected/IsRetryDisabled while
+// the owner calls SetDisableRetry. Under -race this fails if the flags are plain bools (#4314).
+func TestCommonFileSystem_RetryState_ConcurrentAccess(t *testing.T) {
+	tests := []struct {
+		name         string
+		disableRetry bool
+		expConnected bool
+		expRetryOff  bool
+	}{
+		{name: "retry disabled while retry goroutine connects", disableRetry: true, expConnected: true, expRetryOff: true},
+		{name: "retry re-enabled while retry goroutine connects", disableRetry: false, expConnected: true, expRetryOff: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockProvider := NewMockStorageProvider(ctrl)
+			mockProvider.EXPECT().Connect(gomock.Any()).Return(nil).MinTimes(1)
+
+			fs := &CommonFileSystem{Provider: mockProvider, Location: "test-bucket"}
+
+			var wg sync.WaitGroup
+
+			// Simulates startRetryConnect: poll the flags, then Connect.
+			wg.Go(func() {
+				_ = fs.IsConnected()
+				_ = fs.IsRetryDisabled()
+				_ = fs.Connect(t.Context())
+			})
+
+			// Simulates the owner toggling retry / reading state concurrently.
+			wg.Go(func() {
+				fs.SetDisableRetry(tt.disableRetry)
+				_ = fs.IsConnected()
+			})
+
+			wg.Wait()
+
+			assert.Equal(t, tt.expConnected, fs.IsConnected())
+			assert.Equal(t, tt.expRetryOff, fs.IsRetryDisabled())
 		})
 	}
 }
