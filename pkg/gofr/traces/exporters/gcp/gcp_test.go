@@ -415,7 +415,7 @@ func Test_buildExporter_redactsEndpointInError(t *testing.T) {
 	}
 }
 
-func Test_buildExporter_warnsOnIgnoreListedQuotaHeader(t *testing.T) {
+func Test_buildExporter_warnsOnUnhonoredQuotaHeader(t *testing.T) {
 	writeADC(t)
 
 	cfg := exporters.Config{
@@ -505,11 +505,10 @@ func Test_cachingDetector_Detect_addsProjectID(t *testing.T) {
 	writeADC(t)
 	t.Setenv(projectEnv, "env-project")
 
-	d := &cachingDetector{adc: resolvedADC("")}
+	d := &cachingDetector{adc: resolvedADC(""), platform: offGCEDetector{}}
 
-	// Off Google Cloud the platform detector fails; the resource it produces must
-	// still carry the project, and the error must still surface so the SDK can
-	// report a partial resource.
+	// Off Google Cloud the platform detector resolves nothing; the resource Detect
+	// produces must still carry the project on its own.
 	res, _ := d.Detect(t.Context())
 
 	if got := resolvedProject(res); got != "env-project" {
@@ -522,6 +521,20 @@ func Test_cachingDetector_Detect_addsProjectID(t *testing.T) {
 		t.Error("expected Detect to cache its result")
 	}
 }
+
+// offGCEDetector stands in for the real platform detector off Google Cloud, where
+// metadata.OnGCE() is false and Detect returns (nil, nil) without touching the
+// network (contrib/detectors/gcp@v1.46.0 detector.go:36-37).
+//
+// Injecting it is not only about speed. The real detector calls metadata.OnGCE(),
+// whose answer is memoized for the life of the process
+// (compute/metadata@v0.9.0 metadata.go:118,134), and a cached "false" makes every
+// later FindDefaultCredentials in the binary fail before it reaches the metadata
+// server -- which is what left Test_adc_get_isBoundedByTheStartupDeadline passing
+// in 0.00s against a deadline it never exercised.
+type offGCEDetector struct{}
+
+func (offGCEDetector) Detect(context.Context) (*resource.Resource, error) { return nil, nil }
 
 // hangingDetector stands in for the real platform detector under a metadata
 // server that accepts the connection and never replies. It ignores its context
@@ -650,8 +663,16 @@ func Test_adc_get_isBoundedByTheStartupDeadline(t *testing.T) {
 		t.Errorf("adc.get blocked for %s; the startup deadline did not bound it", elapsed)
 	}
 
-	if err == nil {
-		t.Fatal("expected an error from a metadata server that never replies")
+	// errMetadataTimeout specifically, not merely a non-nil error. FindDefaultCredentials
+	// reaches the metadata server only when metadata.OnGCE() says it is worth trying,
+	// and that answer is memoized for the life of the process
+	// (compute/metadata@v0.9.0 metadata.go:118,134). Anything that resolves it before
+	// this test runs caches a "false" that makes the lookup fail instantly on
+	// "could not find default credentials" -- which a bare err != nil accepts, leaving
+	// the deadline under test never exercised. Naming the sentinel is what makes that
+	// regression loud instead of silent; the sibling detector test already does it.
+	if !errors.Is(err, errMetadataTimeout) {
+		t.Fatalf("expected errMetadataTimeout from a metadata server that never replies, got %v", err)
 	}
 }
 
