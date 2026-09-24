@@ -3,10 +3,14 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,10 +76,13 @@ func Test_buildReader(t *testing.T) {
 		name         string
 		cfg          exporters.Config
 		wantTemporal bool
+		wantInterval bool
 	}{
-		{"cumulative default endpoint", exporters.Config{Interval: time.Second}, false},
-		{"explicit endpoint", exporters.Config{Endpoint: defaultEndpoint, Interval: time.Second}, false},
-		{"delta preference warns and is ignored", exporters.Config{Interval: time.Second, Temporality: "delta"}, true},
+		{"cumulative default endpoint", exporters.Config{Interval: 30 * time.Second}, false, false},
+		{"explicit endpoint", exporters.Config{Endpoint: defaultEndpoint, Interval: 30 * time.Second}, false, false},
+		{"delta preference warns and is ignored",
+			exporters.Config{Interval: 30 * time.Second, Temporality: "delta"}, true, false},
+		{"interval under the per-series minimum warns", exporters.Config{Interval: time.Second}, false, true},
 	}
 
 	for _, tc := range tests {
@@ -93,6 +100,10 @@ func Test_buildReader(t *testing.T) {
 
 			if got := l.warnedAbout("METRICS_TEMPORALITY"); got != tc.wantTemporal {
 				t.Errorf("temporality warning = %v, want %v", got, tc.wantTemporal)
+			}
+
+			if got := l.warnedAbout("METRICS_EXPORT_INTERVAL"); got != tc.wantInterval {
+				t.Errorf("interval warning = %v, want %v, got: %v", got, tc.wantInterval, l.warnings)
 			}
 
 			if l.warnedAbout("location") {
@@ -149,6 +160,42 @@ func Test_buildReader_warnsOnQuotaProjectHeader(t *testing.T) {
 
 	if !l.warnedAbout("GOOGLE_CLOUD_QUOTA_PROJECT") {
 		t.Errorf("expected a quota-project warning, got: %v", l.warnings)
+	}
+}
+
+func Test_exportInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       time.Duration
+		want     time.Duration
+		wantWarn bool
+	}{
+		// Zero means "SDK default"; it is not a request for a sub-minimum interval.
+		{"unset passes through", 0, 0, false},
+		{"under the minimum is raised", time.Second, minExportInterval, true},
+		{"just under the minimum is raised", minExportInterval - time.Millisecond, minExportInterval, true},
+		{"exactly the minimum is kept", minExportInterval, minExportInterval, false},
+		{"above the minimum is kept", 30 * time.Second, 30 * time.Second, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l := &testLogger{}
+
+			if got := exportInterval(tc.in, l); got != tc.want {
+				t.Errorf("exportInterval(%s) = %s, want %s", tc.in, got, tc.want)
+			}
+
+			if got := len(l.warnings) > 0; got != tc.wantWarn {
+				t.Errorf("warned = %v, want %v, got: %v", got, tc.wantWarn, l.warnings)
+			}
+
+			// The warning must name both knobs that set the interval, so an
+			// operator can find whichever one they used.
+			if tc.wantWarn && (!l.warnedAbout("METRICS_EXPORT_INTERVAL") || !l.warnedAbout("OTEL_METRIC_EXPORT_INTERVAL")) {
+				t.Errorf("warning should name both interval env vars, got: %v", l.warnings)
+			}
+		})
 	}
 }
 
@@ -252,5 +299,86 @@ func Test_buildReader_warnsWhenInstanceUnresolvable(t *testing.T) {
 
 	if l.warnedAbout("no location could be resolved") {
 		t.Errorf("location was set; it must not warn, got: %v", l.warnings)
+	}
+}
+
+func Test_buildReader_credentialsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		adcPath string
+		wantErr string
+	}{
+		{
+			name:    "credentials file does not exist",
+			adcPath: filepath.Join(t.TempDir(), "missing.json"),
+			wantErr: "gcp metrics: resolving application default credentials",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", tc.adcPath)
+			t.Setenv(otelResourceAttrsEnv, "location=us-central1,service.instance.id=test")
+
+			cfg := exporters.Config{Interval: time.Second}
+
+			r, err := buildReader(t.Context(), &cfg, &testLogger{})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("buildReader() error = %v, want error containing %q", err, tc.wantErr)
+			}
+
+			if r != nil {
+				t.Errorf("expected nil reader on error, got %v", r)
+			}
+		})
+	}
+}
+
+// The detector talks to the metadata server; pointing GCE_METADATA_HOST at an
+// in-process server keeps the test off the network and lets it count round trips.
+func Test_cachingDetector_detectsOnce(t *testing.T) {
+	tests := []struct {
+		name  string
+		calls int
+	}{
+		{"repeated Detect calls reuse the first result", 3},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.Header().Set("Metadata-Flavor", "Google")
+				_, _ = w.Write([]byte("test-value"))
+			}))
+			defer srv.Close()
+
+			// metadata.OnGCE caches its answer once per process (sync.Once). This test relies on no earlier
+			// test in this package probing OnGCE without GCE_METADATA_HOST set; a cached "false" would make
+			// Detect skip the fake server. New tests that reach the metadata client must account for this.
+			t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(srv.URL, "http://"))
+
+			d := &cachingDetector{}
+
+			firstRes, firstErr := d.Detect(t.Context())
+			afterFirst := requests.Load()
+
+			if afterFirst == 0 {
+				t.Fatal("expected the first Detect to query the metadata server")
+			}
+
+			for i := 1; i < tc.calls; i++ {
+				res, err := d.Detect(t.Context())
+				if res != firstRes || !errors.Is(err, firstErr) {
+					t.Errorf("Detect call %d = (%v, %v), want cached (%v, %v)", i+1, res, err, firstRes, firstErr)
+				}
+			}
+
+			if got := requests.Load(); got != afterFirst {
+				t.Errorf("metadata requests after %d calls = %d, want %d", tc.calls, got, afterFirst)
+			}
+		})
 	}
 }

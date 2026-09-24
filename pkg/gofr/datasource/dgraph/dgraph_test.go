@@ -3,12 +3,14 @@ package dgraph
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -382,4 +384,142 @@ func Test_DropField_Error(t *testing.T) {
 	err := client.DropField(context.Background(), fieldName)
 
 	require.ErrorIs(t, err, errAlterFailed, "Test_DropField_Error Failed!")
+}
+
+// fakeDgraphServer is an in-process Dgraph gRPC server whose Query answers the
+// connection health check.
+type fakeDgraphServer struct {
+	api.UnimplementedDgraphServer
+}
+
+func (*fakeDgraphServer) Query(context.Context, *api.Request) (*api.Response, error) {
+	return &api.Response{Json: []byte(`{"health":[]}`)}, nil
+}
+
+// startFakeDgraphServer serves fakeDgraphServer on a loopback listener and returns
+// its host and port.
+func startFakeDgraphServer(t *testing.T) (host, port string) {
+	t.Helper()
+
+	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	srv := grpc.NewServer()
+	api.RegisterDgraphServer(srv, &fakeDgraphServer{})
+
+	go func() { _ = srv.Serve(lis) }()
+
+	t.Cleanup(srv.Stop)
+
+	host, port, err = net.SplitHostPort(lis.Addr().String())
+	require.NoError(t, err)
+
+	return host, port
+}
+
+func TestClient_Connect(t *testing.T) {
+	host, port := startFakeDgraphServer(t)
+
+	tests := []struct {
+		desc       string
+		config     Config
+		setupMocks func(l *MockLogger, m *MockMetrics)
+		expClient  bool
+	}{
+		{
+			desc:   "invalid address fails client creation",
+			config: Config{Host: "bad\x00host", Port: "9080"},
+			setupMocks: func(l *MockLogger, _ *MockMetrics) {
+				l.EXPECT().Debugf("connecting to Dgraph at %v", "bad\x00host:9080")
+				l.EXPECT().Errorf("error while connecting to Dgraph, err: %v", gomock.Any())
+			},
+			expClient: false,
+		},
+		{
+			desc:   "healthy server connects",
+			config: Config{Host: host, Port: port},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				l.EXPECT().Debugf("connecting to Dgraph at %v", host+":"+port)
+				m.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
+				l.EXPECT().Logf("connected to Dgraph server at %v:%v", host, port)
+			},
+			expClient: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			tc.setupMocks(mockLogger, mockMetrics)
+
+			client := New(tc.config)
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+
+			client.Connect()
+
+			require.Equal(t, tc.expClient, client.client != nil)
+		})
+	}
+}
+
+func TestClient_HealthCheck(t *testing.T) {
+	tests := []struct {
+		desc      string
+		resp      *api.Response
+		queryErr  error
+		expLog    func(m *MockLogger)
+		expStatus any
+		expErr    error
+	}{
+		{desc: "healthy", resp: &api.Response{Json: []byte(`{"health":[]}`)}, expLog: func(*MockLogger) {}, expStatus: "UP"},
+		{
+			desc: "query error", resp: nil, queryErr: errQueryFailed,
+			expLog:    func(m *MockLogger) { m.EXPECT().Error("dgraph health check failed: ", errQueryFailed) },
+			expStatus: "DOWN", expErr: errHealthCheckFailed,
+		},
+		{
+			// Only assert that a failure is logged; the log content on this path is not part of the contract.
+			desc: "empty response", resp: &api.Response{},
+			expLog:    func(m *MockLogger) { m.EXPECT().Error(gomock.Any()) },
+			expStatus: "DOWN", expErr: errHealthCheckFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDgraphClient, mockLogger, _ := setupDB(t)
+
+			mockTxn := NewMockTxn(mockDgraphClient.ctrl)
+			mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
+			mockTxn.EXPECT().Query(gomock.Any(), gomock.Any()).Return(tc.resp, tc.queryErr)
+			tc.expLog(mockLogger)
+
+			status, err := client.HealthCheck(t.Context())
+
+			require.ErrorIs(t, err, tc.expErr)
+			require.Equal(t, tc.expStatus, status)
+		})
+	}
+}
+
+func Test_mutationToString(t *testing.T) {
+	tests := []struct {
+		desc     string
+		mutation *api.Mutation
+		expected string
+	}{
+		{desc: "valid json is compacted", mutation: &api.Mutation{SetJson: []byte("{\n  \"name\": \"gofr\"\n}")}, expected: `{"name":"gofr"}`},
+		{desc: "invalid json", mutation: &api.Mutation{SetJson: []byte("{bad")}, expected: ""},
+		{desc: "no set json", mutation: &api.Mutation{}, expected: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.expected, mutationToString(tc.mutation))
+		})
+	}
 }
