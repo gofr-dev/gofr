@@ -86,6 +86,44 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	}
 }
 
+func TestContainer_googlePubSubInt(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	testCases := []struct {
+		desc     string
+		configs  map[string]string
+		key      string
+		expected int
+	}{
+		{
+			desc:     "valid value is parsed",
+			configs:  map[string]string{"GOOGLE_MAX_OUTSTANDING_MESSAGES": "100"},
+			key:      "GOOGLE_MAX_OUTSTANDING_MESSAGES",
+			expected: 100,
+		},
+		{
+			desc:     "unset falls back to 0 (SDK default)",
+			configs:  map[string]string{},
+			key:      "GOOGLE_MAX_OUTSTANDING_MESSAGES",
+			expected: 0,
+		},
+		{
+			desc:     "invalid value falls back to 0 (SDK default)",
+			configs:  map[string]string{"GOOGLE_NUM_GOROUTINES": "not-a-number"},
+			key:      "GOOGLE_NUM_GOROUTINES",
+			expected: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := c.googlePubSubInt(config.NewMockConfig(tc.configs), tc.key)
+
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
 func TestContainer_MQTTInitialization_Default(t *testing.T) {
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",

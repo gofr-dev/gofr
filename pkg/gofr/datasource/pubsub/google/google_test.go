@@ -1719,3 +1719,76 @@ func TestGoogleClient_InjectedServerErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestGoogleClient_applyReceiveSettings(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      Config
+		expMsgs  int
+		expBytes int
+		expGoros int
+	}{
+		{
+			name:     "overrides every field when set",
+			cfg:      Config{MaxOutstandingMessages: 100, MaxOutstandingBytes: 5000, NumGoroutines: 3},
+			expMsgs:  100,
+			expBytes: 5000,
+			expGoros: 3,
+		},
+		{
+			name:     "keeps SDK defaults when unset",
+			cfg:      Config{},
+			expMsgs:  gcPubSub.DefaultReceiveSettings.MaxOutstandingMessages,
+			expBytes: gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes,
+			expGoros: gcPubSub.DefaultReceiveSettings.NumGoroutines,
+		},
+		{
+			name:     "overrides only the fields that are set",
+			cfg:      Config{MaxOutstandingMessages: 50},
+			expMsgs:  50,
+			expBytes: gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes,
+			expGoros: gcPubSub.DefaultReceiveSettings.NumGoroutines,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &googleClient{Config: tc.cfg}
+			sub := &gcPubSub.Subscription{ReceiveSettings: gcPubSub.DefaultReceiveSettings}
+
+			g.applyReceiveSettings(sub)
+
+			assert.Equal(t, tc.expMsgs, sub.ReceiveSettings.MaxOutstandingMessages)
+			assert.Equal(t, tc.expBytes, sub.ReceiveSettings.MaxOutstandingBytes)
+			assert.Equal(t, tc.expGoros, sub.ReceiveSettings.NumGoroutines)
+		})
+	}
+}
+
+func TestGoogleClient_getSubscription_AppliesReceiveSettings(t *testing.T) {
+	client := getGoogleClient(t)
+
+	defer client.Close()
+
+	g := &googleClient{
+		client: client,
+		logger: logging.NewMockLogger(logging.DEBUG),
+		Config: Config{
+			ProjectID:              "test",
+			SubscriptionName:       "sub",
+			MaxOutstandingMessages: 100,
+			MaxOutstandingBytes:    5000,
+			NumGoroutines:          3,
+		},
+	}
+
+	topic, err := client.CreateTopic(t.Context(), "flow-control-topic")
+	require.NoError(t, err)
+
+	sub, err := g.getSubscription(t.Context(), topic)
+	require.NoError(t, err)
+
+	assert.Equal(t, 100, sub.ReceiveSettings.MaxOutstandingMessages)
+	assert.Equal(t, 5000, sub.ReceiveSettings.MaxOutstandingBytes)
+	assert.Equal(t, 3, sub.ReceiveSettings.NumGoroutines)
+}

@@ -560,9 +560,25 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 
 func (c *Container) createGooglePubSub(conf config.Config) {
 	c.PubSub = google.New(google.Config{
-		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		ProjectID:              conf.Get("GOOGLE_PROJECT_ID"),
+		SubscriptionName:       conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		MaxOutstandingMessages: c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_MESSAGES"),
+		MaxOutstandingBytes:    c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_BYTES"),
+		NumGoroutines:          c.googlePubSubInt(conf, "GOOGLE_NUM_GOROUTINES"),
 	}, c.Logger, c.metricsManager)
+}
+
+// googlePubSubInt reads an optional integer Google Pub/Sub flow-control setting. An unset or
+// invalid value returns 0, which the client treats as "use the Google Pub/Sub SDK default".
+func (c *Container) googlePubSubInt(conf config.Config, key string) int {
+	val, err := strconv.Atoi(conf.GetOrDefault(key, "0"))
+	if err != nil {
+		c.Logger.Errorf("invalid value for %s, using Google Pub/Sub SDK default", key)
+
+		return 0
+	}
+
+	return val
 }
 
 func (c *Container) createRedisPubSub(conf config.Config) {

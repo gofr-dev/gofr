@@ -31,6 +31,14 @@ const (
 type Config struct {
 	ProjectID        string
 	SubscriptionName string
+
+	// Pull flow control for the subscriber. Each field is optional; a zero value keeps the
+	// Google Pub/Sub SDK default (MaxOutstandingMessages=1000, MaxOutstandingBytes=1e9,
+	// NumGoroutines=10). NumGoroutines is the number of StreamingPull streams, not the handler
+	// concurrency.
+	MaxOutstandingMessages int
+	MaxOutstandingBytes    int
+	NumGoroutines          int
 }
 
 type googleClient struct {
@@ -367,7 +375,25 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		}
 	}
 
+	g.applyReceiveSettings(subscription)
+
 	return subscription, nil
+}
+
+// applyReceiveSettings overrides the subscription's pull flow control with any values set in the
+// Config. A zero value is left untouched, so the Google Pub/Sub SDK default continues to apply.
+func (g *googleClient) applyReceiveSettings(subscription *gcPubSub.Subscription) {
+	if g.MaxOutstandingMessages != 0 {
+		subscription.ReceiveSettings.MaxOutstandingMessages = g.MaxOutstandingMessages
+	}
+
+	if g.MaxOutstandingBytes != 0 {
+		subscription.ReceiveSettings.MaxOutstandingBytes = g.MaxOutstandingBytes
+	}
+
+	if g.NumGoroutines != 0 {
+		subscription.ReceiveSettings.NumGoroutines = g.NumGoroutines
+	}
 }
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
