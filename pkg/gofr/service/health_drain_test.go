@@ -77,7 +77,7 @@ func TestHealthCheck_ReusesConnection(t *testing.T) {
 			desc:   "default alive endpoint, non-200 is DOWN",
 			status: http.StatusServiceUnavailable,
 			body:   `{"error":{"message":"unavailable"}}`,
-			want:   &Health{Status: serviceDown, Details: map[string]any{"error": "service down"}},
+			want:   &Health{Status: serviceDown, Details: map[string]any{"error": serviceDownReason}},
 		},
 		{
 			desc:    "custom health endpoint, UP",
