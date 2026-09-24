@@ -2,20 +2,26 @@ package gofr
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/zipkin" //nolint:staticcheck // deprecated but kept for backward compatibility
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/traces/exporters"
 )
+
+// The gofr exporter stays in this package rather than moving to
+// traces/exporters: gofr.NewExporter is exported API, and moving it would be a
+// breaking change. Registering it here keeps the registry the single lookup
+// path without an import cycle — traces/exporters imports nothing from pkg/gofr.
+//
+//nolint:gochecknoinits // self-registration mirrors the built-in exporters.
+func init() {
+	exporters.Register(gofrTraceExporter, buildGoFrExporter)
+}
 
 func (a *App) initTracer() {
 	// Install GoFr's default W3C TraceContext + Baggage propagator only if
@@ -33,77 +39,99 @@ func (a *App) initTracer() {
 		)
 	}
 
-	otel.SetErrorHandler(&otelErrorHandler{
-		logger: a.container.Logger,
-	})
-
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
+
+	// The handler is given the endpoint so it can redact it: the SDK reports a
+	// failed export as `request to <TRACER_URL> failed: …`, at runtime rather
+	// than at startup, and would otherwise put a credential in the log on every
+	// batch a collector rejects.
+	otel.SetErrorHandler(&otelErrorHandler{
+		logger:   a.container.Logger,
+		endpoint: tracerURL,
+	})
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
-		// No exporter configured — install a minimal SDK provider with
-		// NeverSample. Spans get a valid TraceID/SpanID so X-Correlation-ID
-		// and the trace_id log field stay unique per request, but the SDK
-		// short-circuits at the sampler: no attributes/events stored, no
-		// batch processor, no exporter. A previous attempt to install a
-		// pure noop provider here zeroed out correlation IDs across every
-		// request on the default (no-exporter) deployment.
-		tp := sdktrace.NewTracerProvider(
-			sdktrace.WithSampler(sdktrace.NeverSample()),
-		)
-		otel.SetTracerProvider(tp)
-
-		return
+	cfg := exporters.Config{
+		AppName:  a.container.GetAppName(),
+		Endpoint: tracerURL,
+		Host:     tracerHost,
+		Port:     tracerPort,
+		Headers:  a.getTracerHeaders(),
+		Ratio:    a.tracerRatio(),
 	}
 
-	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
-	if err != nil {
-		a.container.Error(err)
+	// An empty Exporter is what makes Build install the NeverSample provider, so
+	// an invalid configuration reaches the same place as no configuration at all.
+	if isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
+		cfg.Exporter = traceExporter
+		cfg.Insecure, cfg.InsecureSet = a.tracerInsecure()
 	}
 
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(a.container.GetAppName()),
-		)),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
-	)
+	shutdown, tp := exporters.Build(context.Background(), &cfg, a.Logger())
+
+	a.shutdownTracer = shutdown
+
 	otel.SetTracerProvider(tp)
-
-	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
-	if err != nil {
-		a.container.Error(err)
-	}
-
-	batcher := sdktrace.NewBatchSpanProcessor(exporter)
-	tp.RegisterSpanProcessor(batcher)
 }
 
-func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
-	if url == "" && name == "" {
+// shutdownTraces flushes the pending span batch and shuts the TracerProvider
+// down. It is safe to call when tracing was never initialized, and idempotent
+// (see exporters.Build). Without it the final batch is dropped, which is routine
+// for a container scaling to zero.
+func (a *App) shutdownTraces(ctx context.Context) error {
+	if a.shutdownTracer == nil {
+		return nil
+	}
+
+	return a.shutdownTracer(ctx)
+}
+
+// tracerRatio resolves TRACER_RATIO, the head-based sampling ratio.
+//
+// An unparsable value falls back to 1 (sample everything), matching the
+// documented default of the config itself. The alternative — treating a typo as
+// 0 — silently disables tracing on the deployment that most needs it, and the
+// operator sees the same effect as a working exporter with no traffic. Over-
+// sampling is visible and costs money; under-sampling is invisible. The error is
+// logged naming both the rejected value and the ratio actually applied, so the
+// volume jump is attributable.
+func (a *App) tracerRatio() float64 {
+	value := a.Config.GetOrDefault("TRACER_RATIO", "1")
+
+	ratio, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		a.container.Errorf("invalid TRACER_RATIO %q: %v; falling back to 1 (sampling every trace)", value, err)
+
+		return 1
+	}
+
+	return ratio
+}
+
+func isValidConfig(logger logging.Logger, name, endpoint, host, port string) bool {
+	if endpoint == "" && name == "" {
 		logger.Debug("tracing is disabled, as configs are not provided")
 		return false
 	}
 
-	if url != "" && name == "" {
+	if endpoint != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
 	}
 
-	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
-	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
-		if host != "" && port != "" {
-			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-		} else {
-			logger.Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
-			return false
-		}
+	if endpoint == "" && name != "" && !strings.EqualFold(name, gofrTraceExporter) && host != "" && port != "" {
+		logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 	}
 
+	// Whether a missing TRACER_URL is fatal is the exporter's own question, not
+	// this function's: otlp and zipkin have no sane default target and say so
+	// (exporters.ErrMissingEndpoint), while gofr and gcp resolve their own. The
+	// check used to live here and rejected every exporter that defaults an
+	// endpoint before its builder was ever consulted.
 	return true
 }
 
@@ -161,7 +189,7 @@ func (a *App) getTracerHeaders() map[string]string {
 // the scheme and warns when the flag was set and therefore ignored.
 //
 // It defaults to true (plaintext), unlike METRICS_INSECURE, which defaults to
-// false. See resolveOtlpTransport for why the two diverge.
+// false. See exporters.resolveOtlpTransport for why the two diverge.
 func (a *App) tracerInsecure() (insecure, set bool) {
 	v := strings.TrimSpace(a.Config.Get("TRACER_INSECURE"))
 	if v == "" {
@@ -170,8 +198,10 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		a.Logger().Warnf("invalid TRACER_INSECURE %q: expected a boolean; defaulting to plaintext for a "+
-			"schemeless TRACER_URL", v)
+		// The raw value is not echoed. Tracer config reaches a log only through
+		// exporters.RedactURL, redactExporterName or as a matched constant.
+		a.Logger().Warn("invalid TRACER_INSECURE: expected true or false; defaulting to plaintext for a " +
+			"schemeless TRACER_URL")
 
 		return true, false
 	}
@@ -179,165 +209,25 @@ func (a *App) tracerInsecure() (insecure, set bool) {
 	return b, true
 }
 
-func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
-	var (
-		exporter sdktrace.SpanExporter
-		err      error
-	)
-
-	headers := a.getTracerHeaders()
-
-	switch strings.ToLower(name) {
-	case "otlp", "jaeger":
-		// Resolved inside the case, not above the switch: TRACER_INSECURE means
-		// nothing to zipkin or gofr, and evaluating it for them would warn about a
-		// malformed value under an exporter that never reads it.
-		insecure, insecureSet := a.tracerInsecure()
-
-		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers, insecure, insecureSet)
-	case "zipkin":
-		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
-			"Zipkin supports OTLP natively (v2.24+) — to migrate, switch to TRACE_EXPORTER=otlp " +
-			"and point TRACER_URL to your Zipkin OTLP gRPC endpoint (default: <host>:4317)")
-
-		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, headers)
-	case gofrTraceExporter:
-		exporter = buildGoFrExporter(a.Logger(), url)
-	default:
-		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
+// buildGoFrExporter ships spans to GoFr's hosted tracer. It stays here rather
+// than in traces/exporters because NewExporter is exported API of this package.
+func buildGoFrExporter(_ context.Context, cfg *exporters.Config, logger exporters.Logger) (sdktrace.SpanExporter, error) {
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	return exporter, err
-}
+	logger.Infof("Exporting traces to GoFr at %s", exporters.RedactURL(endpoint))
 
-// otlpTransport is the resolved transport-security decision for the OTLP trace
-// exporter: which endpoint option to use, whether to apply WithInsecure, and
-// whether the resulting connection carries traffic in the clear.
-type otlpTransport struct {
-	// useEndpointURL selects WithEndpointURL (the endpoint carries a scheme)
-	// over WithEndpoint. The two are never combined.
-	useEndpointURL bool
-
-	// insecure applies WithInsecure(). Only ever true for a schemeless endpoint —
-	// WithEndpointURL derives transport security from the scheme itself.
-	insecure bool
-
-	// plaintext reports whether spans will leave the process unencrypted,
-	// regardless of which option expressed it.
-	plaintext bool
-}
-
-// resolveOtlpTransport derives transport security from the TRACER_URL scheme
-// when it has one, and from TRACER_INSECURE only when it does not.
-//
-// Before this change the exporter passed the raw TRACER_URL to WithEndpoint,
-// which stores it verbatim as the gRPC target. A scheme-bearing value is not a
-// valid target ("too many colons in address"), so the dialer never opened a
-// socket and no span was ever exported — the endpoint was unusable rather than
-// downgraded.
-//
-// WithEndpointURL is what reads the scheme, and it must never be paired with
-// WithInsecure(): the SDK applies options in slice order, so a WithInsecure()
-// appended afterwards would override the scheme and downgrade the connection to
-// plaintext. Hence the two are mutually exclusive below.
-//
-// Precedence: the SDK applies OTEL_EXPORTER_OTLP_INSECURE (and
-// OTEL_EXPORTER_OTLP_TRACES_INSECURE) before any explicit option, so whatever
-// GoFr passes here wins over them. TRACER_URL's scheme, then TRACER_INSECURE,
-// then the OTel standard variables.
-//
-// Deliberate divergence from the metrics exporter (metrics/exporters/otlp.go),
-// which defaults a schemeless METRICS_URL to TLS: every TRACER_URL=host:4317
-// deployment in the wild points at a plaintext collector today, because this
-// exporter hardcoded WithInsecure(). Defaulting a schemeless endpoint to TLS
-// would break all of them silently in a minor release, so traces default a
-// schemeless endpoint to plaintext and TRACER_INSECURE=false is the opt-in.
-func resolveOtlpTransport(logger logging.Logger, url string, insecure, insecureSet bool) otlpTransport {
-	const (
-		schemeHTTP  = "http://"
-		schemeHTTPS = "https://"
-	)
-
-	// Scheme comparison is case-insensitive per RFC 3986 §3.1, and url.Parse
-	// inside WithEndpointURL treats it that way — so HTTPS://host:4317 must not
-	// fall through to WithEndpoint, where it would be an invalid gRPC target.
-	scheme := strings.ToLower(url)
-
-	if strings.HasPrefix(scheme, schemeHTTP) || strings.HasPrefix(scheme, schemeHTTPS) {
-		if insecureSet {
-			logger.Warnf("TRACER_INSECURE is ignored for TRACER_URL=%q: transport security is derived "+
-				"from the URL scheme", url)
-		}
-
-		return otlpTransport{useEndpointURL: true, plaintext: strings.HasPrefix(scheme, schemeHTTP)}
-	}
-
-	return otlpTransport{insecure: insecure, plaintext: insecure}
-}
-
-// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
-// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func buildOtlpExporter(logger logging.Logger, name, url, host, port string, headers map[string]string,
-	insecure, insecureSet bool) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
-	}
-
-	transport := resolveOtlpTransport(logger, url, insecure, insecureSet)
-
-	if transport.plaintext && len(headers) > 0 {
-		logger.Warnf("traces are exported to %s over plaintext with headers configured: "+
-			"headers (including auth credentials) will be sent in the clear", url)
-	}
-
-	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
-
-	var opts []otlptracegrpc.Option
-
-	if transport.useEndpointURL {
-		opts = append(opts, otlptracegrpc.WithEndpointURL(url))
-	} else {
-		opts = append(opts, otlptracegrpc.WithEndpoint(url))
-
-		if transport.insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
-	}
-
-	if len(headers) > 0 {
-		opts = append(opts, otlptracegrpc.WithHeaders(headers))
-	}
-
-	return otlptracegrpc.New(context.Background(), opts...)
-}
-
-func buildZipkinExporter(logger logging.Logger, url, host, port string, headers map[string]string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
-	}
-
-	logger.Infof("Exporting traces to zipkin at %s", url)
-
-	var opts []zipkin.Option
-	if len(headers) > 0 {
-		opts = append(opts, zipkin.WithHeaders(headers))
-	}
-
-	return zipkin.New(url, opts...)
-}
-
-func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter {
-	if url == "" {
-		url = "https://tracer-api.gofr.dev/api/spans"
-	}
-
-	logger.Infof("Exporting traces to GoFr at %s", url)
-
-	return NewExporter(url, logging.NewLogger(logging.INFO))
+	return NewExporter(endpoint, logging.NewLogger(logging.INFO)), nil
 }
 
 type otelErrorHandler struct {
 	logger logging.Logger
+
+	// endpoint is the configured TRACER_URL, kept so it can be redacted out of
+	// the SDK's own messages, which quote it verbatim.
+	endpoint string
 }
 
 func (o *otelErrorHandler) Handle(e error) {
@@ -352,5 +242,5 @@ func (o *otelErrorHandler) Handle(e error) {
 		return
 	}
 
-	o.logger.Error(msg)
+	o.logger.Error(exporters.RedactMessage(msg, o.endpoint))
 }

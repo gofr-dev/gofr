@@ -75,6 +75,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 	r := gofrHTTP.NewRouter()
 
 	logRouterChoice(c.Logger, r)
+	r.UseLogger(c.Logger)
 
 	wsManager := websocket.New()
 
@@ -82,7 +83,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 		middleware.Tracer,
 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics()),
+		middleware.Metrics(c.Metrics(), middleware.WithCardinalityLimit(middlewareConfigs.MetricsCardinalityLimit)),
 	)
 
 	return &httpServer{

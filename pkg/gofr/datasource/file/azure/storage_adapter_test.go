@@ -12,14 +12,23 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/directory"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/share"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
-var errTest = errors.New("test error")
+var (
+	errTest                  = errors.New("test error")
+	errDirAlreadyExists      = errors.New("directory already exists")
+	errShareAlreadyExists    = errors.New("ShareAlreadyExists")
+	errResourceAlreadyExists = errors.New("ResourceAlreadyExists")
+)
 
 // TestStorageAdapter_Connect tests the Connect method with table-driven tests.
 func TestStorageAdapter_Connect(t *testing.T) {
@@ -2482,4 +2491,294 @@ func TestStorageAdapter_DeleteObject_RootDirectory(t *testing.T) {
 
 	err = adapter.DeleteObject(context.Background(), "/")
 	require.NoError(t, err)
+}
+
+// shareHandler responds to share GetProperties requests with the given status and 404s everything else.
+func shareHandler(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.Contains(r.URL.RawQuery, "restype=share") {
+			w.WriteHeader(status)
+
+			return
+		}
+
+		http.NotFound(w, r)
+	}
+}
+
+func TestStorageAdapter_Connect_ShareValidationSuccess(t *testing.T) {
+	srv := httptest.NewServer(shareHandler(http.StatusOK))
+	defer srv.Close()
+
+	adapter := &storageAdapter{
+		cfg: &Config{
+			AccountName: "testaccount",
+			AccountKey:  "dGVzdGtleQ==",
+			ShareName:   "testshare",
+			Endpoint:    srv.URL,
+		},
+	}
+
+	require.NoError(t, adapter.Connect(t.Context()))
+	assert.NotNil(t, adapter.shareClient)
+}
+
+func TestStorageAdapter_Connect_ShareValidationErrors(t *testing.T) {
+	okSrv := httptest.NewServer(shareHandler(http.StatusOK))
+	defer okSrv.Close()
+
+	forbiddenSrv := httptest.NewServer(shareHandler(http.StatusForbidden))
+	defer forbiddenSrv.Close()
+
+	expiredCtx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	tests := []struct {
+		name      string
+		endpoint  string
+		ctx       context.Context
+		expErrMsg string
+	}{
+		{
+			name:      "share validation fails",
+			endpoint:  forbiddenSrv.URL,
+			ctx:       t.Context(),
+			expErrMsg: "share validation failed",
+		},
+		{
+			name:      "share validation times out",
+			endpoint:  okSrv.URL,
+			ctx:       expiredCtx,
+			expErrMsg: "share validation failed: connection timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := &storageAdapter{
+				cfg: &Config{
+					AccountName: "testaccount",
+					AccountKey:  "dGVzdGtleQ==",
+					ShareName:   "testshare",
+					Endpoint:    tt.endpoint,
+				},
+			}
+
+			err := adapter.Connect(tt.ctx)
+
+			require.ErrorContains(t, err, tt.expErrMsg)
+			assert.Nil(t, adapter.shareClient)
+		})
+	}
+}
+
+// newPlainShareClient creates a share client for a plain HTTP httptest server.
+func newPlainShareClient(t *testing.T, serverURL string) *share.Client {
+	t.Helper()
+
+	cred, err := share.NewSharedKeyCredential("testaccount", "dGVzdGtleQ==")
+	require.NoError(t, err)
+
+	client, err := share.NewClientWithSharedKeyCredential(serverURL+"/testshare", cred, nil)
+	require.NoError(t, err)
+
+	return client
+}
+
+// statusHandler responds to every request with the given status and optional Azure error code.
+func statusHandler(status int, errorCode string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		if errorCode != "" {
+			w.Header().Set("x-ms-error-code", errorCode)
+		}
+
+		w.WriteHeader(status)
+	}
+}
+
+func TestStorageAdapter_ServerErrors(t *testing.T) {
+	srv := httptest.NewServer(statusHandler(http.StatusForbidden, "AuthorizationFailure"))
+	defer srv.Close()
+
+	adapter := &storageAdapter{cfg: &Config{ShareName: "testshare"}, shareClient: newPlainShareClient(t, srv.URL)}
+
+	tests := []struct {
+		name   string
+		call   func() error
+		expMsg string
+	}{
+		{
+			name:   "health check fails",
+			call:   func() error { return adapter.Health(t.Context()) },
+			expMsg: "azure health check failed",
+		},
+		{
+			name: "reader download fails",
+			call: func() error {
+				_, err := adapter.NewReader(t.Context(), "dir/file.txt")
+				return err
+			},
+			expMsg: `failed to create reader for "dir/file.txt"`,
+		},
+		{
+			name: "range reader download fails",
+			call: func() error {
+				_, err := adapter.NewRangeReader(t.Context(), "file.txt", 0, 10)
+				return err
+			},
+			expMsg: `failed to create range reader for "file.txt"`,
+		},
+		{
+			name:   "create directory level fails",
+			call:   func() error { return adapter.createDirectoryLevel(t.Context(), "dir") },
+			expMsg: `failed to create directory "dir"`,
+		},
+		{
+			name:   "ensure parent directories propagates directory error",
+			call:   func() error { return adapter.ensureParentDirectories(t.Context(), "a/b/file.txt") },
+			expMsg: `failed to create directory "a"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+
+			var respErr *azcore.ResponseError
+
+			require.ErrorAs(t, err, &respErr)
+			assert.Equal(t, http.StatusForbidden, respErr.StatusCode)
+			assert.Contains(t, err.Error(), tt.expMsg)
+		})
+	}
+}
+
+func TestStorageAdapter_CreateDirectoryLevel_AlreadyExists(t *testing.T) {
+	srv := httptest.NewServer(statusHandler(http.StatusConflict, "ResourceAlreadyExists"))
+	defer srv.Close()
+
+	adapter := &storageAdapter{cfg: &Config{ShareName: "testshare"}, shareClient: newPlainShareClient(t, srv.URL)}
+
+	require.NoError(t, adapter.createDirectoryLevel(t.Context(), "dir"))
+}
+
+func TestIsDirectoryExistsError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{name: "already exists message", err: errDirAlreadyExists, expected: true},
+		{name: "share already exists code", err: errShareAlreadyExists, expected: true},
+		{name: "resource already exists code", err: errResourceAlreadyExists, expected: true},
+		{name: "unrelated error", err: errTest, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isDirectoryExistsError(tt.err))
+		})
+	}
+}
+
+func TestNormalizePrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   string
+		expected string
+	}{
+		{name: "empty prefix", prefix: "", expected: ""},
+		{name: "root slash", prefix: "/", expected: ""},
+		{name: "prefix without trailing slash", prefix: "/dir/sub", expected: "dir/sub/"},
+		{name: "prefix with trailing slash", prefix: "dir/", expected: "dir/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, normalizePrefix(tt.prefix))
+		})
+	}
+}
+
+func TestProcessListHelpers_SkipIncompleteItems(t *testing.T) {
+	name := "dir/file.txt"
+	dirName := "dir"
+
+	tests := []struct {
+		name        string
+		files       []*directory.File
+		directories []*directory.Directory
+		expObjects  []string
+		expInfos    []file.ObjectInfo
+		expPrefixes []string
+	}{
+		{
+			name:        "nil names and properties are skipped",
+			files:       []*directory.File{{Name: nil}, {Name: &name, Properties: nil}},
+			directories: []*directory.Directory{{Name: nil}, {Name: &dirName}},
+			expObjects:  []string{name},
+			expInfos:    nil,
+			expPrefixes: []string{"dir/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page := &directory.ListFilesAndDirectoriesResponse{}
+			page.Segment = &directory.FilesAndDirectoriesListSegment{Files: tt.files}
+
+			assert.Equal(t, tt.expObjects, processListObjectsPage(page, "dir/", nil))
+			assert.Equal(t, tt.expInfos, processListDirFiles(tt.files, nil))
+			assert.Equal(t, tt.expPrefixes, processListDirDirectories(tt.directories, nil))
+		})
+	}
+}
+
+type errReadCloser struct{}
+
+func (errReadCloser) Read([]byte) (int, error) { return 0, errTest }
+
+func (errReadCloser) Close() error { return nil }
+
+func TestReadSeekCloserWrapper_Seek(t *testing.T) {
+	tests := []struct {
+		name      string
+		offset    int64
+		whence    int
+		expOffset int64
+		expErr    error
+		expRest   string
+	}{
+		{name: "seek start", offset: 1, whence: io.SeekStart, expOffset: 1, expRest: "ello"},
+		{name: "seek current", offset: 2, whence: io.SeekCurrent, expOffset: 2, expRest: "llo"},
+		{name: "seek end", offset: -1, whence: io.SeekEnd, expOffset: 4, expRest: "o"},
+		{name: "seek beyond end is clamped", offset: 10, whence: io.SeekStart, expOffset: 5, expRest: ""},
+		{name: "negative offset", offset: -1, whence: io.SeekStart, expErr: errNegativeOffset, expRest: "hello"},
+		{name: "invalid whence", offset: 0, whence: 42, expErr: errInvalidWhence, expRest: "hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &readSeekCloserWrapper{reader: io.NopCloser(strings.NewReader("hello"))}
+
+			offset, err := w.Seek(tt.offset, tt.whence)
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expOffset, offset)
+
+			rest, readErr := io.ReadAll(w)
+			require.NoError(t, readErr)
+			assert.Equal(t, tt.expRest, string(rest))
+			require.NoError(t, w.Close())
+		})
+	}
+}
+
+func TestReadSeekCloserWrapper_Seek_ReadError(t *testing.T) {
+	w := &readSeekCloserWrapper{reader: errReadCloser{}}
+
+	offset, err := w.Seek(0, io.SeekStart)
+
+	require.ErrorIs(t, err, errTest)
+	assert.Zero(t, offset)
 }

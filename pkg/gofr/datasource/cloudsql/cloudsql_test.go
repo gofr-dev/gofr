@@ -1,8 +1,11 @@
 package cloudsql
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"cloud.google.com/go/cloudsqlconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -187,6 +190,107 @@ func TestConnector_Connect_IAMValidation(t *testing.T) {
 			connector, cleanup, err := New(tc.configs).Connect()
 
 			require.ErrorIs(t, err, tc.wantErr)
+			assert.Nil(t, connector)
+			assert.Nil(t, cleanup)
+		})
+	}
+}
+
+// fakeADC is an authorized_user Application Default Credentials file. Loading it
+// performs no network I/O, so the Cloud SQL dialer can be constructed offline; the
+// connectors built from it are never dialed in these tests.
+const fakeADC = `{"type":"authorized_user","client_id":"id","client_secret":"secret","refresh_token":"token"}`
+
+// setFakeADC points Application Default Credentials at a temp file holding content.
+func setFakeADC(t *testing.T, content string) {
+	t.Helper()
+
+	adcPath := filepath.Join(t.TempDir(), "adc.json")
+	require.NoError(t, os.WriteFile(adcPath, []byte(content), 0o600))
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", adcPath)
+}
+
+// TestConnector_Connect_IAM verifies the IAM path builds a dialer-backed connector
+// for each supported dialect and IP type without dialing, and that the returned
+// cleanup tears the dialer down so the connector can no longer dial.
+func TestConnector_Connect_IAM(t *testing.T) {
+	tests := []struct {
+		name    string
+		configs fakeConfig
+	}{
+		{
+			// An IP-literal host keeps pgx from doing a DNS lookup before it calls the
+			// dial function, so the post-cleanup connect below stays offline.
+			name:    "postgres public ip",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "127.0.0.1", "DB_USER": "u", "DB_NAME": "d"},
+		},
+		{
+			name: "mysql private ip",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "mysql", "DB_HOST": "p:r:i", "DB_USER": "u",
+				"DB_NAME": "d", "DB_CLOUDSQL_IP_TYPE": "PRIVATE"},
+		},
+		{
+			name:    "mysql psc",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "mysql", "DB_HOST": "p:r:i", "DB_CLOUDSQL_IP_TYPE": "PSC"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setFakeADC(t, fakeADC)
+
+			connector, cleanup, err := New(tc.configs).Connect()
+
+			require.NoError(t, err)
+			assert.NotNil(t, connector)
+			require.NotNil(t, cleanup)
+			require.NoError(t, cleanup())
+
+			// Once cleaned up, the connector's dial path routes through the closed
+			// dialer, so connecting fails fast without any network I/O.
+			_, err = connector.Connect(t.Context())
+			require.ErrorIs(t, err, cloudsqlconn.ErrDialerClosed)
+		})
+	}
+}
+
+// TestConnector_Connect_IAMBuildError verifies failures while building the IAM
+// connector (dialer credentials, postgres DSN parsing) are surfaced with no
+// connector or cleanup.
+func TestConnector_Connect_IAMBuildError(t *testing.T) {
+	tests := []struct {
+		name    string
+		configs fakeConfig
+		adc     string
+		wantErr string
+	}{
+		{
+			name:    "postgres dialer credentials invalid",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "p:r:i"},
+			adc:     "{not json",
+			wantErr: "cloudsql: create dialer",
+		},
+		{
+			name:    "mysql dialer credentials invalid",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "mysql", "DB_HOST": "p:r:i"},
+			adc:     "{not json",
+			wantErr: "cloudsql: create dialer",
+		},
+		{
+			name:    "postgres config unparsable",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "p:r:i", "DB_NAME": "a\x00b"},
+			adc:     fakeADC,
+			wantErr: "cloudsql: parse postgres config",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setFakeADC(t, tc.adc)
+
+			connector, cleanup, err := New(tc.configs).Connect()
+
+			require.ErrorContains(t, err, tc.wantErr)
 			assert.Nil(t, connector)
 			assert.Nil(t, cleanup)
 		})
