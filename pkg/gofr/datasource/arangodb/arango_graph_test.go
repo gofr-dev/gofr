@@ -235,3 +235,95 @@ func TestClient_GetEdges_InvalidResponseType(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, errInvalidResponseType)
 }
+
+func TestGraph_Operations_Errors(t *testing.T) {
+	var edges EdgeDetails
+
+	edgeDefs := &EdgeDefinition{{Collection: "edgeColl", From: []string{"fromColl"}, To: []string{"toColl"}}}
+
+	tests := []struct {
+		desc       string
+		setupMocks func(m *arangoMocks)
+		call       func(ctx context.Context, c *Client) error
+		expErr     error
+	}{
+		{
+			desc: "create graph database lookup fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(nil, errDBNotFound)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.CreateGraph(ctx, "testDB", "g", edgeDefs) },
+			expErr: errDBNotFound,
+		},
+		{
+			desc: "create graph existence check fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().GraphExists(gomock.Any(), "g").Return(false, errStatusDown)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.CreateGraph(ctx, "testDB", "g", edgeDefs) },
+			expErr: errStatusDown,
+		},
+		{
+			desc: "create graph with invalid edge definitions type",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().GraphExists(gomock.Any(), "g").Return(false, nil)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.CreateGraph(ctx, "testDB", "g", "invalid") },
+			expErr: errInvalidEdgeDefinitionsType,
+		},
+		{
+			desc: "create graph with nil edge definitions",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().GraphExists(gomock.Any(), "g").Return(false, nil)
+			},
+			call: func(ctx context.Context, c *Client) error {
+				return c.CreateGraph(ctx, "testDB", "g", (*EdgeDefinition)(nil))
+			},
+			expErr: errNilEdgeDefinitions,
+		},
+		{
+			desc: "drop graph lookup fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Graph(gomock.Any(), "g", nil).Return(nil, errStatusDown)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.DropGraph(ctx, "testDB", "g") },
+			expErr: errStatusDown,
+		},
+		{
+			desc: "drop graph remove fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Graph(gomock.Any(), "g", nil).Return(m.graph, nil)
+				m.graph.EXPECT().Remove(gomock.Any(), &arangodb.RemoveGraphOptions{DropCollections: true}).Return(errStatusDown)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.DropGraph(ctx, "testDB", "g") },
+			expErr: errStatusDown,
+		},
+		{
+			desc: "get edges query fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().GetEdges(gomock.Any(), "edgeColl", "v/1", nil).Return(nil, errStatusDown)
+			},
+			call: func(ctx context.Context, c *Client) error {
+				return c.GetEdges(ctx, "testDB", "g", "edgeColl", "v/1", &edges)
+			},
+			expErr: errStatusDown,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, m := newArangoTestClient(t)
+			tc.setupMocks(m)
+
+			err := tc.call(t.Context(), client)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
