@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1178,4 +1179,54 @@ func TestStorageAdapter_CopyObject_DestinationWriteFails(t *testing.T) {
 	err := adapter.CopyObject(t.Context(), "src.txt", "missing/dir/copy.txt")
 
 	require.ErrorContains(t, err, `failed to write destination object "missing/dir/copy.txt"`)
+}
+
+func TestStorageAdapter_ConnectConcurrentWithOperations(t *testing.T) {
+	tests := []struct {
+		name string
+		op   func(a *storageAdapter)
+	}{
+		{name: "NewReader", op: func(a *storageAdapter) { _, _ = a.NewReader(t.Context(), "missing.txt") }},
+		{name: "StatObject", op: func(a *storageAdapter) { _, _ = a.StatObject(t.Context(), "missing.txt") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server, _, cleanup := setupTestFTPServer(t)
+			defer cleanup()
+
+			a := &storageAdapter{cfg: getTestConfig(server.Port)}
+
+			var wg sync.WaitGroup
+
+			wg.Go(func() { assert.NoError(t, a.Connect(t.Context())) })
+			wg.Go(func() {
+				for range 50 {
+					tt.op(a)
+				}
+			})
+			wg.Wait()
+
+			_, err := a.StatObject(t.Context(), "missing.txt")
+			require.NotErrorIs(t, err, errFTPClientNotInitialized)
+		})
+	}
+}
+
+func TestStorageAdapter_PublishConn_KeepsExisting(t *testing.T) {
+	server, _, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	a := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, a.Connect(t.Context()))
+
+	other := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, other.Connect(t.Context()))
+
+	first, second := a.conn, other.conn
+
+	a.publishConn(second)
+
+	assert.Same(t, first, a.conn)
+	require.Error(t, second.NoOp(), "redundant connection should be closed")
 }
