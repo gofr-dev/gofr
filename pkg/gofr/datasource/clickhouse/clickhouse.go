@@ -227,14 +227,17 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query string, m
 
 // getOperationType extracts the operation type (e.g., SELECT, INSERT) from a query: its first
 // whitespace-separated token, upper-cased, so tab- or newline-formatted queries label cleanly.
+//
+// strings.Fields already skips leading whitespace and returns an empty slice for a query that is
+// entirely whitespace, so the TrimSpace that used to precede it -- and the == "" check that went
+// with it -- only restated what the length check does.
 func getOperationType(query string) string {
-	query = strings.TrimSpace(query)
-
-	if query == "" {
+	fields := strings.Fields(query)
+	if len(fields) == 0 {
 		return ""
 	}
 
-	return strings.ToUpper(strings.Fields(query)[0])
+	return strings.ToUpper(fields[0])
 }
 
 type Health struct {

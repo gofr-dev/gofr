@@ -255,26 +255,27 @@ func Test_ClickHouse_OperationDurationCoversTheDriverCall(t *testing.T) {
 		span      string
 		driverErr error
 		expect    func(conn *MockConn, driverErr error)
-		call      func(c *Client) error
+		call      func(ctx context.Context, c *Client) error
 	}{
-		{desc: "exec", span: "exec", expect: expectSlowExec, call: func(c *Client) error {
-			return c.Exec(t.Context(), query, 1)
+		{desc: "exec", span: "exec", expect: expectSlowExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
 		}},
-		{desc: "exec error", span: "exec", driverErr: errDriver, expect: expectSlowExec, call: func(c *Client) error {
-			return c.Exec(t.Context(), query, 1)
+		{desc: "exec error", span: "exec", driverErr: errDriver, expect: expectSlowExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
 		}},
-		{desc: "select", span: "select", expect: expectSlowSelect(&dest), call: func(c *Client) error {
-			return c.Select(t.Context(), &dest, query, 1)
+		{desc: "select", span: "select", expect: expectSlowSelect(&dest), call: func(ctx context.Context, c *Client) error {
+			return c.Select(ctx, &dest, query, 1)
 		}},
-		{desc: "select error", span: "select", driverErr: errDriver, expect: expectSlowSelect(&dest), call: func(c *Client) error {
-			return c.Select(t.Context(), &dest, query, 1)
-		}},
-		{desc: "async insert", span: "async-insert", expect: expectSlowAsyncInsert, call: func(c *Client) error {
-			return c.AsyncInsert(t.Context(), query, true, 1)
+		{desc: "select error", span: "select", driverErr: errDriver, expect: expectSlowSelect(&dest),
+			call: func(ctx context.Context, c *Client) error {
+				return c.Select(ctx, &dest, query, 1)
+			}},
+		{desc: "async insert", span: "async-insert", expect: expectSlowAsyncInsert, call: func(ctx context.Context, c *Client) error {
+			return c.AsyncInsert(ctx, query, true, 1)
 		}},
 		{desc: "async insert error", span: "async-insert", driverErr: errDriver, expect: expectSlowAsyncInsert,
-			call: func(c *Client) error {
-				return c.AsyncInsert(t.Context(), query, true, 1)
+			call: func(ctx context.Context, c *Client) error {
+				return c.AsyncInsert(ctx, query, true, 1)
 			}},
 	}
 
@@ -297,7 +298,7 @@ func Test_ClickHouse_OperationDurationCoversTheDriverCall(t *testing.T) {
 
 			mockLogger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) { logged, _ = args[0].(*Log) })
 
-			err := tc.call(&c)
+			err := tc.call(t.Context(), &c)
 
 			if tc.driverErr != nil {
 				require.ErrorIs(t, err, tc.driverErr)
