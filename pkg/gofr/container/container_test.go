@@ -1004,6 +1004,13 @@ func TestContainer_LLMToolsLazyResolution(t *testing.T) {
 }
 
 func TestContainer_createKafkaPubSub_InvalidConfigs(t *testing.T) {
+	// The assertions are on what kafka.New's own validation logs. Under gofr_nopubsub there is no
+	// kafka.New to validate anything -- the stub logs the one message naming the tag and returns --
+	// so there is nothing here for this test to be about.
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+	}
+
 	tests := []struct {
 		desc    string
 		configs map[string]string

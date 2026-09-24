@@ -98,6 +98,11 @@ For scale, against `gofr.dev/pkg/gofr` itself: 828 packages by default, 616 with
 `examples/http-server` that is a 60,028,914 byte binary by default and 43,357,218 with all three
 tags, a 27.8% reduction.
 
+**Measured on darwin/arm64 with Go 1.26.3.** The counts are platform- and toolchain-dependent —
+the standard library and `modernc.org/libc` pull in different package sets per GOOS/GOARCH, so the
+same commands on linux/amd64 report roughly twenty fewer. The *differences* between the rows are
+what the tags are about; the absolute numbers are not comparable across platforms.
+
 These figures move with every dependency change, so treat them as a sense of scale rather than a
 contract. Run the command above against your own service for the number that matters to you. What CI
 does enforce is the direction: the `Slim Build Tags` job fails if any of these tags stops removing

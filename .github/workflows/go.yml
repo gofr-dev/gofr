@@ -766,30 +766,22 @@ jobs:
             exit 1
           fi
 
-      # The tags are opt-in, so the default build must link exactly what it linked
-      # before. This compares the package list rather than asserting it compiles:
-      # a build that quietly started pulling in a tagged-out dependency, or one
-      # that stopped linking a package it used to, passes `go build` either way.
+      # There is deliberately NO step here diffing the default build's whole package
+      # list against the merge base.
       #
-      # The baseline is the merge base rather than a committed file, so it cannot
-      # go stale and needs no upkeep.
-      - name: Default build links the same packages as before
+      # An earlier revision had one, and it was the wrong gate: this job runs on every
+      # pull request, so a whole-module `go list -deps ./...` diff means "no PR may add
+      # a package or a dependency, ever". That is not a rule this repo has, and the
+      # step would have gone red on changes that have nothing to do with build tags.
+      #
+      # What it was trying to protect is already covered, and covered better, by the
+      # step above: its `grep -Eq "$pattern" /tmp/deps.default` guard fails when a
+      # tagged-out package is missing from the DEFAULT build, so the tags cannot start
+      # passing vacuously and an untagged build cannot quietly stop linking them.
+      # Please do not re-add the broad diff.
+      - name: The tagged packages still build and test untagged
         run: |
           set -euo pipefail
-
-          go list -deps ./... | sort > /tmp/deps.head
-
-          git worktree add /tmp/base "$(git merge-base HEAD origin/${{ github.base_ref || 'development' }})"
-          (cd /tmp/base && go list -deps ./... | sort) > /tmp/deps.base
-
-          if ! diff -u /tmp/deps.base /tmp/deps.head > /tmp/deps.diff; then
-            echo "::error::The default build's linked package set changed. The gofr_no* tags are"
-            echo "::error::opt-in, so an untagged build must link exactly what it linked before."
-            cat /tmp/deps.diff
-            exit 1
-          fi
-
-          echo "default build links $(wc -l < /tmp/deps.head) packages, unchanged"
 
           go test -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
   code_quality:
