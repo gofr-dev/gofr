@@ -292,7 +292,7 @@ func buildExporter(ctx context.Context, cfg *exporters.Config, logger exporters.
 
 	if len(cfg.Headers) > 0 {
 		if _, ok := cfg.Headers[quotaProjectHeader]; ok {
-			logger.Warnf("gcp traces: ignore-listed header %s is set; "+
+			logger.Warnf("gcp traces: header %s is forwarded but Google does not honor it on this endpoint; "+
 				"set GOOGLE_CLOUD_QUOTA_PROJECT instead, or attach a service account", quotaProjectHeader)
 		}
 

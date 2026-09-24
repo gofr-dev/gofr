@@ -727,6 +727,7 @@ func Test_registeredUnderTheExporterName(t *testing.T) {
 	writeADC(t)
 
 	shutdown, tp := exporters.Build(t.Context(), &cfg, &testLogger{})
+
 	defer func() { _ = shutdown(t.Context()) }()
 
 	// Deliberately never ended: an ended span would reach the BatchSpanProcessor
