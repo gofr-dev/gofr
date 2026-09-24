@@ -50,7 +50,8 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 	}
 
 	server := mcp.NewServer(tools,
-		mcp.WithServerInfo(a.container.GetAppName(), a.container.GetAppVersion()))
+		mcp.WithServerInfo(a.container.GetAppName(), a.container.GetAppVersion()),
+		mcp.WithLogger(a.container.Logger))
 
 	a.mcpServer = newMCPServer(port, server)
 }

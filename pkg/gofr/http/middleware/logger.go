@@ -342,5 +342,10 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 		envelopeStatusKey:  "ERROR",
 		envelopeMessageKey: "Some unexpected error has occurred",
 	}
-	_ = json.NewEncoder(w).Encode(res)
+
+	// The envelope is a fixed map that always marshals, so Encode can only fail writing to the
+	// client; the status is already committed, so logging the failure is all that is left to do.
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		logger.Error("failed to write panic recovery response: " + err.Error())
+	}
 }

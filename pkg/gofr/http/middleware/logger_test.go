@@ -1372,6 +1372,47 @@ func Test_LoggingContract_PanicOnProbePathSkipsRequestLog(t *testing.T) {
 	assert.Equal(t, logCharPanicEnvelope, rr.Body.String())
 }
 
+// errLogCharWrite is returned by logCharFailingWriter to simulate a client
+// connection that fails while the panic envelope is being written.
+var errLogCharWrite = errors.New("client went away")
+
+// logCharFailingWriter delegates headers and status to the embedded recorder
+// (so .Code is observable) but fails every body write.
+type logCharFailingWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (*logCharFailingWriter) Write([]byte) (int, error) { return 0, errLogCharWrite }
+
+// Test_LoggingContract_PanicRecoveryWriteErrorIsLogged pins that a failure to
+// write the panic envelope is logged at Error level after the panicLog record,
+// while the 500 status is still committed.
+func Test_LoggingContract_PanicRecoveryWriteErrorIsLogged(t *testing.T) {
+	rec := &logCharRecorder{}
+	req := logCharNewRequest(t, http.MethodGet, "http://dummy/panic")
+	fw := &logCharFailingWriter{ResponseRecorder: httptest.NewRecorder()}
+
+	Logging(LogProbes{}, rec)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	})).ServeHTTP(fw, req)
+
+	records := rec.all()
+	require.Len(t, records, 3, "request log, panic log, then the write-failure log")
+
+	_, ok := records[1].arg.(panicLog)
+	assert.True(t, ok, "the panic log precedes the write-failure log")
+
+	last := records[2]
+	assert.Equal(t, "ERROR", last.level)
+
+	msg, ok := last.arg.(string)
+	require.True(t, ok, "write-failure record is %T, want a single string", last.arg)
+	assert.Contains(t, msg, "failed to write panic recovery response")
+	assert.Contains(t, msg, errLogCharWrite.Error())
+
+	assert.Equal(t, http.StatusInternalServerError, fw.Code)
+}
+
 // Test_LoggingContract_ProbeFiltering pins which (Disabled, Paths, urlPath)
 // combinations suppress the request log entirely.
 func Test_LoggingContract_ProbeFiltering(t *testing.T) {
