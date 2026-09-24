@@ -3,12 +3,15 @@ package container
 import (
 	"context"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // nilReceiverClient reproduces the shape the real constructors produce: a
@@ -152,10 +155,78 @@ func TestIsNilHandlesNonNillableKinds(t *testing.T) {
 		assert.False(t, isNil(v), "%T is present, not nil", v)
 	}
 
-	// The nillable kinds keep their meaning.
-	var nilPtr *valueImpl
+	// Every nillable kind keeps its meaning. Listed exhaustively rather than testing the pointer
+	// alone: the Kind switch enumerates them, so a kind dropped from it would otherwise fall through
+	// to "not nillable, therefore present" silently, which is the wrong answer in the safe-looking
+	// direction.
+	var (
+		nilPtr   *valueImpl
+		nilMap   map[string]int
+		nilSlice []int
+		nilChan  chan int
+		nilFunc  func()
+		nilIface error
+		nilUnsaf unsafe.Pointer
+	)
 
-	assert.True(t, isNil(nilPtr), "a typed nil pointer is absent")
+	absent := []any{nilPtr, nilMap, nilSlice, nilChan, nilFunc, nilIface, nilUnsaf}
+	for _, v := range absent {
+		assert.True(t, isNil(v), "a nil %T is absent", v)
+	}
+
 	assert.True(t, isNil(nil), "an unset interface is absent")
-	assert.False(t, isNil(&valueImpl{}), "a real pointer is present")
+
+	presentNillable := []any{
+		&valueImpl{},
+		map[string]int{},
+		[]int{},
+		make(chan int),
+		func() {},
+	}
+	for _, v := range presentNillable {
+		assert.False(t, isNil(v), "a non-nil %T is present", v)
+	}
+}
+
+// TestRejectedPubSubConfigLeavesTheExportedFieldNil pins the root cause rather than the symptom.
+//
+// The getters filter a typed nil, but Container.PubSub is exported: ctx.Container.PubSub, and any
+// future internal caller, reads it directly and gets no filtering at all. kafka.New and google.New
+// both return a bare nil of their concrete type when they reject a config, and assigning that
+// straight into the pubsub.Client interface is what manufactures the typed nil in the first place.
+//
+// Assigning only a real client means the bad value never exists, and the getters stay as defense in
+// depth rather than as the only thing standing between a misconfiguration and a nil receiver.
+//
+// The plain == nil comparison is the point: assert.Nil reflects, so it would pass on a typed nil and
+// this test would prove nothing.
+func TestRejectedPubSubConfigLeavesTheExportedFieldNil(t *testing.T) {
+	tests := []struct {
+		desc   string
+		create func(c *Container, conf config.Config)
+		conf   map[string]string
+	}{
+		{
+			desc:   "google with no project id",
+			create: (*Container).createGooglePubSub,
+			conf:   map[string]string{"PUBSUB_BACKEND": "GOOGLE"},
+		},
+		{
+			desc:   "kafka with no broker",
+			create: (*Container).createKafkaPubSub,
+			conf:   map[string]string{"PUBSUB_BACKEND": "KAFKA", "PUBSUB_BROKER": ""},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+			tc.create(c, config.NewMockConfig(tc.conf))
+
+			if c.PubSub != nil {
+				t.Errorf("a rejected config must leave PubSub plainly nil, got a %T in the interface", c.PubSub)
+			}
+		})
+	}
 }
