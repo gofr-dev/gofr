@@ -40,13 +40,57 @@ Tracing is opt-in. Set:
 
 | Env var          | Purpose                                              | Notes                                    |
 |------------------|------------------------------------------------------|------------------------------------------|
-| `TRACE_EXPORTER` | `otlp`, `jaeger`, `zipkin` (deprecated)              | Required to enable                       |
-| `TRACER_URL`     | Endpoint URL or `host:port`                          | Required when exporter is set            |
-| `TRACER_RATIO`   | Sample ratio (0.0–1.0)                               | Defaults to `1` (100%)                   |
+| `TRACE_EXPORTER` | `otlp`, `jaeger`, `gcp`, `zipkin` (deprecated)        | Required to enable                       |
+| `TRACER_URL`     | Endpoint URL or `host:port`                          | Required except for `gcp`, which defaults it |
+| `TRACER_INSECURE`| Plaintext for a schemeless `TRACER_URL`              | Defaults to `true`; ignored when the URL carries a scheme |
+| `TRACER_RATIO`   | Sample ratio (0.0–1.0)                               | Defaults to `1` (100%); an unparsable value also resolves to `1` |
 | `TRACER_HEADERS` | Custom headers (e.g., for SaaS auth)                 | Comma-separated `key=value` pairs        |
 | `TRACER_AUTH_KEY`| Single auth header value                             | Use `TRACER_HEADERS` for multiple        |
 
 The `zipkin` value emits a deprecation warning at startup and recommends switching to `otlp` (verified in `pkg/gofr/otel.go`).
+
+Two failure modes are worth knowing before you set these:
+
+- **An unparsable `TRACER_RATIO` samples everything.** `TRACER_RATIO=10%` is not a number, so it is
+  rejected and the ratio falls back to `1` — every trace is exported, and the error names both the
+  rejected value and the ratio actually applied. Use `0.1`, not `10%`, and watch for that log line if
+  export volume is higher than you expect.
+- **An unrecognized `TRACE_EXPORTER` disables tracing rather than pretending to work.** The app
+  starts, logs the unsupported name, and installs a non-recording provider. Trace and span IDs stay
+  valid, so `X-Correlation-ID` and the `trace_id` log field keep working — but no span leaves the
+  process. Check the startup log if a backend you configured is receiving nothing.
+
+A credential inside `TRACER_URL` — `https://user:token@collector:4317`, or
+`?api-key=...` on a Zipkin spans URL — is replaced with `REDACTED` wherever GoFr
+logs the endpoint: at startup, and in the export errors the OTel SDK raises later.
+The host, port and path are kept, so the line still tells you where spans are
+going. A secret pasted into `TRACE_EXPORTER` is redacted too, while a plain typo
+(`otpl`) is echoed back so you can spot it.
+
+### Resource attributes from the environment
+
+Every exported span carries a resource — the attributes that describe *which* service emitted it.
+GoFr fills it with `service.name` (from `APP_NAME`) and `framework_version`, and merges in the
+standard `OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the
+backend without a code change:
+
+```bash
+OTEL_RESOURCE_ATTRIBUTES="deployment.environment=prod,cloud.region=asia-south1"
+```
+
+**`service.name` is the one exception.** GoFr always takes it from `APP_NAME`, so
+`OTEL_SERVICE_NAME` — and a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES` — is
+discarded. Setting either logs a warning naming the value that was dropped:
+
+```
+traces: service.name="checkout-from-env" from the environment is ignored; GoFr sets it from APP_NAME ("checkout"). Set APP_NAME to rename the service.
+```
+
+Rename the service with `APP_NAME`. The reason for the exception is consistency across signals:
+GoFr's metrics resource resolves `service.name` from `APP_NAME` the same way, and letting only
+traces follow `OTEL_SERVICE_NAME` would report one service name to your trace backend and a
+different one to your metric backend — breaking the join between a service's traces and its
+metrics exactly where you need it.
 
 ## End-to-end example
 
@@ -99,6 +143,7 @@ For business-level operations inside a handler, wrap them with `c.Trace("name")`
 - **Sidecar tracing** — Istio and Linkerd inject their own spans. Configure them to use the same backend, not a parallel one.
 - **Logs without trace IDs** — if `trace_id` is empty in a log, the request didn't carry a `traceparent`. Likely the entry point (Ingress, gateway) is not adding one.
 - **High cardinality span names** — never put a path parameter (e.g., `/orders/12345`) directly in a span name. Use the route template.
+- **A short `SHUTDOWN_GRACE_PERIOD` cuts the final flush off** — on shutdown GoFr flushes the spans still sitting in the batch processor before it closes the datasources, and that flush is bounded by [`SHUTDOWN_GRACE_PERIOD`](/docs/guides/graceful-shutdown) along with the rest of the drain. Against a collector that is unreachable, the OTLP exporter spends its own 10s export timeout there. Keep the grace period comfortably above that, or a pod's last spans are dropped exactly when you are debugging why it went away.
 
 ## What spans cost
 

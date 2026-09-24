@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
@@ -60,6 +62,46 @@ func TestBuild_appliesCardinalityLimit(t *testing.T) {
 
 	if points >= distinct || points > limit+1 {
 		t.Errorf("cardinality limit not applied: got %d data points, want <= %d", points, limit+1)
+	}
+}
+
+// TestBuild_unsetCardinalityLimitHonorsSDKEnv pins the other half of the
+// contract: with METRICS_CARDINALITY_LIMIT unset, Build must pass no limit at
+// all. The SDK applies explicit options after OTEL_GO_X_CARDINALITY_LIMIT
+// (sdk/metric config.go newConfig), so any hard-coded WithCardinalityLimit in
+// Build would silently make that variable inert.
+func TestBuild_unsetCardinalityLimitHonorsSDKEnv(t *testing.T) {
+	t.Setenv("OTEL_GO_X_CARDINALITY_LIMIT", "3")
+
+	reader := metricSdk.NewManualReader()
+
+	Register("card-env-test", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
+		return reader, nil
+	})
+
+	cfg := Config{AppName: "app", AppVersion: "v1", Exporter: "card-env-test"}
+
+	shutdown, meter := Build(context.Background(), &cfg, logging.NewMockLogger(logging.ERROR))
+
+	defer func() { _ = shutdown(context.Background()) }()
+
+	counter, err := meter.Int64Counter("card_env_counter")
+	if err != nil {
+		t.Fatalf("failed to create counter: %v", err)
+	}
+
+	const distinct = 10
+	for i := 0; i < distinct; i++ {
+		counter.Add(context.Background(), 1, metric.WithAttributes(attribute.Int("i", i)))
+	}
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect failed: %v", err)
+	}
+
+	if points := countDataPoints(t, &rm, "card_env_counter"); points == 0 || points > 3 {
+		t.Errorf("OTEL_GO_X_CARDINALITY_LIMIT=3 not honored with METRICS_CARDINALITY_LIMIT unset: got %d data points", points)
 	}
 }
 
@@ -281,5 +323,95 @@ func TestBuildResource_schemaURLConflictIsNotAFailure(t *testing.T) {
 
 	if strings.Contains(logs, "resource detection was incomplete") {
 		t.Errorf("a schema-URL conflict must not be logged as a failure, got: %q", logs)
+	}
+}
+
+var (
+	errShutdownFailed = errors.New("shutdown failed")
+	errDetectorFailed = errors.New("detector failed")
+)
+
+// failingShutdownReader is a working ManualReader whose Shutdown always fails.
+type failingShutdownReader struct {
+	*metricSdk.ManualReader
+}
+
+func (failingShutdownReader) Shutdown(context.Context) error { return errShutdownFailed }
+
+func TestBuild_shutdownPropagatesReaderError(t *testing.T) {
+	Register("shutdown-fail", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
+		return failingShutdownReader{ManualReader: metricSdk.NewManualReader()}, nil
+	})
+
+	t.Cleanup(func() {
+		registryMu.Lock()
+		defer registryMu.Unlock()
+
+		delete(registry, "shutdown-fail")
+	})
+
+	tests := []struct {
+		desc     string
+		exporter string
+		expErr   error
+	}{
+		{desc: "reader shutdown error is returned", exporter: "shutdown-fail", expErr: errShutdownFailed},
+		{desc: "clean shutdown returns nil", exporter: "", expErr: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := Config{AppName: "app", Exporter: tc.exporter}
+
+			shutdown, _ := Build(t.Context(), &cfg, logging.NewMockLogger(logging.INFO))
+
+			require.ErrorIs(t, shutdown(t.Context()), tc.expErr)
+		})
+	}
+}
+
+func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.T) {
+	RegisterResourceDetector("detector-fail", detectorFunc(func(context.Context) (*resource.Resource, error) {
+		return nil, errDetectorFailed
+	}))
+
+	t.Cleanup(func() {
+		registryMu.Lock()
+		defer registryMu.Unlock()
+
+		delete(detectors, "detector-fail")
+	})
+
+	tests := []struct {
+		desc           string
+		exporter       string
+		expLog         string
+		expServiceName string
+	}{
+		{
+			desc:           "failing detector",
+			exporter:       "detector-fail",
+			expLog:         "metrics: resource detection was incomplete",
+			expServiceName: "app",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var res *resource.Resource
+
+			// Warnf is WARN level, which the mock logger writes to stdout.
+			logs := testutil.StdoutOutputForFunc(func() {
+				res = buildResource(t.Context(), &Config{AppName: "app", Exporter: tc.exporter},
+					logging.NewMockLogger(logging.DEBUG))
+			})
+
+			assert.Contains(t, logs, tc.expLog)
+			assert.Contains(t, logs, errDetectorFailed.Error())
+
+			serviceName, ok := res.Set().Value("service.name")
+			require.True(t, ok)
+			assert.Equal(t, tc.expServiceName, serviceName.AsString())
+		})
 	}
 }

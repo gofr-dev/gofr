@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp/syntax"
 	"sort"
 	"testing"
 
@@ -716,7 +717,7 @@ func TestTrieRouter_IndexInvariant(t *testing.T) {
 		// Every route mux itself would match must be among the candidates.
 		cands := make([]*routeEntry, 0, len(idx.fallback))
 
-		idx.root.collect(pathTrimForTest(req.URL.Path), &cands)
+		cands = idx.root.collect(pathTrimForTest(req.URL.Path), cands)
 		cands = append(cands, idx.fallback...)
 
 		inCandidates := make(map[*mux.Route]bool, len(cands))
@@ -746,4 +747,80 @@ func pathTrimForTest(p string) string {
 	}
 
 	return p
+}
+
+func TestIsIndexablePathRegexp(t *testing.T) {
+	tests := []struct {
+		desc   string
+		rx     string
+		expOut bool
+	}{
+		{desc: "unparsable regexp", rx: "^/(", expOut: false},
+		{desc: "single literal is not anchored", rx: "abc", expOut: false},
+		{desc: "prefix pattern is not end anchored", rx: "^/static/", expOut: false},
+		{desc: "exact static path", rx: "^/users$", expOut: true},
+		{desc: "single segment capture", rx: "^/users/([^/]+)$", expOut: true},
+		{desc: "capture of bounded repeat", rx: "^/([a-z]{2,3})$", expOut: true},
+		{desc: "capture of repeat with zero minimum", rx: "^/([a-z]{0,3})$", expOut: false},
+		{desc: "capture of non-empty concatenation", rx: "^/([a-z][0-9])$", expOut: true},
+		{desc: "capture of all-optional concatenation", rx: "^/([a-z]*[0-9]*)$", expOut: false},
+		{desc: "capture of non-empty alternation", rx: "^/(ab|cd)$", expOut: true},
+		{desc: "capture of alternation with empty arm", rx: "^/(ab|c*)$", expOut: false},
+		{desc: "capture of any char spans slash", rx: "^/(.+)$", expOut: false},
+		{desc: "capture of any char including newline spans slash", rx: "^/((?s).+)$", expOut: false},
+		{desc: "capture of literal slash", rx: "^/(a/b)$", expOut: false},
+		{desc: "capture of char class containing slash", rx: "^/([%-9]+)$", expOut: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expOut, isIndexablePathRegexp(tc.rx))
+		})
+	}
+}
+
+func TestCanMatchEmpty(t *testing.T) {
+	tests := []struct {
+		desc   string
+		re     *syntax.Regexp
+		expOut bool
+	}{
+		{desc: "empty literal", re: &syntax.Regexp{Op: syntax.OpLiteral}, expOut: true},
+		{desc: "non-empty literal", re: &syntax.Regexp{Op: syntax.OpLiteral, Rune: []rune("a")}, expOut: false},
+		{desc: "no-match op cannot match empty", re: &syntax.Regexp{Op: syntax.OpNoMatch}, expOut: false},
+		{desc: "empty match", re: &syntax.Regexp{Op: syntax.OpEmptyMatch}, expOut: true},
+		{desc: "plus of empty literal", re: &syntax.Regexp{Op: syntax.OpPlus,
+			Sub: []*syntax.Regexp{{Op: syntax.OpLiteral}}}, expOut: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expOut, canMatchEmpty(tc.re))
+		})
+	}
+}
+
+func TestExactPathTemplate(t *testing.T) {
+	tests := []struct {
+		desc   string
+		route  func(r *mux.Router) *mux.Route
+		expTpl string
+		expOK  bool
+	}{
+		{desc: "route without a path", route: func(r *mux.Router) *mux.Route { return r.NewRoute().Host("example.com") },
+			expTpl: "", expOK: false},
+		{desc: "prefix route", route: func(r *mux.Router) *mux.Route { return r.NewRoute().PathPrefix("/static/") },
+			expTpl: "", expOK: false},
+		{desc: "exact route", route: func(r *mux.Router) *mux.Route { return r.NewRoute().Path("/users/{id}") },
+			expTpl: "/users/{id}", expOK: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			tpl, ok := exactPathTemplate(tc.route(mux.NewRouter()))
+
+			assert.Equal(t, tc.expTpl, tpl)
+			assert.Equal(t, tc.expOK, ok)
+		})
+	}
 }
