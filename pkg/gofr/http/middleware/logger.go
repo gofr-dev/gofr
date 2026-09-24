@@ -192,7 +192,7 @@ type logSink struct {
 // In the default mux matcher the middleware chain is rebuilt inside Route.Match on every request, so
 // the closure Logging returns is allocated per request and pays for everything it captures. Capturing
 // a logSink by value made that closure 48 bytes larger: BenchmarkLogging went 1249 -> 1297 B/op, a
-// regression this optimisation would otherwise have shipped alongside its saving. Captured as a
+// regression this optimization would otherwise have shipped alongside its saving. Captured as a
 // pointer it is 8 bytes, and routing panicRecovery through sink.logger drops the separate 16-byte
 // logger interface the closure used to hold as well, which brings it back to 1249 exactly.
 //
