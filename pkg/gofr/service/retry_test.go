@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -406,7 +407,14 @@ func TestRetryProvider_ContextDoneBeforeCall_MakesOneAttempt(t *testing.T) {
 	assert.Equal(t, int32(0), hits.Load())
 }
 
-func TestRetryProvider_ContextDoneInFlight_StopsAfterNextAttempt(t *testing.T) {
+// TestRetryProvider_ContextDoneInFlight_MakesNoFurtherAttempt covers the case the pre-attempt check
+// alone misses, and it is the common one: the deadline passes while a request is already on the wire
+// against a slow upstream. The context was live when the loop sampled it, so nothing stopped a second
+// request going out -- one that cannot reach the network, and is still logged, still recorded as a
+// failed outbound call, and still counted by an inner circuit breaker. With retry(circuitBreaker),
+// MaxRetries 3 and a 50ms deadline, that second attempt is what took a timed-out call from one
+// failure to two, tripping the breaker at half its configured threshold.
+func TestRetryProvider_ContextDoneInFlight_MakesNoFurtherAttempt(t *testing.T) {
 	tests := []struct {
 		desc     string
 		deadline bool
@@ -446,7 +454,8 @@ func TestRetryProvider_ContextDoneInFlight_StopsAfterNextAttempt(t *testing.T) {
 			requireNoResponse(t, resp)
 			require.ErrorIs(t, err, tc.wantErr)
 			assert.Equal(t, singleAttemptErr(ctx, t, server.URL).Error(), err.Error(), "caller must see the same error as today")
-			assert.Equal(t, int32(2), probe.attempts.Load(), "the attempt made after the context ended must be the last")
+			assert.Equal(t, int32(1), probe.attempts.Load(),
+				"the attempt the context ended during must be the last; a second one cannot reach the network")
 			assert.Equal(t, int32(1), hits.Load())
 		})
 	}
@@ -570,4 +579,46 @@ func TestRetryProvider_ConcurrentCallers_StopPerCallerContext(t *testing.T) {
 	assert.Equal(t, int32(callers/2*1+callers/2*4), probe.attempts.Load())
 	assert.Equal(t, int32(callers/2*4), hits.Load())
 	assert.Equal(t, int32(callers/2*4), probe.closed.Load())
+}
+
+// TestRetryProvider_RetriedBodiesAreDrainedSoTheConnectionIsReused pins the reason the discarded
+// body is read before it is closed, rather than only closed.
+//
+// net/http returns a connection to the idle pool only once its body has been read to EOF. A Close on
+// a body still holding bytes makes it abandon the connection instead, so a service retrying three
+// times opened four connections to the same upstream and left three in TIME_WAIT. Counting
+// connections rather than asserting the io.CopyN call is what makes this a test of the behavior and
+// not of the implementation: it fails if the drain is removed, and it keeps passing if the drain is
+// written some other way.
+func TestRetryProvider_RetriedBodiesAreDrainedSoTheConnectionIsReused(t *testing.T) {
+	var conns atomic.Int32
+
+	// Unstarted, because ConnState has to be installed before the server accepts anything -- setting it
+	// on a running httptest.Server races with its accept loop, which -race catches.
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		// A body with content: an empty one is already at EOF and would be reused either way, so it
+		// would make this test pass with and without the fix.
+		_, _ = w.Write([]byte(`{"error":"upstream is unavailable, please retry"}`))
+	}))
+
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			conns.Add(1)
+		}
+	}
+
+	server.Start()
+
+	defer server.Close()
+
+	probe := &attemptProbe{}
+
+	resp, err := newProbedRetryService(server.URL, probe).Get(t.Context(), "test", nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	require.Equal(t, int32(4), probe.attempts.Load(), "the premise: every retry was made")
+	assert.Equal(t, int32(1), conns.Load(), "4 attempts must share one connection; a body closed unread forces a new one")
 }
