@@ -58,43 +58,57 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...an
 
 	defer emptyExpectation(&m)
 
-	expectedText := m.queryWithArgs[0].queryText
-	expectedArgs := m.queryWithArgs[0].arguments
+	expected := m.queryWithArgs[0]
 
-	valueType := reflect.TypeOf(value)
-	if valueType.Kind() != reflect.Pointer {
-		m.logger.Errorf("expected a pointer type: %q", value)
+	if !m.matchesCall(expected, query, args) {
 		return
 	}
 
-	if m.queryWithArgs[0].value == nil {
+	m.assignResponse(expected.value, value, query)
+}
+
+// matchesCall reports whether the actual query and args match the expectation, reporting the first mismatch.
+func (m sqlMockDB) matchesCall(expected queryWithArgs, query string, args []any) bool {
+	if expected.queryText != query {
+		m.logger.Errorf("expected query: %q, actual query: %q", expected.queryText, query)
+		return false
+	}
+
+	if len(args) != len(expected.arguments) {
+		m.logger.Errorf("expected %d args, actual %d", len(expected.arguments), len(args))
+		return false
+	}
+
+	for i, arg := range args {
+		if !reflect.DeepEqual(expected.arguments[i], arg) {
+			m.logger.Errorf("expected arg %d: %v (%T), actual: %v (%T)", i, expected.arguments[i], expected.arguments[i], arg, arg)
+			return false
+		}
+	}
+
+	return true
+}
+
+// assignResponse copies the canned response into dest once the call has matched.
+func (m sqlMockDB) assignResponse(response, dest any, query string) {
+	destValue := reflect.ValueOf(dest)
+	if destValue.Kind() != reflect.Pointer || destValue.IsNil() {
+		m.logger.Errorf("expected a non-nil pointer, actual %T", dest)
+		return
+	}
+
+	if response == nil {
 		m.logger.Errorf("received different expectations: %q", query)
 		return
 	}
 
-	v := reflect.ValueOf(value)
-
-	if v.Kind() == reflect.Pointer && !v.IsNil() {
-		tobechanged := v.Elem()
-		tobechanged.Set(reflect.ValueOf(m.queryWithArgs[0].value))
-	}
-
-	if expectedText != query {
-		m.logger.Errorf("expected query: %q, actual query: %q", query, expectedText)
+	responseValue := reflect.ValueOf(response)
+	if !responseValue.Type().AssignableTo(destValue.Elem().Type()) {
+		m.logger.Errorf("cannot assign response of type %T to destination of type %T", response, dest)
 		return
 	}
 
-	if len(args) != len(expectedArgs) {
-		m.logger.Errorf("expected %d args, actual %d", len(expectedArgs), len(args))
-		return
-	}
-
-	for i := range args {
-		if args[i] != expectedArgs[i] {
-			m.logger.Errorf("expected arg %d, actual arg %d", args[i], expectedArgs[i])
-			return
-		}
-	}
+	destValue.Elem().Set(responseValue)
 }
 
 func (m sqlMockDB) HealthCheck() *datasource.Health {
@@ -144,8 +158,7 @@ func (m sqlMockDB) finish(t *testing.T) {
 func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...any) *queryWithArgs {
 	qr := queryWithArgs{queryText: query, arguments: args}
 
-	fieldType := reflect.TypeOf(value)
-	if fieldType.Kind() == reflect.Pointer {
+	if reflect.ValueOf(value).Kind() == reflect.Pointer {
 		qr.value = value
 	}
 
