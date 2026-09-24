@@ -3,6 +3,7 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,16 +28,22 @@ const (
 	shutdownRaced     = "MARKER:run-returned-first"
 )
 
-// closeRecordingLogger closes its channel when Shutdown closes the logger, which is the last thing
+// closeRecordingLogger closes its channel when the logger is closed, which is the last thing
 // App.Shutdown does. It tells the helper whether shutdown had finished at the moment Run returned,
-// without racing the shutdown goroutine's own logging.
+// without racing the shutdown goroutine's own logging. onClose, when set, is also called on every
+// Close, so a test can record where the close falls relative to other steps.
 type closeRecordingLogger struct {
 	logging.Logger
 
-	closed chan struct{}
+	closed  chan struct{}
+	onClose func()
 }
 
 func (l *closeRecordingLogger) Close() error {
+	if l.onClose != nil {
+		l.onClose()
+	}
+
 	select {
 	case <-l.closed:
 	default:
@@ -272,6 +279,66 @@ func TestApp_runCMD_exitCode(t *testing.T) {
 			assert.Equal(t, tc.wantExits, exits, "exit codes reported to the process")
 			assert.Contains(t, stdout, tc.wantStdout, "stdout")
 			assert.Equal(t, tc.wantStderr, stderr, "stderr")
+		})
+	}
+}
+
+// TestApp_runCMD_cleanupOrder pins the order of runCMD's final steps: the telemetry flush (observed
+// through the trace shutdown, which flushCMDTelemetry runs alongside the metrics flush), then the
+// logger close, and only then — for a failed command — the exit. Exiting any earlier would skip
+// the steps after it, dropping the final span batch or leaving the logger unclosed on exactly the
+// runs where they matter most.
+func TestApp_runCMD_cleanupOrder(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		handler    Handler
+		wantEvents []string
+	}{
+		{
+			desc:       "failing command",
+			handler:    func(*Context) (any, error) { return nil, errTest },
+			wantEvents: []string{"flush traces", "close logger", "exit(1)"},
+		},
+		{
+			desc:       "succeeding command",
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantEvents: []string{"flush traces", "close logger"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			original := os.Args
+
+			t.Cleanup(func() { os.Args = original })
+
+			os.Args = []string{"", "run"}
+
+			var events []string
+
+			record := func(event string) { events = append(events, event) }
+
+			app := &App{
+				cmd: &cmd{},
+				container: &container.Container{Logger: &closeRecordingLogger{
+					Logger:  logging.NewMockLogger(logging.ERROR),
+					closed:  make(chan struct{}),
+					onClose: func() { record("close logger") },
+				}},
+				shutdownTracer: func(context.Context) error {
+					record("flush traces")
+
+					return nil
+				},
+				exit: func(code int) { record(fmt.Sprintf("exit(%d)", code)) },
+			}
+			app.cmd.addRoute("run", tc.handler)
+
+			testutil.StdoutOutputForFunc(func() {
+				testutil.StderrOutputForFunc(app.runCMD)
+			})
+
+			assert.Equal(t, tc.wantEvents, events, "order of runCMD's final steps")
 		})
 	}
 }

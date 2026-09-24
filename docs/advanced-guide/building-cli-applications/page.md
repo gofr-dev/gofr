@@ -93,9 +93,13 @@ Scripts and CI read the exit status of a CLI application to tell whether it succ
 | The handler returns a `nil` error | `0` |
 | The handler returns a non-nil error (its data, if any, is still printed) | `1` |
 | The subcommand is missing or not registered | `1` |
-| `-h` / `--help` on its own or after a registered subcommand | `0` |
+| `help` as a bare word (it is not a help flag; only `-h` / `--help` are) | `1` |
+| The subcommand is registered with a `nil` handler | `1` |
+| `-h` / `--help` on its own or after a registered subcommand that has a handler | `0` |
 
-The error is written to stderr before the process exits. When a command fails, GoFr flushes
+The error is written to stderr before the process exits. A missing or unregistered subcommand
+(including a bare `help`) also prints the list of available commands to stdout; a subcommand
+registered with a `nil` handler prints only the error. When a command fails, GoFr flushes
 telemetry and closes the logger, then calls `os.Exit(1)`. Because of that, functions deferred in
 your `main()` (for example `defer db.Close()`) do not run when a command fails. Put cleanup that
 must always happen inside the handler rather than in a `defer` in `main()`.

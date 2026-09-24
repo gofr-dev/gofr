@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,7 +49,9 @@ func TestMain(m *testing.M) {
 }
 
 // runMainInSubprocess runs main() with args in a child copy of the test binary and returns its
-// stdout, stderr and exit code.
+// stdout, stderr and exit code: 0 when the child exits cleanly, otherwise the status it exited
+// with. It asserts nothing about that code, so callers check it; any failure other than a non-zero
+// exit (the child could not be started, for instance) fails the test.
 //
 // A failing command exits the process with a non-zero status, so it cannot run in-process
 // without taking the test binary down with it. -test.run pins the child to the calling test, so
@@ -63,11 +66,16 @@ func runMainInSubprocess(t *testing.T, args ...string) (stdout, stderr string, e
 
 	c.Stdout, c.Stderr = &outBuf, &errBuf
 
+	err := c.Run()
+
 	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return outBuf.String(), errBuf.String(), exitErr.ExitCode()
+	}
 
-	require.ErrorAs(t, c.Run(), &exitErr, "the child must exit with a non-zero status")
+	require.NoError(t, err, "running the child process")
 
-	return outBuf.String(), errBuf.String(), exitErr.ExitCode()
+	return outBuf.String(), errBuf.String(), 0
 }
 
 // setArgs replaces os.Args for the duration of the test and restores it
