@@ -21,6 +21,10 @@ var (
 	errTableNotExist = errors.New("ORA-00942: table or view does not exist")
 	errSomeTest      = errors.New("some error")
 	errQueryTest     = errors.New("query error")
+	errBeginTest     = errors.New("begin error")
+	errRowTest       = errors.New("row error")
+	errCommitTest    = errors.New("commit error")
+	errRollbackTest  = errors.New("rollback error")
 )
 
 func getOracleTestConnection(t *testing.T) (*MockConnection, *MockLogger, Client) {
@@ -738,4 +742,214 @@ func Test_OracleTx_Rollback(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func newTestOracleTx(t *testing.T) (*oracleTx, sqlmock.Sqlmock, *MockLogger) {
+	t.Helper()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	t.Cleanup(func() { db.Close() })
+
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+
+	mockLogger := NewMockLogger(gomock.NewController(t))
+
+	return &oracleTx{tx: sqlTx, logger: mockLogger}, mock, mockLogger
+}
+
+func Test_Oracle_Begin_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		conn       func(t *testing.T, mock sqlmock.Sqlmock, db *sql.DB) Connection
+		setupMocks func(mock sqlmock.Sqlmock, logger *MockLogger)
+		expErr     error
+	}{
+		{
+			desc: "connection is not a sql connection",
+			conn: func(t *testing.T, _ sqlmock.Sqlmock, _ *sql.DB) Connection {
+				t.Helper()
+				return NewMockConnection(gomock.NewController(t))
+			},
+			setupMocks: func(sqlmock.Sqlmock, *MockLogger) {},
+			expErr:     errInvalidConnType,
+		},
+		{
+			desc: "begin transaction fails",
+			conn: func(_ *testing.T, _ sqlmock.Sqlmock, db *sql.DB) Connection {
+				return &sqlConn{db: db}
+			},
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectBegin().WillReturnError(errBeginTest)
+				logger.EXPECT().Errorf("failed to begin transaction: %v", errBeginTest)
+			},
+			expErr: errBeginTest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+
+			defer db.Close()
+
+			mockLogger := NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(mock, mockLogger)
+
+			c := Client{conn: tc.conn(t, mock, db), logger: mockLogger}
+
+			tx, err := c.Begin()
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, tx)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_OracleTx_SelectContext_Errors(t *testing.T) {
+	tests := []struct {
+		desc      string
+		dest      any
+		setupMock func(mock sqlmock.Sqlmock)
+		expErr    error
+	}{
+		{
+			desc:      "destination is not a pointer to slice",
+			dest:      []map[string]any{},
+			setupMock: func(sqlmock.Sqlmock) {},
+			expErr:    errInvalidDestType,
+		},
+		{
+			desc: "query fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").WillReturnError(errQueryTest)
+			},
+			expErr: errQueryTest,
+		},
+		{
+			desc: "row iteration fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).RowError(0, errRowTest))
+			},
+			expErr: errRowTest,
+		},
+		{
+			desc: "destination slice has wrong element type",
+			dest: &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+			},
+			expErr: errInvalidDestType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			tx, mock, _ := newTestOracleTx(t)
+			tc.setupMock(mock)
+
+			err := tx.SelectContext(t.Context(), tc.dest, "SELECT id FROM users")
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_OracleTx_CommitRollback_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setupMocks func(mock sqlmock.Sqlmock, logger *MockLogger)
+		op         func(tx *oracleTx) error
+		expErr     error
+	}{
+		{
+			desc: "commit fails",
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectCommit().WillReturnError(errCommitTest)
+				logger.EXPECT().Debug(gomock.Any())
+				logger.EXPECT().Errorf("transaction commit failed: %v", errCommitTest)
+			},
+			op:     func(tx *oracleTx) error { return tx.Commit() },
+			expErr: errCommitTest,
+		},
+		{
+			desc: "rollback fails",
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectRollback().WillReturnError(errRollbackTest)
+				logger.EXPECT().Debug(gomock.Any())
+				logger.EXPECT().Errorf("transaction rollback failed: %v", errRollbackTest)
+			},
+			op:     func(tx *oracleTx) error { return tx.Rollback() },
+			expErr: errRollbackTest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			tx, mock, mockLogger := newTestOracleTx(t)
+			tc.setupMocks(mock, mockLogger)
+
+			err := tc.op(tx)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_sqlConn_Select_Errors(t *testing.T) {
+	tests := []struct {
+		desc      string
+		dest      any
+		setupMock func(mock sqlmock.Sqlmock)
+		expErr    error
+	}{
+		{
+			desc: "row iteration fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM dual").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).RowError(0, errRowTest))
+			},
+			expErr: errRowTest,
+		},
+		{
+			desc: "destination slice has wrong element type",
+			dest: &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM dual").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+			},
+			expErr: errInvalidDestType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+
+			defer db.Close()
+
+			tc.setupMock(mock)
+
+			s := &sqlConn{db: db}
+
+			err = s.Select(t.Context(), tc.dest, "SELECT id FROM dual")
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }

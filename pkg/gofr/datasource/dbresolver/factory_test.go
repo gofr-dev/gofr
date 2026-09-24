@@ -3,6 +3,7 @@ package dbresolver
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
+	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 func TestNewDBResolverProvider(t *testing.T) {
@@ -837,4 +839,157 @@ func TestCreateReplicaConnection_MissingDBName(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, replica)
 	assert.ErrorIs(t, err, errDBNameRequired)
+}
+
+// newSQLiteApp creates a gofr app whose primary SQL datasource is an in-process SQLite database.
+func newSQLiteApp(t *testing.T) *gofr.App {
+	t.Helper()
+
+	t.Setenv("DB_DIALECT", "sqlite")
+	t.Setenv("DB_NAME", filepath.Join(t.TempDir(), "primary.db"))
+
+	app := gofr.New()
+	require.NotNil(t, app.GetSQL())
+
+	t.Cleanup(func() { _ = app.GetSQL().Close() })
+
+	return app
+}
+
+func TestResolverProvider_Connect(t *testing.T) {
+	tests := []struct {
+		desc       string
+		newApp     func(t *testing.T) *gofr.App
+		replicas   []ReplicaCredential
+		setupMocks func(l *MockLogger)
+		expType    any
+	}{
+		{
+			desc:   "no replicas configured falls back to primary",
+			newApp: newSQLiteApp,
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Warn("No replicas configured - all operations will use primary")
+			},
+			expType: &gofrSQL.DB{},
+		},
+		{
+			desc:     "invalid replica configuration",
+			newApp:   newSQLiteApp,
+			replicas: []ReplicaCredential{{Host: "invalid-host", User: "user", Password: "pass"}},
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("Failed to create replicas: %v", gomock.Any())
+			},
+			expType: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			tc.setupMocks(mockLogger)
+
+			provider := NewDBResolverProvider(tc.newApp(t), &Config{Replicas: tc.replicas})
+			provider.UseLogger(mockLogger)
+			provider.UseMetrics(mockMetrics)
+
+			provider.Connect()
+
+			assert.IsType(t, tc.expType, provider.GetResolver())
+		})
+	}
+}
+
+func TestInitDBResolver(t *testing.T) {
+	tests := []struct {
+		desc     string
+		cfg      Config
+		expType  any
+		expCount int
+	}{
+		{
+			desc: "resolver with replica replaces primary SQL",
+			cfg: Config{
+				Strategy:      StrategyRandom,
+				ReadFallback:  true,
+				PrimaryRoutes: []string{"/admin/*"},
+				Replicas:      []ReplicaCredential{{Host: "localhost:3307", User: "user", Password: "pass"}},
+			},
+			expType:  &Resolver{},
+			expCount: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			app := newSQLiteApp(t)
+
+			err := InitDBResolver(app, &tc.cfg)
+			require.NoError(t, err)
+
+			resolver := app.GetSQL()
+			require.IsType(t, tc.expType, resolver)
+
+			r := resolver.(*Resolver)
+			assert.Len(t, r.replicas, tc.expCount)
+			assert.IsType(t, &RandomStrategy{}, r.strategy)
+			assert.True(t, r.isPrimaryRoute("/admin/users"))
+		})
+	}
+}
+
+func TestConnectReplicas_AllReplicaConnectionsFail(t *testing.T) {
+	tests := []struct {
+		desc     string
+		replicas []ReplicaCredential
+		expErr   error
+	}{
+		{
+			desc: "DB_NAME missing for every replica",
+			replicas: []ReplicaCredential{
+				{Host: "replica1:3307", User: "user", Password: "pass"},
+				{Host: "replica2:3308", User: "user", Password: "pass"},
+			},
+			expErr: errAllReplicasFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			for i, r := range tc.replicas {
+				mockLogger.EXPECT().Warnf("Failed to connect to replica #%d (%s): %v", i+1, r.Host, errDBNameRequired)
+			}
+
+			replicas, err := connectReplicas(&Config{Replicas: tc.replicas}, config.NewMockConfig(map[string]string{}),
+				mockLogger, mockMetrics)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, replicas)
+		})
+	}
+}
+
+func TestOptimizedConnections_NonPositiveValue(t *testing.T) {
+	tests := []struct {
+		desc     string
+		value    string
+		expected string
+	}{
+		{desc: "zero uses default", value: "0", expected: "2"},
+		{desc: "negative uses default", value: "-3", expected: "2"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{"DB_REPLICA_MAX_IDLE_CONNECTIONS": tc.value})
+
+			assert.Equal(t, tc.expected, optimizedIdleConnections(mockConfig))
+		})
+	}
 }

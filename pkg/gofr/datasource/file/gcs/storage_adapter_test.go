@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
 
@@ -1179,4 +1180,205 @@ func TestStorageAdapter_Connect_NoCredentials_DoesNotCache(t *testing.T) {
 	// When no credentials JSON is set, the cached fields stay empty (Workload Identity path).
 	assert.Empty(t, adapter.saEmail)
 	assert.Empty(t, adapter.saPrivateKey)
+}
+
+// newForbiddenAdapter returns an adapter whose GCS client talks to a server that rejects every request.
+func newForbiddenAdapter(t *testing.T) *storageAdapter {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := storage.NewClient(t.Context(), option.WithEndpoint(srv.URL), option.WithoutAuthentication())
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	return &storageAdapter{client: client, bucket: client.Bucket("bucket")}
+}
+
+func TestStorageAdapter_ServerErrors(t *testing.T) {
+	adapter := newForbiddenAdapter(t)
+
+	tests := []struct {
+		name   string
+		call   func() error
+		expMsg string
+	}{
+		{
+			name:   "health check",
+			call:   func() error { return adapter.Health(t.Context()) },
+			expMsg: "GCS health check failed",
+		},
+		{
+			name: "new reader",
+			call: func() error {
+				_, err := adapter.NewReader(t.Context(), "file.txt")
+				return err
+			},
+			expMsg: "failed to create reader for \"file.txt\"",
+		},
+		{
+			name: "new range reader",
+			call: func() error {
+				_, err := adapter.NewRangeReader(t.Context(), "file.txt", 0, 5)
+				return err
+			},
+			expMsg: "failed to create range reader for \"file.txt\"",
+		},
+		{
+			name: "stat object",
+			call: func() error {
+				_, err := adapter.StatObject(t.Context(), "file.txt")
+				return err
+			},
+			expMsg: "failed to get object attrs for \"file.txt\"",
+		},
+		{
+			name:   "delete object attrs lookup",
+			call:   func() error { return adapter.DeleteObject(t.Context(), "file.txt") },
+			expMsg: "failed to get object attrs for \"file.txt\"",
+		},
+		{
+			name:   "copy object",
+			call:   func() error { return adapter.CopyObject(t.Context(), "a.txt", "b.txt") },
+			expMsg: "failed to copy object from \"a.txt\" to \"b.txt\"",
+		},
+		{
+			name: "list objects",
+			call: func() error {
+				_, err := adapter.ListObjects(t.Context(), "prefix/")
+				return err
+			},
+			expMsg: "failed to list objects with prefix \"prefix/\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+
+			var apiErr *googleapi.Error
+
+			require.ErrorAs(t, err, &apiErr)
+			assert.Equal(t, http.StatusForbidden, apiErr.Code)
+			assert.Contains(t, err.Error(), tt.expMsg)
+		})
+	}
+}
+
+func TestStorageAdapter_Connect_Errors(t *testing.T) {
+	forbiddenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer forbiddenSrv.Close()
+
+	tests := []struct {
+		name   string
+		cfg    *Config
+		expMsg string
+	}{
+		{
+			name:   "invalid credentials json",
+			cfg:    &Config{BucketName: "bucket", CredentialsJSON: "{not-json"},
+			expMsg: "failed to create storage client",
+		},
+		{
+			name:   "bucket validation rejected by server",
+			cfg:    &Config{BucketName: "bucket", EndPoint: forbiddenSrv.URL},
+			expMsg: "bucket validation failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := &storageAdapter{cfg: tt.cfg}
+
+			err := adapter.Connect(t.Context())
+
+			require.ErrorContains(t, err, tt.expMsg)
+			assert.Nil(t, adapter.client)
+			assert.Nil(t, adapter.bucket)
+		})
+	}
+}
+
+func TestStorageAdapter_Connect_AlreadyConnected(t *testing.T) {
+	adapter := newForbiddenAdapter(t)
+	client, bucket := adapter.client, adapter.bucket
+
+	require.NoError(t, adapter.Connect(t.Context()))
+	assert.Same(t, client, adapter.client)
+	assert.Same(t, bucket, adapter.bucket)
+}
+
+func TestStorageAdapter_Connect_UnparsableSigningCredentials(t *testing.T) {
+	srv := httptest.NewServer(bucketAttrsHandler("bucket"))
+	defer srv.Close()
+
+	mockLogger := file.NewMockLogger(gomock.NewController(t))
+	mockLogger.EXPECT().Errorf(
+		"credentials cannot be used for signed URLs: %v; signed URL calls will use ambient credentials", gomock.Any())
+
+	adapter := &storageAdapter{
+		cfg:    &Config{BucketName: "bucket", EndPoint: srv.URL, CredentialsJSON: `{"client_email":"sa@example.com"}`},
+		logger: mockLogger,
+	}
+
+	require.NoError(t, adapter.Connect(t.Context()))
+	assert.NotNil(t, adapter.bucket)
+	assert.Empty(t, adapter.saEmail)
+	assert.Empty(t, adapter.saPrivateKey)
+	require.NoError(t, adapter.Close())
+}
+
+func TestStorageAdapter_NewWriter_ReturnsObjectWriter(t *testing.T) {
+	adapter := newForbiddenAdapter(t)
+
+	w := adapter.NewWriter(t.Context(), "file.txt")
+
+	sw, ok := w.(*storage.Writer)
+	require.True(t, ok)
+	assert.Equal(t, "file.txt", sw.ObjectAttrs.Name)
+}
+
+func TestStorageAdapter_DeleteObject_Errors(t *testing.T) {
+	tests := []struct {
+		name       string
+		attrStatus int
+		expErr     error
+	}{
+		{name: "object does not exist", attrStatus: http.StatusNotFound, expErr: errObjectNotFound},
+		{name: "delete rejected", attrStatus: http.StatusOK, expErr: errFailedToDeleteObject},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tt.attrStatus)
+					_, _ = w.Write([]byte(`{"name":"file.txt","generation":"1"}`))
+
+					return
+				}
+
+				http.Error(w, "forbidden", http.StatusForbidden)
+			}))
+			defer srv.Close()
+
+			client, err := storage.NewClient(t.Context(), option.WithEndpoint(srv.URL), option.WithoutAuthentication())
+			require.NoError(t, err)
+
+			defer client.Close()
+
+			adapter := &storageAdapter{client: client, bucket: client.Bucket("bucket")}
+
+			err = adapter.DeleteObject(t.Context(), "file.txt")
+
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
 }

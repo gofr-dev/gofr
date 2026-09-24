@@ -405,3 +405,83 @@ func TestFiles_ChDir_ReturnsError(t *testing.T) {
 
 	require.ErrorIs(t, files.ChDir("any"), errChDirNotSupported)
 }
+
+func TestNew(t *testing.T) {
+	cfg := Config{User: "user", Password: "pass", Host: "localhost", Port: 22}
+
+	fs := New(cfg)
+
+	require.Equal(t, &FileSystem{config: cfg}, fs)
+}
+
+func TestFileSystem_UseLogger(t *testing.T) {
+	logger := NewMockLogger(gomock.NewController(t))
+
+	testCases := []struct {
+		desc      string
+		logger    any
+		expLogger Logger
+	}{
+		{desc: "valid logger is set", logger: logger, expLogger: logger},
+		{desc: "invalid logger is ignored", logger: "not a logger", expLogger: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			fs := New(Config{})
+
+			fs.UseLogger(tc.logger)
+
+			require.Equal(t, tc.expLogger, fs.logger)
+		})
+	}
+}
+
+func TestFileSystem_UseMetrics(t *testing.T) {
+	metrics := NewMockMetrics(gomock.NewController(t))
+
+	testCases := []struct {
+		desc       string
+		metrics    any
+		expMetrics Metrics
+	}{
+		{desc: "valid metrics is set", metrics: metrics, expMetrics: metrics},
+		{desc: "invalid metrics is ignored", metrics: "not metrics", expMetrics: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			fs := New(Config{})
+
+			fs.UseMetrics(tc.metrics)
+
+			require.Equal(t, tc.expMetrics, fs.metrics)
+		})
+	}
+}
+
+func TestFileSystem_Connect_DialError(t *testing.T) {
+	testCases := []struct {
+		desc string
+		cfg  Config
+	}{
+		// An invalid port makes the dial fail before any network I/O happens.
+		{desc: "invalid port", cfg: Config{Host: "localhost", Port: -1}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			logger := NewMockLogger(gomock.NewController(t))
+
+			logger.EXPECT().Debugf("connecting to SFTP server with host `%v` and port `%v`", tc.cfg.Host, tc.cfg.Port)
+			logger.EXPECT().Errorf("failed to connect with sftp with err %v", gomock.Any())
+
+			fs := New(tc.cfg)
+			fs.UseLogger(logger)
+
+			fs.Connect()
+
+			require.Nil(t, fs.client)
+		})
+	}
+}
