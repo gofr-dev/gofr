@@ -116,6 +116,7 @@ var (
 	errMockXRange      = errors.New("mock xrange error")
 	errMockDel         = errors.New("mock del error")
 	errBusyGroup       = errors.New("BUSYGROUP Consumer Group name already exists")
+	errWrongType       = errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
 )
 
 type testRedisClient struct {
@@ -2891,5 +2892,217 @@ func TestPubSub_ResubscribeAll_StreamMode_RestartsGoroutine(t *testing.T) {
 		assert.Equal(t, "after-resub", string(msg.Value))
 	case <-time.After(3 * time.Second):
 		t.Fatal("did not receive message after resubscription")
+	}
+}
+
+// newZeroConfigPubSub builds a PubSub on top of miniredis with an otherwise empty Config so that
+// the default fallbacks (mode, buffer size, query timeout/limit) are exercised.
+// When connected is false the miniredis server is stopped.
+func newZeroConfigPubSub(t *testing.T, connected bool) *PubSub {
+	t.Helper()
+
+	client, cfg := newMiniredisClient(t, connected)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	ps := newPubSub(client, cfg, logging.NewMockLogger(logging.DEBUG), mockMetrics)
+
+	t.Cleanup(func() { _ = ps.Close() })
+
+	return ps
+}
+
+type zeroConfigCase struct {
+	desc   string
+	action func(ctx context.Context, ps *PubSub) (any, error)
+	expRes any
+	expErr error
+}
+
+func runZeroConfigCases(t *testing.T, connected bool, tests []zeroConfigCase) {
+	t.Helper()
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ps := newZeroConfigPubSub(t, connected)
+
+			res, err := tc.action(t.Context(), ps)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expRes, res)
+		})
+	}
+}
+
+func TestPubSub_ZeroConfig_EmptyTopic(t *testing.T) {
+	// Operations with an empty topic name are rejected before reaching Redis.
+	runZeroConfigCases(t, true, []zeroConfigCase{
+		{
+			desc: "publish with empty topic",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return nil, ps.Publish(ctx, "", []byte("msg"))
+			},
+			expErr: errEmptyTopicName,
+		},
+		{
+			desc: "subscribe with empty topic",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return ps.Subscribe(ctx, "")
+			},
+			expRes: (*pubsub.Message)(nil),
+			expErr: errEmptyTopicName,
+		},
+		{
+			desc: "query with empty topic",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return ps.Query(ctx, "")
+			},
+			expRes: []byte(nil),
+			expErr: errEmptyTopicName,
+		},
+		{
+			desc: "unsubscribe with empty topic",
+			action: func(_ context.Context, ps *PubSub) (any, error) {
+				return nil, ps.unsubscribe("")
+			},
+			expErr: errEmptyTopicName,
+		},
+	})
+}
+
+func TestPubSub_ZeroConfig_Query(t *testing.T) {
+	// With an empty Config, Query falls back to streams mode with the default timeout and limit.
+	tests := []struct {
+		desc   string
+		setup  func(t *testing.T, ctx context.Context, ps *PubSub)
+		topic  string
+		expRes []byte
+		expErr require.ErrorAssertionFunc
+	}{
+		{
+			desc: "publish defaults to streams mode and query uses default timeout and limit",
+			setup: func(t *testing.T, ctx context.Context, ps *PubSub) {
+				t.Helper()
+				require.NoError(t, ps.Publish(ctx, "orders", []byte("hello")))
+			},
+			topic:  "orders",
+			expRes: []byte("hello"),
+			expErr: require.NoError,
+		},
+		{
+			desc: "query on a key of the wrong type returns redis error",
+			setup: func(t *testing.T, ctx context.Context, ps *PubSub) {
+				t.Helper()
+				require.NoError(t, ps.client.Set(ctx, "plain-key", "value", 0).Err())
+			},
+			topic: "plain-key",
+			expErr: func(t require.TestingT, err error, _ ...any) {
+				require.ErrorContains(t, err, "WRONGTYPE")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ps := newZeroConfigPubSub(t, true)
+
+			tc.setup(t, t.Context(), ps)
+
+			res, err := ps.Query(t.Context(), tc.topic)
+
+			tc.expErr(t, err)
+			assert.Equal(t, tc.expRes, res)
+		})
+	}
+}
+
+func TestPubSub_ZeroConfig_Connected(t *testing.T) {
+	// With an empty Config the client falls back to streams mode and default limits.
+	runZeroConfigCases(t, true, []zeroConfigCase{
+		{
+			desc: "create topic in default streams mode without consumer group",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return nil, ps.CreateTopic(ctx, "orders")
+			},
+			expErr: errConsumerGroupNotProvided,
+		},
+		{
+			desc: "unsubscribe in default streams mode cleans up stream consumers",
+			action: func(_ context.Context, ps *PubSub) (any, error) {
+				ps.mu.Lock()
+				ps.subStarted["orders"] = struct{}{}
+				ps.mu.Unlock()
+
+				err := ps.unsubscribe("orders")
+
+				ps.mu.RLock()
+				_, exists := ps.subStarted["orders"]
+				ps.mu.RUnlock()
+
+				return exists, err
+			},
+			expRes: false,
+		},
+	})
+}
+
+func TestPubSub_ZeroConfig_Disconnected(t *testing.T) {
+	// When Redis is unreachable, operations fail fast with errClientNotConnected.
+	runZeroConfigCases(t, false, []zeroConfigCase{
+		{
+			desc: "publish when not connected",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return nil, ps.Publish(ctx, "orders", []byte("msg"))
+			},
+			expErr: errClientNotConnected,
+		},
+		{
+			desc: "query when not connected",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return ps.Query(ctx, "orders")
+			},
+			expRes: []byte(nil),
+			expErr: errClientNotConnected,
+		},
+		{
+			desc: "delete topic in default streams mode when not connected",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				return nil, ps.DeleteTopic(ctx, "orders")
+			},
+			expErr: errClientNotConnected,
+		},
+		{
+			desc: "subscribe when not connected returns nil once context is done",
+			action: func(ctx context.Context, ps *PubSub) (any, error) {
+				ctx, cancel := context.WithTimeout(ctx, 3*subscribeRetryInterval)
+				defer cancel()
+
+				return ps.Subscribe(ctx, "orders")
+			},
+			expRes: (*pubsub.Message)(nil),
+		},
+	})
+}
+
+func TestPubSub_IsPermanentError(t *testing.T) {
+	tests := []struct {
+		desc string
+		err  error
+		exp  bool
+	}{
+		{desc: "nil error", err: nil, exp: false},
+		{desc: "wrong type error", err: errWrongType, exp: true},
+		{desc: "transient error", err: errMockPing, exp: false},
+	}
+
+	ps := &PubSub{}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, ps.isPermanentError(tc.err))
+		})
 	}
 }

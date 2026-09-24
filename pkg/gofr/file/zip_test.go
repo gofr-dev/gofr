@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -348,6 +349,83 @@ func TestCreateLocalCopies_PathTraversal_Error(t *testing.T) {
 			require.Error(t, err)
 			require.ErrorIs(t, err, errPathTraversal)
 			assert.Contains(t, err.Error(), tt.filename)
+		})
+	}
+}
+
+// rawZip builds an archive whose single entry is written verbatim from header and data, so the
+// header may declare a compression method or size that does not match the stored bytes.
+func rawZip(t *testing.T, header *zip.FileHeader, data []byte) []byte {
+	t.Helper()
+
+	buf := bytes.NewBuffer(nil)
+	zipWriter := zip.NewWriter(buf)
+
+	w, err := zipWriter.CreateRaw(header)
+	require.NoError(t, err)
+
+	_, err = w.Write(data)
+	require.NoError(t, err)
+
+	require.NoError(t, zipWriter.Close())
+
+	return buf.Bytes()
+}
+
+func TestNewZip_EntryErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		header *zip.FileHeader
+		expErr error
+	}{
+		{
+			name:   "unsupported compression method",
+			header: &zip.FileHeader{Name: "file.txt", Method: 99, CompressedSize64: 4, UncompressedSize64: 4},
+			expErr: zip.ErrAlgorithm,
+		},
+		{
+			name: "declared uncompressed size above limit",
+			header: &zip.FileHeader{Name: "file.txt", Method: zip.Store, CompressedSize64: 4,
+				UncompressedSize64: maxFileSize + 1},
+			expErr: errMaxFileSize,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			z, err := NewZip(rawZip(t, tt.header, []byte("data")))
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Nil(t, z)
+		})
+	}
+}
+
+func TestCreateLocalCopies_DirectoryCreationErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		file file
+	}{
+		{
+			name: "directory entry beneath a regular file",
+			file: file{name: "blocker/sub", isDir: true},
+		},
+		{
+			name: "file entry whose parent is a regular file",
+			file: file{name: "blocker/file.txt", content: []byte("content"), size: 7},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			destDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(destDir, "blocker"), []byte("x"), 0o600))
+
+			z := &Zip{Files: map[string]file{tt.file.name: tt.file}}
+
+			err := z.CreateLocalCopies(destDir)
+
+			require.ErrorIs(t, err, syscall.ENOTDIR)
 		})
 	}
 }

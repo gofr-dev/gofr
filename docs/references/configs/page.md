@@ -134,7 +134,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACE_EXPORTER
--  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp.
+-  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp, gcp. `gcp` exports directly to Google Cloud's Telemetry (OTLP) API using Application Default Credentials, and requires the blank import `_ "gofr.dev/pkg/gofr/traces/exporters/gcp"`.
 
 ---
 
@@ -152,7 +152,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_URL
--  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger. An `http://` or `https://` scheme selects the transport; a schemeless `host:port` is governed by TRACER_INSECURE.
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin, jaeger or otlp; optional for gcp, which defaults to `telemetry.googleapis.com:443`. For zipkin, jaeger and otlp an `http://` or `https://` scheme selects the transport, and a schemeless `host:port` is governed by TRACER_INSECURE. For gcp the value must be a schemeless `host:port` — that destination is always TLS on 443, so a scheme is rejected at startup rather than interpreted.
 
 ---
 

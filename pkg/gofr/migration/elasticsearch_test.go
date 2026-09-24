@@ -389,3 +389,108 @@ func TestElasticsearchMigrator_commitMigration_SkipsWhenNotUsed(t *testing.T) {
 	err := m.commitMigration(c, data)
 	assert.NoError(t, err)
 }
+
+func TestExtractLastMigrationVersion(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		result map[string]any
+		expVer int64
+	}{
+		{desc: "missing hits", result: map[string]any{}, expVer: 0},
+		{desc: "hits list not a slice", result: map[string]any{"hits": map[string]any{"hits": "bad"}}, expVer: 0},
+		{desc: "first hit not a map", result: map[string]any{"hits": map[string]any{"hits": []any{"bad"}}}, expVer: 0},
+		{
+			desc:   "source not a map",
+			result: map[string]any{"hits": map[string]any{"hits": []any{map[string]any{"_source": "bad"}}}},
+			expVer: 0,
+		},
+		{
+			desc: "version not a number",
+			result: map[string]any{"hits": map[string]any{"hits": []any{
+				map[string]any{"_source": map[string]any{"version": "5"}},
+			}}},
+			expVer: 0,
+		},
+		{
+			desc: "valid version",
+			result: map[string]any{"hits": map[string]any{"hits": []any{
+				map[string]any{"_source": map[string]any{"version": float64(12)}},
+			}}},
+			expVer: 12,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expVer, extractLastMigrationVersion(tc.result))
+		})
+	}
+}
+
+func TestElasticsearchMigrator_getLastMigration_Errors(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		searchErr  error
+		setupMocks func(m *Mockmigrator, c *container.Container)
+		expVersion int64
+		expErr     error
+	}{
+		{
+			desc:       "search error",
+			searchErr:  assert.AnError,
+			setupMocks: func(*Mockmigrator, *container.Container) {},
+			expVersion: -1,
+			expErr:     assert.AnError,
+		},
+		{
+			desc: "base migrator error",
+			setupMocks: func(m *Mockmigrator, c *container.Container) {
+				m.EXPECT().getLastMigration(c).Return(int64(0), assert.AnError)
+			},
+			expVersion: -1,
+			expErr:     assert.AnError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
+			mockMigrator := NewMockmigrator(ctrl)
+
+			mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+				getLastElasticsearchMigrationQuery()).Return(map[string]any{}, tc.searchErr)
+			tc.setupMocks(mockMigrator, mockContainer)
+
+			mg := elasticsearchMigrator{elasticsearchDS: elasticsearchDS{client: mockElasticsearch}, migrator: mockMigrator}
+
+			lastMigration, err := mg.getLastMigration(mockContainer)
+
+			assert.Equal(t, tc.expVersion, lastMigration)
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestElasticsearchMigrator_Delegation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockContainer.Logger = mockLogger
+
+	m := elasticsearchMigrator{migrator: mockMigrator}
+	data := transactionData{MigrationNumber: 4}
+
+	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(4))
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(assert.AnError)
+	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(assert.AnError)
+
+	m.rollback(mockContainer, data)
+
+	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), assert.AnError)
+	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), assert.AnError)
+	assert.Equal(t, "Elasticsearch", m.name())
+}

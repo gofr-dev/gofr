@@ -76,6 +76,10 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 			response: "",
 		},
 		{
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte("storedUser:wrongPass")),
+			err:    ErrorInvalidAuthorizationHeader{key: headerAuthorization},
+		},
+		{
 			header:   "Basic " + base64.StdEncoding.EncodeToString([]byte("storedUser:storedPass")),
 			response: "storedUser",
 		},
@@ -191,6 +195,12 @@ func TestBasicAuthMiddleware_validateCredentials(t *testing.T) {
 			users:    users,
 			success:  true,
 		},
+		{
+			username: "unknownUser",
+			password: "storedPass",
+			users:    users,
+			success:  false,
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
@@ -202,6 +212,43 @@ func TestBasicAuthMiddleware_validateCredentials(t *testing.T) {
 			}
 			success := provider.validateCredentials(tc.username, tc.password)
 			assert.Equal(t, tc.success, success)
+		})
+	}
+}
+
+func TestBasicAuthMiddleware(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		header    string
+		expStatus int
+		expValue  any
+	}{
+		{desc: "missing authorization header", expStatus: http.StatusUnauthorized},
+		{desc: "wrong password", header: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:wrong")),
+			expStatus: http.StatusUnauthorized},
+		{desc: "valid credentials", header: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
+			expStatus: http.StatusOK, expValue: "user"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var gotValue any
+
+			handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"user": "password"}})(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					gotValue = r.Context().Value(Username)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.Header.Set(headerAuthorization, tc.header)
+
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expStatus, rr.Code)
+			assert.Equal(t, tc.expValue, gotValue)
 		})
 	}
 }
