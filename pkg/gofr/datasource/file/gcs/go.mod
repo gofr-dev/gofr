@@ -3,12 +3,12 @@ module gofr.dev/pkg/gofr/datasource/file/gcs
 go 1.26.0
 
 require (
-	cloud.google.com/go/storage v1.64.0
+	cloud.google.com/go/storage v1.68.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.57.0
 	golang.org/x/oauth2 v0.37.0
-	google.golang.org/api v0.297.0
+	google.golang.org/api v0.298.0
 )
 
 require (
@@ -37,7 +37,7 @@ require (
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/spiffe/go-spiffe/v2 v2.7.0 // indirect
+	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.46.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.68.0 // indirect
@@ -57,7 +57,7 @@ require (
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20260723164925-7274b71286bd // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260723164925-7274b71286bd // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260904194346-d0f1323225a4 // indirect
-	google.golang.org/grpc v1.83.2 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260921155816-b14227669459 // indirect
+	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
