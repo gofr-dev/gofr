@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -685,4 +686,360 @@ func TestHealthCheck_ContextCanceled(t *testing.T) {
 
 	require.Nil(t, resp)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestConnect(t *testing.T) {
+	tests := []struct {
+		desc       string
+		body       string
+		tracer     any
+		setupMocks func(l *MockLogger)
+	}{
+		{
+			desc:   "version fetched successfully",
+			body:   `{"version":"2.4.0"}`,
+			tracer: otel.GetTracerProvider().Tracer("gofr-opentsdb"),
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Logf("connected to OpenTSDB at %s", gomock.Any()).Times(1)
+			},
+		},
+		{
+			desc: "version request fails to parse",
+			body: `not-json`,
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("unmarshal %s error: %s", gomock.Any(), gomock.Any()).Times(1)
+				l.EXPECT().Errorf("error while connecting to OpenTSDB: %v", gomock.Any()).Times(1)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			host := server.Listener.Addr().String()
+
+			mockLogger := NewMockLogger(gomock.NewController(t))
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+			tc.setupMocks(mockLogger)
+
+			client := New(Config{Host: host})
+			client.UseLogger(mockLogger)
+			client.UseTracer(tc.tracer)
+
+			client.Connect()
+
+			assert.Equal(t, "http://"+host, client.endpoint)
+			assert.Equal(t, defaultMaxPutPointsNum, client.config.MaxPutPointsNum)
+		})
+	}
+}
+
+func TestPutDataPoints_Errors(t *testing.T) {
+	validPoints := []DataPoint{{Metric: "cpu", Timestamp: 1, Value: 1, Tags: map[string]string{"host": "h"}}}
+
+	tests := []struct {
+		desc     string
+		datas    any
+		resp     any
+		param    string
+		mockCall func(m *MockhttpClient)
+		expErr   error
+	}{
+		{
+			desc:     "invalid response type",
+			datas:    validPoints,
+			resp:     &QueryResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidResponseType,
+		},
+		{
+			desc:     "empty datapoints",
+			datas:    []DataPoint{},
+			resp:     &PutResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidDataPoint,
+		},
+		{
+			desc:  "http request failure",
+			datas: validPoints,
+			resp:  &PutResponse{},
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed)
+			},
+			expErr: errRequestFailed,
+		},
+		{
+			desc:  "response contains put errors",
+			datas: validPoints,
+			resp:  &PutResponse{},
+			param: "summary",
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body: io.NopCloser(strings.NewReader(
+						`{"failed":1,"success":0,"errors":[{"datapoint":{"metric":"cpu"},"error":"bad"}]}`)),
+				}, nil)
+			},
+			expErr: errUnexpected,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockHTTP := setOpenTSDBTest(t)
+			tc.mockCall(mockHTTP)
+
+			err := client.PutDataPoints(t.Context(), tc.datas, tc.param, tc.resp)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestQueryDataPoints_Errors(t *testing.T) {
+	validQuery := []SubQuery{{Aggregator: "sum", Metric: "cpu"}}
+
+	tests := []struct {
+		desc      string
+		param     any
+		resp      any
+		mockCall  func(m *MockhttpClient)
+		expErrMsg string
+	}{
+		{
+			desc:      "invalid param type",
+			param:     QueryParam{},
+			resp:      &QueryResponse{},
+			mockCall:  func(*MockhttpClient) {},
+			expErrMsg: "Must be *QueryParam",
+		},
+		{
+			desc:      "invalid response type",
+			param:     &QueryParam{},
+			resp:      &PutResponse{},
+			mockCall:  func(*MockhttpClient) {},
+			expErrMsg: "Must be *QueryResponse",
+		},
+		{
+			desc:      "invalid query params",
+			param:     &QueryParam{Start: 1},
+			resp:      &QueryResponse{},
+			mockCall:  func(*MockhttpClient) {},
+			expErrMsg: errInvalidQueryParam.Error(),
+		},
+		{
+			desc: "query body marshal failure",
+			param: &QueryParam{Start: 1, Queries: []SubQuery{{
+				Aggregator: "sum", Metric: "cpu", RateParams: map[string]any{queryRateOptionCounter: make(chan int)},
+			}}},
+			resp:      &QueryResponse{},
+			mockCall:  func(*MockhttpClient) {},
+			expErrMsg: "failed to marshal query param",
+		},
+		{
+			desc:  "http request failure",
+			param: &QueryParam{Start: 1, Queries: validQuery},
+			resp:  &QueryResponse{},
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed)
+			},
+			expErrMsg: errRequestFailed.Error(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockHTTP := setOpenTSDBTest(t)
+			tc.mockCall(mockHTTP)
+
+			err := client.QueryDataPoints(t.Context(), tc.param, tc.resp)
+
+			require.ErrorContains(t, err, tc.expErrMsg)
+		})
+	}
+}
+
+func TestQueryLatestDataPoints_Errors(t *testing.T) {
+	tests := []struct {
+		desc     string
+		param    any
+		resp     any
+		mockCall func(m *MockhttpClient)
+		expErr   error
+	}{
+		{
+			desc:     "invalid param type",
+			param:    QueryLastParam{},
+			resp:     &QueryLastResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidParam,
+		},
+		{
+			desc:     "invalid response type",
+			param:    &QueryLastParam{},
+			resp:     &QueryResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidResponseType,
+		},
+		{
+			desc:     "invalid query last params",
+			param:    &QueryLastParam{Queries: []SubQueryLast{{Metric: ""}}},
+			resp:     &QueryLastResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidQueryParam,
+		},
+		{
+			desc:  "http request failure",
+			param: &QueryLastParam{Queries: []SubQueryLast{{Metric: "cpu"}}},
+			resp:  &QueryLastResponse{},
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed)
+			},
+			expErr: errRequestFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockHTTP := setOpenTSDBTest(t)
+			tc.mockCall(mockHTTP)
+
+			err := client.QueryLatestDataPoints(t.Context(), tc.param, tc.resp)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestQueryAnnotation_Errors(t *testing.T) {
+	tests := []struct {
+		desc     string
+		param    map[string]any
+		resp     any
+		mockCall func(m *MockhttpClient)
+		expErr   error
+	}{
+		{
+			desc:     "invalid response type",
+			param:    map[string]any{anQueryTSUid: "0001"},
+			resp:     &QueryResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidResponseType,
+		},
+		{
+			desc:     "empty query params",
+			param:    map[string]any{},
+			resp:     &AnnotationResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidQueryParam,
+		},
+		{
+			desc:  "http request failure",
+			param: map[string]any{anQueryTSUid: "0001"},
+			resp:  &AnnotationResponse{},
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed)
+			},
+			expErr: errRequestFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockHTTP := setOpenTSDBTest(t)
+			tc.mockCall(mockHTTP)
+
+			err := client.QueryAnnotation(t.Context(), tc.param, tc.resp)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestPutAnnotationSuccess(t *testing.T) {
+	client, mockHTTP := setOpenTSDBTest(t)
+
+	anno := Annotation{StartTime: 1728841614, TSUID: "000001000001000002", Description: "updated"}
+
+	mockHTTP.EXPECT().
+		Do(gomock.Any()).
+		DoAndReturn(func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, http.MethodPut, req.Method)
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body: io.NopCloser(strings.NewReader(
+					`{"tsuid":"000001000001000002","description":"updated","startTime":1728841614}`)),
+			}, nil
+		}).Times(1)
+
+	resp := &AnnotationResponse{}
+
+	err := client.PutAnnotation(t.Context(), &anno, resp)
+
+	require.NoError(t, err)
+	assert.Equal(t, anno.TSUID, resp.TSUID)
+	assert.Equal(t, anno.Description, resp.Description)
+}
+
+func TestGetAggregators_Errors(t *testing.T) {
+	tests := []struct {
+		desc     string
+		resp     any
+		mockCall func(m *MockhttpClient)
+		expErr   error
+	}{
+		{
+			desc:     "invalid response type",
+			resp:     &QueryResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidResponseType,
+		},
+		{
+			desc: "http request failure",
+			resp: &AggregatorsResponse{},
+			mockCall: func(m *MockhttpClient) {
+				m.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed)
+			},
+			expErr: errRequestFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockHTTP := setOpenTSDBTest(t)
+			tc.mockCall(mockHTTP)
+
+			err := client.GetAggregators(t.Context(), tc.resp)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestHealthCheck_VersionFailure(t *testing.T) {
+	client, mockHTTP := setOpenTSDBTest(t)
+
+	originalDial := dialContext
+
+	t.Cleanup(func() { dialContext = originalDial })
+
+	mockConn := NewMockconnection(gomock.NewController(t))
+	mockConn.EXPECT().Close().Return(nil).Times(1)
+
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
+		return mockConn, nil
+	}
+
+	mockHTTP.EXPECT().Do(gomock.Any()).Return(nil, errRequestFailed).Times(1)
+
+	resp, err := client.HealthCheck(t.Context())
+
+	require.ErrorIs(t, err, errRequestFailed)
+	assert.Nil(t, resp)
 }

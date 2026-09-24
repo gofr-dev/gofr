@@ -1,13 +1,18 @@
 package gofr
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -110,6 +115,41 @@ func TestQueryContentTypeGuard_Accept_QueryOnUnsupportedOnly(t *testing.T) {
 				assert.Empty(t, acceptQuery,
 					"Accept-Query belongs only on 415; %d is not a media-type refusal", tc.wantStatus)
 			}
+		})
+	}
+}
+
+func TestApp_add_BlockedPortIsFatal(t *testing.T) {
+	tests := []struct {
+		desc     string
+		register func(a *App)
+	}{
+		{desc: "GET route", register: func(a *App) { a.GET("/x", func(*Context) (any, error) { return nil, nil }) }},
+		{desc: "QUERY route", register: func(a *App) { a.QUERY("/x", func(*Context) (any, error) { return nil, nil }) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Occupy a port so isPortAvailable reports it as blocked.
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			defer listener.Close()
+
+			port := listener.Addr().(*net.TCPAddr).Port
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			// The gomock controller fails the test unless Fatalf is called exactly once with the blocked port.
+			// A real Fatalf exits the process, so the route registration that follows it is not asserted.
+			logger.EXPECT().Fatalf("http port %d is blocked or unreachable", port)
+
+			a := &App{
+				Config:     config.NewMockConfig(nil),
+				container:  &container.Container{Logger: logger},
+				httpServer: &httpServer{router: gofrHTTP.NewRouter(), port: port},
+			}
+
+			tc.register(a)
 		})
 	}
 }
