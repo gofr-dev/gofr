@@ -37,11 +37,26 @@ type mockSQL struct {
 	*expectedQuery
 }
 
+// errorReporter is the part of testing.TB the SQL mock needs to fail the test that made a mismatched call.
+type errorReporter interface {
+	Errorf(format string, args ...any)
+}
+
 // sqlMockDB wraps the go-mock-sql DB connection and expectations.
 type sqlMockDB struct {
 	*gofrSQL.DB
 	*expectedQuery
-	logger logging.Logger
+	logger   logging.Logger
+	reporter errorReporter
+}
+
+// reportf logs a mock mismatch and, when a reporter is set, fails the test.
+func (m sqlMockDB) reportf(format string, args ...any) {
+	m.logger.Errorf(format, args...)
+
+	if m.reporter != nil {
+		m.reporter.Errorf(format, args...)
+	}
 }
 
 func emptyExpectation(m *sqlMockDB) {
@@ -52,7 +67,7 @@ func emptyExpectation(m *sqlMockDB) {
 
 func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...any) {
 	if len(m.queryWithArgs) == 0 {
-		m.logger.Errorf("did not expect any calls for Select with query: %q", query)
+		m.reportf("did not expect any calls for Select with query: %q", query)
 		return
 	}
 
@@ -70,18 +85,18 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...an
 // matchesCall reports whether the actual query and args match the expectation, reporting the first mismatch.
 func (m sqlMockDB) matchesCall(expected queryWithArgs, query string, args []any) bool {
 	if expected.queryText != query {
-		m.logger.Errorf("expected query: %q, actual query: %q", expected.queryText, query)
+		m.reportf("expected query: %q, actual query: %q", expected.queryText, query)
 		return false
 	}
 
 	if len(args) != len(expected.arguments) {
-		m.logger.Errorf("expected %d args, actual %d", len(expected.arguments), len(args))
+		m.reportf("expected %d args, actual %d", len(expected.arguments), len(args))
 		return false
 	}
 
 	for i, arg := range args {
 		if !reflect.DeepEqual(expected.arguments[i], arg) {
-			m.logger.Errorf("expected arg %d: %v (%T), actual: %v (%T)", i, expected.arguments[i], expected.arguments[i], arg, arg)
+			m.reportf("expected arg %d: %v (%T), actual: %v (%T)", i, expected.arguments[i], expected.arguments[i], arg, arg)
 			return false
 		}
 	}
@@ -93,18 +108,18 @@ func (m sqlMockDB) matchesCall(expected queryWithArgs, query string, args []any)
 func (m sqlMockDB) assignResponse(response, dest any, query string) {
 	destValue := reflect.ValueOf(dest)
 	if destValue.Kind() != reflect.Pointer || destValue.IsNil() {
-		m.logger.Errorf("expected a non-nil pointer, actual %T", dest)
+		m.reportf("expected a non-nil pointer, actual %T", dest)
 		return
 	}
 
 	if response == nil {
-		m.logger.Errorf("received different expectations: %q", query)
+		m.reportf("received different expectations: %q", query)
 		return
 	}
 
 	responseValue := reflect.ValueOf(response)
 	if !responseValue.Type().AssignableTo(destValue.Elem().Type()) {
-		m.logger.Errorf("cannot assign response of type %T to destination of type %T", response, dest)
+		m.reportf("cannot assign response of type %T to destination of type %T", response, dest)
 		return
 	}
 

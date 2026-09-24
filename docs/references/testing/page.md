@@ -27,7 +27,7 @@ mock.SQL.ExpectSelect(ctx, &users, "SELECT id, name FROM users WHERE status = ?"
 
 When the handler calls `ctx.SQL.Select(ctx, &dest, "SELECT id, name FROM users WHERE status = ?", "active")`, `dest` is set to the response.
 
-The query text must match exactly, and the arguments must have the same count, values and types (compared with `reflect.DeepEqual`, so slices such as `IN` lists are supported). If the query or arguments do not match, the destination is left untouched and the mismatch is reported with the expected and actual values.
+The query text must match exactly, and the arguments must have the same count, values and types (compared with `reflect.DeepEqual`, so slices such as `IN` lists are supported). If the query or arguments do not match, the destination is left untouched and the test fails with a message showing the expected and actual values.
 
 ## Example of Unit Testing a REST API Using GoFr
 
