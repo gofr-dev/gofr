@@ -103,7 +103,7 @@ func httpEndpointWithSignalPath(endpoint string) string {
 		return endpoint
 	}
 
-	u.Path = "/v1/metrics"
+	u.Path = otlpMetricsSignalPath
 
 	return u.String()
 }

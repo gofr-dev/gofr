@@ -41,8 +41,8 @@ func Test_buildOTLPExporter_HTTPPathLessURLKeepsSignalPath(t *testing.T) {
 		path     string // path suffix on the endpoint, "" = path-less
 		wantPath string
 	}{
-		{name: "path-less", path: "", wantPath: "/v1/metrics"},
-		{name: "explicit signal path", path: "/v1/metrics", wantPath: "/v1/metrics"},
+		{name: "path-less", path: "", wantPath: otlpMetricsSignalPath},
+		{name: "explicit signal path", path: otlpMetricsSignalPath, wantPath: otlpMetricsSignalPath},
 		{name: "custom path", path: "/otlp/v1/metrics", wantPath: "/otlp/v1/metrics"},
 	}
 
