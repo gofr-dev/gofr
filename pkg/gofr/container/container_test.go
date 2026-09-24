@@ -26,6 +26,7 @@ import (
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -90,34 +91,38 @@ func TestContainer_googlePubSubInt(t *testing.T) {
 	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
 
 	testCases := []struct {
-		desc     string
-		configs  map[string]string
-		key      string
-		expected int
+		desc       string
+		configs    map[string]string
+		key        string
+		defaultVal int
+		expected   int
 	}{
 		{
-			desc:     "valid value is parsed",
-			configs:  map[string]string{"GOOGLE_MAX_OUTSTANDING_MESSAGES": "100"},
-			key:      "GOOGLE_MAX_OUTSTANDING_MESSAGES",
-			expected: 100,
+			desc:       "valid value is parsed",
+			configs:    map[string]string{"GOOGLE_MAX_OUTSTANDING_MESSAGES": "100"},
+			key:        "GOOGLE_MAX_OUTSTANDING_MESSAGES",
+			defaultVal: google.DefaultMaxOutstandingMessages,
+			expected:   100,
 		},
 		{
-			desc:     "unset falls back to 0 (SDK default)",
-			configs:  map[string]string{},
-			key:      "GOOGLE_MAX_OUTSTANDING_MESSAGES",
-			expected: 0,
+			desc:       "unset falls back to the GoFr default",
+			configs:    map[string]string{},
+			key:        "GOOGLE_MAX_OUTSTANDING_MESSAGES",
+			defaultVal: google.DefaultMaxOutstandingMessages,
+			expected:   google.DefaultMaxOutstandingMessages,
 		},
 		{
-			desc:     "invalid value falls back to 0 (SDK default)",
-			configs:  map[string]string{"GOOGLE_NUM_GOROUTINES": "not-a-number"},
-			key:      "GOOGLE_NUM_GOROUTINES",
-			expected: 0,
+			desc:       "invalid value falls back to the GoFr default",
+			configs:    map[string]string{"GOOGLE_NUM_GOROUTINES": "not-a-number"},
+			key:        "GOOGLE_NUM_GOROUTINES",
+			defaultVal: google.DefaultNumGoroutines,
+			expected:   google.DefaultNumGoroutines,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			got := c.googlePubSubInt(config.NewMockConfig(tc.configs), tc.key)
+			got := c.googlePubSubInt(config.NewMockConfig(tc.configs), tc.key, tc.defaultVal)
 
 			assert.Equal(t, tc.expected, got)
 		})

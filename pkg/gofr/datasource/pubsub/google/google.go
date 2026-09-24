@@ -28,14 +28,18 @@ const (
 	messageBufferSize    = 100
 )
 
+// Subscriber pull flow-control defaults, mirroring the SDK's DefaultReceiveSettings.
+const (
+	DefaultMaxOutstandingMessages = 1000
+	DefaultMaxOutstandingBytes    = 1_000_000_000 // 1 GB
+	DefaultNumGoroutines          = 10
+)
+
 type Config struct {
 	ProjectID        string
 	SubscriptionName string
 
-	// Pull flow control for the subscriber. Each field is optional; a zero value keeps the
-	// Google Pub/Sub SDK default (MaxOutstandingMessages=1000, MaxOutstandingBytes=1e9,
-	// NumGoroutines=10). NumGoroutines is the number of StreamingPull streams, not the handler
-	// concurrency.
+	// Optional pull flow control; zero uses the corresponding Default* value.
 	MaxOutstandingMessages int
 	MaxOutstandingBytes    int
 	NumGoroutines          int
@@ -380,20 +384,19 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	return subscription, nil
 }
 
-// applyReceiveSettings overrides the subscription's pull flow control with any values set in the
-// Config. A zero value is left untouched, so the Google Pub/Sub SDK default continues to apply.
+// applyReceiveSettings sets pull flow control, using defaults for zero-valued fields.
 func (g *googleClient) applyReceiveSettings(subscription *gcPubSub.Subscription) {
-	if g.MaxOutstandingMessages != 0 {
-		subscription.ReceiveSettings.MaxOutstandingMessages = g.MaxOutstandingMessages
+	subscription.ReceiveSettings.MaxOutstandingMessages = orDefault(g.MaxOutstandingMessages, DefaultMaxOutstandingMessages)
+	subscription.ReceiveSettings.MaxOutstandingBytes = orDefault(g.MaxOutstandingBytes, DefaultMaxOutstandingBytes)
+	subscription.ReceiveSettings.NumGoroutines = orDefault(g.NumGoroutines, DefaultNumGoroutines)
+}
+
+func orDefault(val, fallback int) int {
+	if val == 0 {
+		return fallback
 	}
 
-	if g.MaxOutstandingBytes != 0 {
-		subscription.ReceiveSettings.MaxOutstandingBytes = g.MaxOutstandingBytes
-	}
-
-	if g.NumGoroutines != 0 {
-		subscription.ReceiveSettings.NumGoroutines = g.NumGoroutines
-	}
+	return val
 }
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {

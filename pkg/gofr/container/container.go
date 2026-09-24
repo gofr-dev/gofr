@@ -562,20 +562,19 @@ func (c *Container) createGooglePubSub(conf config.Config) {
 	c.PubSub = google.New(google.Config{
 		ProjectID:              conf.Get("GOOGLE_PROJECT_ID"),
 		SubscriptionName:       conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		MaxOutstandingMessages: c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_MESSAGES"),
-		MaxOutstandingBytes:    c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_BYTES"),
-		NumGoroutines:          c.googlePubSubInt(conf, "GOOGLE_NUM_GOROUTINES"),
+		MaxOutstandingMessages: c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_MESSAGES", google.DefaultMaxOutstandingMessages),
+		MaxOutstandingBytes:    c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_BYTES", google.DefaultMaxOutstandingBytes),
+		NumGoroutines:          c.googlePubSubInt(conf, "GOOGLE_NUM_GOROUTINES", google.DefaultNumGoroutines),
 	}, c.Logger, c.metricsManager)
 }
 
-// googlePubSubInt reads an optional integer Google Pub/Sub flow-control setting. An unset or
-// invalid value returns 0, which the client treats as "use the Google Pub/Sub SDK default".
-func (c *Container) googlePubSubInt(conf config.Config, key string) int {
-	val, err := strconv.Atoi(conf.GetOrDefault(key, "0"))
+// googlePubSubInt returns the int configured for key, or defaultVal if unset or invalid.
+func (c *Container) googlePubSubInt(conf config.Config, key string, defaultVal int) int {
+	val, err := strconv.Atoi(conf.GetOrDefault(key, strconv.Itoa(defaultVal)))
 	if err != nil {
-		c.Logger.Errorf("invalid value for %s, using Google Pub/Sub SDK default", key)
+		c.Logger.Errorf("invalid value for %s, using default: %d", key, defaultVal)
 
-		return 0
+		return defaultVal
 	}
 
 	return val

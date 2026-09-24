@@ -1730,24 +1730,24 @@ func TestGoogleClient_applyReceiveSettings(t *testing.T) {
 	}{
 		{
 			name:     "overrides every field when set",
-			cfg:      Config{MaxOutstandingMessages: 100, MaxOutstandingBytes: 5000, NumGoroutines: 3},
-			expMsgs:  100,
+			cfg:      Config{MaxOutstandingMessages: 250, MaxOutstandingBytes: 5000, NumGoroutines: 3},
+			expMsgs:  250,
 			expBytes: 5000,
 			expGoros: 3,
 		},
 		{
-			name:     "keeps SDK defaults when unset",
+			name:     "falls back to GoFr defaults when unset",
 			cfg:      Config{},
-			expMsgs:  gcPubSub.DefaultReceiveSettings.MaxOutstandingMessages,
-			expBytes: gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes,
-			expGoros: gcPubSub.DefaultReceiveSettings.NumGoroutines,
+			expMsgs:  DefaultMaxOutstandingMessages,
+			expBytes: DefaultMaxOutstandingBytes,
+			expGoros: DefaultNumGoroutines,
 		},
 		{
 			name:     "overrides only the fields that are set",
 			cfg:      Config{MaxOutstandingMessages: 50},
 			expMsgs:  50,
-			expBytes: gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes,
-			expGoros: gcPubSub.DefaultReceiveSettings.NumGoroutines,
+			expBytes: DefaultMaxOutstandingBytes,
+			expGoros: DefaultNumGoroutines,
 		},
 	}
 
@@ -1776,7 +1776,7 @@ func TestGoogleClient_getSubscription_AppliesReceiveSettings(t *testing.T) {
 		Config: Config{
 			ProjectID:              "test",
 			SubscriptionName:       "sub",
-			MaxOutstandingMessages: 100,
+			MaxOutstandingMessages: 250,
 			MaxOutstandingBytes:    5000,
 			NumGoroutines:          3,
 		},
@@ -1788,7 +1788,7 @@ func TestGoogleClient_getSubscription_AppliesReceiveSettings(t *testing.T) {
 	sub, err := g.getSubscription(t.Context(), topic)
 	require.NoError(t, err)
 
-	assert.Equal(t, 100, sub.ReceiveSettings.MaxOutstandingMessages)
+	assert.Equal(t, 250, sub.ReceiveSettings.MaxOutstandingMessages)
 	assert.Equal(t, 5000, sub.ReceiveSettings.MaxOutstandingBytes)
 	assert.Equal(t, 3, sub.ReceiveSettings.NumGoroutines)
 }
