@@ -187,8 +187,19 @@ type logSink struct {
 	entries entryLogger
 }
 
-func newLogSink(l logger) logSink {
-	s := logSink{logger: l}
+// newLogSink returns a pointer, and that is load-bearing rather than stylistic.
+//
+// In the default mux matcher the middleware chain is rebuilt inside Route.Match on every request, so
+// the closure Logging returns is allocated per request and pays for everything it captures. Capturing
+// a logSink by value made that closure 48 bytes larger: BenchmarkLogging went 1249 -> 1297 B/op, a
+// regression this optimisation would otherwise have shipped alongside its saving. Captured as a
+// pointer it is 8 bytes, and routing panicRecovery through sink.logger drops the separate 16-byte
+// logger interface the closure used to hold as well, which brings it back to 1249 exactly.
+//
+// The trie matcher memoises its chain per route, so none of this is visible there. Measured at
+// 2000x, count=6, darwin/arm64; allocs/op is 10 throughout and does not move.
+func newLogSink(l logger) *logSink {
+	s := &logSink{logger: l}
 
 	if l == nil {
 		return s
@@ -260,7 +271,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// the canonical spelling either way.
 			srw.Header()[canonicalCorrelationID] = []string{traceID}
 
-			defer func() { panicRecovery(recover(), srw, logger) }()
+			defer func() { panicRecovery(recover(), srw, sink.logger) }()
 
 			// Skip logging for default probe paths if log probes are disabled.
 			// time.Now() (vDSO call) is deferred past this so probe paths do
@@ -279,7 +290,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time,
-	traceID, spanID string, sink logSink) {
+	traceID, spanID string, sink *logSink) {
 	status := srw.Status()
 
 	// A server error is reported through Error, which survives every level below
