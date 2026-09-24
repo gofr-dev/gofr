@@ -8,11 +8,21 @@ import (
 )
 
 func (c *Client) user(ctx context.Context, username string) (arangodb.User, error) {
-	return c.client.User(ctx, username)
+	client, err := c.arangoClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.User(ctx, username)
 }
 
 func (c *Client) database(ctx context.Context, name string) (arangodb.Database, error) {
-	return c.client.GetDatabase(ctx, name, nil)
+	client, err := c.arangoClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.GetDatabase(ctx, name, nil)
 }
 
 // createUser creates a new user in ArangoDB.
@@ -25,7 +35,12 @@ func (c *Client) createUser(ctx context.Context, username string, options any) e
 		return fmt.Errorf("%w", errInvalidUserOptionsType)
 	}
 
-	_, err := c.client.CreateUser(ctx, username, userOptions.toArangoUserOptions())
+	client, err := c.arangoClient()
+	if err != nil {
+		return err
+	}
+
+	_, err = client.CreateUser(ctx, username, userOptions.toArangoUserOptions())
 	if err != nil {
 		return err
 	}
@@ -38,7 +53,12 @@ func (c *Client) dropUser(ctx context.Context, username string) error {
 	ctx, done := c.instrumentOp(ctx, &QueryLog{Operation: "dropUser", ID: username})
 	defer done()
 
-	err := c.client.RemoveUser(ctx, username)
+	client, err := c.arangoClient()
+	if err != nil {
+		return err
+	}
+
+	err = client.RemoveUser(ctx, username)
 	if err != nil {
 		return err
 	}
@@ -51,7 +71,7 @@ func (c *Client) grantDB(ctx context.Context, database, username, permission str
 	ctx, done := c.instrumentOp(ctx, &QueryLog{Operation: "grantDB", Database: database, ID: username})
 	defer done()
 
-	user, err := c.client.User(ctx, username)
+	user, err := c.user(ctx, username)
 	if err != nil {
 		return err
 	}
@@ -67,7 +87,7 @@ func (c *Client) grantCollection(ctx context.Context, database, collection, user
 		Database: database, Collection: collection, ID: username})
 	defer done()
 
-	user, err := c.client.User(ctx, username)
+	user, err := c.user(ctx, username)
 	if err != nil {
 		return err
 	}
