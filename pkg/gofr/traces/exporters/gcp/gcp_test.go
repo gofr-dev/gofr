@@ -52,6 +52,46 @@ func containsSubstr(lines []string, substr string) bool {
 	return false
 }
 
+// TestMain pins metadata.OnGCE() for the whole test binary, which is what makes
+// Test_adc_get_isBoundedByTheStartupDeadline independent of test order.
+//
+// OnGCE memoizes its answer in a package-level sync.Once for the life of the
+// process (compute/metadata@v0.9.0 metadata.go:118,134), so whichever test
+// resolves it first decides it for every test after. That is a genuine
+// order dependency and -shuffle finds it: the deadline test needs the answer to
+// be "true" so FindDefaultCredentials actually reaches the metadata server and
+// hits the deadline, while any test that runs the real detector first --
+// Test_registeredUnderTheExporterName, via exporters.Build -- resolved it to
+// "false" and left the deadline test passing on "could not find default
+// credentials" instead, which errors.Is(err, errMetadataTimeout) correctly
+// rejects.
+//
+// Setting GCE_METADATA_HOST here settles it before any test runs, and settles it
+// without a network call: OnGCE returns true outright when the variable is set
+// and probes nothing (metadata.go:457-459). Port 1 is chosen so that the
+// requests which follow that "true" are REFUSED instantly rather than answered
+// or dropped.
+//
+// This also removes the live probe the other direction produced. In file order
+// the deadline test cached "true" and Test_registeredUnderTheExporterName then
+// ran the real detector with GCE_METADATA_HOST already restored by t.Setenv, so
+// it queried the link-local address 169.254.169.254 for real -- fast on a
+// network that refuses it, up to a 5s stall plus a leaked goroutine on one that
+// silently drops it (metadata.go:479-491). No test reaches link-local now.
+//
+// A test that needs a different metadata host still overrides it with t.Setenv:
+// the request path re-reads the variable on every call (metadata.go:518), and
+// only the OnGCE answer is memoized.
+func TestMain(m *testing.M) {
+	// Not t.Setenv: this has to be in place before the first test resolves OnGCE,
+	// and os.Exit below would skip its cleanup anyway.
+	if err := os.Setenv("GCE_METADATA_HOST", "127.0.0.1:1"); err != nil {
+		panic(err)
+	}
+
+	os.Exit(m.Run())
+}
+
 // writeADC points GOOGLE_APPLICATION_CREDENTIALS at a well-formed
 // authorized_user credentials file so FindDefaultCredentials resolves without
 // any network call. That credential type carries no project, which is the local
@@ -415,7 +455,7 @@ func Test_buildExporter_redactsEndpointInError(t *testing.T) {
 	}
 }
 
-func Test_buildExporter_warnsOnIgnoreListedQuotaHeader(t *testing.T) {
+func Test_buildExporter_warnsOnUnhonoredQuotaHeader(t *testing.T) {
 	writeADC(t)
 
 	cfg := exporters.Config{
@@ -505,11 +545,10 @@ func Test_cachingDetector_Detect_addsProjectID(t *testing.T) {
 	writeADC(t)
 	t.Setenv(projectEnv, "env-project")
 
-	d := &cachingDetector{adc: resolvedADC("")}
+	d := &cachingDetector{adc: resolvedADC(""), platform: offGCEDetector{}}
 
-	// Off Google Cloud the platform detector fails; the resource it produces must
-	// still carry the project, and the error must still surface so the SDK can
-	// report a partial resource.
+	// Off Google Cloud the platform detector resolves nothing; the resource Detect
+	// produces must still carry the project on its own.
 	res, _ := d.Detect(t.Context())
 
 	if got := resolvedProject(res); got != "env-project" {
@@ -522,6 +561,20 @@ func Test_cachingDetector_Detect_addsProjectID(t *testing.T) {
 		t.Error("expected Detect to cache its result")
 	}
 }
+
+// offGCEDetector stands in for the real platform detector off Google Cloud, where
+// metadata.OnGCE() is false and Detect returns (nil, nil) without touching the
+// network (contrib/detectors/gcp@v1.46.0 detector.go:36-37).
+//
+// Injecting it is not only about speed. The real detector calls metadata.OnGCE(),
+// whose answer is memoized for the life of the process
+// (compute/metadata@v0.9.0 metadata.go:118,134), and a cached "false" makes every
+// later FindDefaultCredentials in the binary fail before it reaches the metadata
+// server -- which is what left Test_adc_get_isBoundedByTheStartupDeadline passing
+// in 0.00s against a deadline it never exercised.
+type offGCEDetector struct{}
+
+func (offGCEDetector) Detect(context.Context) (*resource.Resource, error) { return nil, nil }
 
 // hangingDetector stands in for the real platform detector under a metadata
 // server that accepts the connection and never replies. It ignores its context
@@ -650,8 +703,20 @@ func Test_adc_get_isBoundedByTheStartupDeadline(t *testing.T) {
 		t.Errorf("adc.get blocked for %s; the startup deadline did not bound it", elapsed)
 	}
 
-	if err == nil {
-		t.Fatal("expected an error from a metadata server that never replies")
+	// errMetadataTimeout specifically, not merely a non-nil error. FindDefaultCredentials
+	// reaches the metadata server only when metadata.OnGCE() says it is worth trying,
+	// and that answer is memoized for the life of the process
+	// (compute/metadata@v0.9.0 metadata.go:118,134). Anything that resolved it to
+	// "false" before this test runs makes the lookup fail instantly on "could not find
+	// default credentials" -- which a bare err != nil accepts, leaving the deadline
+	// under test never exercised. Naming the sentinel is what makes that regression
+	// loud instead of silent; the sibling detector test already does it.
+	//
+	// TestMain is what guarantees the answer is "true" here no matter which test ran
+	// first. Without it this assertion held only in file order and -shuffle failed on
+	// most seeds.
+	if !errors.Is(err, errMetadataTimeout) {
+		t.Fatalf("expected errMetadataTimeout from a metadata server that never replies, got %v", err)
 	}
 }
 
