@@ -45,10 +45,7 @@ func toText(v any) string {
 func Test_OTLPTraceExporterOmitted_StillRegistersItsNames(t *testing.T) {
 	for _, name := range []string{exporterOTLP, exporterJaeger} {
 		t.Run(name, func(t *testing.T) {
-			registryMu.RLock()
-			builder, ok := registry[name]
-			registryMu.RUnlock()
-
+			builder, ok := lookup(name)
 			if !ok {
 				t.Fatalf("%q must stay registered under gofr_nootlp so the failure names the tag, not a typo", name)
 			}
