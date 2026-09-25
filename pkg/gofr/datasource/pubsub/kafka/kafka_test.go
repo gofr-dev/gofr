@@ -179,6 +179,17 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 			},
 			expected: errUnsupportedSecurityProtocol,
 		},
+		{
+			name: "SSL without TLS configuration",
+			config: Config{
+				Brokers:          []string{"kafkabroker"},
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SSL",
+			},
+			expected: errUnsupportedSecurityProtocol,
+		},
 	}
 
 	for _, tc := range testCases {

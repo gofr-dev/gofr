@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
@@ -151,4 +153,132 @@ func TestSubscriptionManager_handleSubscription_HandlerErrorDoesNotCommit(t *tes
 	require.ErrorIs(t, err, errHandlerFail, "handler error must propagate so startSubscriber can back off")
 	require.NotNil(t, ps.lastCommitter)
 	require.Zero(t, ps.lastCommitter.n, "handler error must not commit")
+}
+
+var errPanicValue = errors.New("panic error value")
+
+// cancelingSubscriber cancels the subscriber loop's context on every Subscribe, so startSubscriber
+// observes shutdown on its next iteration without relying on timing.
+type cancelingSubscriber struct {
+	mockSubscriber
+	cancel context.CancelFunc
+	err    error
+}
+
+func (c *cancelingSubscriber) Subscribe(context.Context, string) (*pubsub.Message, error) {
+	c.cancel()
+
+	return nil, c.err
+}
+
+func TestSubscriptionManager_startSubscriber(t *testing.T) {
+	tests := []struct {
+		desc       string
+		subErr     error
+		setupMocks func(l *container.MockLogger)
+	}{
+		{
+			desc:   "no message then shutdown",
+			subErr: nil,
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "orders")
+			},
+		},
+		{
+			desc:   "subscribe error is logged then shutdown",
+			subErr: errSubscription,
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Errorf("error while reading from topic %v, err: %v", "orders", errSubscription.Error())
+				l.EXPECT().Errorf("error in subscription for topic %s: %v", "orders", errSubscription)
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "orders")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := container.NewMockLogger(ctrl)
+			tc.setupMocks(logger)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			s := newSubscriptionManager(&container.Container{
+				Logger: logger,
+				PubSub: &cancelingSubscriber{cancel: cancel, err: tc.subErr},
+			})
+
+			err := s.startSubscriber(ctx, "orders", func(*Context) error { return nil })
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestSubscriptionManager_handleSubscription_WithoutCommitter(t *testing.T) {
+	tests := []struct {
+		desc      string
+		topic     string
+		expCalled bool
+		expErr    error
+	}{
+		{desc: "message without committer is handled", topic: "test-topic", expCalled: true, expErr: nil},
+		{desc: "subscribe error is returned", topic: "test-err", expCalled: false, expErr: kafka.ErrConsumerGroupNotProvided},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var called bool
+
+			s := SubscriptionManager{container: &container.Container{
+				Logger: logging.NewMockLogger(logging.FATAL),
+				PubSub: mockSubscriber{},
+			}}
+
+			err := s.handleSubscription(t.Context(), tc.topic, func(*Context) error {
+				called = true
+				return nil
+			})
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expCalled, called)
+		})
+	}
+}
+
+func TestPanicRecovery(t *testing.T) {
+	tests := []struct {
+		desc      string
+		recovered any
+		expCalls  int
+		expError  string
+	}{
+		{desc: "nil value is ignored", recovered: nil, expCalls: 0, expError: ""},
+		{desc: "string panic", recovered: "boom", expCalls: 1, expError: "boom"},
+		{desc: "error panic", recovered: errPanicValue, expCalls: 1, expError: errPanicValue.Error()},
+		{desc: "unknown panic type", recovered: 42, expCalls: 1, expError: "Unknown panic type"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := container.NewMockLogger(ctrl)
+
+			var logged []panicLog
+
+			logger.EXPECT().Error(gomock.Any()).Do(func(args ...any) {
+				logged = append(logged, args[0].(panicLog))
+			}).Times(tc.expCalls)
+
+			panicRecovery(tc.recovered, logger)
+
+			require.Len(t, logged, tc.expCalls)
+
+			for _, l := range logged {
+				assert.Equal(t, tc.expError, l.Error)
+				assert.NotEmpty(t, l.StackTrace)
+			}
+		})
+	}
 }
