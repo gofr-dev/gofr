@@ -140,7 +140,7 @@ func TestContainer_googleConfigFromEnv(t *testing.T) {
 		"GOOGLE_NUM_GOROUTINES":           "33",
 	}))
 
-	// Distinct values so a mis-wired env key (e.g. feeding NumGoroutines from the wrong var) fails.
+	// Distinct values so a field fed from the wrong env key (e.g. NumGoroutines) fails.
 	assert.Equal(t, "proj", cfg.ProjectID)
 	assert.Equal(t, "sub", cfg.SubscriptionName)
 	assert.Equal(t, 11, cfg.MaxOutstandingMessages)
