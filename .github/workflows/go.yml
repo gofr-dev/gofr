@@ -691,6 +691,58 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
+      # gofr_nogrpc is scoped to ./pkg/... on purpose. Unlike the other tags it
+      # removes exported methods -- RegisterService and the AddGRPC* setters name
+      # grpc types and cannot exist without the import -- so the gRPC examples do
+      # not compile under it, which is the intended behaviour and not a failure.
+      - name: Build and test with the gRPC server omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nogrpc ./pkg/...
+          go vet   -tags gofr_nogrpc ./pkg/gofr/
+          go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
+
+      # gofr_nodgraph drops the Dgraph migrator, the one place in GoFr that imports
+      # dgo. The stub has to keep implementing migrator, so a change to that
+      # interface must update both halves; without this step only the real one
+      # would ever be compiled.
+      - name: Build and test with the Dgraph migrator omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nodgraph ./...
+          go vet   -tags gofr_nodgraph ./pkg/gofr/migration/
+          go test  -tags gofr_nodgraph -count=1 ./pkg/gofr/migration/
+
+      # gofr_nootlp drops the OTLP exporters, which pin google.golang.org/grpc --
+      # otlpmetrichttp included -- so gofr_nogrpc pays off only once this is set
+      # too. It is not sufficient on its own: measured against gofr.dev/pkg/gofr,
+      # which links 86 grpc packages by default, gofr_nogrpc alone leaves 82,
+      # adding gofr_nootlp and gofr_nodgraph leaves 81, and only adding
+      # gofr_nopubsub reaches 0, because the Google Pub/Sub client pins grpc
+      # through cloud.google.com/go. A shared dependency goes when its last
+      # importer does. Both halves of the trace and metric transports have tests
+      # that exist only under the tag.
+      - name: Build and test with the OTLP exporters omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nootlp ./...
+          go vet   -tags gofr_nootlp ./pkg/gofr/ ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/
+          go test  -tags gofr_nootlp -count=1 ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/
+
+      # Every tag above is built on its own, and #4167's three together. A symbol
+      # that resolves under one tag but breaks under two would still ship green, so
+      # all six are also built, vetted and tested at once. ./pkg/... for the same
+      # reason as the gofr_nogrpc step.
+      - name: Build with every optional subsystem omitted at once
+        run: |
+          set -euo pipefail
+          ALL="gofr_nosqldrivers gofr_nopubsub gofr_nographql gofr_nogrpc gofr_nodgraph gofr_nootlp"
+          PKGS="./pkg/gofr/container/ ./pkg/gofr/datasource/sql/ ./pkg/gofr/migration/ ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/"
+          go build -tags "$ALL" ./pkg/...
+          go vet   -tags "$ALL" ./pkg/gofr/ $PKGS
+          go test  -tags "$ALL" -count=1 $PKGS
+          go test  -tags "$ALL" -count=1 -run 'TestGRPCDisabled|TestGraphQLDisabled' ./pkg/gofr/
+
       # Lint under the tags too. The tagged files are half of what these tags add
       # and the default lint job never sees them -- moving noopResponder and
       # configTrue in this PR was prompted by a tagged-build lint failure that
@@ -703,7 +755,7 @@ jobs:
           # introduces, not the ones the repo already carries. Without it the step
           # reports every pre-existing goconst and exhaustive finding in the tree.
           only-new-issues: true
-          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql" --timeout 9m0s
+          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp" --timeout 9m0s
 
       # Building and testing under a tag proves the tagged code still compiles. It
       # does not prove the tag REMOVED anything, which is the only reason the tag
@@ -755,6 +807,14 @@ jobs:
           check gofr_nosqldrivers '^(github\.com/lib/pq|modernc\.org/sqlite)($|/)'
           check gofr_nopubsub     '^(github\.com/segmentio/kafka-go|cloud\.google\.com/go/pubsub|github\.com/eclipse/paho\.mqtt\.golang)($|/)'
           check gofr_nographql    '^github\.com/graphql-go/graphql($|/)'
+          check gofr_nootlp       '^go\.opentelemetry\.io/otel/exporters/otlp($|/)'
+          check gofr_nodgraph     '^github\.com/dgraph-io/dgo($|/)'
+
+          # gofr_nogrpc is checked against the COMBINED tag set, not on its own. grpc is pinned by
+          # the OTLP exporters, the Dgraph protos and cloud.google.com/go as well as by the server,
+          # so on its own it takes 4 of 86 packages and a "still linked" assertion would fail for
+          # reasons that have nothing to do with the tag working.
+          check gofr_nogrpc,gofr_nootlp,gofr_nodgraph,gofr_nopubsub '^google\.golang\.org/grpc($|/)'
 
           go list -tags gofr_nosqldrivers,gofr_nopubsub,gofr_nographql -deps gofr.dev/pkg/gofr > /tmp/deps.slim
 

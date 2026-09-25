@@ -1,3 +1,5 @@
+//go:build !gofr_nootlp
+
 package exporters
 
 import (
@@ -149,3 +151,9 @@ func buildOtlpExporter(ctx context.Context, name string, cfg *Config, logger Log
 
 	return exporter, redactEndpointInError(err, endpoint)
 }
+
+// otlpTraceLinked reports whether the OTLP trace exporter is compiled into this binary. Tests that
+// assert on what the real builder logs use it to skip themselves under gofr_nootlp, where the
+// registered name resolves to a stub that deliberately logs something else. It mirrors
+// container.pubsubBackendsLinked.
+const otlpTraceLinked = true

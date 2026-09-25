@@ -121,22 +121,23 @@ func Test_builders_doNotLogCredentials(t *testing.T) {
 	const secret = "s3cret-value"
 
 	tests := []struct {
-		name     string
-		cfg      *Config
-		expected string
+		name      string
+		cfg       *Config
+		expected  string
+		needsOTLP bool
 	}{
 		{name: "otlp userinfo", cfg: &Config{Exporter: "otlp", Endpoint: "https://user:" + secret + "@localhost:4317"},
-			expected: "Exporting traces to otlp at https://REDACTED@localhost:4317"},
+			expected: "Exporting traces to otlp at https://REDACTED@localhost:4317", needsOTLP: true},
 		{name: "jaeger logs the matched name, not the configured one",
 			cfg:      &Config{Exporter: "  JaEgEr  ", Endpoint: "http://user:" + secret + "@localhost:4317"},
-			expected: "Exporting traces to jaeger at http://REDACTED@localhost:4317"},
+			expected: "Exporting traces to jaeger at http://REDACTED@localhost:4317", needsOTLP: true},
 		{name: "ignored TRACER_INSECURE names the endpoint",
 			cfg:      &Config{Exporter: "otlp", Endpoint: "http://user:" + secret + "@localhost:4317", Insecure: true, InsecureSet: true},
-			expected: `TRACER_INSECURE is ignored for TRACER_URL="http://REDACTED@localhost:4317"`},
+			expected: `TRACER_INSECURE is ignored for TRACER_URL="http://REDACTED@localhost:4317"`, needsOTLP: true},
 		{name: "plaintext-with-headers warning names the endpoint",
 			cfg: &Config{Exporter: "otlp", Endpoint: "localhost:4317/p?api-key=" + secret, Insecure: true,
 				Headers: map[string]string{"Authorization": "Bearer " + secret}},
-			expected: "traces are exported to localhost:4317/p?REDACTED over plaintext"},
+			expected: "traces are exported to localhost:4317/p?REDACTED over plaintext", needsOTLP: true},
 		{name: "zipkin query key", cfg: &Config{Exporter: "zipkin", Endpoint: "http://localhost:2005/api/v2/spans?api-key=" + secret},
 			expected: "Exporting traces to zipkin at http://localhost:2005/api/v2/spans?REDACTED"},
 		{name: "zipkin schemeless query key", cfg: &Config{Exporter: "zipkin", Endpoint: "localhost:9411/api/v2/spans?api-key=" + secret},
@@ -145,6 +146,10 @@ func Test_builders_doNotLogCredentials(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.needsOTLP && !otlpTraceLinked {
+				t.Skip("built with -tags gofr_nootlp; the OTLP builder that emits this line is not linked")
+			}
+
 			build, ok := lookup(exporterName(tt.cfg.Exporter))
 			require.True(t, ok, "no builder registered for %q", tt.cfg.Exporter)
 
