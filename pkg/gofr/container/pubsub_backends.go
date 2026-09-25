@@ -129,7 +129,12 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 
 	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
 
-	c.PubSub = kafka.New(&kafka.Config{
+	// Assigned only when a real client came back. kafka.New returns a bare nil *kafkaClient when it
+	// rejects the config, and assigning that straight into the pubsub.Client interface is what
+	// creates the typed nil in the first place: a non-nil interface holding a nil pointer, which
+	// every `c.PubSub != nil` check in the codebase admits. The getters filter it as defense in
+	// depth, but they cannot help a direct reader of the exported field.
+	if client := kafka.New(&kafka.Config{
 		Brokers:          pubsubBrokers,
 		Partition:        partition,
 		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
@@ -142,12 +147,18 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
 		SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
 		TLS:              tlsConf,
-	}, c.Logger, c.metricsManager)
+	}, c.Logger, c.metricsManager); client != nil {
+		c.PubSub = client
+	}
 }
 
 func (c *Container) createGooglePubSub(conf config.Config) {
-	c.PubSub = google.New(google.Config{
+	// See createKafkaPubSub: google.New returns a typed nil for an incomplete config, and only a
+	// real client may reach the exported field.
+	if client := google.New(google.Config{
 		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-	}, c.Logger, c.metricsManager)
+	}, c.Logger, c.metricsManager); client != nil {
+		c.PubSub = client
+	}
 }

@@ -386,11 +386,45 @@ func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
 
+// GetPublisher returns the pub/sub client, or nil when none is usable.
+//
+// Same filter, same reason as GetSubscriber below -- a handler calling
+// ctx.GetPublisher().Publish(...) against a typed-nil client hits the identical
+// nil receiver, it just surfaces on a request instead of at startup.
+//
+// To be precise about what this does and does not buy: an unconditional
+// ctx.GetPublisher().Publish(...) still panics, now on a nil interface rather
+// than a nil receiver. What the filter fixes is every caller that DOES check,
+// whose `!= nil` guard the typed nil used to walk straight through. The
+// constructors no longer put a typed nil in the field at all, so this is
+// defense in depth rather than the only line of it.
 func (c *Container) GetPublisher() pubsub.Publisher {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 
+// GetSubscriber returns the pub/sub client, or nil when none is usable.
+//
+// The nil check is isNil rather than a plain comparison because the pub/sub
+// constructors assign the result of google.New or kafka.New straight into the
+// interface, and those return a TYPED nil when they reject an incomplete
+// config. A typed nil is not equal to nil, so returning c.PubSub unfiltered let
+// every caller's own nil guard pass and then call a method on a nil receiver.
+// Filtering here fixes all of them at once, the worst being App.Subscribe: its
+// `GetSubscriber() == nil` guard admitted the typed nil, registered the
+// subscription, and handleSubscription then called Subscribe on the nil
+// receiver. That call sits outside the recover it installs around the handler,
+// and errgroup does not recover either -- x/sync v0.23.0 says so in
+// errgroup.go, "It is tempting to propagate panics from f() [...]" -- so the
+// panic killed the process at startup rather than surfacing on a request.
 func (c *Container) GetSubscriber() pubsub.Subscriber {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 

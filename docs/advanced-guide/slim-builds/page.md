@@ -93,10 +93,10 @@ reports them as present whatever tags you pass:
 go list -deps -tags gofr_nopubsub ./cmd/my-service | grep pubsub/kafka   # no output: not linked
 ```
 
-For scale, against `gofr.dev/pkg/gofr` itself: 828 packages by default, 616 with `gofr_nopubsub`,
-784 with `gofr_nosqldrivers`, 808 with `gofr_nographql`, and 552 with all three. On
-`examples/http-server` that is a 60,028,914 byte binary by default and 43,357,218 with all three
-tags, a 27.8% reduction.
+For scale, against `gofr.dev/pkg/gofr` itself: 827 packages by default, 614 with `gofr_nopubsub`,
+783 with `gofr_nosqldrivers`, 807 with `gofr_nographql`, and 550 with all three. On
+`examples/http-server` that is a 60,008,402 byte binary by default and 43,384,642 with all three
+tags, a 27.7% reduction.
 
 **Measured on darwin/arm64 with Go 1.26.3.** The counts are platform- and toolchain-dependent —
 the standard library and `modernc.org/libc` pull in different package sets per GOOS/GOARCH, so the
