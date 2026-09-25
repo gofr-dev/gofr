@@ -520,7 +520,7 @@ func TestRequestLogEmittedWhenLevelAllows(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", trace.SpanContext{}, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.logCalls, "an allowed level must still emit the request log")
 }
@@ -531,7 +531,7 @@ func TestRequestLogSkippedWhenLevelDiscards(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", trace.SpanContext{}, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Zero(t, lg.logCalls, "a discarded level must not be handed an entry")
 }
@@ -543,7 +543,7 @@ func TestRequestLogAlwaysEmittedForServerErrors(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusInternalServerError}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", trace.SpanContext{}, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.errCalls, "a server error must be logged regardless of the informational level")
 }
@@ -555,7 +555,7 @@ func TestRequestLogUngatedLoggerUnaffected(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", trace.SpanContext{}, lg)
+		time.Now(), "tid", zeroSpanID, newLogSink(lg))
 
 	require.Equal(t, 1, lg.logCalls, "a logger without the gate must still receive the entry")
 }
@@ -577,6 +577,71 @@ func TestCorrelationIDHeaderSpellingUnchanged(t *testing.T) {
 	// The const is only safe to hard-code while it equals what
 	// Header.Set would have canonicalized the documented name to.
 	require.Equal(t, canonicalCorrelationID, textproto.CanonicalMIMEHeaderKey("X-Correlation-ID"))
+}
+
+// TestTraceSpanIDsMatchesOtelRendering pins traceSpanIDs against the only
+// contract it has: the strings otel itself would produce.
+//
+// It renders both IDs into one stack array and hands back two slices of one
+// string, so the split offset is the thing that can silently go wrong -- and it
+// would go wrong by shifting the ID boundary, which no output test in this file
+// would notice because both fields would still be hex of the right total length.
+// Comparing field by field against TraceID.String()/SpanID.String() is what
+// catches an off-by-one there.
+//
+// The half-zero rows are the cases worth stating explicitly: a SpanContext with
+// a zero trace ID or a zero span ID is NOT valid by otel's definition
+// (IsValid is HasTraceID && HasSpanID), so both IDs fall back to the zero-string
+// constants together. That is unchanged behavior, and pinning it here stops a
+// future "optimization" from emitting a half-real pair.
+func TestTraceSpanIDsMatchesOtelRendering(t *testing.T) {
+	realTrace := trace.TraceID{
+		0x0a, 0xf7, 0x65, 0x19, 0x16, 0xcd, 0x43, 0xdd,
+		0x84, 0x48, 0xeb, 0x21, 0x1c, 0x80, 0x31, 0x9c,
+	}
+	realSpan := trace.SpanID{0xb7, 0xad, 0x6b, 0x71, 0x69, 0x20, 0x33, 0x31}
+	maxTrace := trace.TraceID{
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	}
+	maxSpan := trace.SpanID{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+
+	tests := []struct {
+		name          string
+		cfg           trace.SpanContextConfig
+		wantTrace     string
+		wantSpan      string
+		expectFromSDK bool
+	}{
+		{"valid pair", trace.SpanContextConfig{TraceID: realTrace, SpanID: realSpan},
+			"0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331", true},
+		{"all 0xff", trace.SpanContextConfig{TraceID: maxTrace, SpanID: maxSpan},
+			"ffffffffffffffffffffffffffffffff", "ffffffffffffffff", true},
+		{"empty span context", trace.SpanContextConfig{},
+			zeroTraceID, zeroSpanID, false},
+		{"zero trace id, real span id", trace.SpanContextConfig{SpanID: realSpan},
+			zeroTraceID, zeroSpanID, false},
+		{"real trace id, zero span id", trace.SpanContextConfig{TraceID: realTrace},
+			zeroTraceID, zeroSpanID, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := trace.NewSpanContext(tt.cfg)
+
+			gotTrace, gotSpan := traceSpanIDs(sc)
+
+			assert.Equal(t, tt.wantTrace, gotTrace)
+			assert.Equal(t, tt.wantSpan, gotSpan)
+			assert.Len(t, gotTrace, len(zeroTraceID), "the trace ID must keep its wire width")
+			assert.Len(t, gotSpan, len(zeroSpanID), "the span ID must keep its wire width")
+
+			if tt.expectFromSDK {
+				assert.Equal(t, sc.TraceID().String(), gotTrace, "must match otel's own rendering")
+				assert.Equal(t, sc.SpanID().String(), gotSpan, "must match otel's own rendering")
+			}
+		})
+	}
 }
 
 // loggingBenchWriter keeps a header map and discards the rest, so the benchmark measures the
@@ -652,7 +717,7 @@ func TestRequestLogGateWithRealLoggers(t *testing.T) {
 					srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 					req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
 
-					handleRequestLog(srw, req, time.Now(), "tid", trace.SpanContext{}, build.make(tt.level))
+					handleRequestLog(srw, req, time.Now(), "tid", zeroSpanID, newLogSink(build.make(tt.level)))
 				})
 
 				assert.Equal(t, tt.emitted, strings.Contains(out, "/x"),
@@ -673,8 +738,8 @@ func TestRequestLogGateNeverSuppresses5xx(t *testing.T) {
 		}
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/boom", http.NoBody)
 
-		handleRequestLog(srw, req, time.Now(), "tid", trace.SpanContext{},
-			remotelogger.New(logging.ERROR, "", time.Second))
+		handleRequestLog(srw, req, time.Now(), "tid", zeroSpanID,
+			newLogSink(remotelogger.New(logging.ERROR, "", time.Second)))
 	})
 
 	assert.Contains(t, out, "/boom", "a 5xx must be logged even at ERROR")
@@ -1944,7 +2009,7 @@ func Test_LoggingContract_HandleRequestLogNilLogger(t *testing.T) {
 	req := logCharNewRequest(t, http.MethodGet, "http://dummy/nil-logger")
 
 	assert.NotPanics(t, func() {
-		handleRequestLog(srw, req, time.Now(), zeroTraceID, trace.SpanContext{}, nil)
+		handleRequestLog(srw, req, time.Now(), zeroTraceID, zeroSpanID, newLogSink(nil))
 	})
 }
 
