@@ -129,6 +129,35 @@ func TestContainer_googlePubSubInt(t *testing.T) {
 	}
 }
 
+func TestContainer_googleConfigFromEnv(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	cfg := c.googleConfigFromEnv(config.NewMockConfig(map[string]string{
+		"GOOGLE_PROJECT_ID":               "proj",
+		"GOOGLE_SUBSCRIPTION_NAME":        "sub",
+		"GOOGLE_MAX_OUTSTANDING_MESSAGES": "11",
+		"GOOGLE_MAX_OUTSTANDING_BYTES":    "22",
+		"GOOGLE_NUM_GOROUTINES":           "33",
+	}))
+
+	// Distinct values so a mis-wired env key (e.g. feeding NumGoroutines from the wrong var) fails.
+	assert.Equal(t, "proj", cfg.ProjectID)
+	assert.Equal(t, "sub", cfg.SubscriptionName)
+	assert.Equal(t, 11, cfg.MaxOutstandingMessages)
+	assert.Equal(t, 22, cfg.MaxOutstandingBytes)
+	assert.Equal(t, 33, cfg.NumGoroutines)
+}
+
+func TestContainer_googleConfigFromEnv_Defaults(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	cfg := c.googleConfigFromEnv(config.NewMockConfig(nil))
+
+	assert.Equal(t, google.DefaultMaxOutstandingMessages, cfg.MaxOutstandingMessages)
+	assert.Equal(t, google.DefaultMaxOutstandingBytes, cfg.MaxOutstandingBytes)
+	assert.Equal(t, google.DefaultNumGoroutines, cfg.NumGoroutines)
+}
+
 func TestContainer_MQTTInitialization_Default(t *testing.T) {
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",

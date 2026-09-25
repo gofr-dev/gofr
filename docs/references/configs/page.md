@@ -702,16 +702,37 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - Name
 - Description
+- Default Value
 
 ---
 
 -  GOOGLE_PROJECT_ID
 -  ID of the Google Cloud project. Required for Google Pub/Sub.
+-  None
 
 ---
 
 -  GOOGLE_SUBSCRIPTION_NAME
 -  Name of the Google Pub/Sub subscription. Required for Google Pub/Sub.
+-  None
+
+---
+
+-  GOOGLE_MAX_OUTSTANDING_MESSAGES
+-  Max messages the client leases and holds unacknowledged at once (the memory/goroutine bound from #4371, not the handler concurrency). 0 uses the default; a negative value means no limit.
+-  1000
+
+---
+
+-  GOOGLE_MAX_OUTSTANDING_BYTES
+-  Max total size (bytes) of unacknowledged messages held at once. 0 uses the default; a negative value means no limit.
+-  1000000000
+
+---
+
+-  GOOGLE_NUM_GOROUTINES
+-  Number of StreamingPull streams opened by the subscriber. It is the stream count, not handler concurrency, and does not raise throughput under GoFr's one-message-at-a-time delivery. 0 or a negative value uses the default.
+-  10
 
 {% /table %}
 

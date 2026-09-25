@@ -39,7 +39,11 @@ type Config struct {
 	ProjectID        string
 	SubscriptionName string
 
-	// Optional pull flow control; zero uses the corresponding Default* value.
+	// Optional pull flow control. Zero uses the corresponding Default* (which mirrors the SDK).
+	// A negative value is passed through to the SDK: for MaxOutstandingMessages and
+	// MaxOutstandingBytes it means no limit, whereas NumGoroutines below 1 falls back to 10.
+	// NumGoroutines is the number of StreamingPull streams, not handler concurrency, and does not
+	// raise throughput under GoFr's one-message-at-a-time delivery per topic.
 	MaxOutstandingMessages int
 	MaxOutstandingBytes    int
 	NumGoroutines          int

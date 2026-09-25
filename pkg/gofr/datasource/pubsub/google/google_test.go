@@ -1749,6 +1749,15 @@ func TestGoogleClient_applyReceiveSettings(t *testing.T) {
 			expBytes: DefaultMaxOutstandingBytes,
 			expGoros: DefaultNumGoroutines,
 		},
+		{
+			// Negative values are passed straight through to the SDK (only zero maps to a default),
+			// where -1 means unlimited for messages/bytes and NumGoroutines below 1 falls back to 10.
+			name:     "passes negative values through unchanged",
+			cfg:      Config{MaxOutstandingMessages: -1, MaxOutstandingBytes: -1, NumGoroutines: -1},
+			expMsgs:  -1,
+			expBytes: -1,
+			expGoros: -1,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1763,6 +1772,12 @@ func TestGoogleClient_applyReceiveSettings(t *testing.T) {
 			assert.Equal(t, tc.expGoros, sub.ReceiveSettings.NumGoroutines)
 		})
 	}
+}
+
+func TestGoogleClient_defaultsMatchSDK(t *testing.T) {
+	assert.Equal(t, DefaultMaxOutstandingMessages, gcPubSub.DefaultReceiveSettings.MaxOutstandingMessages)
+	assert.Equal(t, DefaultMaxOutstandingBytes, gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes)
+	assert.Equal(t, DefaultNumGoroutines, gcPubSub.DefaultReceiveSettings.NumGoroutines)
 }
 
 func TestGoogleClient_getSubscription_AppliesReceiveSettings(t *testing.T) {
