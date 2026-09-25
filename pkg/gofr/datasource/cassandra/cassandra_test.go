@@ -30,7 +30,6 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -325,9 +324,6 @@ func Test_HealthCheck(t *testing.T) {
 		}, errStatusDown},
 		{"failure case: cassandra not initializes", func() {
 			client.cassandra.session = nil
-
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
