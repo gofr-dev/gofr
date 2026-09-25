@@ -45,8 +45,7 @@ func TestClient_Connect_Failure(t *testing.T) {
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
 
-	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any())
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(2)
 
 	// Mock Metric behavior
 	mockMetrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -280,22 +279,6 @@ func Test_NewReadOnlyTxn(t *testing.T) {
 	require.NotNil(t, txn, "Test_NewReadOnlyTxn Failed!")
 }
 
-func Test_HealthCheck_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
-
-	mockTxn := NewMockTxn(mockDgraphClient.ctrl)
-	mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
-
-	mockLogger.EXPECT().Error("dgraph health check failed: ", errQueryFailed)
-
-	mockQueryResponse := &api.Response{}
-	mockTxn.EXPECT().Query(gomock.Any(), gomock.Any()).Return(mockQueryResponse, errQueryFailed)
-
-	_, err := client.HealthCheck(context.Background())
-
-	require.EqualError(t, err, errHealthCheckFailed.Error(), "Test_HealthCheck_Error Failed!")
-}
-
 func Test_ApplySchema_Success(t *testing.T) {
 	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
@@ -470,39 +453,55 @@ func TestClient_Connect(t *testing.T) {
 
 func TestClient_HealthCheck(t *testing.T) {
 	tests := []struct {
-		desc      string
-		resp      *api.Response
-		queryErr  error
-		expLog    func(m *MockLogger)
-		expStatus any
-		expErr    error
+		desc        string
+		resp        *api.Response
+		queryErr    error
+		expLogErr   error
+		expLogs     int
+		expStatus   any
+		expErr      error
+		expErrCause error
 	}{
-		{desc: "healthy", resp: &api.Response{Json: []byte(`{"health":[]}`)}, expLog: func(*MockLogger) {}, expStatus: "UP"},
 		{
-			desc: "query error", resp: nil, queryErr: errQueryFailed,
-			expLog:    func(m *MockLogger) { m.EXPECT().Error("dgraph health check failed: ", errQueryFailed) },
-			expStatus: "DOWN", expErr: errHealthCheckFailed,
+			desc: "healthy", resp: &api.Response{Json: []byte(`{"health":[]}`)}, queryErr: nil,
+			expLogErr: nil, expLogs: 0, expStatus: "UP", expErr: nil, expErrCause: nil,
 		},
 		{
-			// Only assert that a failure is logged; the log content on this path is not part of the contract.
-			desc: "empty response", resp: &api.Response{},
-			expLog:    func(m *MockLogger) { m.EXPECT().Error(gomock.Any()) },
-			expStatus: "DOWN", expErr: errHealthCheckFailed,
+			desc: "query error", resp: nil, queryErr: errQueryFailed,
+			expLogErr: errQueryFailed, expLogs: 1, expStatus: "DOWN",
+			expErr: errHealthCheckFailed, expErrCause: errQueryFailed,
+		},
+		{
+			desc: "empty response", resp: &api.Response{}, queryErr: nil,
+			expLogErr: errEmptyHealthResponse, expLogs: 1, expStatus: "DOWN",
+			expErr: errHealthCheckFailed, expErrCause: errEmptyHealthResponse,
+		},
+		{
+			desc: "nil response without error", resp: nil, queryErr: nil,
+			expLogErr: errEmptyHealthResponse, expLogs: 1, expStatus: "DOWN",
+			expErr: errHealthCheckFailed, expErrCause: errEmptyHealthResponse,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			client, mockDgraphClient, mockLogger, _ := setupDB(t)
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockDgraphClient := NewMockDgraphClient(ctrl)
+			mockTxn := NewMockTxn(ctrl)
 
-			mockTxn := NewMockTxn(mockDgraphClient.ctrl)
+			client := New(Config{Host: "localhost", Port: "9080"})
+			client.UseLogger(mockLogger)
+			client.client = mockDgraphClient
+
 			mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
 			mockTxn.EXPECT().Query(gomock.Any(), gomock.Any()).Return(tc.resp, tc.queryErr)
-			tc.expLog(mockLogger)
+			mockLogger.EXPECT().Errorf("dgraph health check failed: %v", tc.expLogErr).Times(tc.expLogs)
 
 			status, err := client.HealthCheck(t.Context())
 
 			require.ErrorIs(t, err, tc.expErr)
+			require.ErrorIs(t, err, tc.expErrCause)
 			require.Equal(t, tc.expStatus, status)
 		})
 	}
