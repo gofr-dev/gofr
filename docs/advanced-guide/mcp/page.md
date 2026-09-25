@@ -40,12 +40,14 @@ route and the remaining arguments become query values.
 
 ### Read-only
 
-Only safe-to-retry handlers (`GET`, `HEAD`, `OPTIONS`) are exposed as tools. Write handlers
-(`POST`/`PUT`/`PATCH`/`DELETE`) are never exposed, so an agent cannot mutate state through this
-surface.
+Only safe, non-mutating handlers are exposed as tools: the read-only methods (`GET`, `HEAD`,
+`OPTIONS`) and `QUERY` ([RFC 10008](https://www.rfc-editor.org/rfc/rfc10008.html)), which is safe and
+idempotent and carries its input in the request body. A `QUERY` tool therefore takes a required `body`
+argument alongside any path parameters. Write handlers (`POST`/`PUT`/`PATCH`/`DELETE`) are never
+exposed, so an agent cannot mutate state through this surface.
 
 Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework `/.well-known/*` probes are
-never exposed. The read-only rule is enforced at call time, not just in the tool listing — a write
+never exposed. The safe-method rule is enforced at call time, not just in the tool listing — a write
 route cannot be invoked by guessing its tool name.
 
 ### Safety
@@ -56,6 +58,37 @@ entry point to your handlers. When a tool is invoked, GoFr rebuilds the request 
 as for a normal HTTP call. The caller's `Authorization` / `X-Api-Key` headers propagate, so
 `ctx.GetAuthInfo()` works inside a tool call and a secured endpoint stays secured. Set `MCP_PORT=0`
 to disable the server while keeping in-process tools available.
+
+### If the port is unavailable
+
+Calling `app.EnableMCP()` says you want the MCP transport, so GoFr treats a port it cannot claim as
+a startup failure rather than coming up without it. `app.Run()` reports the problem, releases what
+startup opened, and exits non-zero instead of serving:
+
+```
+ERROR  MCP server cannot start on port 8200: listen tcp 127.0.0.1:8200: bind: address already in
+       use. Set MCP_PORT to a free port, or MCP_PORT=0 to run without the MCP transport while
+       keeping tools available in-process.
+```
+
+A service that started successfully and quietly lacked a transport it was configured to expose would
+be the worse outcome — an orchestrator would report it healthy while agents could not reach it.
+
+Note the default is `8200`, which is also [Vault](https://developer.hashicorp.com/vault)'s default
+port. If you run Vault locally, set `MCP_PORT` to something else.
+
+The port is claimed before any server starts, so this decision is made while nothing is yet serving.
+The startup hooks have already run by then, so GoFr runs shutdown on the way out to release the
+datasources they opened. If you would rather run without the transport, `MCP_PORT=0` is the explicit
+way to say so — tools stay callable in-process through `ctx.LLM().Tools()`, because registration is
+independent of the transport.
+
+`MCP_PORT` is read as a number, so `0`, `00`, `+0` and ` 0 ` all disable the transport. A value that
+is not a number, or one outside the valid port range `1`–`65535`, refuses startup with a message
+naming the problem — it is not folded to `8200`. Falling back would put the service on the port that
+collides with Vault for an operator who typed one digit too many, and it would apply the gentler
+policy to the less ambiguous mistake: an occupied port can be a transient condition of the
+environment, while `99999` will be just as wrong on the next start.
 
 ## Building an agent
 

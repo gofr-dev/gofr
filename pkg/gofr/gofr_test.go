@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,10 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -109,11 +112,37 @@ func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(metricsFlushTimeout + 5*time.Second):
+	case <-time.After(telemetryFlushTimeout + 5*time.Second):
 		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
 	}
 
 	assert.True(t, handlerCalled, "expected the subcommand handler to run")
+}
+
+// TestApp_Shutdown_flushesTraces pins the trace half of the shutdown path
+// (closes #3771): the TracerProvider was never shut down, so the pending
+// BatchSpanProcessor batch was dropped at exit — routine for a container
+// scaling to zero, and enough to make a working exporter look broken.
+// Shutdown is public API, so it must also survive being called twice.
+func TestApp_Shutdown_flushesTraces(t *testing.T) {
+	flushed := 0
+
+	c := container.NewContainer(config.NewMockConfig(map[string]string{}))
+	c.Logger = logging.NewMockLogger(logging.ERROR)
+
+	a := &App{
+		container: c,
+		shutdownTracer: func(context.Context) error {
+			flushed++
+			return nil
+		},
+	}
+
+	require.NoError(t, a.Shutdown(t.Context()))
+	require.Equal(t, 1, flushed, "expected Shutdown to flush traces")
+
+	require.NoError(t, a.Shutdown(t.Context()))
+	require.Equal(t, 2, flushed, "shutdownTracer owns its own idempotency; Shutdown must still call it")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -836,7 +865,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		config             config.Config
 		expectedLogMessage string
 	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc; tracing is disabled"},
 		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
 		{"miss tracer_url ", mockConfig3,
 			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
@@ -1752,26 +1781,26 @@ func TestHandleStartupHooks(t *testing.T) {
 	tests := []struct {
 		name     string
 		hooks    []func(ctx *Context) error
-		expected bool
+		expected startupOutcome
 	}{
 		{
-			name:     "No hooks returns true",
+			name:     "No hooks continues",
 			hooks:    nil,
-			expected: true,
+			expected: startupOK,
 		},
 		{
-			name: "Successful hook returns true",
+			name: "Successful hook continues",
 			hooks: []func(ctx *Context) error{
 				func(_ *Context) error { return nil },
 			},
-			expected: true,
+			expected: startupOK,
 		},
 		{
-			name: "Failed hook returns false",
+			name: "Failed hook is a startup failure",
 			hooks: []func(ctx *Context) error{
 				func(_ *Context) error { return errHookFailed },
 			},
-			expected: false,
+			expected: startupFailed,
 		},
 	}
 
@@ -1805,7 +1834,9 @@ func TestHandleStartupHooks_ContextCanceled(t *testing.T) {
 
 	result := app.handleStartupHooks(t.Context())
 
-	assert.False(t, result, "should return false on context.Canceled")
+	// Canceled, not failed: an operator stopping the process during startup got what they asked
+	// for, and Run must not report a non-zero exit status for it.
+	assert.Equal(t, startupCanceled, result, "context.Canceled is a graceful stop, not a failure")
 }
 
 func Test_add_RequestTimeout(t *testing.T) {
@@ -2002,4 +2033,303 @@ func Test_HTTPMethods(t *testing.T) {
 			assert.True(t, a.httpRegistered)
 		})
 	}
+}
+
+// TestHandleStartupHooks_FailureReleasesDatasources covers the other half of the abandoned-startup
+// contract. The hooks run after the container has opened its datasources, and a failing hook returns
+// from Run normally, so the connections have to be released on the way out rather than left to
+// process exit.
+func TestHandleStartupHooks_FailureReleasesDatasources(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		// The cleanup is the same either way; only what the process reports differs.
+		want startupOutcome
+	}{
+		{name: "hook error", err: errHookFailed, want: startupFailed},
+		{name: "context canceled", err: context.Canceled, want: startupCanceled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			var proceed startupOutcome
+
+			// Shutdown logs its completion at INFO, on stdout.
+			logs := testutil.StdoutOutputForFunc(func() {
+				app := New()
+				app.OnStart(func(_ *Context) error { return tt.err })
+
+				proceed = app.handleStartupHooks(t.Context())
+			})
+
+			require.Equal(t, tt.want, proceed)
+			assert.Contains(t, logs, "Application shutdown complete",
+				"an abandoned startup must release what the container opened, either way")
+		})
+	}
+}
+
+// Test_QUERY_Registration verifies that app.QUERY registers a route for the HTTP
+// QUERY method (RFC 10008) and that the handler can read the request body via Bind.
+func Test_QUERY_Registration(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
+	}
+
+	app.QUERY("/search", func(ctx *Context) (any, error) {
+		body := struct {
+			Filter string `json:"filter"`
+		}{}
+		if err := ctx.Bind(&body); err != nil {
+			return nil, err
+		}
+
+		return map[string]string{"filter": body.Filter}, nil
+	})
+
+	go app.Run()
+
+	testutil.WaitForHTTPServer(t, fmt.Sprintf("http://localhost:%d", port))
+
+	netClient := &http.Client{Timeout: 500 * time.Millisecond}
+
+	req, _ := http.NewRequestWithContext(t.Context(), "QUERY",
+		fmt.Sprintf("http://localhost:%d/search", port), strings.NewReader(`{"filter":"title"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := netClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(respBody), `"filter":"title"`)
+}
+
+// TestQueryContentTypeGuardWiring pins that the RFC 10008 Content-Type guard is
+// actually wired to registered QUERY routes and not to the router's catch-all.
+// Removing the `if method == MethodQuery` block in rest.go would make all three
+// sub-tests fail — the 200 path proves the guard passes a valid request, the
+// rejection paths prove it runs before the handler, and the 404 path proves it
+// does NOT run for unregistered paths (so a QUERY to an unknown route gets 404,
+// not a spurious 400 or 415).
+func TestQueryContentTypeGuardWiring(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
+	}
+
+	app.QUERY("/guarded", func(_ *Context) (any, error) {
+		return "ok", nil
+	})
+
+	go app.Run()
+
+	base := fmt.Sprintf("http://localhost:%d", port)
+	testutil.WaitForHTTPServer(t, base)
+
+	netClient := &http.Client{Timeout: 500 * time.Millisecond}
+
+	tests := []struct {
+		desc            string
+		path            string
+		contentType     string
+		body            string
+		wantStatus      int
+		wantAcceptQuery bool
+	}{
+		{
+			desc:        "valid JSON body reaches the handler",
+			path:        "/guarded",
+			contentType: "application/json",
+			body:        `{}`,
+			wantStatus:  http.StatusOK,
+		},
+		{
+			desc:       "missing Content-Type is rejected before the handler (guard wired)",
+			path:       "/guarded",
+			body:       `{}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			desc:            "unsupported Content-Type is rejected with Accept-Query header (RFC 10008 §3.1)",
+			path:            "/guarded",
+			contentType:     "text/plain",
+			body:            "hello",
+			wantStatus:      http.StatusUnsupportedMediaType,
+			wantAcceptQuery: true,
+		},
+		{
+			desc:        "QUERY to an unregistered path is 404, not 400/415 (guard not on catch-all)",
+			path:        "/no-such-route",
+			contentType: "application/json",
+			body:        `{}`,
+			wantStatus:  http.StatusNotFound,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			req, _ := http.NewRequestWithContext(t.Context(), MethodQuery,
+				base+tc.path, strings.NewReader(tc.body))
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+
+			resp, err := netClient.Do(req)
+			require.NoError(t, err)
+
+			acceptQuery := resp.Header.Get("Accept-Query")
+
+			resp.Body.Close()
+
+			assert.Equal(t, tc.wantStatus, resp.StatusCode)
+
+			if tc.wantAcceptQuery {
+				// Advertised set must be exactly the media types the guard would
+				// have accepted, so a client cannot ask for a type Bind refuses.
+				assert.Equal(t, gofrHTTP.AcceptedQueryMediaTypes(), acceptQuery,
+					"415 must carry Accept-Query listing the accepted media types (RFC 10008 §3.1)")
+			} else {
+				assert.Empty(t, acceptQuery, "Accept-Query is only advertised on 415, not on %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestApp_startSubscriptions(t *testing.T) {
+	tests := []struct {
+		desc       string
+		topics     []string
+		setupMocks func(l *container.MockLogger)
+	}{
+		{
+			desc:       "no subscriptions returns immediately",
+			topics:     nil,
+			setupMocks: func(*container.MockLogger) {},
+		},
+		{
+			desc:   "every subscriber runs until the context is canceled",
+			topics: []string{"orders", "payments"},
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "orders")
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "payments")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			c := &container.Container{Logger: logger, PubSub: &cancelingSubscriber{cancel: cancel}}
+			a := &App{container: c, subscriptionManager: newSubscriptionManager(c)}
+
+			for _, topic := range tc.topics {
+				a.subscriptionManager.subscriptions[topic] = func(*Context) error { return nil }
+			}
+
+			require.NoError(t, a.startSubscriptions(ctx))
+		})
+	}
+}
+
+func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
+	tests := []struct {
+		desc     string
+		register func(a *App)
+	}{
+		{
+			desc:     "graphql query",
+			register: func(a *App) { a.GraphQLQuery("hello", func(*Context) (any, error) { return nil, nil }) },
+		},
+		{
+			desc:     "graphql mutation",
+			register: func(a *App) { a.GraphQLMutation("create", func(*Context) (any, error) { return nil, nil }) },
+		},
+		{
+			desc:     "static files",
+			register: func(a *App) { a.AddStaticFiles("/static", "./does-not-exist") },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Occupy a port so isPortAvailable reports it as blocked.
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			defer listener.Close()
+
+			port := listener.Addr().(*net.TCPAddr).Port
+
+			c, mocks := container.NewMockContainer(t)
+			mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+			mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			// The gomock controller fails the test unless Fatalf is called exactly once with the blocked port.
+			logger.EXPECT().Fatalf("http port %d is blocked or unreachable", port)
+			// A real Fatalf exits the process; the mocked one returns, so whatever runs after it is not asserted.
+			logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			c.Logger = logger
+
+			a := &App{container: c, httpServer: &httpServer{port: port, staticFiles: map[string]string{}}}
+
+			tc.register(a)
+		})
+	}
+}
+
+func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
+	c, mocks := container.NewMockContainer(t)
+	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	logger := container.NewMockLogger(gomock.NewController(t))
+	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
+	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
+	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
+	c.Logger = logger
+
+	a := &App{
+		container:      c,
+		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
+		graphqlManager: newGraphQLManager(c),
+	}
+
+	a.setupGraphQL()
 }

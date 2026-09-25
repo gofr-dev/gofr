@@ -180,3 +180,78 @@ func TestRateLimiter_HTTPMethods(t *testing.T) {
 
 	_ = resp.Body.Close()
 }
+
+func TestRateLimiter_QueryMethods(t *testing.T) {
+	store := &mockStore{allowed: true}
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store: store,
+		HTTP:  &mockHTTP{},
+	}
+
+	ctx := context.Background()
+
+	resp, err := rl.Query(ctx, "foo", nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "rate limiter must delegate to Query, not another verb")
+
+	defer resp.Body.Close()
+
+	resp, err = rl.QueryWithHeaders(ctx, "foo", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"),
+		"rate limiter must delegate to QueryWithHeaders, not another verb")
+
+	_ = resp.Body.Close()
+}
+
+func TestRateLimiter_MethodsDenied(t *testing.T) {
+	store := &mockStore{allowed: false, retryAfter: 2 * time.Second}
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store: store,
+		HTTP:  &mockHTTP{},
+	}
+
+	denied := &RateLimitError{ServiceKey: "svc", RetryAfter: 2 * time.Second}
+	headers := map[string]string{"k": "v"}
+
+	testCases := []struct {
+		desc    string
+		method  string
+		headers map[string]string
+		expErr  error
+	}{
+		{desc: "GET", method: http.MethodGet, expErr: denied},
+		{desc: "POST", method: http.MethodPost, expErr: denied},
+		{desc: "PUT", method: http.MethodPut, expErr: denied},
+		{desc: "PATCH", method: http.MethodPatch, expErr: denied},
+		{desc: "DELETE", method: http.MethodDelete, expErr: denied},
+		{desc: "QUERY", method: methodQuery, expErr: denied},
+		{desc: "GET with headers", method: http.MethodGet, headers: headers, expErr: denied},
+		{desc: "POST with headers", method: http.MethodPost, headers: headers, expErr: denied},
+		{desc: "PUT with headers", method: http.MethodPut, headers: headers, expErr: denied},
+		{desc: "PATCH with headers", method: http.MethodPatch, headers: headers, expErr: denied},
+		{desc: "DELETE with headers", method: http.MethodDelete, headers: headers, expErr: denied},
+		{desc: "QUERY with headers", method: methodQuery, headers: headers, expErr: denied},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			gotResponse, err := callHTTPServiceAndClose(t.Context(), rl, tc.method, tc.headers)
+
+			assert.Equal(t, tc.expErr, err)
+			assert.False(t, gotResponse)
+		})
+	}
+}

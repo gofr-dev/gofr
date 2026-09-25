@@ -177,16 +177,22 @@ func (c headerCarrier) Set(key, value string) { http.Header(c).Set(key, value) }
 // this method the assertion fails and Extract silently falls back to the
 // single-value Get, dropping every baggage member after the first whenever a
 // request carries more than one Baggage header -- which is legal per W3C and is
-// what proxies and service meshes commonly emit. GoFr installs
-// propagation.Baggage in its default composite propagator, so that path is live.
+// what proxies and service meshes commonly emit.
 //
 // Measured against the stdlib carrier with three Baggage headers: stdlib
 // extracted 3 members, this carrier extracted 1 before the method existed.
 //
-// The canonical-key fast path is deliberately not used here. Baggage is not one
-// of the keys canonicalPropagationKeys covers, and a carrier that replaces a
-// stdlib one has to be a faithful drop-in first and an optimization second.
-func (c headerCarrier) Values(key string) []string { return http.Header(c).Values(key) }
+// It uses the same canonical-key table Get does. http.Header.Values
+// canonicalizes whatever key it is handed, and "baggage" is not already
+// canonical, so going through it allocated the canonical string on every
+// request -- for the one header the propagators always ask about.
+func (c headerCarrier) Values(key string) []string {
+	if canonical, ok := canonicalPropagationKeys[key]; ok {
+		return c[canonical]
+	}
+
+	return http.Header(c).Values(key)
+}
 
 func (c headerCarrier) Keys() []string {
 	keys := make([]string, 0, len(c))

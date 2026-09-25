@@ -184,3 +184,113 @@ func TestMapUsage_Absent(t *testing.T) {
 	assert.Zero(t, got.ReasoningTokens)
 	assert.Zero(t, got.TotalTokens)
 }
+
+func TestUsageFields_ExtractEdgeInputs(t *testing.T) {
+	tests := []struct {
+		desc   string
+		fields UsageFields
+		raw    json.RawMessage
+		exp    ai.Usage
+	}{
+		{desc: "empty raw usage", fields: UsageFields{}, raw: nil, exp: ai.Usage{}},
+		{desc: "custom path walks through a non-object", fields: UsageFields{PromptTokens: "prompt_tokens.nested"},
+			raw: json.RawMessage(`{"prompt_tokens":7,"completion_tokens":3}`), exp: ai.Usage{CompletionTokens: 3}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, tc.fields.extract(tc.raw))
+		})
+	}
+}
+
+func TestToWireMessages(t *testing.T) {
+	tests := []struct {
+		desc     string
+		messages []ai.Message
+		exp      []wireMessage
+	}{
+		{
+			desc:     "message without tool calls",
+			messages: []ai.Message{{Role: "user", Content: "hi"}},
+			exp:      []wireMessage{{Role: "user", Content: "hi"}},
+		},
+		{
+			desc: "assistant message with tool calls",
+			messages: []ai.Message{{Role: "assistant", ToolCalls: []ai.ToolCall{
+				{ID: "call-1", Name: "get_user", Args: json.RawMessage(`{"id":1}`)},
+				{ID: "call-2", Name: "list_users"},
+			}}},
+			exp: []wireMessage{{Role: "assistant", ToolCalls: []wireRequestTool{
+				{ID: "call-1", Type: functionType, Function: wireRequestFunc{Name: "get_user", Arguments: `{"id":1}`}},
+				{ID: "call-2", Type: functionType, Function: wireRequestFunc{Name: "list_users"}},
+			}}},
+		},
+		{
+			desc:     "tool result message",
+			messages: []ai.Message{{Role: "tool", Content: `{"ok":true}`, ToolCallID: "call-1"}},
+			exp:      []wireMessage{{Role: "tool", Content: `{"ok":true}`, ToolCallID: "call-1"}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, toWireMessages(tc.messages))
+		})
+	}
+}
+
+func TestToWireTools(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object"}`)
+
+	tests := []struct {
+		desc  string
+		tools []ai.ToolSpec
+		exp   []wireTool
+	}{
+		{desc: "no tools", tools: nil, exp: nil},
+		{
+			desc:  "tools mapped to function specs",
+			tools: []ai.ToolSpec{{Name: "get_user", Description: "fetch a user", InputSchema: schema}, {Name: "ping"}},
+			exp: []wireTool{
+				{Type: functionType, Function: wireFuncSpec{Name: "get_user", Description: "fetch a user", Parameters: schema}},
+				{Type: functionType, Function: wireFuncSpec{Name: "ping"}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, toWireTools(tc.tools))
+		})
+	}
+}
+
+func TestToToolCalls(t *testing.T) {
+	tests := []struct {
+		desc  string
+		calls []wireResponseTool
+		exp   []ai.ToolCall
+	}{
+		{desc: "no calls", calls: nil, exp: nil},
+		{
+			desc: "arguments kept or normalized to an empty object",
+			calls: []wireResponseTool{
+				{ID: "1", Function: wireResponseFunc{Name: "valid", Arguments: `{"a":1}`}},
+				{ID: "2", Function: wireResponseFunc{Name: "empty", Arguments: ""}},
+				{ID: "3", Function: wireResponseFunc{Name: "malformed", Arguments: `{"a":`}},
+			},
+			exp: []ai.ToolCall{
+				{ID: "1", Name: "valid", Args: json.RawMessage(`{"a":1}`)},
+				{ID: "2", Name: "empty", Args: json.RawMessage(emptyJSONObject)},
+				{ID: "3", Name: "malformed", Args: json.RawMessage(emptyJSONObject)},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, toToolCalls(tc.calls))
+		})
+	}
+}

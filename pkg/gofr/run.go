@@ -12,30 +12,56 @@ import (
 	"time"
 )
 
-// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
-// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
-// on an unreachable metrics collector.
-const metricsFlushTimeout = 10 * time.Second
+// telemetryFlushTimeout bounds the metrics and traces flush/shutdown performed
+// after a CMD app's handler returns, so a CLI invocation cannot hang
+// indefinitely waiting on an unreachable collector.
+const telemetryFlushTimeout = 10 * time.Second
+
+// runCMD runs a CMD application's subcommand and then flushes telemetry: the
+// final metric window and the pending span batch would otherwise be dropped when
+// the process exits, which for a CLI invocation is every window and every batch.
+// The flush is bounded by telemetryFlushTimeout so an unreachable collector
+// cannot hang the invocation.
+func (a *App) runCMD() {
+	a.cmd.Run(a.container)
+
+	if a.container != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+		defer cancel()
+
+		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush metrics: %v", err)
+		}
+
+		if err := a.shutdownTraces(flushCtx); err != nil {
+			a.Logger().Errorf("failed to flush traces: %v", err)
+		}
+	}
+
+	if closer, ok := a.container.Logger.(io.Closer); ok {
+		closer.Close()
+	}
+}
+
+// shutdownWaitMargin is the extra time Run gives the graceful-shutdown goroutine on top of the
+// shutdown timeout that goroutine already bounds itself by. The wait is a safety net against a
+// shutdown step that ignores its context, not a second deadline competing with the first one.
+//
+// One second because this value only ever decides how long a process hangs *after* it has already
+// misbehaved, and both directions of error are bounded by that framing: too small and Run reports
+// a shutdown that was about to finish as failed; too large and a pod that will never finish sits
+// there until Kubernetes SIGKILLs it at terminationGracePeriodSeconds. A second is long enough to
+// cover the scheduling and log-flush tail after the last shutdown step returns — the only work
+// that legitimately happens past the deadline — and short enough to stay well inside the gap
+// operators leave between SHUTDOWN_GRACE_PERIOD and terminationGracePeriodSeconds. It is
+// deliberately not configurable: a knob here would be a second shutdown deadline to reason about,
+// and SHUTDOWN_GRACE_PERIOD is the one that should move.
+const shutdownWaitMargin = time.Second
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
-		a.cmd.Run(a.container)
-
-		if a.container != nil {
-			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
-
-			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-				a.Logger().Errorf("failed to flush metrics: %v", err)
-			}
-
-			cancel()
-		}
-
-		if closer, ok := a.container.Logger.(io.Closer); ok {
-			closer.Close()
-		}
-
+		a.runCMD()
 		return
 	}
 
@@ -43,7 +69,18 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if !a.handleStartupHooks(ctx) {
+	// Both steps have already released what startup opened by the time they report anything but
+	// startupOK. What is left is deciding what the abandonment means to the process, which happens
+	// in one place rather than inside each step. See finishAbandonedStartup.
+	if outcome := a.handleStartupHooks(ctx); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
+		return
+	}
+
+	if outcome := a.bindMCPServer(ctx); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
 		return
 	}
 
@@ -52,37 +89,82 @@ func (a *App) Run() {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
 	}
 
-	a.startShutdownHandler(ctx, timeout)
+	shutdownDone := a.startShutdownHandler(ctx, timeout)
 	a.startTelemetryIfEnabled()
 	a.startAllServers(ctx)
+	a.awaitShutdown(ctx, shutdownDone, timeout)
 }
 
-// handleStartupHooks runs the startup hooks and returns false if the application should exit.
-func (a *App) handleStartupHooks(ctx context.Context) bool {
-	if err := a.runOnStartHooks(ctx); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			a.Logger().Errorf("Startup failed: %v", err)
+// startupOutcome is what a pre-server startup step reports back to Run.
+//
+// The distinction that matters is the second one from the third: both abandon the run, but only one
+// of them is a failure. An operator sending SIGTERM during startup got exactly what they asked for,
+// and reporting that as a failed start would have every orchestrator retrying a deliberate stop.
+type startupOutcome int
 
-			return false
-		}
-		// If the error is context.Canceled, do not exit; allow graceful shutdown.
-		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+const (
+	// startupOK means the step succeeded and Run may continue.
+	startupOK startupOutcome = iota
+	// startupFailed means the run was abandoned because something was wrong. The process reports a
+	// non-zero status.
+	startupFailed
+	// startupCanceled means the run was abandoned because the operator stopped it. The process
+	// reports success, as it does for a signal received at any other time.
+	startupCanceled
+)
 
-		return false
+// finishAbandonedStartup reports an abandoned startup to the process.
+//
+// Everything the run opened has already been released by the step that abandoned it, so this only
+// decides the exit status.
+func (a *App) finishAbandonedStartup(outcome startupOutcome) {
+	if outcome == startupFailed {
+		a.abortStartup()
+	}
+}
+
+// handleStartupHooks runs the startup hooks and reports whether Run may continue.
+//
+// A hook that fails abandons the run the same way an unclaimable MCP port does, and for the same
+// reason has to release what startup has already opened: the container's datasources are live by
+// the time the hooks run, and Run unwinds from here rather than exiting from inside the hook.
+func (a *App) handleStartupHooks(ctx context.Context) startupOutcome {
+	err := a.runOnStartHooks(ctx)
+	if err == nil {
+		return startupOK
 	}
 
-	return true
+	outcome := startupFailed
+
+	if errors.Is(err, context.Canceled) {
+		// A canceled context is an operator stopping the process, not a broken hook.
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+
+		outcome = startupCanceled
+	} else {
+		a.Logger().Errorf("Startup failed: %v", err)
+	}
+
+	a.shutdownAfterFailedStartup()
+
+	return outcome
 }
 
-// startShutdownHandler starts a goroutine to handle graceful shutdown.
-func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+// startShutdownHandler starts a goroutine to handle graceful shutdown. The returned channel is
+// closed once that goroutine has finished, so Run can wait for it instead of letting the process
+// exit while shutdown is still in flight.
+func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
+		defer close(done)
+
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), timeout)
-		defer done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		defer cancel()
 
 		if a.hasTelemetry() {
 			a.sendTelemetry(http.DefaultClient, false)
@@ -95,6 +177,27 @@ func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
 		}
 	}()
+
+	return done
+}
+
+// awaitShutdown blocks until the graceful shutdown started by startShutdownHandler has finished,
+// so a main that only calls Run does not return — and let the process exit — while the datasources
+// are still being closed.
+//
+// It returns at once when the servers stopped for a reason other than a termination signal: no
+// shutdown is running in that case, and the handler goroutine is still parked on a context that is
+// canceled only once Run returns.
+func (a *App) awaitShutdown(ctx context.Context, done <-chan struct{}, timeout time.Duration) {
+	if ctx.Err() == nil {
+		return
+	}
+
+	select {
+	case <-done:
+	case <-time.After(timeout + shutdownWaitMargin):
+		a.Logger().Errorf("graceful shutdown did not finish within %v, exiting anyway", timeout+shutdownWaitMargin)
+	}
 }
 
 // startTelemetryIfEnabled starts telemetry if it's enabled.
@@ -115,6 +218,95 @@ func (a *App) startAllServers(ctx context.Context) {
 	a.startSubscriptionManager(ctx, &wg)
 
 	wg.Wait()
+}
+
+// bindMCPServer claims the MCP port and reports whether startup may continue.
+//
+// It runs before any server goroutine is launched. A port that cannot be claimed is a startup
+// failure: EnableMCP was called, so MCP was asked for, and a service that silently comes up without
+// a transport it was configured to expose is worse than one that refuses to start. Returning false
+// aborts Run the same way a failed OnStart hook does — no server has started, and no os.Exit is
+// involved.
+//
+// Doing this here rather than inside mcpServer.Run is deliberate: the servers run as concurrent
+// goroutines under a shared waitgroup, so a failure raised from inside one of them would race the
+// others' startup rather than cleanly stopping it.
+//
+// Nothing is serving at this point, but the OnStart hooks have already run and the container's
+// datasources are already open, so the abort releases them before returning rather than dropping
+// them on the floor.
+func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
+	// An MCP_PORT that could never be served is reported here rather than at the point it was
+	// parsed, because EnableMCP runs inside the application's own setup where there is nothing to
+	// abort yet. It aborts for the same reason an occupied port does -- MCP was asked for and cannot
+	// be provided -- and with more justification: an occupied port can be a transient condition of
+	// the environment, while a value outside 1-65535 is unambiguously wrong and will be just as
+	// wrong on the next start.
+	if a.mcpConfigErr != nil {
+		a.Logger().Errorf("MCP server cannot start: %v. Set MCP_PORT to a valid, free port, or "+
+			"MCP_PORT=0 to run without the MCP transport while keeping tools available in-process.",
+			a.mcpConfigErr)
+
+		a.shutdownAfterFailedStartup()
+
+		return startupFailed
+	}
+
+	if a.mcpServer == nil {
+		return startupOK
+	}
+
+	err := a.mcpServer.bind(ctx)
+	if err == nil {
+		return startupOK
+	}
+
+	outcome := startupFailed
+
+	// ListenConfig.Listen honors cancellation, so a SIGINT or SIGTERM arriving inside the bind
+	// window surfaces here as context.Canceled. That is an operator stopping the process, not a port
+	// problem, and reporting the port remedy for it sends them looking for a conflict that does not
+	// exist. handleStartupHooks draws the same distinction for the startup hooks.
+	if errors.Is(err, context.Canceled) {
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+
+		outcome = startupCanceled
+	} else {
+		a.Logger().Errorf("MCP server cannot start on port %d: %v. Set MCP_PORT to a free port, or "+
+			"MCP_PORT=0 to run without the MCP transport while keeping tools available in-process.",
+			a.mcpServer.port, err)
+	}
+
+	a.shutdownAfterFailedStartup()
+
+	return outcome
+}
+
+// shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned
+// before any server is up — a failed startup hook, or an MCP port that cannot be claimed. Run
+// returns normally afterwards, so without this the datasource connections opened by the container
+// would be left to process exit.
+//
+// The timeout is deliberately taken from a fresh Background context rather than the run's own: the
+// run context may already be canceled (that is one of the ways startup is abandoned), and a
+// shutdown that inherited it would be dead on arrival.
+func (a *App) shutdownAfterFailedStartup() {
+	// Reported here rather than assumed to have been reported already. An earlier revision skipped
+	// it on the grounds that Run's normal path logs it -- but that is exactly the path an abandoned
+	// startup never reaches, so a malformed SHUTDOWN_GRACE_PERIOD went unmentioned in the only
+	// situation where this function runs. The default returned alongside the error is still used: a
+	// bad grace period must not stop the cleanup.
+	timeout, err := getShutdownTimeoutFromConfig(a.Config)
+	if err != nil {
+		a.Logger().Errorf("invalid SHUTDOWN_GRACE_PERIOD, using %s to shut down after a failed startup: %v", timeout, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := a.Shutdown(ctx); err != nil {
+		a.Logger().Debugf("Shutdown after failed startup reported: %v", err)
+	}
 }
 
 // startMCPServer starts the MCP server if app.EnableMCP was called.

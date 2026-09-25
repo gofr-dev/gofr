@@ -528,3 +528,180 @@ func TestApp_WithReflection(t *testing.T) {
 	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
 	assert.True(t, ok, "reflection service should be registered")
 }
+
+// injectableHealthService is a health service whose exported container field receives injection.
+type injectableHealthService struct {
+	grpc_health_v1.UnimplementedHealthServer
+	C *container.Container
+}
+
+// nonInjectableHealthService hides its container field, so injection fails.
+type nonInjectableHealthService struct {
+	grpc_health_v1.UnimplementedHealthServer
+	c *container.Container
+}
+
+func TestNewGRPCServer_InvalidPort(t *testing.T) {
+	tests := []struct {
+		desc string
+		port int
+	}{
+		{desc: "zero port", port: 0},
+		{desc: "negative port", port: -1},
+		{desc: "port above range", port: 65536},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, _ := container.NewMockContainer(t)
+
+			g, err := newGRPCServer(c, tc.port, config.NewMockConfig(nil))
+
+			require.ErrorIs(t, err, errInvalidPort)
+			assert.Nil(t, g)
+		})
+	}
+}
+
+func TestApp_AddGRPCServerOptionsAndInterceptors(t *testing.T) {
+	unary := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(ctx, req)
+	}
+
+	stream := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, ss)
+	}
+
+	otherStream := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, ss)
+	}
+
+	tests := []struct {
+		desc           string
+		call           func(a *App)
+		setupMocks     func(l *container.MockLogger)
+		expOptions     int
+		expUnary       int
+		expStreamCount int
+	}{
+		{
+			desc: "no server options",
+			call: func(a *App) { a.AddGRPCServerOptions() },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debug("no gRPC server options provided")
+			},
+			expOptions: 0, expUnary: 2, expStreamCount: 2,
+		},
+		{
+			desc: "server options added",
+			call: func(a *App) { a.AddGRPCServerOptions(grpc.MaxRecvMsgSize(1024)) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debugf("adding %d gRPC server options", 1)
+			},
+			expOptions: 1, expUnary: 2, expStreamCount: 2,
+		},
+		{
+			desc: "no unary interceptors",
+			call: func(a *App) { a.AddGRPCUnaryInterceptors() },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debug("no unary interceptors provided")
+			},
+			expOptions: 0, expUnary: 2, expStreamCount: 2,
+		},
+		{
+			desc: "unary interceptors added",
+			call: func(a *App) { a.AddGRPCUnaryInterceptors(unary) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debugf("adding %d valid unary interceptors", 1)
+			},
+			expOptions: 0, expUnary: 3, expStreamCount: 2,
+		},
+		{
+			desc: "no stream interceptors",
+			call: func(a *App) { a.AddGRPCServerStreamInterceptors() },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debug("no stream interceptors provided")
+			},
+			expOptions: 0, expUnary: 2, expStreamCount: 2,
+		},
+		{
+			desc: "stream interceptors added",
+			call: func(a *App) { a.AddGRPCServerStreamInterceptors(stream, otherStream) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Debugf("adding %d stream interceptors", 2)
+			},
+			expOptions: 0, expUnary: 2, expStreamCount: 4,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, _, g := setupTestGRPCServer(t, 9999, false)
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+			c.Logger = logger
+
+			a := &App{container: c, grpcServer: g}
+
+			tc.call(a)
+
+			assert.Len(t, g.options, tc.expOptions)
+			assert.Len(t, g.interceptors, tc.expUnary)
+			assert.Len(t, g.streamInterceptors, tc.expStreamCount)
+		})
+	}
+}
+
+func TestApp_RegisterService(t *testing.T) {
+	tests := []struct {
+		desc        string
+		impl        any
+		setupMocks  func(l *container.MockLogger)
+		injected    func(impl any) bool
+		expInjected bool
+	}{
+		{
+			desc: "service registered and container injected",
+			impl: &injectableHealthService{},
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Infof("registering gRPC Service: %s", "grpc.health.v1.Health")
+				l.EXPECT().Infof("successfully registered gRPC service: %s", "grpc.health.v1.Health")
+			},
+			injected:    func(impl any) bool { return impl.(*injectableHealthService).C != nil },
+			expInjected: true,
+		},
+		{
+			desc: "container injection failure is fatal",
+			impl: &nonInjectableHealthService{},
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Infof("registering gRPC Service: %s", "grpc.health.v1.Health")
+				l.EXPECT().Error(errNonAddressable)
+				l.EXPECT().Fatalf("failed to inject container into gRPC service %s: %v", "grpc.health.v1.Health", errNonAddressable)
+				// A real Fatalf exits the process; the mocked one returns, so anything logged after it is not asserted.
+				l.EXPECT().Infof("successfully registered gRPC service: %s", "grpc.health.v1.Health").AnyTimes()
+			},
+			injected:    func(impl any) bool { return impl.(*nonInjectableHealthService).c != nil },
+			expInjected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, mocks, g := setupTestGRPCServer(t, 9999, false)
+			mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "grpc_services_registered_total")
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+			c.Logger = logger
+
+			a := &App{container: c, grpcServer: g}
+
+			a.RegisterService(&grpc_health_v1.Health_ServiceDesc, tc.impl)
+
+			_, ok := g.getServer().GetServiceInfo()["grpc.health.v1.Health"]
+			assert.True(t, ok)
+			assert.Equal(t, tc.expInjected, tc.injected(tc.impl))
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,29 @@ func TestMessage_Context(t *testing.T) {
 	out := m.Context()
 
 	assert.Equal(t, ctx, out)
+}
+
+func TestNewMessage(t *testing.T) {
+	var nilCtx context.Context
+
+	ctx := t.Context()
+
+	testCases := []struct {
+		desc   string
+		ctx    context.Context
+		expCtx context.Context
+	}{
+		{desc: "provided context is used", ctx: ctx, expCtx: ctx},
+		{desc: "nil context falls back to background", ctx: nilCtx, expCtx: context.Background()},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := NewMessage(tc.ctx)
+
+			assert.Equal(t, tc.expCtx, m.Context())
+		})
+	}
 }
 
 func TestMessage_Bind(t *testing.T) {
