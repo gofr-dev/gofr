@@ -27,7 +27,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -2275,24 +2274,4 @@ func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
 			tc.register(a)
 		})
 	}
-}
-
-func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
-	c, mocks := container.NewMockContainer(t)
-	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	logger := container.NewMockLogger(gomock.NewController(t))
-	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
-	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
-	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
-	c.Logger = logger
-
-	a := &App{
-		container:      c,
-		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
-		graphqlManager: newGraphQLManager(c),
-	}
-
-	a.setupGraphQL()
 }

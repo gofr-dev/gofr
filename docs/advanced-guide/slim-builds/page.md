@@ -1,0 +1,109 @@
+---
+description: "Leave subsystems your service does not use out of the binary with the gofr_no* build tags. Opt-in, no source changes, and the default build is unaffected."
+nextjs:
+  metadata:
+    title: "Slim Builds in GoFr — Omitting Unused Subsystems"
+    description: "Leave subsystems your service does not use out of the binary with the gofr_no* build tags. Opt-in, no source changes, and the default build is unaffected."
+---
+
+# Slim Builds
+
+GoFr compiles several optional subsystems into every binary so they work from configuration alone —
+set `PUBSUB_BACKEND=KAFKA` and the Kafka client is there, set `DB_DIALECT=postgres` and the driver is
+registered, call `app.GraphQLQuery(...)` and the engine is linked. That is the behavior most
+services want, and it is the default.
+
+A service that uses none of them still pays for them in binary size and, in one case, in resident
+memory. The `gofr_no*` build tags let you leave those out:
+
+```bash
+go build -tags "gofr_nopubsub gofr_nosqldrivers gofr_nographql" ./...
+```
+
+Tags compose, so use as many as apply.
+
+## The tags
+
+| Tag | Leaves out | Affects |
+|---|---|---|
+| `gofr_nopubsub` | the Kafka, Google Pub/Sub and MQTT clients | `PUBSUB_BACKEND=KAFKA`, `=GOOGLE`, `=MQTT` |
+| `gofr_nosqldrivers` | the PostgreSQL and SQLite drivers | `DB_DIALECT=postgres`, `=sqlite`, `=supabase`, `=cockroachdb` |
+| `gofr_nographql` | the GraphQL engine | `app.GraphQLQuery`, `app.GraphQLMutation` |
+
+Two things are deliberately **not** affected. `PUBSUB_BACKEND=REDIS` keeps working under
+`gofr_nopubsub`, because the Redis client is linked for caching anyway and removing it would buy
+nothing. `DB_DIALECT=mysql` keeps working under `gofr_nosqldrivers`, because GoFr imports the MySQL
+driver for its configuration types rather than only for registration, so it is linked either way.
+
+`supabase` and `cockroachdb` are in the table because they connect through the PostgreSQL driver, so
+the tag that omits that driver omits them too.
+
+## Nothing in your code changes
+
+The tags remove implementations, never API. `app.GraphQLQuery` still exists and still takes a GoFr
+`Handler` under `gofr_nographql`; the container still has a `PubSub` field under `gofr_nopubsub`.
+Source that compiles without the tags compiles with them.
+
+## A subsystem you asked for, but did not build in, says so
+
+This is the point of using a tag rather than asking you to wire each subsystem up yourself. If you
+configure something the binary does not carry, GoFr logs an error naming the tag:
+
+```
+ERROR  PUBSUB_BACKEND=KAFKA was configured, but this binary was built with -tags gofr_nopubsub,
+       which omits the Kafka client. Rebuild without the tag to use it.
+```
+
+The service still starts. A missing pub/sub client leaves `PubSub` unset, which is the same state an
+unconfigured service has, and GoFr already handles it — so a misbuilt deployment is visible in the
+logs rather than being a crash loop, and it cannot silently half-work.
+
+The SQL case reports through `database/sql` itself:
+
+```
+ERROR  could not register sql dialect 'postgres' for traces, error: sql: unknown driver "postgres"
+       (forgotten import?)
+```
+
+If you want one of these dialects in a tagged build, import the driver in your own `main` package,
+exactly as you would when using `database/sql` directly:
+
+```go
+import _ "github.com/lib/pq"
+```
+
+## When it is worth it
+
+Only when the binary size or the memory matters to you — a container image budget, a serverless
+deployment, a memory-capped runtime. The tags change nothing about how a service behaves at runtime,
+so there is no reason to reach for them otherwise.
+
+`gofr_nosqldrivers` is the one with a memory effect rather than only a size effect: the SQLite driver
+pulls in `modernc.org/libc`, whose initialization parses embedded copies of `/etc/protocols` and
+`/etc/services` into permanent Go structures — retained heap in every binary, whether or not SQLite
+is ever opened.
+
+## Verifying a build
+
+The tags are compile-time, so the check is too. Ask what YOUR package links, not what `./...`
+matches -- the second form lists the pubsub packages themselves because they are in the pattern, and
+reports them as present whatever tags you pass:
+
+```bash
+go list -deps -tags gofr_nopubsub ./cmd/my-service | grep pubsub/kafka   # no output: not linked
+```
+
+For scale, against `gofr.dev/pkg/gofr` itself: 827 packages by default, 614 with `gofr_nopubsub`,
+783 with `gofr_nosqldrivers`, 807 with `gofr_nographql`, and 550 with all three. On
+`examples/http-server` that is a 60,008,402 byte binary by default and 43,384,642 with all three
+tags, a 27.7% reduction.
+
+**Measured on darwin/arm64 with Go 1.26.3.** The counts are platform- and toolchain-dependent —
+the standard library and `modernc.org/libc` pull in different package sets per GOOS/GOARCH, so the
+same commands on linux/amd64 report roughly twenty fewer. The *differences* between the rows are
+what the tags are about; the absolute numbers are not comparable across platforms.
+
+These figures move with every dependency change, so treat them as a sense of scale rather than a
+contract. Run the command above against your own service for the number that matters to you. What CI
+does enforce is the direction: the `Slim Build Tags` job fails if any of these tags stops removing
+the packages it names.
