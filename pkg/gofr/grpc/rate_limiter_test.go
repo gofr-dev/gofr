@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	httpmw "gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -56,8 +58,9 @@ func (m *rateLimiterMockMetrics) GetCounter(name string) int {
 }
 
 type infoCapturingLogger struct {
-	mu   sync.Mutex
-	logs []string
+	mu     sync.Mutex
+	logs   []string
+	errors []string
 }
 
 func (m *infoCapturingLogger) Info(args ...any) {
@@ -71,13 +74,26 @@ func (m *infoCapturingLogger) Info(args ...any) {
 
 func (*infoCapturingLogger) Debug(_ ...any)            {}
 func (*infoCapturingLogger) Fatalf(_ string, _ ...any) {}
-func (*infoCapturingLogger) Errorf(_ string, _ ...any) {}
+
+func (m *infoCapturingLogger) Errorf(format string, args ...any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.errors = append(m.errors, fmt.Sprintf(format, args...))
+}
 
 func (m *infoCapturingLogger) logCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	return len(m.logs)
+}
+
+func (m *infoCapturingLogger) errorLogs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return append([]string(nil), m.errors...)
 }
 
 type rateLimitMockStream struct {
@@ -108,17 +124,21 @@ func (*rateLimitMockStream) SendMsg(any) error { return nil }
 func (*rateLimitMockStream) RecvMsg(any) error { return nil }
 
 type fakeStore struct {
-	allowed    bool
-	retryAfter time.Duration
-	err        error
+	allowed      bool
+	retryAfter   time.Duration
+	err          error
+	allowCalls   atomic.Int32
+	cleanupCalls atomic.Int32
 }
 
 func (f *fakeStore) Allow(context.Context, string, httpmw.RateLimiterConfig) (bool, time.Duration, error) {
+	f.allowCalls.Add(1)
+
 	return f.allowed, f.retryAfter, f.err
 }
 
-func (*fakeStore) StartCleanup(context.Context) {}
-func (*fakeStore) StopCleanup()                 {}
+func (f *fakeStore) StartCleanup(context.Context) { f.cleanupCalls.Add(1) }
+func (*fakeStore) StopCleanup()                   {}
 
 type fakeAddr string
 
@@ -264,32 +284,83 @@ func Test_retryAfterSeconds(t *testing.T) {
 	}
 }
 
-func TestUnaryRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
+func TestUnaryRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 	tests := []struct {
-		name   string
-		config httpmw.RateLimiterConfig
+		name    string
+		config  httpmw.RateLimiterConfig
+		wantErr string
 	}{
 		{
-			name:   "zero values",
-			config: httpmw.RateLimiterConfig{},
+			name:    "zero values",
+			config:  httpmw.RateLimiterConfig{},
+			wantErr: "requestsPerSecond must be positive",
 		},
 		{
-			name:   "negative RequestsPerSecond",
-			config: httpmw.RateLimiterConfig{RequestsPerSecond: -1, Burst: 5},
+			name:    "negative RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: -1, Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
 		},
 		{
-			name:   "zero Burst",
-			config: httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 0},
+			name:    "zero Burst",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 0},
+			wantErr: "burst must be positive",
+		},
+		{
+			name:    "negative Burst",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: -1},
+			wantErr: "burst must be positive",
+		},
+		{
+			name:    "NaN RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
 		},
 	}
 
+	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
+	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Panics(t, func() {
-				UnaryRateLimitInterceptor(context.Background(), tc.config, nil, nil)
+			logger := &infoCapturingLogger{}
+
+			var interceptor grpc.UnaryServerInterceptor
+
+			require.NotPanics(t, func() {
+				interceptor = UnaryRateLimitInterceptor(t.Context(), tc.config, logger, nil)
 			})
+
+			for i := 0; i < 10; i++ {
+				resp, err := interceptor(t.Context(), nil, info, handler)
+
+				require.NoError(t, err, "request %d should pass through", i+1)
+				assert.Equal(t, "ok", resp)
+			}
+
+			errs := logger.errorLogs()
+			require.Len(t, errs, 1)
+			assert.Contains(t, errs[0], "invalid rate limiter config")
+			assert.Contains(t, errs[0], tc.wantErr)
+			assert.Contains(t, errs[0], "rate limiting is disabled")
 		})
 	}
+}
+
+func TestUnaryRateLimitInterceptor_InvalidConfigNilLogger(t *testing.T) {
+	var interceptor grpc.UnaryServerInterceptor
+
+	logs := testutil.StderrOutputForFunc(func() {
+		interceptor = UnaryRateLimitInterceptor(t.Context(), httpmw.RateLimiterConfig{}, nil, nil)
+	})
+
+	assert.Contains(t, logs, "invalid rate limiter config")
+	assert.Contains(t, logs, "rate limiting is disabled")
+
+	resp, err := interceptor(t.Context(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
+		func(context.Context, any) (any, error) { return "ok", nil })
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
 }
 
 func TestUnaryRateLimitInterceptor_DefaultStore(t *testing.T) {
@@ -604,32 +675,89 @@ func TestUnaryRateLimitInterceptor_SkipsHealthCheck(t *testing.T) {
 	assert.Equal(t, "healthy", resp)
 }
 
-func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
+func TestStreamRateLimitInterceptor_InvalidConfigPassesThrough(t *testing.T) {
 	tests := []struct {
-		name   string
-		config httpmw.RateLimiterConfig
+		name    string
+		config  httpmw.RateLimiterConfig
+		wantErr string
 	}{
 		{
-			name:   "zero values",
-			config: httpmw.RateLimiterConfig{},
+			name:    "zero values",
+			config:  httpmw.RateLimiterConfig{},
+			wantErr: "requestsPerSecond must be positive",
 		},
 		{
-			name:   "negative RequestsPerSecond",
-			config: httpmw.RateLimiterConfig{RequestsPerSecond: -1, Burst: 5},
+			name:    "negative RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: -1, Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
 		},
 		{
-			name:   "zero Burst",
-			config: httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 0},
+			name:    "zero Burst",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 0},
+			wantErr: "burst must be positive",
+		},
+		{
+			name:    "negative Burst",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: -1},
+			wantErr: "burst must be positive",
+		},
+		{
+			name:    "NaN RequestsPerSecond",
+			config:  httpmw.RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5},
+			wantErr: "requestsPerSecond must be positive",
 		},
 	}
 
+	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Panics(t, func() {
-				StreamRateLimitInterceptor(context.Background(), tc.config, nil, nil)
+			logger := &infoCapturingLogger{}
+
+			var (
+				interceptor grpc.StreamServerInterceptor
+				calls       int
+			)
+
+			handler := func(any, grpc.ServerStream) error {
+				calls++
+				return nil
+			}
+
+			require.NotPanics(t, func() {
+				interceptor = StreamRateLimitInterceptor(t.Context(), tc.config, logger, nil)
 			})
+
+			for i := 0; i < 10; i++ {
+				err := interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, info, handler)
+
+				require.NoError(t, err, "stream %d should pass through", i+1)
+			}
+
+			assert.Equal(t, 10, calls)
+
+			errs := logger.errorLogs()
+			require.Len(t, errs, 1)
+			assert.Contains(t, errs[0], "invalid rate limiter config")
+			assert.Contains(t, errs[0], tc.wantErr)
+			assert.Contains(t, errs[0], "rate limiting is disabled")
 		})
 	}
+}
+
+func TestStreamRateLimitInterceptor_InvalidConfigNilLogger(t *testing.T) {
+	var interceptor grpc.StreamServerInterceptor
+
+	logs := testutil.StderrOutputForFunc(func() {
+		interceptor = StreamRateLimitInterceptor(t.Context(), httpmw.RateLimiterConfig{}, nil, nil)
+	})
+
+	assert.Contains(t, logs, "invalid rate limiter config")
+
+	err := interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
+		func(any, grpc.ServerStream) error { return nil })
+
+	require.NoError(t, err)
 }
 
 func TestStreamRateLimitInterceptor_DefaultStore(t *testing.T) {
@@ -900,4 +1028,76 @@ func TestStreamRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 	assert.LessOrEqual(t, successCount, int64(11), "Should not allow significantly more than burst size")
 	assert.Positive(t, rateLimitedCount, "Should have some rate limited requests")
 	assert.Equal(t, int64(20), successCount+rateLimitedCount, "Total requests should be 20")
+}
+
+func TestRateLimitInterceptors_InvalidConfigLeavesStoreUntouched(t *testing.T) {
+	store := &fakeStore{}
+	cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 0, Burst: 5, Store: store}
+	logger := &infoCapturingLogger{}
+
+	unary := UnaryRateLimitInterceptor(t.Context(), cfg, logger, nil)
+	stream := StreamRateLimitInterceptor(t.Context(), cfg, logger, nil)
+
+	_, err := unary(t.Context(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
+		func(context.Context, any) (any, error) { return "ok", nil })
+	require.NoError(t, err)
+
+	err = stream(nil, &rateLimitMockStream{ctx: t.Context()}, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
+		func(any, grpc.ServerStream) error { return nil })
+	require.NoError(t, err)
+
+	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
+	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
+	assert.Len(t, logger.errorLogs(), 2)
+}
+
+func TestRateLimitInterceptors_NegativeMaxKeysStillLimits(t *testing.T) {
+	const correction = "invalid rate limiter MaxKeys -1; falling back to the default key limit"
+
+	tests := []struct {
+		name    string
+		store   func() httpmw.RateLimiterStore
+		expLogs []string
+	}{
+		{"default store logs the correction", func() httpmw.RateLimiterStore { return nil }, []string{correction}},
+		{"caller-supplied store owns its bound", func() httpmw.RateLimiterStore {
+			return httpmw.NewMemoryRateLimiterStore(httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1})
+		}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name+"/unary", func(t *testing.T) {
+			logger := &infoCapturingLogger{}
+			cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store()}
+
+			interceptor := UnaryRateLimitInterceptor(t.Context(), cfg, logger, nil)
+			info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
+			handler := func(context.Context, any) (any, error) { return "ok", nil }
+
+			_, err := interceptor(t.Context(), nil, info, handler)
+			require.NoError(t, err)
+
+			_, err = interceptor(t.Context(), nil, info, handler)
+			assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+
+			assert.Equal(t, tc.expLogs, logger.errorLogs())
+		})
+
+		t.Run(tc.name+"/stream", func(t *testing.T) {
+			logger := &infoCapturingLogger{}
+			cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store()}
+
+			interceptor := StreamRateLimitInterceptor(t.Context(), cfg, logger, nil)
+			info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
+			handler := func(any, grpc.ServerStream) error { return nil }
+
+			err := interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, info, handler)
+			require.NoError(t, err)
+
+			err = interceptor(nil, &rateLimitMockStream{ctx: t.Context()}, info, handler)
+			assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+
+			assert.Equal(t, tc.expLogs, logger.errorLogs())
+		})
+	}
 }
