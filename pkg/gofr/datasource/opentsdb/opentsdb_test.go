@@ -723,6 +723,13 @@ func TestPutDataPoints_Errors(t *testing.T) {
 			expErr:   errInvalidResponseType,
 		},
 		{
+			desc:     "invalid datapoints type",
+			datas:    "not-datapoints",
+			resp:     &PutResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidParam,
+		},
+		{
 			desc:     "empty datapoints",
 			datas:    []DataPoint{},
 			resp:     &PutResponse{},
