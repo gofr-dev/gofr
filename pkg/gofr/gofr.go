@@ -80,8 +80,9 @@ type App struct {
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
 
-	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
-	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
+	// exit is os.Exit, indirected so a test can observe the status a failed startup or a failed
+	// command reports without taking the test binary down with it. Nil means os.Exit, which is what
+	// every real app uses.
 	exit func(int)
 }
 

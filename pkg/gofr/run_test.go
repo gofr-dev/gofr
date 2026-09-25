@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,16 +33,22 @@ const (
 	shutdownRaced     = "MARKER:run-returned-first"
 )
 
-// closeRecordingLogger closes its channel when Shutdown closes the logger, which is the last thing
+// closeRecordingLogger closes its channel when the logger is closed, which is the last thing
 // App.Shutdown does. It tells the helper whether shutdown had finished at the moment Run returned,
-// without racing the shutdown goroutine's own logging.
+// without racing the shutdown goroutine's own logging. onClose, when set, is also called on every
+// Close, so a test can record where the close falls relative to other steps.
 type closeRecordingLogger struct {
 	logging.Logger
 
-	closed chan struct{}
+	closed  chan struct{}
+	onClose func()
 }
 
 func (l *closeRecordingLogger) Close() error {
+	if l.onClose != nil {
+		l.onClose()
+	}
+
 	select {
 	case <-l.closed:
 	default:
@@ -340,6 +347,156 @@ func TestApp_startMCPServer(t *testing.T) {
 
 			a.startMCPServer(&wg)
 			wg.Wait()
+		})
+	}
+}
+
+// TestApp_runCMD_exitCode drives runCMD end to end and records what it reports to the process
+// through the exit seam: a failed command must exit with exitCodeCommandFailed, and anything else
+// must not exit at all (returning from main is exit status 0). The expected code is the literal 1,
+// not the constant, because it is the contract shells and CI branch on.
+func TestApp_runCMD_exitCode(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		args       []string
+		handler    Handler
+		wantExits  []int
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			desc:       "handler returns nil error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  nil,
+			wantStdout: "ok\n",
+		},
+		{
+			desc:       "handler returns error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return nil, errTest },
+			wantExits:  []int{1},
+			wantStderr: errTest.Error() + "\n",
+		},
+		{
+			desc:       "handler returns data and error",
+			args:       []string{"", "run"},
+			handler:    func(*Context) (any, error) { return "partial", errTest },
+			wantExits:  []int{1},
+			wantStdout: "partial\n",
+			wantStderr: errTest.Error() + "\n",
+		},
+		{
+			desc:       "unknown command",
+			args:       []string{"", "does-not-exist"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  []int{1},
+			wantStdout: "Available commands:",
+			wantStderr: "'does-not-exist' is not a valid command.\n",
+		},
+		{
+			desc:       "missing command",
+			args:       []string{""},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  []int{1},
+			wantStdout: "Available commands:",
+			wantStderr: "'' is not a valid command.\n",
+		},
+		{
+			desc:       "help flag",
+			args:       []string{"", "--help"},
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantExits:  nil,
+			wantStdout: "Available commands:",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			original := os.Args
+
+			t.Cleanup(func() { os.Args = original })
+
+			os.Args = tc.args
+
+			var exits []int
+
+			app := &App{
+				cmd:       &cmd{},
+				container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+				exit:      func(code int) { exits = append(exits, code) },
+			}
+			app.cmd.addRoute("run", tc.handler)
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(app.runCMD)
+			})
+
+			assert.Equal(t, tc.wantExits, exits, "exit codes reported to the process")
+			assert.Contains(t, stdout, tc.wantStdout, "stdout")
+			assert.Equal(t, tc.wantStderr, stderr, "stderr")
+		})
+	}
+}
+
+// TestApp_runCMD_cleanupOrder pins the order of runCMD's final steps: the telemetry flush (observed
+// through the trace shutdown, which flushCMDTelemetry runs alongside the metrics flush), then the
+// logger close, and only then — for a failed command — the exit. Exiting any earlier would skip
+// the steps after it, dropping the final span batch or leaving the logger unclosed on exactly the
+// runs where they matter most.
+func TestApp_runCMD_cleanupOrder(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		handler    Handler
+		wantEvents []string
+	}{
+		{
+			desc:       "failing command",
+			handler:    func(*Context) (any, error) { return nil, errTest },
+			wantEvents: []string{"flush traces", "close logger", "exit(1)"},
+		},
+		{
+			desc:       "succeeding command",
+			handler:    func(*Context) (any, error) { return "ok", nil },
+			wantEvents: []string{"flush traces", "close logger"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			original := os.Args
+
+			t.Cleanup(func() { os.Args = original })
+
+			os.Args = []string{"", "run"}
+
+			var events []string
+
+			record := func(event string) { events = append(events, event) }
+
+			app := &App{
+				cmd: &cmd{},
+				container: &container.Container{Logger: &closeRecordingLogger{
+					Logger:  logging.NewMockLogger(logging.ERROR),
+					closed:  make(chan struct{}),
+					onClose: func() { record("close logger") },
+				}},
+				shutdownTracer: func(context.Context) error {
+					record("flush traces")
+
+					return nil
+				},
+				exit: func(code int) { record(fmt.Sprintf("exit(%d)", code)) },
+			}
+			app.cmd.addRoute("run", tc.handler)
+
+			testutil.StdoutOutputForFunc(func() {
+				testutil.StderrOutputForFunc(app.runCMD)
+			})
+
+			assert.Equal(t, tc.wantEvents, events, "order of runCMD's final steps")
 		})
 	}
 }
