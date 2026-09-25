@@ -3,14 +3,8 @@ package service
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 )
-
-// discardedBodyLimit bounds the read of a response body that a retry is about to replace. It only has
-// to be large enough that an ordinary error body is consumed in full, so the connection goes back to
-// the pool; a body larger than this is one where paying for a new connection is the cheaper side.
-const discardedBodyLimit = 4 << 10
 
 type RetryConfig struct {
 	MaxRetries int
@@ -156,7 +150,9 @@ func (rp *retryProvider) doWithRetry(ctx context.Context, reqFunc func() (*http.
 			break
 		}
 
-		drainAndClose(resp)
+		// The attempt is being replaced, so nobody reads this response: drain it so its connection goes
+		// back to the pool instead of being abandoned.
+		drainAndCloseResponse(resp)
 	}
 
 	return resp, err
@@ -173,19 +169,4 @@ func contextEndedTheAttempt(ctx context.Context, err error) bool {
 	}
 
 	return errors.Is(err, ctx.Err()) || errors.Is(err, context.Cause(ctx))
-}
-
-// drainAndClose discards a response a retry is about to replace.
-//
-// Draining before closing is what returns the connection to the pool: net/http only reuses a
-// connection whose body reached EOF, so a Close on an unread body makes it abandon the connection and
-// the next attempt opens a fresh one. The read is bounded because a >500 body is not necessarily
-// small, and anything past the limit is worth a new connection rather than an unbounded read.
-func drainAndClose(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-
-	_, _ = io.CopyN(io.Discard, resp.Body, discardedBodyLimit)
-	_ = resp.Body.Close()
 }
