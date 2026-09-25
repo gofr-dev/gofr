@@ -3,6 +3,10 @@ package sqs
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -527,4 +531,208 @@ func TestErrors(t *testing.T) {
 	assert.Equal(t, "sqs client not connected", errClientNotConnected.Error())
 	assert.Equal(t, "sqs queue not found", errQueueNotFound.Error())
 	assert.Equal(t, "queue name cannot be empty", errEmptyQueueName.Error())
+}
+
+// isolateAWSEnv keeps LoadDefaultConfig away from the developer's real AWS setup: shared config and
+// credentials files point at paths that do not exist, and every credential/profile env var is
+// cleared. Rows that need a profile or env credentials set them on top of this.
+func isolateAWSEnv(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "config"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
+	t.Setenv("AWS_PROFILE", "")
+	t.Setenv("AWS_DEFAULT_PROFILE", "")
+	t.Setenv("AWS_ROLE_ARN", "")
+	t.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", "")
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", "")
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "")
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+	t.Setenv("AWS_SESSION_TOKEN", "")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+}
+
+// newListQueuesServer fakes the SQS JSON endpoint for ListQueues, answering every request with the
+// given status. It counts the ListQueues calls it receives.
+func newListQueuesServer(t *testing.T, status int) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+
+	var calls atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Amz-Target") == "AmazonSQS.ListQueues" {
+			calls.Add(1)
+		}
+
+		w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+		w.WriteHeader(status)
+
+		// A 400 with a non-throttling error code is not retried by the SDK, so the failure is immediate.
+		body := map[int]string{
+			http.StatusOK:         `{"QueueUrls":[]}`,
+			http.StatusBadRequest: `{"__type":"com.amazonaws.sqs#AccessDenied","message":"access denied"}`,
+		}[status]
+
+		_, _ = w.Write([]byte(body))
+	}))
+
+	t.Cleanup(server.Close)
+
+	return server, &calls
+}
+
+func TestClient_Connect(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        int
+		profile       string
+		expConnected  bool
+		expLastError  string
+		expListQueues int32
+	}{
+		{
+			name:          "connects when ListQueues succeeds",
+			status:        http.StatusOK,
+			expConnected:  true,
+			expLastError:  "",
+			expListQueues: 1,
+		},
+		{
+			name:          "drops the connection when ListQueues fails",
+			status:        http.StatusBadRequest,
+			expConnected:  false,
+			expLastError:  "failed to connect to SQS: %v",
+			expListQueues: 1,
+		},
+		{
+			name:          "gives up before dialing when the AWS config cannot load",
+			status:        http.StatusOK,
+			profile:       "profile-that-does-not-exist",
+			expConnected:  false,
+			expLastError:  "failed to load AWS config: %v",
+			expListQueues: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateAWSEnv(t)
+			t.Setenv("AWS_PROFILE", tt.profile)
+
+			server, calls := newListQueuesServer(t, tt.status)
+
+			logger := NewMockLogger()
+			client := New(&Config{
+				Region:          "us-east-1",
+				Endpoint:        server.URL,
+				AccessKeyID:     "test-key",
+				SecretAccessKey: "test-secret",
+			})
+			client.UseLogger(logger)
+
+			// Mark a retry as already in flight so a failed connect does not start the background
+			// retry loop, which sleeps between attempts and would outlive the test.
+			client.isRetrying.Store(true)
+
+			client.Connect()
+
+			assert.Equal(t, tt.expConnected, client.isConnected())
+			assert.Equal(t, tt.expLastError, logger.lastError)
+			assert.Equal(t, tt.expListQueues, calls.Load())
+			assert.True(t, client.isRetrying.Load(), "Connect must not reset an in-flight retry")
+		})
+	}
+}
+
+func TestClient_connectInternal(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        int
+		profile       string
+		expConnected  bool
+		expListQueues int32
+	}{
+		{name: "connects when ListQueues succeeds", status: http.StatusOK, expConnected: true, expListQueues: 1},
+		{name: "stays disconnected when ListQueues fails", status: http.StatusBadRequest, expConnected: false, expListQueues: 1},
+		{
+			name:          "stays disconnected when the AWS config cannot load",
+			status:        http.StatusOK,
+			profile:       "profile-that-does-not-exist",
+			expConnected:  false,
+			expListQueues: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateAWSEnv(t)
+			t.Setenv("AWS_PROFILE", tt.profile)
+
+			server, calls := newListQueuesServer(t, tt.status)
+
+			client := New(&Config{
+				Region:          "us-east-1",
+				Endpoint:        server.URL,
+				AccessKeyID:     "test-key",
+				SecretAccessKey: "test-secret",
+			})
+			client.UseLogger(NewMockLogger())
+
+			client.connectInternal()
+
+			assert.Equal(t, tt.expConnected, client.isConnected())
+			assert.Equal(t, tt.expListQueues, calls.Load())
+		})
+	}
+}
+
+func TestClient_loadAWSConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		cfg          *Config
+		expAccessKey string
+		expToken     string
+	}{
+		{
+			name:         "static credentials take precedence",
+			cfg:          &Config{Region: "eu-west-1", AccessKeyID: "static-key", SecretAccessKey: "static-secret", SessionToken: "tok"},
+			expAccessKey: "static-key",
+			expToken:     "tok",
+		},
+		{
+			name:         "partial static credentials fall back to the default chain",
+			cfg:          &Config{Region: "eu-west-1", AccessKeyID: "static-key"},
+			expAccessKey: "env-key",
+			expToken:     "",
+		},
+		{
+			name:         "no static credentials use the default chain",
+			cfg:          &Config{Region: "eu-west-1"},
+			expAccessKey: "env-key",
+			expToken:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateAWSEnv(t)
+			t.Setenv("AWS_ACCESS_KEY_ID", "env-key")
+			t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+
+			client := New(tt.cfg)
+
+			awsCfg, err := client.loadAWSConfig(t.Context())
+			require.NoError(t, err)
+
+			creds, err := awsCfg.Credentials.Retrieve(t.Context())
+			require.NoError(t, err)
+
+			assert.Equal(t, "eu-west-1", awsCfg.Region)
+			assert.Equal(t, tt.expAccessKey, creds.AccessKeyID)
+			assert.Equal(t, tt.expToken, creds.SessionToken)
+		})
+	}
 }

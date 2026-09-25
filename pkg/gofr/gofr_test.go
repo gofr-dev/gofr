@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,10 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -2145,4 +2148,112 @@ func TestQueryContentTypeGuardWiring(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApp_startSubscriptions(t *testing.T) {
+	tests := []struct {
+		desc       string
+		topics     []string
+		setupMocks func(l *container.MockLogger)
+	}{
+		{
+			desc:       "no subscriptions returns immediately",
+			topics:     nil,
+			setupMocks: func(*container.MockLogger) {},
+		},
+		{
+			desc:   "every subscriber runs until the context is canceled",
+			topics: []string{"orders", "payments"},
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "orders")
+				l.EXPECT().Infof("shutting down subscriber for topic %s", "payments")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			c := &container.Container{Logger: logger, PubSub: &cancelingSubscriber{cancel: cancel}}
+			a := &App{container: c, subscriptionManager: newSubscriptionManager(c)}
+
+			for _, topic := range tc.topics {
+				a.subscriptionManager.subscriptions[topic] = func(*Context) error { return nil }
+			}
+
+			require.NoError(t, a.startSubscriptions(ctx))
+		})
+	}
+}
+
+func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
+	tests := []struct {
+		desc     string
+		register func(a *App)
+	}{
+		{
+			desc:     "graphql query",
+			register: func(a *App) { a.GraphQLQuery("hello", func(*Context) (any, error) { return nil, nil }) },
+		},
+		{
+			desc:     "graphql mutation",
+			register: func(a *App) { a.GraphQLMutation("create", func(*Context) (any, error) { return nil, nil }) },
+		},
+		{
+			desc:     "static files",
+			register: func(a *App) { a.AddStaticFiles("/static", "./does-not-exist") },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Occupy a port so isPortAvailable reports it as blocked.
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			defer listener.Close()
+
+			port := listener.Addr().(*net.TCPAddr).Port
+
+			c, mocks := container.NewMockContainer(t)
+			mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+			mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			// The gomock controller fails the test unless Fatalf is called exactly once with the blocked port.
+			logger.EXPECT().Fatalf("http port %d is blocked or unreachable", port)
+			// A real Fatalf exits the process; the mocked one returns, so whatever runs after it is not asserted.
+			logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			c.Logger = logger
+
+			a := &App{container: c, httpServer: &httpServer{port: port, staticFiles: map[string]string{}}}
+
+			tc.register(a)
+		})
+	}
+}
+
+func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
+	c, mocks := container.NewMockContainer(t)
+	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	logger := container.NewMockLogger(gomock.NewController(t))
+	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
+	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
+	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
+	c.Logger = logger
+
+	a := &App{
+		container:      c,
+		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
+		graphqlManager: newGraphQLManager(c),
+	}
+
+	a.setupGraphQL()
 }
