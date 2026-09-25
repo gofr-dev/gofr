@@ -198,7 +198,18 @@ func (c *Container) checkPrimaryDatasources(ctx context.Context, collector *heal
 		})
 	}
 
-	if c.PubSub != nil {
+	// isNil, not a plain != nil: the pub/sub constructors assign the result of
+	// google.New or kafka.New straight into this interface, and those return a
+	// TYPED nil when they reject an incomplete config. A typed nil in an interface
+	// is not equal to nil, so a plain check admits it and the Health call below
+	// runs on a nil receiver. SQL and Redis above already use isNil for the same
+	// reason; this guard was the odd one out.
+	//
+	// runCheck recovers, so this was never a crash here -- it surfaced as a
+	// "pubsub": DOWN entry reading "health check panicked", which put the whole
+	// app into DEGRADED over a dependency it does not have. The crash is on the
+	// GetSubscriber path, where App.Subscribe's errgroup has no recover.
+	if !isNil(c.PubSub) {
 		runCheck(wg, collector, pubsubKey, func() {
 			health := c.PubSub.Health()
 			collector.record(pubsubKey, health, health.Status == datasource.StatusDown)
@@ -342,12 +353,32 @@ func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	}
 }
 
+// isNil reports whether i is absent: either an unset interface, or an interface
+// holding a nil pointer.
+//
+// The Kind check is not optional. reflect.Value.IsNil PANICS on a value whose
+// kind cannot be nil, and a datasource field can legitimately hold one:
+// App.AddPubSub, App.AddMongo and the rest take an interface, so a caller whose
+// implementation has value receivers can hand over a struct rather than a
+// pointer -- ordinary Go, and nothing in the signature discourages it. The
+// unguarded IsNil panicked on that, and Container.Close reaches it from the
+// shutdown goroutine in startShutdownHandler, which has no recover.
+//
+// Anything not nillable is present by definition, so it reports false.
 func isNil(i any) bool {
-	// Get the value of the interface
 	val := reflect.ValueOf(i)
+	if !val.IsValid() {
+		return true
+	}
 
-	// If the interface is not assigned or is nil, return true
-	return !val.IsValid() || val.IsNil()
+	//nolint:exhaustive // the default is the point: every kind that cannot be nil is present.
+	switch val.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return val.IsNil()
+	default:
+		return false
+	}
 }
 
 // stalledHealth is the body returned while a previous round's checks are still outstanding. It
