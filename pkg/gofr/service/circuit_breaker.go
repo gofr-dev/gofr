@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -83,6 +84,14 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 
 	result, err := f(ctx)
 
+	// A request its own caller abandoned never got a verdict from the upstream, so it is
+	// neither a failure nor a success: counting it would let callers who hang up open the
+	// breaker for every other caller of a healthy upstream, and resetting on it would erase
+	// a real failure streak.
+	if canceledByCaller(ctx, err) {
+		return result, err
+	}
+
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -90,6 +99,12 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 		cb.handleFailure()
 
 		if cb.state == OpenState {
+			// The caller never receives result on this path, so nothing outside this function can
+			// close its body -- and an unread body holds its connection out of the pool for good.
+			// The breaker opening is precisely when a service is hammering a struggling upstream,
+			// so this is the worst moment to leak a connection per call.
+			drainAndCloseResponse(result)
+
 			return nil, ErrCircuitOpen
 		}
 	} else {
@@ -174,6 +189,26 @@ func (cb *circuitBreaker) handleFailure() {
 	if cb.failureCount > cb.threshold {
 		cb.openCircuit()
 	}
+}
+
+// canceledByCaller reports whether err is the caller canceling ctx rather than an outcome
+// of the upstream. The transport returns context.Cause(ctx), so a caller that canceled with
+// context.WithCancelCause sees its own cause instead of context.Canceled; both are matched.
+//
+// context.DeadlineExceeded is deliberately not matched: a request that ran out of time is
+// evidence of a slow upstream and keeps counting as a failure.
+//
+// The context.Cause arm is wider than it first looks: an upstream error chain that happened to wrap
+// the same sentinel a caller passed to WithCancelCause would go unaccounted. That needs the caller
+// to have chosen a cause the upstream also returns, which is not a shape reached by accident, and
+// the alternative is dropping WithCancelCause support entirely. Of the two mistakes, treating a real
+// cancellation as an upstream failure is the worse one -- it is the bug this function exists to fix.
+func canceledByCaller(ctx context.Context, err error) bool {
+	if err == nil || !errors.Is(ctx.Err(), context.Canceled) {
+		return false
+	}
+
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.Cause(ctx))
 }
 
 // resetFailureCount resets the failure count to zero.
@@ -358,4 +393,23 @@ func (cb *circuitBreaker) QueryWithHeaders(ctx context.Context, path string, que
 func (cb *circuitBreaker) Query(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return cb.doRequest(ctx, methodQuery, path, queryParams, body, nil)
+}
+
+// discardedBodyLimit bounds the read of a response body nobody will consume. It only has to be large
+// enough that an ordinary error body is read in full, so the connection goes back to the pool; past
+// that, paying for a new connection is the cheaper side.
+const discardedBodyLimit = 4 << 10
+
+// drainAndCloseResponse releases a response the caller will never see.
+//
+// Draining before closing is what returns the connection to the pool: net/http only reuses a
+// connection whose body reached EOF, so a Close on an unread body makes it abandon the connection
+// instead.
+func drainAndCloseResponse(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+
+	_, _ = io.CopyN(io.Discard, resp.Body, discardedBodyLimit)
+	_ = resp.Body.Close()
 }
