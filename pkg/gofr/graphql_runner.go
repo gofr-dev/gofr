@@ -6,7 +6,7 @@ import "net/http"
 //
 // The field on App is this interface rather than the concrete *graphQLManager so
 // that the implementation -- and with it the graphql-go and gqlparser trees, 20
-// packages and 1.4 MB of binary -- can be left out of a build that does not use
+// packages and about 0.8 MB of binary -- can be left out of a build that does not use
 // GraphQL. App holds five method calls' worth of dependency on it; naming those
 // five is what turns a hard import into an optional one.
 //
