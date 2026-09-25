@@ -7,6 +7,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -400,34 +401,29 @@ func Test_ExecCAS(t *testing.T) {
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).AnyTimes()
 		}, true, nil},
 
 		{"success case: int dest, applied true", &mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(true, nil).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockQuery.EXPECT().ScanCAS(&mockInt).Return(true, nil).AnyTimes()
 		}, true, nil},
 
 		{"failure case: struct dest, error", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).AnyTimes()
-		}, true, nil},
-		{"failure case: int dest, error", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(false, errMock).AnyTimes()
 		}, true, nil},
 		{"failure case: dest is not pointer", mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 		}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]any{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 		}, false, errUnexpectedMap},
 	}
 
@@ -440,6 +436,47 @@ func Test_ExecCAS(t *testing.T) {
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
+
+func Test_ExecCASForwardsValuesAndDest(t *testing.T) {
+	const stmt = "UPDATE users SET name = ? WHERE id = ? IF name = ?"
+
+	values := []any{"b", 1, "a"}
+
+	testCases := []struct {
+		desc       string
+		scanErr    error
+		expApplied bool
+		expErr     error
+		expName    string
+	}{
+		{desc: "applied", expApplied: true, expName: ""},
+		{desc: "not applied, existing value scanned", expApplied: false, expName: "current"},
+		{desc: "error", scanErr: errMock, expApplied: false, expErr: errMock},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
+
+			var name string
+
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(stmt, values...).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().ScanCAS(&name).DoAndReturn(func(dest ...any) (bool, error) {
+				*(dest[0].(*string)) = tc.expName
+
+				return tc.expApplied, tc.scanErr
+			})
+
+			applied, err := client.ExecCAS(&name, stmt, values...)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expApplied, applied)
+			assert.Equal(t, tc.expName, name)
+		})
+	}
+}
+
 func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 	client, mockDeps := initTest(t)
 
