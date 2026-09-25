@@ -12,6 +12,7 @@ import (
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -142,10 +143,11 @@ func (d *Client) DropField(ctx context.Context, fieldName string) error {
 }
 
 // Query executes a read-only query in the Dgraph database and returns the result.
-func (d *Client) Query(ctx context.Context, query string) (any, error) {
+func (d *Client) Query(ctx context.Context, query string) (_ any, err error) {
 	start := time.Now()
 
 	tracedCtx, span := d.addTrace(ctx, "query")
+	defer func() { finishSpan(span, err) }()
 
 	// Execute query
 	resp, err := d.client.NewTxn().Query(tracedCtx, query)
@@ -158,24 +160,24 @@ func (d *Client) Query(ctx context.Context, query string) (any, error) {
 		Duration: duration,
 	}
 
+	d.sendOperationStats(tracedCtx, start, query, "query", span, ql, "dgraph_query_duration")
+
 	if err != nil {
 		d.logger.Error("dgraph query failed: ", err)
-		ql.PrettyPrint(d.logger)
 
 		return nil, err
 	}
-
-	d.sendOperationStats(tracedCtx, start, query, "query", span, ql, "dgraph_query_duration")
 
 	return resp, nil
 }
 
 // QueryWithVars executes a read-only query with variables in the Dgraph database.
 // QueryWithVars executes a read-only query with variables in the Dgraph database.
-func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error) {
+func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[string]string) (_ any, err error) {
 	start := time.Now()
 
 	tracedCtx, span := d.addTrace(ctx, "query-with-vars")
+	defer func() { finishSpan(span, err) }()
 
 	// Execute the query with variables
 	resp, err := d.client.NewTxn().QueryWithVars(tracedCtx, query, vars)
@@ -192,14 +194,13 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		span.SetAttributes(attribute.String("dgraph.query.vars", fmt.Sprintf("%v", vars)))
 	}
 
+	d.sendOperationStats(tracedCtx, start, query, "query-with-vars", span, ql, "dgraph_query_with_vars_duration")
+
 	if err != nil {
 		d.logger.Error("dgraph queryWithVars failed: ", err)
-		ql.PrettyPrint(d.logger)
 
 		return nil, err
 	}
-
-	d.sendOperationStats(tracedCtx, start, query, "query-with-vars", span, ql, "dgraph_query_with_vars_duration")
 
 	return resp, nil
 }
@@ -207,10 +208,11 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 // Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
 //
 // The write is committed before this returns, whether or not CommitNow is set on the mutation.
-func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
+func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 	start := time.Now()
 
 	tracedCtx, span := d.addTrace(ctx, "mutate")
+	defer func() { finishSpan(span, err) }()
 
 	// Cast to proper mutation type
 	mutation, ok := mu.(*api.Mutation)
@@ -229,14 +231,13 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 		Duration: duration,
 	}
 
+	d.sendOperationStats(tracedCtx, start, mutationToString(mutation), "mutate", span, ql, "dgraph_mutate_duration")
+
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
-		ql.PrettyPrint(d.logger)
 
 		return nil, err
 	}
-
-	d.sendOperationStats(tracedCtx, start, mutationToString(mutation), "mutate", span, ql, "dgraph_mutate_duration")
 
 	return resp, nil
 }
@@ -289,10 +290,11 @@ func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.
 }
 
 // Alter applies schema or other changes to the Dgraph database.
-func (d *Client) Alter(ctx context.Context, op any) error {
+func (d *Client) Alter(ctx context.Context, op any) (err error) {
 	start := time.Now()
 
 	tracedCtx, span := d.addTrace(ctx, "alter")
+	defer func() { finishSpan(span, err) }()
 
 	// Cast to proper operation type
 	operation, ok := op.(*api.Operation)
@@ -302,7 +304,7 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 	}
 
 	// Apply the schema changes
-	err := d.client.Alter(tracedCtx, operation)
+	err = d.client.Alter(tracedCtx, operation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the operation details
@@ -316,14 +318,13 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 		span.SetAttributes(attribute.String("dgraph.alter.operation", operation.String()))
 	}
 
+	d.sendOperationStats(tracedCtx, start, operation.String(), "alter", span, ql, "dgraph_alter_duration")
+
 	if err != nil {
 		d.logger.Error("dgraph alter failed: ", err)
-		ql.PrettyPrint(d.logger)
 
 		return err
 	}
-
-	d.sendOperationStats(tracedCtx, start, operation.String(), "alter", span, ql, "dgraph_alter_duration")
 
 	return nil
 }
@@ -369,14 +370,26 @@ func (d *Client) sendOperationStats(ctx context.Context, start time.Time, query,
 	duration := time.Since(start).Microseconds()
 
 	if span != nil {
-		defer span.End()
-
 		span.SetAttributes(attribute.String(fmt.Sprintf("dgraph.%v.query", method), query))
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("dgraph.%v.duration", method), duration))
 	}
 
 	queryLog.PrettyPrint(d.logger)
 	d.metrics.RecordHistogram(ctx, metricName, float64(queryLog.Duration))
+}
+
+// finishSpan records err on span, if any, and ends it. It is a no-op when tracing is disabled.
+func finishSpan(span trace.Span, err error) {
+	if span == nil {
+		return
+	}
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	span.End()
 }
 
 func mutationToString(mutation *api.Mutation) string {
