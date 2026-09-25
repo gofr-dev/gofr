@@ -321,7 +321,7 @@ func (c *Client) ExecuteBatch(name string) error {
 }
 
 // HealthCheck performs a health check on the ScyllaDB cluster by querying.
-func (c *Client) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUp   = "UP"
@@ -341,7 +341,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 		return &h, errStatusDown
 	}
 
-	err := c.scylla.session.Query("SELECT now() FROM system.local").Exec()
+	err := c.scylla.session.Query("SELECT now() FROM system.local").ExecWithCtx(ctx)
 	if err != nil {
 		h.Status = statusDown
 		h.Details["message"] = err.Error()

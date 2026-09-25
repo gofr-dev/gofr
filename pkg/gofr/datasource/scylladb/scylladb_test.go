@@ -7,6 +7,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -23,6 +24,7 @@ type mockDependencies struct {
 	mockBatch   *Mockbatch
 	mockIter    *Mockiterator
 	mockLogger  *MockLogger
+	ctrl        *gomock.Controller
 }
 
 func initTest(t *testing.T) (*Client, *mockDependencies) {
@@ -57,7 +59,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
-		mockIter: mockiter, mockLogger: mockLogger}
+		mockIter: mockiter, mockLogger: mockLogger, ctrl: ctrl}
 }
 
 func TestScyllaDB_Connect(t *testing.T) {
@@ -268,14 +270,14 @@ func Test_HealthCheck(t *testing.T) {
 	}{
 		{"success case", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
+			mockDeps.mockQuery.EXPECT().ExecWithCtx(gomock.Any()).Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(errMock).Times(1)
+			mockDeps.mockQuery.EXPECT().ExecWithCtx(gomock.Any()).Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
@@ -283,9 +285,6 @@ func Test_HealthCheck(t *testing.T) {
 		}, errStatusDown},
 		{"failure case: ScyllaDB not initialized", func() {
 			client.scylla.session = nil
-
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
@@ -533,4 +532,29 @@ func Test_ExecuteBatch(t *testing.T) {
 
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+// Test_HealthCheck_PropagatesContext asserts the context passed to HealthCheck is
+// forwarded to the health-check query, so a caller's deadline/cancellation applies.
+func Test_HealthCheck_PropagatesContext(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	type ctxKey string
+
+	const key ctxKey = "health-check"
+
+	ctx := context.WithValue(t.Context(), key, "yes")
+
+	mockDeps.mockSession.EXPECT().Query("SELECT now() FROM system.local").Return(mockDeps.mockQuery).Times(1)
+	mockDeps.mockQuery.EXPECT().
+		ExecWithCtx(gomock.Cond(func(x any) bool {
+			c, ok := x.(context.Context)
+			return ok && c.Value(key) == "yes"
+		})).
+		Return(nil).Times(1)
+
+	_, err := client.HealthCheck(ctx)
+
+	require.NoError(t, err)
+	require.True(t, mockDeps.ctrl.Satisfied(), "health-check query was not executed")
 }
