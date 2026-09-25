@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -23,12 +24,17 @@ type RateLimiterStore interface {
 	StopCleanup()
 }
 
-// tokenBucket with simplified integer-only token handling.
+// maxRefillPeriod (2^61 ns, about 73 years) bounds both the time to accrue one token and the burst credit
+// (Burst*interval). Keeping the theoretical arrival time within now+2*maxRefillPeriod means it never overflows an int64.
+const maxRefillPeriod = int64(1) << 61
+
+// tokenBucket is a lock-free token bucket implemented as a GCRA (generic cell rate algorithm):
+// the whole state is one int64, the theoretical arrival time (TAT) of the next conforming request,
+// so fractional refill rates need no floating point and every update is a single CAS.
 type tokenBucket struct {
-	tokens         int64 // Current tokens
-	lastRefillTime int64 // Unix nano timestamp
-	maxTokens      int64 // Maximum tokens
-	refillRate     int64 // Tokens per second (as integer)
+	tat           int64 // Theoretical arrival time, Unix nanoseconds; accessed atomically
+	interval      int64 // Nanoseconds needed to accrue one token, in [1, maxRefillPeriod]
+	burstInterval int64 // Burst * interval, burst capped so this stays in [0, maxRefillPeriod]
 }
 
 // bucketEntry holds bucket with last access time for cleanup.
@@ -37,50 +43,53 @@ type bucketEntry struct {
 	lastAccess int64 // Unix timestamp
 }
 
-// newTokenBucket creates a new token bucket with integer-only math.
+// newTokenBucket creates a token bucket that starts full. The configured rate is kept exactly; only a burst whose
+// credit would exceed maxRefillPeriod is reduced to the largest burst that fits.
 func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
-	maxTokens := int64(config.Burst)
-	refillRate := int64(config.RequestsPerSecond())
+	interval := refillInterval(config) // in [1, maxRefillPeriod], so the division below is at least 1
+	burst := min(max(int64(config.Burst), 0), maxRefillPeriod/interval)
 
-	return &tokenBucket{
-		tokens:         maxTokens,
-		lastRefillTime: time.Now().UnixNano(),
-		maxTokens:      maxTokens,
-		refillRate:     refillRate,
+	return &tokenBucket{interval: interval, burstInterval: burst * interval}
+}
+
+// refillInterval returns the nanoseconds needed to accrue one token, clamped to [1, maxRefillPeriod].
+// A non-positive or NaN rate, only reachable when a caller skips Validate, uses the default rate.
+func refillInterval(config *RateLimiterConfig) int64 {
+	rps := config.RequestsPerSecond()
+	if rps <= 0 || math.IsNaN(rps) {
+		rps = defaultRequestsPerMinute / defaultWindow.Seconds()
+	}
+
+	interval := float64(time.Second) / rps
+
+	switch {
+	case interval < 1:
+		return 1
+	case interval > float64(maxRefillPeriod):
+		return maxRefillPeriod
+	default:
+		return int64(interval)
 	}
 }
 
-// allow checks if a token can be consumed.
+// allow checks if a token can be consumed now.
 func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
-	now := time.Now().UnixNano()
+	return tb.allowAt(time.Now().UnixNano())
+}
 
-	// Calculate tokens to add based on elapsed time
-	elapsed := now - atomic.LoadInt64(&tb.lastRefillTime)
-	tokensToAdd := elapsed * tb.refillRate / int64(time.Second)
-
-	// Update tokens atomically
+// allowAt checks if a token can be consumed at the given Unix nanosecond time.
+func (tb *tokenBucket) allowAt(now int64) (allowed bool, waitTime time.Duration) {
 	for {
-		oldTokens := atomic.LoadInt64(&tb.tokens)
-		newTokens := oldTokens + tokensToAdd
+		oldTAT := atomic.LoadInt64(&tb.tat)
+		// A stored TAT is at most burstInterval ahead of the time it was set, so newTAT stays below
+		// now+2*maxRefillPeriod and cannot overflow.
+		newTAT := max(oldTAT, now) + tb.interval
 
-		if newTokens > tb.maxTokens {
-			newTokens = tb.maxTokens
+		if wait := newTAT - now - tb.burstInterval; wait > 0 {
+			return false, max(time.Duration(wait), time.Millisecond)
 		}
 
-		// Early return if not enough tokens
-		if newTokens < 1 {
-			waitTime := time.Duration((1-newTokens)*int64(time.Second)/tb.refillRate) * time.Nanosecond
-			if waitTime < time.Millisecond {
-				waitTime = time.Millisecond
-			}
-
-			return false, waitTime
-		}
-
-		// Try to consume a token
-		if atomic.CompareAndSwapInt64(&tb.tokens, oldTokens, newTokens-1) {
-			atomic.StoreInt64(&tb.lastRefillTime, now)
-
+		if atomic.CompareAndSwapInt64(&tb.tat, oldTAT, newTAT) {
 			return true, 0
 		}
 	}

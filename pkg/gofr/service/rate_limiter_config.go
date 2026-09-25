@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 )
@@ -56,12 +57,12 @@ func defaultKeyFunc(req *http.Request) string {
 	return scheme + "://" + host
 }
 
-// Validate checks if the configuration is valid.
-// Validate checks if the configuration is valid and sets defaults.
+// Validate checks if the configuration is valid and sets defaults. A non-positive, NaN or +Inf Requests
+// falls back to the default rate.
 func (config *RateLimiterConfig) Validate() error {
 	var validationError error
 
-	if config.Requests <= 0 {
+	if config.Requests <= 0 || math.IsNaN(config.Requests) || math.IsInf(config.Requests, 1) {
 		validationError = fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
 
 		config.Requests = 60 // Default: 60 requests per minute
