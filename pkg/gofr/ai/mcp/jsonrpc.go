@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 )
@@ -24,6 +25,8 @@ const (
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
 	codeInternal       = -32603
+
+	msgInternal = "internal error"
 )
 
 type rpcRequest struct {
@@ -57,16 +60,38 @@ func idOrNull(id json.RawMessage) json.RawMessage {
 	return id
 }
 
-func writeResult(w http.ResponseWriter, id json.RawMessage, result any) {
-	writeJSON(w, rpcResponse{JSONRPC: jsonRPCVersion, ID: idOrNull(id), Result: result})
+func (s *Server) writeResult(w http.ResponseWriter, id json.RawMessage, result any) {
+	s.writeJSON(w, rpcResponse{JSONRPC: jsonRPCVersion, ID: idOrNull(id), Result: result})
 }
 
-func writeError(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
-	writeJSON(w, rpcResponse{JSONRPC: jsonRPCVersion, ID: idOrNull(id), Error: &rpcError{Code: code, Message: msg}})
+func (s *Server) writeError(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
+	s.writeJSON(w, rpcResponse{JSONRPC: jsonRPCVersion, ID: idOrNull(id), Error: &rpcError{Code: code, Message: msg}})
 }
 
-func writeJSON(w http.ResponseWriter, resp rpcResponse) {
+// writeJSON encodes resp into a buffer before touching w, so a value that cannot be encoded is
+// reported to the client as a JSON-RPC internal error instead of an empty 200, and nothing
+// partial is ever written.
+func (s *Server) writeJSON(w http.ResponseWriter, resp rpcResponse) {
+	var buf bytes.Buffer
+
+	if err := json.NewEncoder(&buf).Encode(resp); err != nil {
+		s.logf("failed to encode MCP response: %v", err)
+
+		buf.Reset()
+
+		fallback := rpcResponse{JSONRPC: jsonRPCVersion, ID: resp.ID, Error: &rpcError{Code: codeInternal, Message: msgInternal}}
+		if err = json.NewEncoder(&buf).Encode(fallback); err != nil {
+			// Only reachable with an ID that is not valid JSON, which ServeHTTP never produces.
+			s.logf("failed to encode MCP internal-error response: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
-	_ = json.NewEncoder(w).Encode(resp)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		s.logf("failed to write MCP response: %v", err)
+	}
 }
