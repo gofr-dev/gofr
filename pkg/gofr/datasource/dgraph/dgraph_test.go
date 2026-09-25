@@ -161,6 +161,7 @@ func Test_Mutate_Success(t *testing.T) {
 	mutation := &api.Mutation{CommitNow: true}
 
 	mockTxn.EXPECT().Mutate(gomock.Any(), mutation).Return(&api.Response{Json: []byte(`{"result": "mutation success"}`)}, nil)
+	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Debugf("dgraph mutation succeeded in %dµs", gomock.Any())
@@ -207,6 +208,7 @@ func Test_Mutate_Error(t *testing.T) {
 	mutation := &api.Mutation{CommitNow: true}
 
 	mockTxn.EXPECT().Mutate(gomock.Any(), mutation).Return(nil, errMutationFailed)
+	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_mutate_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
@@ -630,6 +632,7 @@ func spanEndCases() []spanEndCase {
 			setup: func(dg *MockDgraphClient, txn *MockTxn) {
 				dg.EXPECT().NewTxn().Return(txn)
 				txn.EXPECT().Mutate(gomock.Any(), mutation).Return(okResp, nil)
+				txn.EXPECT().Discard(gomock.Any()).Return(nil)
 			},
 			call:    mutate,
 			expSpan: "dgraph-mutate", expMetric: "dgraph_mutate_duration", expHistos: 1, expStatus: codes.Unset,
@@ -639,6 +642,7 @@ func spanEndCases() []spanEndCase {
 			setup: func(dg *MockDgraphClient, txn *MockTxn) {
 				dg.EXPECT().NewTxn().Return(txn)
 				txn.EXPECT().Mutate(gomock.Any(), mutation).Return(nil, errMutationFailed)
+				txn.EXPECT().Discard(gomock.Any()).Return(nil)
 			},
 			call:    mutate,
 			expSpan: "dgraph-mutate", expMetric: "dgraph_mutate_duration", expHistos: 1,

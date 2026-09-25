@@ -206,6 +206,8 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 }
 
 // Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+//
+// The write is committed before this returns, whether or not CommitNow is set on the mutation.
 func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 	start := time.Now()
 
@@ -219,7 +221,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 	}
 
 	// Execute mutation
-	resp, err := d.client.NewTxn().Mutate(tracedCtx, mutation)
+	resp, err := d.mutateInTxn(tracedCtx, mutation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the mutation details
@@ -234,6 +236,53 @@ func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
 
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// mutateInTxn runs the mutation and resolves the transaction it opens.
+//
+// dgo only finishes the transaction when the caller set CommitNow on the mutation — Txn.Mutate
+// copies the field into the api.Request it builds, and Txn.Do marks the transaction finished only
+// when that field is set. Mutating without it therefore staged the write into a transaction that
+// was then abandoned to the garbage collector: nothing was persisted, no error was returned, and
+// the transaction stayed open on the server until Dgraph timed it out. Committing here makes a
+// single Mutate call atomic whichever way the caller wrote it.
+func (d *Client) mutateInTxn(ctx context.Context, mutation *api.Mutation) (*api.Response, error) {
+	txn := d.client.NewTxn()
+
+	// Discard delegates to Txn.commitOrAbort, which returns immediately once the transaction is
+	// finished. Every path out of this function leaves it finished — Txn.Do finishes a CommitNow
+	// mutation, Txn.Commit below finishes the rest, and Txn.Do discards the transaction itself
+	// when the mutation fails — so the discard costs no round trip. It is here so that a
+	// transaction is still released if any of those paths stops finishing it.
+	//
+	// The cancellation is dropped for the discard alone: a caller whose context is canceled
+	// between the commit returning and this deferred call would otherwise have a successful
+	// write report a discard failure in the logs. The deadline-free context only ever covers
+	// the abort of a transaction that is already being abandoned.
+	discardCtx := context.WithoutCancel(ctx)
+
+	defer func() {
+		if err := txn.Discard(discardCtx); err != nil {
+			d.logger.Error("dgraph mutation transaction discard failed: ", err)
+		}
+	}()
+
+	resp, err := txn.Mutate(ctx, mutation)
+	if err != nil {
+		return nil, err
+	}
+
+	// dgo already committed and marked the transaction finished; Txn.Commit returns ErrFinished
+	// for a finished transaction.
+	if mutation.CommitNow {
+		return resp, nil
+	}
+
+	if err := txn.Commit(ctx); err != nil {
 		return nil, err
 	}
 
