@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/file/azure
 go 1.26.0
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azfile v1.7.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0

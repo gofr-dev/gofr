@@ -4,6 +4,7 @@ package exporters
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -25,6 +26,17 @@ func buildOTLPExporter(ctx context.Context, cfg *Config) (metricSdk.Exporter, er
 	hasScheme := strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://")
 
 	if strings.EqualFold(cfg.Protocol, protocolHTTP) {
+		// otlpmetrichttp appended the default /v1/metrics signal path itself until
+		// otel v1.45 (open-telemetry/opentelemetry-go#8538), which stopped doing so
+		// for a scheme-bearing URL. A path-less METRICS_URL (http://host:4318) then
+		// posts to "/" and the collector rejects every export, with nothing failing
+		// at startup. Re-append it here so a bare endpoint keeps working across the
+		// bump; an endpoint that already carries a path (including "/") is left as
+		// the operator wrote it. gRPC has no signal path, so this is HTTP-only.
+		if hasScheme {
+			endpoint = httpEndpointWithSignalPath(endpoint)
+		}
+
 		opts := otlpOptions(cfg, endpoint, hasScheme, otlpOptionFuncs[otlpmetrichttp.Option]{
 			temporality: otlpmetrichttp.WithTemporalitySelector,
 			endpointURL: otlpmetrichttp.WithEndpointURL,
@@ -45,6 +57,23 @@ func buildOTLPExporter(ctx context.Context, cfg *Config) (metricSdk.Exporter, er
 	})
 
 	return otlpmetricgrpc.New(ctx, opts...)
+}
+
+// httpEndpointWithSignalPath restores the pre-otel-v1.45 behavior of
+// otlpmetrichttp.WithEndpointURL: it appends the default /v1/metrics signal path
+// to a scheme-bearing endpoint that carries no path of its own. An endpoint with
+// any explicit path — including a bare "/" the operator wrote deliberately — is
+// returned unchanged, as is one that does not parse (WithEndpointURL then reports
+// it). Only the empty-path case is repaired, which is the one v1.45 regressed.
+func httpEndpointWithSignalPath(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Path != "" {
+		return endpoint
+	}
+
+	u.Path = otlpMetricsSignalPath
+
+	return u.String()
 }
 
 // otlpOptionFuncs adapts the (structurally identical, but distinctly typed)

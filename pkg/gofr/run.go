@@ -69,7 +69,18 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if !a.handleStartupHooks(ctx) {
+	// Both steps have already released what startup opened by the time they report anything but
+	// startupOK. What is left is deciding what the abandonment means to the process, which happens
+	// in one place rather than inside each step. See finishAbandonedStartup.
+	if outcome := a.handleStartupHooks(ctx); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
+		return
+	}
+
+	if outcome := a.bindMCPServer(ctx); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
 		return
 	}
 
@@ -84,21 +95,59 @@ func (a *App) Run() {
 	a.awaitShutdown(ctx, shutdownDone, timeout)
 }
 
-// handleStartupHooks runs the startup hooks and returns false if the application should exit.
-func (a *App) handleStartupHooks(ctx context.Context) bool {
-	if err := a.runOnStartHooks(ctx); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			a.Logger().Errorf("Startup failed: %v", err)
+// startupOutcome is what a pre-server startup step reports back to Run.
+//
+// The distinction that matters is the second one from the third: both abandon the run, but only one
+// of them is a failure. An operator sending SIGTERM during startup got exactly what they asked for,
+// and reporting that as a failed start would have every orchestrator retrying a deliberate stop.
+type startupOutcome int
 
-			return false
-		}
-		// If the error is context.Canceled, do not exit; allow graceful shutdown.
-		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+const (
+	// startupOK means the step succeeded and Run may continue.
+	startupOK startupOutcome = iota
+	// startupFailed means the run was abandoned because something was wrong. The process reports a
+	// non-zero status.
+	startupFailed
+	// startupCanceled means the run was abandoned because the operator stopped it. The process
+	// reports success, as it does for a signal received at any other time.
+	startupCanceled
+)
 
-		return false
+// finishAbandonedStartup reports an abandoned startup to the process.
+//
+// Everything the run opened has already been released by the step that abandoned it, so this only
+// decides the exit status.
+func (a *App) finishAbandonedStartup(outcome startupOutcome) {
+	if outcome == startupFailed {
+		a.abortStartup()
+	}
+}
+
+// handleStartupHooks runs the startup hooks and reports whether Run may continue.
+//
+// A hook that fails abandons the run the same way an unclaimable MCP port does, and for the same
+// reason has to release what startup has already opened: the container's datasources are live by
+// the time the hooks run, and Run unwinds from here rather than exiting from inside the hook.
+func (a *App) handleStartupHooks(ctx context.Context) startupOutcome {
+	err := a.runOnStartHooks(ctx)
+	if err == nil {
+		return startupOK
 	}
 
-	return true
+	outcome := startupFailed
+
+	if errors.Is(err, context.Canceled) {
+		// A canceled context is an operator stopping the process, not a broken hook.
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+
+		outcome = startupCanceled
+	} else {
+		a.Logger().Errorf("Startup failed: %v", err)
+	}
+
+	a.shutdownAfterFailedStartup()
+
+	return outcome
 }
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown. The returned channel is
@@ -169,6 +218,95 @@ func (a *App) startAllServers(ctx context.Context) {
 	a.startSubscriptionManager(ctx, &wg)
 
 	wg.Wait()
+}
+
+// bindMCPServer claims the MCP port and reports whether startup may continue.
+//
+// It runs before any server goroutine is launched. A port that cannot be claimed is a startup
+// failure: EnableMCP was called, so MCP was asked for, and a service that silently comes up without
+// a transport it was configured to expose is worse than one that refuses to start. Returning false
+// aborts Run the same way a failed OnStart hook does — no server has started, and no os.Exit is
+// involved.
+//
+// Doing this here rather than inside mcpServer.Run is deliberate: the servers run as concurrent
+// goroutines under a shared waitgroup, so a failure raised from inside one of them would race the
+// others' startup rather than cleanly stopping it.
+//
+// Nothing is serving at this point, but the OnStart hooks have already run and the container's
+// datasources are already open, so the abort releases them before returning rather than dropping
+// them on the floor.
+func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
+	// An MCP_PORT that could never be served is reported here rather than at the point it was
+	// parsed, because EnableMCP runs inside the application's own setup where there is nothing to
+	// abort yet. It aborts for the same reason an occupied port does -- MCP was asked for and cannot
+	// be provided -- and with more justification: an occupied port can be a transient condition of
+	// the environment, while a value outside 1-65535 is unambiguously wrong and will be just as
+	// wrong on the next start.
+	if a.mcpConfigErr != nil {
+		a.Logger().Errorf("MCP server cannot start: %v. Set MCP_PORT to a valid, free port, or "+
+			"MCP_PORT=0 to run without the MCP transport while keeping tools available in-process.",
+			a.mcpConfigErr)
+
+		a.shutdownAfterFailedStartup()
+
+		return startupFailed
+	}
+
+	if a.mcpServer == nil {
+		return startupOK
+	}
+
+	err := a.mcpServer.bind(ctx)
+	if err == nil {
+		return startupOK
+	}
+
+	outcome := startupFailed
+
+	// ListenConfig.Listen honors cancellation, so a SIGINT or SIGTERM arriving inside the bind
+	// window surfaces here as context.Canceled. That is an operator stopping the process, not a port
+	// problem, and reporting the port remedy for it sends them looking for a conflict that does not
+	// exist. handleStartupHooks draws the same distinction for the startup hooks.
+	if errors.Is(err, context.Canceled) {
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+
+		outcome = startupCanceled
+	} else {
+		a.Logger().Errorf("MCP server cannot start on port %d: %v. Set MCP_PORT to a free port, or "+
+			"MCP_PORT=0 to run without the MCP transport while keeping tools available in-process.",
+			a.mcpServer.port, err)
+	}
+
+	a.shutdownAfterFailedStartup()
+
+	return outcome
+}
+
+// shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned
+// before any server is up — a failed startup hook, or an MCP port that cannot be claimed. Run
+// returns normally afterwards, so without this the datasource connections opened by the container
+// would be left to process exit.
+//
+// The timeout is deliberately taken from a fresh Background context rather than the run's own: the
+// run context may already be canceled (that is one of the ways startup is abandoned), and a
+// shutdown that inherited it would be dead on arrival.
+func (a *App) shutdownAfterFailedStartup() {
+	// Reported here rather than assumed to have been reported already. An earlier revision skipped
+	// it on the grounds that Run's normal path logs it -- but that is exactly the path an abandoned
+	// startup never reaches, so a malformed SHUTDOWN_GRACE_PERIOD went unmentioned in the only
+	// situation where this function runs. The default returned alongside the error is still used: a
+	// bad grace period must not stop the cleanup.
+	timeout, err := getShutdownTimeoutFromConfig(a.Config)
+	if err != nil {
+		a.Logger().Errorf("invalid SHUTDOWN_GRACE_PERIOD, using %s to shut down after a failed startup: %v", timeout, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := a.Shutdown(ctx); err != nil {
+		a.Logger().Debugf("Shutdown after failed startup reported: %v", err)
+	}
 }
 
 // startMCPServer starts the MCP server if app.EnableMCP was called.

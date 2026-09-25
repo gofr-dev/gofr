@@ -143,9 +143,9 @@ reports them as present whatever tags you pass:
 go list -deps -tags gofr_nopubsub ./cmd/my-service | grep pubsub/kafka   # no output: not linked
 ```
 
-For scale, against `gofr.dev/pkg/gofr` itself: 828 packages by default; 616 with `gofr_nopubsub`,
-786 with `gofr_nootlp`, 784 with `gofr_nosqldrivers`, 808 with `gofr_nographql`, 818 with
-`gofr_nogrpc`, 826 with `gofr_nodgraph` -- and **411 with all six**, half the default.
+For scale, against `gofr.dev/pkg/gofr` itself: 827 packages by default; 614 with `gofr_nopubsub`,
+787 with `gofr_nootlp`, 783 with `gofr_nosqldrivers`, 807 with `gofr_nographql`, 817 with
+`gofr_nogrpc`, 825 with `gofr_nodgraph` -- and **411 with all six**, half the default.
 
 **Measured on darwin/arm64 with Go 1.26.3.** The counts are platform- and toolchain-dependent --
 the standard library and `modernc.org/libc` pull in different package sets per GOOS/GOARCH, so the
