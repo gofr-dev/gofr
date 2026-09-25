@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -52,7 +53,13 @@ const (
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
 type storageAdapter struct {
-	cfg    *Config
+	cfg *Config
+
+	// mu guards client, bucket, saEmail and saPrivateKey. Connect may run on the background
+	// retry goroutine while request goroutines use the adapter, so the fields are written
+	// once, together, under mu and read through bucketHandle (or a single
+	// read-locked snapshot in SignedURL).
+	mu     sync.RWMutex
 	client *storage.Client
 	bucket *storage.BucketHandle
 
@@ -70,7 +77,7 @@ type storageAdapter struct {
 // Connect initializes the GCS client and validates bucket access.
 func (s *storageAdapter) Connect(ctx context.Context) error {
 	// fast-path
-	if s.client != nil && s.bucket != nil {
+	if _, err := s.bucketHandle(); err == nil {
 		return nil
 	}
 
@@ -97,22 +104,53 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	// If parsing fails we log a warning and continue — the GCS client is already valid and
 	// all non-signed-URL operations will work normally. Signed URL calls will fall back to
 	// IAM-based signing via ambient credentials.
+	var (
+		email      string
+		privateKey []byte
+	)
+
 	if s.cfg.CredentialsJSON != "" {
-		email, privateKey, parseErr := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
-		if parseErr != nil {
-			if s.logger != nil {
-				s.logger.Errorf("credentials cannot be used for signed URLs: %v; signed URL calls will use ambient credentials", parseErr)
-			}
-		} else {
-			s.saEmail = email
-			s.saPrivateKey = privateKey
+		var parseErr error
+
+		email, privateKey, parseErr = parseServiceAccountCredentials(s.cfg.CredentialsJSON)
+		if parseErr != nil && s.logger != nil {
+			s.logger.Errorf("credentials cannot be used for signed URLs: %v; signed URL calls will use ambient credentials", parseErr)
 		}
 	}
 
-	s.client = client
-	s.bucket = bucket
+	s.publishConnection(client, bucket, email, privateKey)
 
 	return nil
+}
+
+// publishConnection stores the connection state built by Connect. If a concurrent Connect
+// call has already stored one, that state is kept and the redundant client is closed.
+func (s *storageAdapter) publishConnection(client *storage.Client, bucket *storage.BucketHandle, email string, privateKey []byte) {
+	s.mu.Lock()
+
+	published := s.client != nil && s.bucket != nil
+	if !published {
+		s.client, s.bucket, s.saEmail, s.saPrivateKey = client, bucket, email, privateKey
+	}
+
+	s.mu.Unlock()
+
+	if published {
+		_ = client.Close()
+	}
+}
+
+// bucketHandle returns the connected bucket, or errGCSClientNotInitialized while the
+// adapter is not connected.
+func (s *storageAdapter) bucketHandle() (*storage.BucketHandle, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.client == nil || s.bucket == nil {
+		return nil, errGCSClientNotInitialized
+	}
+
+	return s.bucket, nil
 }
 
 // createStorageClient creates a GCS storage client based on the configured authentication method.
@@ -134,11 +172,12 @@ func (s *storageAdapter) createStorageClient(ctx context.Context) (*storage.Clie
 
 // Health checks if the GCS connection is healthy by verifying bucket access.
 func (s *storageAdapter) Health(ctx context.Context) error {
-	if s.client == nil || s.bucket == nil {
-		return errGCSClientNotInitialized
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return err
 	}
 
-	_, err := s.bucket.Attrs(ctx)
+	_, err = bucket.Attrs(ctx)
 	if err != nil {
 		return fmt.Errorf("GCS health check failed: %w", err)
 	}
@@ -148,8 +187,12 @@ func (s *storageAdapter) Health(ctx context.Context) error {
 
 // Close closes the GCS client connection.
 func (s *storageAdapter) Close() error {
-	if s.client != nil {
-		return s.client.Close()
+	s.mu.RLock()
+	client := s.client
+	s.mu.RUnlock()
+
+	if client != nil {
+		return client.Close()
 	}
 
 	return nil
@@ -161,7 +204,12 @@ func (s *storageAdapter) NewReader(ctx context.Context, name string) (io.ReadClo
 		return nil, errEmptyObjectName
 	}
 
-	reader, err := s.bucket.Object(name).NewReader(ctx)
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := bucket.Object(name).NewReader(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w for %q: %w", errFailedToCreateReader, name, err)
 	}
@@ -179,7 +227,12 @@ func (s *storageAdapter) NewRangeReader(ctx context.Context, name string, offset
 		return nil, fmt.Errorf("%w (got: %d)", errInvalidOffset, offset)
 	}
 
-	reader, err := s.bucket.Object(name).NewRangeReader(ctx, offset, length)
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := bucket.Object(name).NewRangeReader(ctx, offset, length)
 	if err != nil {
 		return nil, fmt.Errorf("%w for %q: %w", errFailedToCreateRangeReader, name, err)
 	}
@@ -194,11 +247,12 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 		return &failWriter{err: errEmptyObjectName}
 	}
 
-	if s.bucket == nil {
-		return &failWriter{err: errGCSClientNotInitialized}
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return &failWriter{err: err}
 	}
 
-	return s.bucket.Object(name).NewWriter(ctx)
+	return bucket.Object(name).NewWriter(ctx)
 }
 
 // NewWriterWithOptions implements MetadataWriter.
@@ -210,11 +264,12 @@ func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, 
 		return &failWriter{err: errEmptyObjectName}
 	}
 
-	if s.bucket == nil {
-		return &failWriter{err: errGCSClientNotInitialized}
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return &failWriter{err: err}
 	}
 
-	w := s.bucket.Object(name).NewWriter(ctx)
+	w := bucket.Object(name).NewWriter(ctx)
 
 	if opts != nil {
 		if opts.ContentType != "" {
@@ -252,7 +307,12 @@ func (s *storageAdapter) StatObject(ctx context.Context, name string) (*file.Obj
 		return nil, errEmptyObjectName
 	}
 
-	attrs, err := s.bucket.Object(name).Attrs(ctx)
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+
+	attrs, err := bucket.Object(name).Attrs(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -276,7 +336,12 @@ func (s *storageAdapter) DeleteObject(ctx context.Context, name string) error {
 		return errEmptyObjectName
 	}
 
-	attrs, err := s.bucket.Object(name).Attrs(ctx)
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return err
+	}
+
+	attrs, err := bucket.Object(name).Attrs(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -285,7 +350,7 @@ func (s *storageAdapter) DeleteObject(ctx context.Context, name string) error {
 		return fmt.Errorf("%w for %q: %w", errFailedToGetObjectAttrs, name, err)
 	}
 
-	err = s.bucket.Object(name).If(storage.Conditions{GenerationMatch: attrs.Generation}).Delete(ctx)
+	err = bucket.Object(name).If(storage.Conditions{GenerationMatch: attrs.Generation}).Delete(ctx)
 	if err != nil {
 		return fmt.Errorf("%w %q: %w", errFailedToDeleteObject, name, err)
 	}
@@ -303,10 +368,15 @@ func (s *storageAdapter) CopyObject(ctx context.Context, src, dst string) error 
 		return errSameSourceAndDest
 	}
 
-	srcObj := s.bucket.Object(src)
-	dstObj := s.bucket.Object(dst)
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return err
+	}
 
-	_, err := dstObj.CopierFrom(srcObj).Run(ctx)
+	srcObj := bucket.Object(src)
+	dstObj := bucket.Object(dst)
+
+	_, err = dstObj.CopierFrom(srcObj).Run(ctx)
 	if err != nil {
 		return fmt.Errorf("%w from %q to %q: %w", errFailedToCopyObject, src, dst, err)
 	}
@@ -316,9 +386,14 @@ func (s *storageAdapter) CopyObject(ctx context.Context, src, dst string) error 
 
 // ListObjects lists all objects with the given prefix.
 func (s *storageAdapter) ListObjects(ctx context.Context, prefix string) ([]string, error) {
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+
 	var objects []string
 
-	it := s.bucket.Objects(ctx, &storage.Query{Prefix: prefix})
+	it := bucket.Objects(ctx, &storage.Query{Prefix: prefix})
 
 	for {
 		obj, err := it.Next()
@@ -342,7 +417,12 @@ func (s *storageAdapter) ListDir(ctx context.Context, prefix string) ([]file.Obj
 
 	var prefixes []string
 
-	it := s.bucket.Objects(ctx, &storage.Query{
+	bucket, err := s.bucketHandle()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	it := bucket.Objects(ctx, &storage.Query{
 		Prefix:    prefix,
 		Delimiter: "/",
 	})
@@ -502,7 +582,11 @@ func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time
 		return "", errGCSBucketNotConfigured
 	}
 
-	if s.bucket == nil {
+	s.mu.RLock()
+	bucket, email, privateKey := s.bucket, s.saEmail, s.saPrivateKey
+	s.mu.RUnlock()
+
+	if bucket == nil {
 		return "", errGCSClientNotInitialized
 	}
 
@@ -512,9 +596,9 @@ func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time
 
 	// saEmail and saPrivateKey are populated during Connect() when CredentialsJSON is
 	// provided. When empty, bucket.SignedURL uses IAM-based signing (Workload Identity).
-	signedOpts := buildSignedURLOptions(s.saEmail, s.saPrivateKey, expiry, opts)
+	signedOpts := buildSignedURLOptions(email, privateKey, expiry, opts)
 
-	signedURL, err := s.bucket.SignedURL(name, signedOpts)
+	signedURL, err := bucket.SignedURL(name, signedOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)
 	}
