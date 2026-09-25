@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -336,4 +337,78 @@ func TestWrappedStream(t *testing.T) {
 	w := &wrappedStream{ServerStream: m, ctx: newCtx}
 
 	assert.Equal(t, newCtx, w.Context())
+}
+
+func withIncomingMD(md metadata.MD) func(ctx context.Context) context.Context {
+	return func(ctx context.Context) context.Context { return metadata.NewIncomingContext(ctx, md) }
+}
+
+func TestAuthStreamInterceptors(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	signToken := func(kid string) string {
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"sub": "user"})
+		token.Header["kid"] = kid
+
+		signed, signErr := token.SignedString(privateKey)
+		require.NoError(t, signErr)
+
+		return signed
+	}
+
+	basic := BasicAuthStreamInterceptor(BasicAuthProvider{Users: map[string]string{"user": "pass"}})
+	apiKey := APIKeyAuthStreamInterceptor(APIKeyAuthProvider{APIKeys: []string{"valid-key"}})
+	oauth := OAuthStreamInterceptor(&mockKeyProvider{key: &privateKey.PublicKey})
+
+	basicHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
+
+	tests := []struct {
+		desc        string
+		interceptor grpc.StreamServerInterceptor
+		incoming    func(ctx context.Context) context.Context
+		method      any
+		expCode     codes.Code
+		expCalled   bool
+		expValue    any
+	}{
+		{desc: "basic auth without metadata", interceptor: basic, method: auth.Username,
+			incoming: func(ctx context.Context) context.Context { return ctx }, expCode: codes.Unauthenticated},
+		{desc: "basic auth success", interceptor: basic, method: auth.Username,
+			incoming: withIncomingMD(metadata.MD{"authorization": []string{basicHeader}}),
+			expCode:  codes.OK, expCalled: true, expValue: "user"},
+		{desc: "api key invalid", interceptor: apiKey, method: auth.APIKey,
+			incoming: withIncomingMD(metadata.MD{"x-api-key": []string{"bad-key"}}), expCode: codes.Unauthenticated},
+		{desc: "api key success", interceptor: apiKey, method: auth.APIKey,
+			incoming: withIncomingMD(metadata.MD{"x-api-key": []string{"valid-key"}}),
+			expCode:  codes.OK, expCalled: true, expValue: "valid-key"},
+		{desc: "oauth token signed with unknown key id", interceptor: oauth, method: auth.JWTClaim,
+			incoming: withIncomingMD(metadata.MD{"authorization": []string{"Bearer " + signToken("unknown-kid")}}),
+			expCode:  codes.Unauthenticated},
+		{desc: "oauth success", interceptor: oauth, method: auth.JWTClaim,
+			incoming: withIncomingMD(metadata.MD{"authorization": []string{"Bearer " + signToken("valid-kid")}}),
+			expCode:  codes.OK, expCalled: true, expValue: jwt.MapClaims{"sub": "user"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				called   bool
+				gotValue any
+			)
+
+			stream := &mockServerStream{ctx: tc.incoming(t.Context())}
+
+			err := tc.interceptor(nil, stream, &grpc.StreamServerInfo{}, func(_ any, ss grpc.ServerStream) error {
+				called = true
+				gotValue = ss.Context().Value(tc.method)
+
+				return nil
+			})
+
+			assert.Equal(t, tc.expCode, status.Code(err))
+			assert.Equal(t, tc.expCalled, called)
+			assert.Equal(t, tc.expValue, gotValue)
+		})
+	}
 }
