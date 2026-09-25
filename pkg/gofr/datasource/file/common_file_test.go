@@ -447,3 +447,138 @@ func TestCommonFile_Close_SuccessAndErrors(t *testing.T) {
 	require.Error(t, err2)
 	assert.ErrorIs(t, err2, errTest)
 }
+
+// failingReadWriteCloser returns errTest from Read and Write.
+type failingReadWriteCloser struct{}
+
+func (failingReadWriteCloser) Read([]byte) (int, error)  { return 0, errTest }
+func (failingReadWriteCloser) Write([]byte) (int, error) { return 0, errTest }
+func (failingReadWriteCloser) Close() error              { return nil }
+
+func TestCommonFile_Read_BodyResults(t *testing.T) {
+	tests := []struct {
+		name   string
+		body   io.ReadCloser
+		expN   int
+		expErr error
+	}{
+		{name: "read error is returned", body: failingReadWriteCloser{}, expN: 0, expErr: errTest},
+		{name: "end of file is passed through", body: io.NopCloser(strings.NewReader("")), expN: 0, expErr: io.EOF},
+		{name: "partial content read", body: io.NopCloser(strings.NewReader("abc")), expN: 3, expErr: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &CommonFile{body: tt.body, name: "r.txt"}
+
+			n, err := f.Read(make([]byte, 8))
+
+			assert.Equal(t, tt.expN, n)
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, int64(tt.expN), f.currentPos)
+		})
+	}
+}
+
+func TestCommonFile_ReadAt_EmptyRangeReturnsEOF(t *testing.T) {
+	_, mockProvider, _ := setupCommonFS(t)
+
+	mockProvider.EXPECT().
+		NewRangeReader(gomock.Any(), "empty.bin", int64(0), int64(4)).
+		Return(io.NopCloser(bytes.NewReader(nil)), nil)
+
+	f := &CommonFile{provider: mockProvider, name: "empty.bin", size: 10}
+
+	n, err := f.ReadAt(make([]byte, 4), 0)
+
+	assert.Equal(t, 0, n)
+	require.ErrorIs(t, err, io.EOF)
+}
+
+func TestCommonFile_Write_WriterError(t *testing.T) {
+	f := &CommonFile{writer: failingReadWriteCloser{}, name: "w.txt"}
+
+	n, err := f.Write([]byte("abc"))
+
+	assert.Equal(t, 0, n)
+	require.ErrorIs(t, err, errTest)
+}
+
+func TestCommonFile_WriteAt_Errors(t *testing.T) {
+	closedFile := func(t *testing.T) io.WriteCloser {
+		t.Helper()
+
+		tmp, err := os.CreateTemp(t.TempDir(), "writeat_closed_*")
+		require.NoError(t, err)
+		require.NoError(t, tmp.Close())
+
+		return tmp
+	}
+
+	tests := []struct {
+		name   string
+		writer func(t *testing.T) io.WriteCloser
+		expErr error
+	}{
+		{name: "no writer", writer: func(*testing.T) io.WriteCloser { return nil }, expErr: errFileNotOpenForWriting},
+		{name: "closed local file", writer: closedFile, expErr: os.ErrClosed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &CommonFile{writer: tt.writer(t), name: "local"}
+
+			n, err := f.WriteAt([]byte("xyz"), 0)
+
+			assert.Equal(t, 0, n)
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
+}
+
+func TestCommonFile_Seek_InvalidOffsetAndOldReaderClose(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       io.ReadCloser
+		offset     int64
+		whence     int
+		setupMocks func(p *MockStorageProvider)
+		expPos     int64
+		expErr     error
+	}{
+		{
+			name:       "invalid whence returns out of range",
+			offset:     0,
+			whence:     42,
+			setupMocks: func(*MockStorageProvider) {},
+			expPos:     0,
+			expErr:     ErrOutOfRange,
+		},
+		{
+			name:   "old reader close error does not fail seek",
+			body:   badReadCloser{},
+			offset: 3,
+			whence: io.SeekStart,
+			setupMocks: func(p *MockStorageProvider) {
+				p.EXPECT().NewRangeReader(gomock.Any(), "seekfile", int64(3), int64(-1)).
+					Return(io.NopCloser(strings.NewReader("tent")), nil)
+			},
+			expPos: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, mockProvider, _ := setupCommonFS(t)
+
+			tt.setupMocks(mockProvider)
+
+			f := &CommonFile{provider: mockProvider, name: "seekfile", body: tt.body, size: 10}
+
+			pos, err := f.Seek(tt.offset, tt.whence)
+
+			assert.Equal(t, tt.expPos, pos)
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
+}

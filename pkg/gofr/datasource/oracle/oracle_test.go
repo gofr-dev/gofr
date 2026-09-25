@@ -10,6 +10,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
@@ -21,6 +23,10 @@ var (
 	errTableNotExist = errors.New("ORA-00942: table or view does not exist")
 	errSomeTest      = errors.New("some error")
 	errQueryTest     = errors.New("query error")
+	errBeginTest     = errors.New("begin error")
+	errRowTest       = errors.New("row error")
+	errCommitTest    = errors.New("commit error")
+	errRollbackTest  = errors.New("rollback error")
 )
 
 func getOracleTestConnection(t *testing.T) (*MockConnection, *MockLogger, Client) {
@@ -738,4 +744,328 @@ func Test_OracleTx_Rollback(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// oracleSlowCall is how long the fake driver takes. Every recorded duration must cover it.
+const oracleSlowCall = 50 * time.Millisecond
+
+// Test_Oracle_OperationDurationCoversTheDriverCall pins the same defect fixed in clickhouse: the
+// deferred sendOperationStats sat AFTER the driver call, and `defer f(time.Now())` evaluates its
+// arguments where the defer statement is, not where it runs. The start instant was therefore taken
+// once the work had already finished, and every oracle.*.duration attribute and Log.Duration read as
+// ~0 regardless of how long the query took.
+//
+// Asserting a floor of the fake driver's own sleep is what makes this a test of the ordering rather
+// than of the clock: it cannot pass unless the timestamp is taken before the call.
+func Test_Oracle_OperationDurationCoversTheDriverCall(t *testing.T) {
+	const query = "SELECT id FROM users WHERE id = :1"
+
+	var dest []struct{}
+
+	tests := []struct {
+		desc      string
+		method    string
+		driverErr error
+		expect    func(conn *MockConnection, driverErr error)
+		call      func(ctx context.Context, c *Client) error
+	}{
+		{desc: "exec", method: "exec", expect: expectSlowOracleExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
+		}},
+		{desc: "exec error", method: "exec", driverErr: errExecTest, expect: expectSlowOracleExec,
+			call: func(ctx context.Context, c *Client) error { return c.Exec(ctx, query, 1) }},
+		{desc: "select", method: "select", expect: expectSlowOracleSelect(&dest), call: func(ctx context.Context, c *Client) error {
+			return c.Select(ctx, &dest, query, 1)
+		}},
+		{desc: "select error", method: "select", driverErr: errSelectTest, expect: expectSlowOracleSelect(&dest),
+			call: func(ctx context.Context, c *Client) error { return c.Select(ctx, &dest, query, 1) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, mockLogger, c := getOracleTestConnection(t)
+
+			span := &oracleRecordingSpan{attrs: map[attribute.Key]attribute.Value{}}
+			c.tracer = &oracleRecordingTracer{span: span}
+
+			tc.expect(mockConn, tc.driverErr)
+
+			var logged *Log
+
+			mockLogger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) { logged, _ = args[0].(*Log) })
+
+			err := tc.call(t.Context(), &c)
+
+			if tc.driverErr != nil {
+				require.ErrorIs(t, err, tc.driverErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			floor := oracleSlowCall.Microseconds()
+
+			require.NotNil(t, logged, "the debug log carrying the duration must have been emitted")
+			assert.GreaterOrEqual(t, logged.Duration, floor, "Log.Duration must cover the driver call (µs)")
+
+			attr, ok := span.attrs[attribute.Key("oracle."+tc.method+".duration")]
+			require.True(t, ok, "the span must carry an oracle.%s.duration attribute", tc.method)
+			assert.GreaterOrEqual(t, attr.AsInt64(), floor, "span duration must cover the driver call (µs)")
+			assert.Equal(t, 1, span.ends, "the span must be ended exactly once")
+		})
+	}
+}
+
+func expectSlowOracleExec(conn *MockConnection, driverErr error) {
+	conn.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, string, ...any) error {
+			time.Sleep(oracleSlowCall)
+			return driverErr
+		})
+}
+
+func expectSlowOracleSelect(dest any) func(conn *MockConnection, driverErr error) {
+	return func(conn *MockConnection, driverErr error) {
+		conn.EXPECT().Select(gomock.Any(), dest, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, any, string, ...any) error {
+				time.Sleep(oracleSlowCall)
+				return driverErr
+			})
+	}
+}
+
+// oracleRecordingSpan keeps the attributes set on it and counts End calls.
+type oracleRecordingSpan struct {
+	noop.Span
+
+	attrs map[attribute.Key]attribute.Value
+	ends  int
+}
+
+func (s *oracleRecordingSpan) SetAttributes(kv ...attribute.KeyValue) {
+	for _, a := range kv {
+		s.attrs[a.Key] = a.Value
+	}
+}
+
+func (s *oracleRecordingSpan) End(...trace.SpanEndOption) { s.ends++ }
+
+type oracleRecordingTracer struct {
+	noop.Tracer
+
+	span *oracleRecordingSpan
+}
+
+func (t *oracleRecordingTracer) Start(ctx context.Context, _ string,
+	_ ...trace.SpanStartOption) (context.Context, trace.Span) {
+	return ctx, t.span
+}
+
+func newTestOracleTx(t *testing.T) (*oracleTx, sqlmock.Sqlmock, *MockLogger) {
+	t.Helper()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	t.Cleanup(func() { db.Close() })
+
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(t.Context(), nil)
+	require.NoError(t, err)
+
+	mockLogger := NewMockLogger(gomock.NewController(t))
+
+	return &oracleTx{tx: sqlTx, logger: mockLogger}, mock, mockLogger
+}
+
+func Test_Oracle_Begin_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		conn       func(t *testing.T, mock sqlmock.Sqlmock, db *sql.DB) Connection
+		setupMocks func(mock sqlmock.Sqlmock, logger *MockLogger)
+		expErr     error
+	}{
+		{
+			desc: "connection is not a sql connection",
+			conn: func(t *testing.T, _ sqlmock.Sqlmock, _ *sql.DB) Connection {
+				t.Helper()
+				return NewMockConnection(gomock.NewController(t))
+			},
+			setupMocks: func(sqlmock.Sqlmock, *MockLogger) {},
+			expErr:     errInvalidConnType,
+		},
+		{
+			desc: "begin transaction fails",
+			conn: func(_ *testing.T, _ sqlmock.Sqlmock, db *sql.DB) Connection {
+				return &sqlConn{db: db}
+			},
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectBegin().WillReturnError(errBeginTest)
+				logger.EXPECT().Errorf("failed to begin transaction: %v", errBeginTest)
+			},
+			expErr: errBeginTest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+
+			defer db.Close()
+
+			mockLogger := NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(mock, mockLogger)
+
+			c := Client{conn: tc.conn(t, mock, db), logger: mockLogger}
+
+			tx, err := c.Begin()
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, tx)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_OracleTx_SelectContext_Errors(t *testing.T) {
+	tests := []struct {
+		desc      string
+		dest      any
+		setupMock func(mock sqlmock.Sqlmock)
+		expErr    error
+	}{
+		{
+			desc:      "destination is not a pointer to slice",
+			dest:      []map[string]any{},
+			setupMock: func(sqlmock.Sqlmock) {},
+			expErr:    errInvalidDestType,
+		},
+		{
+			desc: "query fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").WillReturnError(errQueryTest)
+			},
+			expErr: errQueryTest,
+		},
+		{
+			desc: "row iteration fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).RowError(0, errRowTest))
+			},
+			expErr: errRowTest,
+		},
+		{
+			desc: "destination slice has wrong element type",
+			dest: &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM users").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+			},
+			expErr: errInvalidDestType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			tx, mock, _ := newTestOracleTx(t)
+			tc.setupMock(mock)
+
+			err := tx.SelectContext(t.Context(), tc.dest, "SELECT id FROM users")
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_OracleTx_CommitRollback_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setupMocks func(mock sqlmock.Sqlmock, logger *MockLogger)
+		op         func(tx *oracleTx) error
+		expErr     error
+	}{
+		{
+			desc: "commit fails",
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectCommit().WillReturnError(errCommitTest)
+				logger.EXPECT().Debug(gomock.Any())
+				logger.EXPECT().Errorf("transaction commit failed: %v", errCommitTest)
+			},
+			op:     func(tx *oracleTx) error { return tx.Commit() },
+			expErr: errCommitTest,
+		},
+		{
+			desc: "rollback fails",
+			setupMocks: func(mock sqlmock.Sqlmock, logger *MockLogger) {
+				mock.ExpectRollback().WillReturnError(errRollbackTest)
+				logger.EXPECT().Debug(gomock.Any())
+				logger.EXPECT().Errorf("transaction rollback failed: %v", errRollbackTest)
+			},
+			op:     func(tx *oracleTx) error { return tx.Rollback() },
+			expErr: errRollbackTest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			tx, mock, mockLogger := newTestOracleTx(t)
+			tc.setupMocks(mock, mockLogger)
+
+			err := tc.op(tx)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func Test_sqlConn_Select_Errors(t *testing.T) {
+	tests := []struct {
+		desc      string
+		dest      any
+		setupMock func(mock sqlmock.Sqlmock)
+		expErr    error
+	}{
+		{
+			desc: "row iteration fails",
+			dest: &[]map[string]any{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM dual").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).RowError(0, errRowTest))
+			},
+			expErr: errRowTest,
+		},
+		{
+			desc: "destination slice has wrong element type",
+			dest: &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT id FROM dual").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+			},
+			expErr: errInvalidDestType,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+
+			defer db.Close()
+
+			tc.setupMock(mock)
+
+			s := &sqlConn{db: db}
+
+			err = s.Select(t.Context(), tc.dest, "SELECT id FROM dual")
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
