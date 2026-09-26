@@ -410,7 +410,7 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 	require.True(t, ok, "message is not an object: %T", entry["message"])
 
 	wantFields := []string{
-		"trace_id", "span_id", "start_time", "response_time",
+		"trace_id", "span_id", "start_time", "response_time", "response_time_unit",
 		"method", "user_agent", "ip", "uri", "response",
 	}
 	for _, k := range wantFields {
@@ -422,6 +422,7 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 	assert.Equal(t, "GET", msg["method"])
 	assert.Equal(t, "/users/42?x=1", msg["uri"])
 	assert.Equal(t, "snapshot-test", msg["user_agent"])
+	assert.Equal(t, "µs", msg["response_time_unit"], "response_time_unit should be µs to match the pretty-printed output")
 }
 
 // A streaming response reaches the connection's flusher only if StatusResponseWriter forwards
