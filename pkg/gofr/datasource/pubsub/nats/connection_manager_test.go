@@ -250,3 +250,157 @@ func TestNatsConnWrapper_NatsConn(t *testing.T) {
 
 	assert.Equal(t, mockConn, wrapper.NATSConn())
 }
+
+func TestNewConnectionManager_Defaults(t *testing.T) {
+	cm := NewConnectionManager(&Config{Server: NATSServer}, logging.NewMockLogger(logging.DEBUG), nil, nil)
+
+	assert.Equal(t, &defaultConnector{}, cm.natsConnector, "a nil connector must fall back to the default one")
+	assert.Equal(t, &DefaultJetStreamCreator{}, cm.jetStreamCreator, "a nil creator must fall back to the default one")
+}
+
+func TestNewConnectionManager_NilLoggerPanics(t *testing.T) {
+	assert.PanicsWithValue(t, "logger is required", func() {
+		NewConnectionManager(&Config{Server: NATSServer}, nil, nil, nil)
+	})
+}
+
+func TestConnectionManager_Connect_Scenarios(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        *Config
+		setupMocks func(connector *MockNATSConnector, creator *MockJetStreamCreator, conn *MockConnInterface, js *MockJetStream)
+		expErr     error
+		expConn    bool
+	}{
+		{
+			name: "connector fails",
+			cfg:  &Config{Server: NATSServer},
+			setupMocks: func(connector *MockNATSConnector, _ *MockJetStreamCreator, _ *MockConnInterface, _ *MockJetStream) {
+				connector.EXPECT().Connect(NATSServer, gomock.Any()).Return(nil, errConnectionError)
+			},
+			expErr:  errConnectionError,
+			expConn: false,
+		},
+		{
+			name: "jetstream creation fails and closes the connection",
+			cfg:  &Config{Server: NATSServer},
+			setupMocks: func(connector *MockNATSConnector, creator *MockJetStreamCreator, conn *MockConnInterface, _ *MockJetStream) {
+				connector.EXPECT().Connect(NATSServer, gomock.Any()).Return(conn, nil)
+				creator.EXPECT().New(conn).Return(nil, errJetStreamCreationFailed)
+				conn.EXPECT().Close()
+			},
+			expErr:  errJetStreamCreationFailed,
+			expConn: false,
+		},
+		{
+			// The name option plus the credentials option: exactly two options reach the connector.
+			name: "credentials file adds a connect option",
+			cfg:  &Config{Server: NATSServer, CredsFile: "/path/to/creds"},
+			setupMocks: func(connector *MockNATSConnector, creator *MockJetStreamCreator, conn *MockConnInterface, js *MockJetStream) {
+				connector.EXPECT().Connect(NATSServer, gomock.Any(), gomock.Any()).Return(conn, nil)
+				creator.EXPECT().New(conn).Return(js, nil)
+			},
+			expErr:  nil,
+			expConn: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			connector := NewMockNATSConnector(ctrl)
+			creator := NewMockJetStreamCreator(ctrl)
+			conn := NewMockConnInterface(ctrl)
+			js := NewMockJetStream(ctrl)
+
+			tt.setupMocks(connector, creator, conn, js)
+
+			cm := NewConnectionManager(tt.cfg, logging.NewMockLogger(logging.DEBUG), connector, creator)
+
+			err := cm.Connect()
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expConn, cm.conn != nil)
+		})
+	}
+}
+
+func TestConnectionManager_Publish_Errors(t *testing.T) {
+	subject := "test.subject"
+	message := []byte("test message")
+
+	tests := []struct {
+		name       string
+		subject    string
+		manager    func(conn *MockConnInterface, js *MockJetStream) *ConnectionManager
+		setupMocks func(metrics *MockMetrics, conn *MockConnInterface, js *MockJetStream)
+		expErr     error
+	}{
+		{
+			name:    "not connected",
+			subject: subject,
+			manager: func(*MockConnInterface, *MockJetStream) *ConnectionManager { return &ConnectionManager{} },
+			setupMocks: func(metrics *MockMetrics, _ *MockConnInterface, _ *MockJetStream) {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject)
+			},
+			expErr: errClientNotConnected,
+		},
+		{
+			name:    "connection not in connected state",
+			subject: subject,
+			manager: func(conn *MockConnInterface, _ *MockJetStream) *ConnectionManager {
+				return &ConnectionManager{conn: conn}
+			},
+			setupMocks: func(metrics *MockMetrics, conn *MockConnInterface, _ *MockJetStream) {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject)
+				conn.EXPECT().Status().Return(nats.RECONNECTING)
+			},
+			expErr: errClientNotConnected,
+		},
+		{
+			name:    "jetstream not configured",
+			subject: subject,
+			manager: func(conn *MockConnInterface, _ *MockJetStream) *ConnectionManager {
+				return &ConnectionManager{conn: conn}
+			},
+			setupMocks: func(metrics *MockMetrics, conn *MockConnInterface, _ *MockJetStream) {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject)
+				conn.EXPECT().Status().Return(nats.CONNECTED)
+			},
+			expErr: errJetStreamNotConfigured,
+		},
+		{
+			name:    "publish fails",
+			subject: subject,
+			manager: func(conn *MockConnInterface, js *MockJetStream) *ConnectionManager {
+				return &ConnectionManager{conn: conn, jStream: js}
+			},
+			setupMocks: func(metrics *MockMetrics, conn *MockConnInterface, js *MockJetStream) {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject)
+				conn.EXPECT().Status().Return(nats.CONNECTED)
+				js.EXPECT().PublishMsg(gomock.Any(), natsMsgMatcher{subject: subject, data: message}).Return(nil, errPublishError)
+			},
+			expErr: errPublishError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			metrics := NewMockMetrics(ctrl)
+			conn := NewMockConnInterface(ctrl)
+			js := NewMockJetStream(ctrl)
+
+			tt.setupMocks(metrics, conn, js)
+
+			cm := tt.manager(conn, js)
+			cm.logger = logging.NewMockLogger(logging.DEBUG)
+
+			err := cm.Publish(t.Context(), tt.subject, message, metrics)
+
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
+}

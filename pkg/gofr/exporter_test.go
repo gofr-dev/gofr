@@ -215,6 +215,20 @@ func Test_attributeToStringPair(t *testing.T) {
 			expectedValue:  "stringValue",
 			expectedErrMsg: "",
 		},
+		{
+			name:           "Empty",
+			keyValue:       attribute.KeyValue{Key: "emptyKey"},
+			expectedKey:    "emptyKey",
+			expectedValue:  "invalid",
+			expectedErrMsg: "",
+		},
+		{
+			name:           "ByteSlice falls back to the value's string form",
+			keyValue:       attribute.ByteSlice("bytesKey", []byte("hi")),
+			expectedKey:    "bytesKey",
+			expectedValue:  "aGk=",
+			expectedErrMsg: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -222,4 +236,28 @@ func Test_attributeToStringPair(t *testing.T) {
 		assert.Equal(t, tt.expectedKey, key, "Key mismatch")
 		assert.Equal(t, tt.expectedValue, value, "Value mismatch")
 	}
+}
+
+func Test_ExportSpans_InvalidEndpoint(t *testing.T) {
+	exporter := NewExporter("http://[::1", logging.NewMockLogger(logging.FATAL))
+
+	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
+
+	require.ErrorContains(t, err, "failed to create HTTP request")
+}
+
+func Test_convertSpans_SpanAttributesBecomeTags(t *testing.T) {
+	tp := sdktrace.NewTracerProvider()
+
+	defer func() { _ = tp.Shutdown(t.Context()) }()
+
+	_, span := tp.Tracer("test").Start(t.Context(), "s")
+	span.SetAttributes(attribute.Int("http.status", 200), attribute.String("route", "/users"))
+	span.End()
+
+	got := convertSpans([]sdktrace.ReadOnlySpan{span.(sdktrace.ReadOnlySpan)})
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "200", got[0].Tags["http.status"])
+	assert.Equal(t, "/users", got[0].Tags["route"])
 }

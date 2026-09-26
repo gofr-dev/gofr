@@ -237,3 +237,46 @@ func Test_Client_GrantCollection_Error(t *testing.T) {
 
 	require.ErrorIs(t, errUserNotFound, err, "Expected error when user not found")
 }
+
+func Test_Client_UserManagement_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setupMocks func(m *arangoMocks)
+		call       func(ctx context.Context, c *Client) error
+		expErr     error
+	}{
+		{
+			desc:       "create user with invalid options type",
+			setupMocks: func(*arangoMocks) {},
+			call:       func(ctx context.Context, c *Client) error { return c.createUser(ctx, "test", "invalid") },
+			expErr:     errInvalidUserOptionsType,
+		},
+		{
+			desc: "create user fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().CreateUser(gomock.Any(), "test", gomock.Any()).Return(nil, errUserNotFound)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.createUser(ctx, "test", UserOptions{}) },
+			expErr: errUserNotFound,
+		},
+		{
+			desc: "drop user fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().RemoveUser(gomock.Any(), "test").Return(errUserNotFound)
+			},
+			call:   func(ctx context.Context, c *Client) error { return c.dropUser(ctx, "test") },
+			expErr: errUserNotFound,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, m := newArangoTestClient(t)
+			tc.setupMocks(m)
+
+			err := tc.call(t.Context(), client)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
