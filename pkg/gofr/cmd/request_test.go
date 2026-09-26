@@ -85,3 +85,43 @@ func Test_Params(t *testing.T) {
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
 	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for none-existent query param")
 }
+
+func TestNewRequest_OptionParsing(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		expectedParams map[string]string
+	}{
+		{
+			name: "long option preserves additional equals",
+			args: []string{"--token=abc=="},
+			expectedParams: map[string]string{
+				"token": "abc==",
+			},
+		},
+		{
+			name: "short option preserves additional equals",
+			args: []string{"-query=a=b"},
+			expectedParams: map[string]string{
+				"query": "a=b",
+			},
+		},
+		{
+			name: "empty values, flags, and non-option arguments",
+			args: []string{"command", "--empty=", "-blank=", "--verbose", "-v", "not-an-option", ""},
+			expectedParams: map[string]string{
+				"empty":   "",
+				"blank":   "",
+				"verbose": trueString,
+				"v":       trueString,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewRequest(tt.args)
+			assert.Equal(t, tt.expectedParams, r.params)
+		})
+	}
+}
