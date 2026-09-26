@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,7 +226,7 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 	}
 
 	logGRPCEntry(logger, &logEntry, method)
-	recordGRPCMetrics(ctx, metrics, metricName, duration, method, streamType)
+	recordGRPCMetrics(ctx, metrics, metricName, duration, method, streamType, logEntry.StatusCode)
 }
 
 func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
@@ -247,7 +248,7 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	logGRPCEntry(logger, &logEntry, method)
-	recordGRPCMetrics(ctx, metrics, name, duration, method, "")
+	recordGRPCMetrics(ctx, metrics, name, duration, method, "", logEntry.StatusCode)
 }
 
 // Helper function to extract trace ID from context.
@@ -281,14 +282,14 @@ func logGRPCEntry(logger Logger, logEntry *gRPCLog, method string) {
 	}
 }
 
-func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, duration time.Duration, method, streamType string) {
+func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, duration time.Duration, method, streamType string, statusCode int32) {
 	if metrics == nil {
 		return
 	}
 
 	durationMs := float64(duration.Milliseconds()) + float64(duration.Nanoseconds()%nanosecondsPerMillisecond)/nanosecondsPerMillisecond
 
-	labels := []string{"method", method}
+	labels := []string{"method", method, "status", strconv.Itoa(int(statusCode))}
 	if streamType != "" {
 		labels = append(labels, "stream_type", streamType)
 	}

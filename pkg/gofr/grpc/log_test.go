@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -218,7 +219,8 @@ func TestGRPCLog_DocumentRPCLog(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "test.method", "status", strconv.Itoa(int(codes.Internal))).Times(1)
 
 	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
 }
@@ -241,7 +243,8 @@ func TestObservabilityInterceptor(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Method", "status", strconv.Itoa(int(codes.OK))).Times(1)
 
 	resp, err := interceptor(ctx, req, info, handler)
 
@@ -268,7 +271,8 @@ func TestObservabilityInterceptor_WithError(t *testing.T) {
 	// Set up expectations - the function logs errors with Errorf and then with Info
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Method", "status", strconv.Itoa(int(codes.Internal))).Times(1)
 
 	resp, err := interceptor(ctx, req, info, handler)
 
@@ -296,7 +300,8 @@ func TestObservabilityInterceptor_HealthCheck(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", healthCheck+"\tService: \"test-service\"", "status", strconv.Itoa(int(codes.OK))).Times(1)
 
 	resp, err := interceptor(ctx, req, info, handler)
 
@@ -322,7 +327,9 @@ func TestStreamObservabilityInterceptor(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Stream [SERVER-STREAM]", "status", strconv.Itoa(int(codes.OK)),
+		"stream_type", "SERVER_STREAM").Times(1)
 
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
@@ -347,7 +354,9 @@ func TestStreamObservabilityInterceptor_ClientStream(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Stream [CLIENT-STREAM]", "status", strconv.Itoa(int(codes.OK)),
+		"stream_type", "CLIENT_STREAM").Times(1)
 
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
@@ -372,7 +381,9 @@ func TestStreamObservabilityInterceptor_BidirectionalStream(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Stream [BI-DIRECTION_STREAM]", "status", strconv.Itoa(int(codes.OK)),
+		"stream_type", "BIDIRECTIONAL").Times(1)
 
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
@@ -397,7 +408,9 @@ func TestStreamObservabilityInterceptor_WithError(t *testing.T) {
 
 	// Set up expectations
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Stream [SERVER-STREAM]", "status", strconv.Itoa(int(codes.Internal)),
+		"stream_type", "SERVER_STREAM").Times(1)
 
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
@@ -668,10 +681,11 @@ func TestRecordGRPCMetrics(t *testing.T) {
 	ctx := t.Context()
 
 	// Set up expectations
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "test_metric", gomock.Any(),
+		"method", "/test.Service/Method", "status", strconv.Itoa(int(codes.OK))).Times(1)
 
 	// Test recordGRPCMetrics function
-	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "")
+	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "", int32(codes.OK))
 }
 
 func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
@@ -681,10 +695,12 @@ func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
 	ctx := t.Context()
 
 	// Set up expectations
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "test_metric", gomock.Any(),
+		"method", "/test.Service/Method", "status", strconv.Itoa(int(codes.Internal)),
+		"stream_type", "SERVER_STREAM").Times(1)
 
 	// Test recordGRPCMetrics function with stream type
-	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM")
+	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM", int32(codes.Internal))
 }
 
 func TestIsServerError(t *testing.T) {
@@ -736,7 +752,8 @@ func TestObservabilityInterceptor_WithClientError(t *testing.T) {
 
 	// Errorf should NOT be called for client errors like ResourceExhausted
 	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		"method", "/test.Service/Method", "status", strconv.Itoa(int(codes.ResourceExhausted))).Times(1)
 
 	resp, err := interceptor(ctx, req, info, handler)
 
@@ -749,5 +766,5 @@ func TestRecordGRPCMetrics_WithNilMetrics(t *testing.T) {
 
 	// Test recordGRPCMetrics function with nil metrics
 	// This should not panic
-	recordGRPCMetrics(ctx, nil, "test_metric", 100*time.Millisecond, "/test.Service/Method", "")
+	recordGRPCMetrics(ctx, nil, "test_metric", 100*time.Millisecond, "/test.Service/Method", "", int32(codes.OK))
 }
