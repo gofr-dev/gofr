@@ -177,7 +177,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 // QueryWithCtx takes context ,destination,statement,values and returns error.
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case
-func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) (err error) {
 	span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
@@ -190,6 +190,18 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 
 	rv := rvo.Elem()
 	iter := c.scylla.session.Query(stmt, values...).Iter()
+
+	// gocql only reports a failed query through Close, Scan/NumRows just look
+	// like an empty result set. Close on every path and keep the first error.
+	defer func() {
+		if closeErr := iter.Close(); closeErr != nil {
+			c.logger.Errorf("scylladb query failed: %v", closeErr)
+
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}()
 
 	switch rv.Kind() {
 	case reflect.Slice:
