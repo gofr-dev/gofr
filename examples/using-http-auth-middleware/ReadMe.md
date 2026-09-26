@@ -65,7 +65,9 @@ a.EnableAPIKeyAuthWithValidator(func(c *container.Container, apiKey string) bool
 
 ```go
 a := gofr.New()
-a.EnableOAuth("<JWKS-Endpoint>", 10)
+if err := a.EnableOAuthWithError("<JWKS-Endpoint>", 10); err != nil {
+	a.Logger().Fatalf("%v", err)
+}
 ```
 
 ## Execution:

@@ -33,10 +33,12 @@ func main() {
 	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
 	// Uses rbac.DefaultConfigPath internally (empty string triggers default path resolution)
 	// Tries configs/rbac.json, then configs/rbac.yaml, then configs/rbac.yml
-	app.EnableRBAC()
+	if err := app.EnableRBACWithError(); err != nil {
+		app.Logger().Fatalf("%v", err)
+	}
 	
 	// Or with custom config path
-	app.EnableRBAC("configs/custom-rbac.json")
+	// if err := app.EnableRBACWithError("configs/custom-rbac.json"); err != nil { ... }
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -84,6 +86,18 @@ func main() {
 ```
 
 > **💡 Best Practice**: For production/public APIs, use JWT-based RBAC instead of header-based RBAC for better security.
+
+### Config Load Failures
+
+`EnableRBACWithError` returns an error when the config cannot be used: the file is missing or
+unreadable, it is not valid JSON/YAML, its extension is not `.json`, `.yaml` or `.yml`, it fails
+validation, or no path is given and none of the default files exist. In that case no RBAC
+middleware is installed, so handle the error — typically by stopping the app, as above. Starting
+anyway would serve every route with no role checks.
+
+`EnableRBAC` (without `WithError`) is deprecated. On the same failures it logs an error saying
+authorization is **DISABLED** and the app keeps starting with every route unprotected. It will be
+removed in the next major release.
 
 
 ## Configuration
@@ -289,6 +303,43 @@ request, so it is NOT enforced - any route it was meant to govern is currently u
 
 Treat that line as an open route, not a warning about a typo.
 
+### Startup Route Check
+
+The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
+When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
+them and reports two kinds of mismatch.
+
+**A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
+`/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
+is **not protected**. A rule counts as dead when neither its path nor its method can match any
+registered route. A rule whose method the route does not register (`DELETE` on a route that only
+has `GET`) is dead too.
+
+- With `EnableRBACWithError`, a dead rule **stops startup**: the app logs the error, releases
+  what it opened, and exits with a non-zero status, the same as a failed `OnStart` hook.
+- With the deprecated `EnableRBAC`, the app logs the same error and keeps running.
+- A dead rule marked `"public": true` never stops startup. It cannot leave a route unprotected,
+  so it is reported only as a warning.
+
+```
+RBAC route check failed: RBAC rules match no registered route: DELETE /api/user/{id}. Fix the
+rule paths or methods in the RBAC config, or remove the rules.
+```
+
+**An uncovered route** is a registered route that no rule matches, so it is served without role
+checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). This is often on purpose, so
+it is reported as one warning line and never stops startup. GoFr's own `/.well-known/*` routes and
+`/favicon.ico` are left out of it.
+
+```
+RBAC: 2 registered route(s) are not covered by any rule and are served without role checks:
+GET /api/posts, POST /api/users
+```
+
+The check errs toward "this rule might match". Two path variables with different constraints —
+`{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, even though no
+request could satisfy both, so a rule like that is not reported as dead.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
@@ -297,10 +348,14 @@ For production/public APIs, use JWT-based role extraction:
 app := gofr.New()
 
 // Enable OAuth middleware first (required for JWT validation)
-app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
+if err := app.EnableOAuthWithError("https://auth.example.com/.well-known/jwks.json", 10); err != nil {
+	app.Logger().Fatalf("%v", err)
+}
 
-// Enable RBAC with config path (or use app.EnableRBAC() for default paths using rbac.DefaultConfigPath)
-app.EnableRBAC("configs/rbac.json")
+// Enable RBAC with config path (or call app.EnableRBACWithError() for the default paths)
+if err := app.EnableRBACWithError("configs/rbac.json"); err != nil {
+	app.Logger().Fatalf("%v", err)
+}
 ```
 
 **Configuration** (`configs/rbac.json`):
@@ -542,8 +597,12 @@ Or use role inheritance to avoid duplication:
 - Verify JWT claim path is correct
 
 **Config file not found**
-- Ensure config file exists at the specified path
+- Ensure config file exists at the specified path — relative paths resolve against the process's
+  working directory, which inside a container is often not where the file was copied
 - Or use default paths (`configs/rbac.json`, `configs/rbac.yaml`, `configs/rbac.yml`)
+- With the deprecated `EnableRBAC`, a startup log line `Authorization is DISABLED` means the app
+  is serving every route without role checks; switch to `EnableRBACWithError` so this stops
+  startup instead (see [Config Load Failures](#config-load-failures))
 
 **Route not being protected by RBAC**
 - Verify the route is explicitly configured in `endpoints[]` array
@@ -609,7 +668,9 @@ This design allows you to:
 RBAC middleware implements industry-standard security practices to protect sensitive data:
 
 **Traces (OpenTelemetry):**
-- ✅ HTTP method and route patterns included
+- ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
+  `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
+  When the two disagree, the rule is broader or narrower than the route.
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)

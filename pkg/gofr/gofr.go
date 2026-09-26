@@ -23,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
+	"gofr.dev/pkg/gofr/rbac"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/traces/exporters"
 )
@@ -79,6 +80,12 @@ type App struct {
 	// in the application's own setup, where there is nothing to abort yet; Run reports it at the
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
+
+	// rbacConfig is the RBAC config installed by EnableRBACWithError, kept so Run can check it
+	// against the complete route table. rbacStrict is false when it came from the deprecated
+	// EnableRBAC, which logs a failed check instead of stopping startup. See prepareHTTPServer.
+	rbacConfig *rbac.Config
+	rbacStrict bool
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
 	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.

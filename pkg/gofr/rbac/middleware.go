@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -22,6 +23,21 @@ type authMethod int
 const userRole authMethod = 4
 
 const unknownRouteLabel = "<unmatched>"
+
+// matchedRouteLabel returns the route template the router matched for r, which is what http.route
+// means everywhere else in a trace. The RBAC rule that governed the request can be broader or
+// narrower than that route, so it is recorded separately as rbac.rule.
+//
+// "/" is reported as unmatched: it is the template of GoFr's PathPrefix("/") catch-all, which
+// serves every request no route matched.
+func matchedRouteLabel(r *http.Request) string {
+	tmpl := gofrHTTP.RouteTemplate(r)
+	if tmpl == "" || tmpl == "/" {
+		return unknownRouteLabel
+	}
+
+	return tmpl
+}
 
 // AuditLog represents a structured log entry for RBAC authorization decisions.
 // It follows the same pattern as HTTP RequestLog for consistency.
@@ -104,7 +120,8 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
 				span.SetAttributes(
 					attribute.String("http.method", r.Method),
-					attribute.String("http.route", routeLabel),
+					attribute.String("http.route", matchedRouteLabel(r)),
+					attribute.String("rbac.rule", routeLabel),
 				)
 				r = r.WithContext(ctx)
 

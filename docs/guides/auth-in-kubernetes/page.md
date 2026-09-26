@@ -16,11 +16,11 @@ GoFr supports Basic Auth, API key auth, and OAuth 2.0 JWT validation against a J
 
 Three authentication categories are exposed on the App, all verified in `pkg/gofr/auth.go` — Basic auth, API-key auth, and OAuth/JWT — each with a static-credentials variant and a custom-validator variant:
 
-- `EnableBasicAuth(credentials...)` — pairs of username/password.
+- `EnableBasicAuthWithError(credentials...)` — pairs of username/password; returns an error (and installs nothing) on zero or an odd number of arguments.
 - `EnableBasicAuthWithValidator(fn)` — custom validator with access to the container.
 - `EnableAPIKeyAuth(keys...)` — `X-Api-Key` header check.
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.
-- `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh.
+- `EnableOAuthWithError(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh; returns an error (and installs nothing) on an invalid JWKS URL.
 
 A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Both endpoints are deliberately minimal, so the exemption does not expose anything sensitive.
 
@@ -28,12 +28,12 @@ For full code examples, see [Authentication](/docs/advanced-guide/authentication
 
 ## OAuth 2.0 with JWKS in Kubernetes
 
-`EnableOAuth` registers an internal HTTP service named `gofr_oauth` to fetch keys, then validates JWTs on every request. Two deployment patterns:
+`EnableOAuthWithError` registers an internal HTTP service named `gofr_oauth` to fetch keys, then validates JWTs on every request. Two deployment patterns:
 
 ### Public IdP (Auth0, Okta, Google, Azure AD)
 
 ```go
-app.EnableOAuth("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
+err := app.EnableOAuthWithError("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
     jwt.WithAudience("https://api.example.com"),
     jwt.WithIssuer("https://your-tenant.auth0.com/"),
     jwt.WithExpirationRequired())
@@ -46,7 +46,7 @@ Egress from your cluster must be allowed to reach the IdP. If you have a strict 
 If your IdP runs in the same cluster, point at its in-cluster Service DNS:
 
 ```go
-app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600)
+err := app.EnableOAuthWithError("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600)
 ```
 
 The JWKS fetch is cheap, and the `refreshInterval` controls how stale your key cache can be. A typical value is 600–3600 seconds. After key rotation by the IdP, requests with old tokens fail until the cache refreshes.
@@ -104,6 +104,6 @@ Yes. `EnableOAuth` just needs an HTTP-reachable JWKS endpoint. The mesh is optio
 In a secret manager (Vault, AWS/GCP Secrets Manager) and surfaced to the pod as environment variables via Vault Agent or External Secrets Operator. Never in ConfigMaps or container images.
 {% /faq-item %}
 {% faq-item question="Does enabling auth in GoFr also protect gRPC?" %}
-Yes. A single call to `EnableBasicAuth`, `EnableAPIKeyAuth`, or `EnableOAuth` registers middleware on both the HTTP and gRPC servers — verified in `pkg/gofr/auth.go`.
+Yes. A single call to `EnableBasicAuthWithError`, `EnableAPIKeyAuth`, or `EnableOAuthWithError` registers middleware on both the HTTP and gRPC servers — verified in `pkg/gofr/auth.go`.
 {% /faq-item %}
 {% /faq %}
