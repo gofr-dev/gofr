@@ -28,9 +28,25 @@ const (
 	messageBufferSize    = 100
 )
 
+// Subscriber pull flow-control defaults, mirroring the SDK's DefaultReceiveSettings.
+const (
+	DefaultMaxOutstandingMessages = 1000
+	DefaultMaxOutstandingBytes    = 1_000_000_000 // 1 GB
+	DefaultNumGoroutines          = 10
+)
+
 type Config struct {
 	ProjectID        string
 	SubscriptionName string
+
+	// Optional pull flow control. Zero uses the corresponding Default* (which mirrors the SDK).
+	// A negative value is passed through to the SDK: for MaxOutstandingMessages and
+	// MaxOutstandingBytes it means no limit, whereas NumGoroutines below 1 falls back to 10.
+	// NumGoroutines is the number of StreamingPull streams, not handler concurrency, and does not
+	// raise throughput under GoFr's one-message-at-a-time delivery per topic.
+	MaxOutstandingMessages int
+	MaxOutstandingBytes    int
+	NumGoroutines          int
 }
 
 type googleClient struct {
@@ -367,7 +383,24 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		}
 	}
 
+	g.applyReceiveSettings(subscription)
+
 	return subscription, nil
+}
+
+// applyReceiveSettings sets pull flow control, using defaults for zero-valued fields.
+func (g *googleClient) applyReceiveSettings(subscription *gcPubSub.Subscription) {
+	subscription.ReceiveSettings.MaxOutstandingMessages = orDefault(g.MaxOutstandingMessages, DefaultMaxOutstandingMessages)
+	subscription.ReceiveSettings.MaxOutstandingBytes = orDefault(g.MaxOutstandingBytes, DefaultMaxOutstandingBytes)
+	subscription.ReceiveSettings.NumGoroutines = orDefault(g.NumGoroutines, DefaultNumGoroutines)
+}
+
+func orDefault(val, fallback int) int {
+	if val == 0 {
+		return fallback
+	}
+
+	return val
 }
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {

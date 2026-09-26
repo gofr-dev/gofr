@@ -602,12 +602,34 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 func (c *Container) createGooglePubSub(conf config.Config) {
 	// See createKafkaPubSub: google.New returns a typed nil for an incomplete config, and only a
 	// real client may reach the exported field.
-	if client := google.New(google.Config{
-		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-	}, c.Logger, c.metricsManager); client != nil {
+	if client := google.New(c.googleConfigFromEnv(conf), c.Logger, c.metricsManager); client != nil {
 		c.PubSub = client
 	}
+}
+
+// googleConfigFromEnv builds the Google Pub/Sub config from the GOOGLE_* environment variables.
+func (c *Container) googleConfigFromEnv(conf config.Config) google.Config {
+	return google.Config{
+		ProjectID:              conf.Get("GOOGLE_PROJECT_ID"),
+		SubscriptionName:       conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		MaxOutstandingMessages: c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_MESSAGES", google.DefaultMaxOutstandingMessages),
+		MaxOutstandingBytes:    c.googlePubSubInt(conf, "GOOGLE_MAX_OUTSTANDING_BYTES", google.DefaultMaxOutstandingBytes),
+		NumGoroutines:          c.googlePubSubInt(conf, "GOOGLE_NUM_GOROUTINES", google.DefaultNumGoroutines),
+	}
+}
+
+// googlePubSubInt returns the int configured for key, or defaultVal if unset or invalid.
+func (c *Container) googlePubSubInt(conf config.Config, key string, defaultVal int) int {
+	raw := conf.GetOrDefault(key, strconv.Itoa(defaultVal))
+
+	val, err := strconv.Atoi(raw)
+	if err != nil {
+		c.Logger.Errorf("invalid value %q for %s, using default: %d", raw, key, defaultVal)
+
+		return defaultVal
+	}
+
+	return val
 }
 
 func (c *Container) createRedisPubSub(conf config.Config) {

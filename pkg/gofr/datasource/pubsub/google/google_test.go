@@ -1719,3 +1719,91 @@ func TestGoogleClient_InjectedServerErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestGoogleClient_applyReceiveSettings(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      Config
+		expMsgs  int
+		expBytes int
+		expGoros int
+	}{
+		{
+			name:     "overrides every field when set",
+			cfg:      Config{MaxOutstandingMessages: 250, MaxOutstandingBytes: 5000, NumGoroutines: 3},
+			expMsgs:  250,
+			expBytes: 5000,
+			expGoros: 3,
+		},
+		{
+			name:     "falls back to GoFr defaults when unset",
+			cfg:      Config{},
+			expMsgs:  DefaultMaxOutstandingMessages,
+			expBytes: DefaultMaxOutstandingBytes,
+			expGoros: DefaultNumGoroutines,
+		},
+		{
+			name:     "overrides only the fields that are set",
+			cfg:      Config{MaxOutstandingMessages: 50},
+			expMsgs:  50,
+			expBytes: DefaultMaxOutstandingBytes,
+			expGoros: DefaultNumGoroutines,
+		},
+		{
+			// Negative values are passed straight through to the SDK (only zero maps to a default),
+			// where -1 means unlimited for messages/bytes and NumGoroutines below 1 falls back to 10.
+			name:     "passes negative values through unchanged",
+			cfg:      Config{MaxOutstandingMessages: -1, MaxOutstandingBytes: -1, NumGoroutines: -1},
+			expMsgs:  -1,
+			expBytes: -1,
+			expGoros: -1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &googleClient{Config: tc.cfg}
+			sub := &gcPubSub.Subscription{ReceiveSettings: gcPubSub.DefaultReceiveSettings}
+
+			g.applyReceiveSettings(sub)
+
+			assert.Equal(t, tc.expMsgs, sub.ReceiveSettings.MaxOutstandingMessages)
+			assert.Equal(t, tc.expBytes, sub.ReceiveSettings.MaxOutstandingBytes)
+			assert.Equal(t, tc.expGoros, sub.ReceiveSettings.NumGoroutines)
+		})
+	}
+}
+
+func TestGoogleClient_defaultsMatchSDK(t *testing.T) {
+	assert.Equal(t, DefaultMaxOutstandingMessages, gcPubSub.DefaultReceiveSettings.MaxOutstandingMessages)
+	assert.Equal(t, DefaultMaxOutstandingBytes, gcPubSub.DefaultReceiveSettings.MaxOutstandingBytes)
+	assert.Equal(t, DefaultNumGoroutines, gcPubSub.DefaultReceiveSettings.NumGoroutines)
+}
+
+func TestGoogleClient_getSubscription_AppliesReceiveSettings(t *testing.T) {
+	client := getGoogleClient(t)
+
+	defer client.Close()
+
+	g := &googleClient{
+		client: client,
+		logger: logging.NewMockLogger(logging.DEBUG),
+		Config: Config{
+			ProjectID:              "test",
+			SubscriptionName:       "sub",
+			MaxOutstandingMessages: 250,
+			MaxOutstandingBytes:    5000,
+			NumGoroutines:          3,
+		},
+	}
+
+	topic, err := client.CreateTopic(t.Context(), "flow-control-topic")
+	require.NoError(t, err)
+
+	sub, err := g.getSubscription(t.Context(), topic)
+	require.NoError(t, err)
+
+	assert.Equal(t, 250, sub.ReceiveSettings.MaxOutstandingMessages)
+	assert.Equal(t, 5000, sub.ReceiveSettings.MaxOutstandingBytes)
+	assert.Equal(t, 3, sub.ReceiveSettings.NumGoroutines)
+}
