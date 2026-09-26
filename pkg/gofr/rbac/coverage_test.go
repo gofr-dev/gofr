@@ -52,55 +52,49 @@ func coveringRules() []EndpointMapping {
 
 func TestConfig_CheckRoutes(t *testing.T) {
 	testCases := []struct {
-		desc      string
-		endpoints []EndpointMapping
-		wantDead  []string // "METHOD path" entries expected in the returned error
-		wantWarn  []string // substrings expected in the warning output
-		notInWarn []string // substrings that must not appear in the warning output
+		desc          string
+		endpoints     []EndpointMapping
+		wantDead      []string // "METHOD path" rules expected under ErrDeadRules
+		wantUncovered []string // "METHOD path" routes expected under ErrUncoveredRoutes
+		notInErr      []string // substrings that must not appear in the error
+		wantWarn      []string // substrings expected in the warning output
 	}{
 		{
 			desc:      "every route covered and every rule live",
 			endpoints: coveringRules(),
-			notInWarn: []string{"GET", "POST", "DELETE"},
 		},
 		{
-			desc: "a typo in a path segment is a dead rule",
-			endpoints: append(coveringRules(),
-				guard("/api/user/{id}", http.MethodDelete)),
-			wantDead: []string{"DELETE /api/user/{id}"},
+			desc:      "a typo in a path segment is a dead rule",
+			endpoints: append(coveringRules(), guard("/api/user/{id}", http.MethodDelete)),
+			wantDead:  []string{"DELETE /api/user/{id}"},
 		},
 		{
-			desc: "a method the route does not register is a dead rule",
+			desc:      "a method the route does not register is a dead rule",
+			endpoints: append(coveringRules(), guard("/api/posts", http.MethodDelete)),
+			wantDead:  []string{"DELETE /api/posts"},
+		},
+		{
+			desc: "a wildcard-method rule is live and covers every method",
 			endpoints: []EndpointMapping{
-				guard("/api/posts", http.MethodGet, http.MethodDelete),
-			},
-			wantDead: []string{"DELETE /api/posts"},
-		},
-		{
-			desc: "a wildcard-method rule is live when the path matches",
-			endpoints: []EndpointMapping{
-				guard("/api/posts", "*"),
+				guard("/api/users", "*"),
 				guard("/api/users/{id}"),
+				guard("/api/posts", "*"),
+				guard("/static/{path:.*}", "*"),
 			},
 		},
 		{
-			desc: "a rule under a static prefix is live",
-			endpoints: []EndpointMapping{
-				guard("/static/app.js", http.MethodGet),
-			},
+			desc:      "a rule under a static prefix is live and covers the prefix",
+			endpoints: append(coveringRules()[:3], guard("/static/app.js", http.MethodGet)),
 		},
 		{
-			desc: "the PathPrefix catch-all does not make a rule live",
-			endpoints: []EndpointMapping{
-				guard("/nowhere", http.MethodGet),
-			},
-			wantDead: []string{"GET /nowhere"},
+			desc:      "the PathPrefix catch-all does not make a rule live",
+			endpoints: append(coveringRules(), guard("/nowhere", http.MethodGet)),
+			wantDead:  []string{"GET /nowhere"},
 		},
 		{
 			desc: "a rule for a built-in route is live",
-			endpoints: []EndpointMapping{
-				{Path: "/.well-known/health", Methods: []string{http.MethodGet}, Public: true},
-			},
+			endpoints: append(coveringRules(),
+				EndpointMapping{Path: "/.well-known/health", Methods: []string{http.MethodGet}, Public: true}),
 		},
 		{
 			desc: "a dead public rule is a warning, not an error",
@@ -109,19 +103,30 @@ func TestConfig_CheckRoutes(t *testing.T) {
 			wantWarn: []string{"GET /healthz"},
 		},
 		{
-			desc: "uncovered routes are listed in one warning, built-in routes left out",
+			desc: "a public rule covers its route",
+			endpoints: append(coveringRules()[1:],
+				EndpointMapping{Path: "/api/users", Methods: []string{"*"}, Public: true}),
+		},
+		{
+			desc: "uncovered routes are an error, built-in routes left out",
 			endpoints: []EndpointMapping{
 				guard("/api/users", http.MethodGet),
 				guard("/api/users/{id}", "*"),
 				guard("/static/{path:.*}", "*"),
 			},
-			wantWarn:  []string{"2 registered route(s)", "POST /api/users", "GET /api/posts"},
-			notInWarn: []string{"/.well-known", faviconPath, "GET /api/users,", "/api/users/{id}"},
+			wantUncovered: []string{"GET /api/posts", "POST /api/users"},
+			notInErr:      []string{"/.well-known", faviconPath, "GET /api/users,", "/api/users/{id}"},
 		},
 		{
-			desc:      "an uncovered static prefix is reported",
-			endpoints: coveringRules()[:3],
-			wantWarn:  []string{"* /static/"},
+			desc:          "an uncovered static prefix is reported",
+			endpoints:     coveringRules()[:3],
+			wantUncovered: []string{"* /static/"},
+		},
+		{
+			desc:          "dead rules and uncovered routes are both reported",
+			endpoints:     append(coveringRules()[1:], guard("/api/user", http.MethodGet)),
+			wantDead:      []string{"GET /api/user"},
+			wantUncovered: []string{"GET /api/users", "POST /api/users"},
 		},
 	}
 
@@ -133,14 +138,12 @@ func TestConfig_CheckRoutes(t *testing.T) {
 
 			err := config.CheckRoutes(newCoverageRouter())
 
-			if len(tc.wantDead) == 0 {
-				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			} else {
-				require.ErrorIs(t, err, ErrDeadRules, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assertRouteCheckPart(t, err, ErrDeadRules, tc.wantDead, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assertRouteCheckPart(t, err, ErrUncoveredRoutes, tc.wantUncovered, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-				for _, dead := range tc.wantDead {
-					assert.Contains(t, err.Error(), dead, "TEST[%d], Failed.\n%s", i, tc.desc)
-				}
+			for _, unwanted := range tc.notInErr {
+				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, err.Error(), unwanted, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
 			warnings := strings.Join(logger.warnLogs, "\n")
@@ -148,10 +151,24 @@ func TestConfig_CheckRoutes(t *testing.T) {
 			for _, want := range tc.wantWarn {
 				assert.Contains(t, warnings, want, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
-
-			for _, unwanted := range tc.notInWarn {
-				assert.NotContains(t, warnings, unwanted, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
 		})
+	}
+}
+
+// assertRouteCheckPart checks that err carries sentinel and lists every entry of want when want is
+// non-empty, and that it does not carry sentinel otherwise.
+func assertRouteCheckPart(t *testing.T, err, sentinel error, want []string, msgAndArgs ...any) {
+	t.Helper()
+
+	if len(want) == 0 {
+		assert.NotErrorIs(t, err, sentinel, msgAndArgs...)
+
+		return
+	}
+
+	require.ErrorIs(t, err, sentinel, msgAndArgs...)
+
+	for _, entry := range want {
+		assert.Contains(t, err.Error(), entry, msgAndArgs...)
 	}
 }

@@ -306,38 +306,44 @@ Treat that line as an open route, not a warning about a typo.
 
 The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
 When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
-them and reports two kinds of mismatch.
+them and reports two kinds of mismatch. With `EnableRBACWithError`, either one **stops startup**:
+the app logs the error, releases what it opened, and exits with a non-zero status, the same as a
+failed `OnStart` hook. With the deprecated `EnableRBAC`, the app logs them and keeps running.
 
 **A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
 `/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
 is **not protected**. A rule counts as dead when neither its path nor its method can match any
 registered route. A rule whose method the route does not register (`DELETE` on a route that only
-has `GET`) is dead too.
-
-- With `EnableRBACWithError`, a dead rule **stops startup**: the app logs the error, releases
-  what it opened, and exits with a non-zero status, the same as a failed `OnStart` hook.
-- With the deprecated `EnableRBAC`, the app logs the same error and keeps running.
-- A dead rule marked `"public": true` never stops startup. It cannot leave a route unprotected,
-  so it is reported only as a warning.
+has `GET`) is dead too. A dead rule marked `"public": true` never stops startup: it cannot leave a
+route unprotected, so it is reported only as a warning.
 
 ```
-RBAC route check failed: RBAC rules match no registered route: DELETE /api/user/{id}. Fix the
-rule paths or methods in the RBAC config, or remove the rules.
+RBAC route check failed: RBAC rules match no registered route: DELETE /api/user/{id}. Fix each
+rule's path or methods, or remove it.
 ```
 
-**An uncovered route** is a registered route that no rule matches, so it is served without role
-checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). This is often on purpose, so
-it is reported as one warning line and never stops startup. GoFr's own `/.well-known/*` routes and
-`/favicon.ico` are left out of it.
+**An uncovered route** is a registered route, for a given method, that no rule matches, so it would
+be served without role checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). To
+keep a route open on purpose, such as `/login` or a webhook, give it a rule with `"public": true`.
+GoFr's own `/.well-known/*` routes and `/favicon.ico` are exempt. Other routes GoFr registers for
+you do need a rule: the `./static` directory (served at `/static/` when it exists) and `/graphql`
+when GraphQL is enabled.
 
 ```
-RBAC: 2 registered route(s) are not covered by any rule and are served without role checks:
-GET /api/posts, POST /api/users
+RBAC route check failed: registered routes are covered by no RBAC rule: GET /api/posts,
+POST /api/users. Add a rule for each, with "public": true for a route meant to be open.
+```
+
+```json
+{"path": "/login", "methods": ["POST"], "public": true},
+{"path": "/static/{path:.*}", "methods": ["*"], "public": true}
 ```
 
 The check errs toward "this rule might match". Two path variables with different constraints —
 `{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, even though no
-request could satisfy both, so a rule like that is not reported as dead.
+request could satisfy both, so a rule like that is not reported as dead. For the same reason a route
+counts as covered when a rule matches only some of its requests: a rule for `/api/users/{id:[0-9]+}`
+covers the route `/api/users/{id}`, although a request for `/api/users/abc` is not governed by it.
 
 ## JWT-Based RBAC
 
@@ -655,10 +661,11 @@ In this configuration:
 - `GET /api/posts` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
 - `GET /health` → **Not in RBAC config** → Allowed to proceed (will work if route exists)
 
-This design allows you to:
-- Gradually add RBAC protection to specific endpoints
-- Keep some routes unprotected (not in RBAC config)
-- Let the router handle 404s for non-existent routes
+With `EnableRBACWithError`, the app in this example does not start: `POST /api/users` and
+`GET /api/posts` are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
+Every registered route needs a rule, and a route meant to be open gets one with `"public": true`.
+The runtime behavior above still applies to a request no rule matches, for example one that only
+part of a pattern covers.
 
 ## Security and Privacy
 

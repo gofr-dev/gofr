@@ -155,16 +155,24 @@ func TestEnableRBAC(t *testing.T) {
 	}
 }
 
+// rbacPublicStatic opens the ./static directory New() serves when this package's tests run.
+const rbacPublicStatic = `{"path":"/static/{path:.*}","methods":["*"],"public":true}`
+
 // rbacGuardingPing guards the only application route, GET /ping.
 const rbacGuardingPing = `{"roleHeader":"X-User-Role",` +
 	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
-	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
+	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` + rbacPublicStatic + `]}`
 
 // rbacWithDeadRule adds a rule whose path has a typo, so it matches no registered route.
 const rbacWithDeadRule = `{"roleHeader":"X-User-Role",` +
 	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
 	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` +
-	`{"path":"/api/user/{id}","methods":["DELETE"],"requiredPermissions":["admin:read"]}]}`
+	`{"path":"/api/user/{id}","methods":["DELETE"],"requiredPermissions":["admin:read"]},` + rbacPublicStatic + `]}`
+
+// rbacLeavingPingUncovered has no dead rule, but no rule covers GET /ping either.
+const rbacLeavingPingUncovered = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/.well-known/alive","methods":["GET"],"public":true}]}`
 
 func TestApp_prepareHTTPServer(t *testing.T) {
 	tests := []struct {
@@ -179,6 +187,10 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			wantOutcome: startupFailed, wantLog: "DELETE /api/user/{id}"},
 		{desc: "a dead rule is logged under the deprecated EnableRBAC", config: rbacWithDeadRule, deprecated: true,
 			wantOutcome: startupOK, wantLog: "DELETE /api/user/{id}"},
+		{desc: "an uncovered route stops startup under EnableRBACWithError", config: rbacLeavingPingUncovered,
+			wantOutcome: startupFailed, wantLog: "GET /ping"},
+		{desc: "an uncovered route is logged under the deprecated EnableRBAC", config: rbacLeavingPingUncovered,
+			deprecated: true, wantOutcome: startupOK, wantLog: "GET /ping"},
 	}
 
 	for i, tc := range tests {
@@ -187,25 +199,34 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 
 			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
 
-			var outcome startupOutcome
+			var (
+				outcome startupOutcome
+				stdout  string
+			)
 
-			logs := testutil.StderrOutputForFunc(func() {
-				a := New()
-				a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+			// Errors go to stderr and warnings to stdout, so both are captured.
+			stderr := testutil.StderrOutputForFunc(func() {
+				stdout = testutil.StdoutOutputForFunc(func() {
+					a := New()
+					a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 
-				if tc.deprecated {
-					a.EnableRBAC(path)
-				} else {
-					require.NoError(t, a.EnableRBACWithError(path))
-				}
+					if tc.deprecated {
+						a.EnableRBAC(path)
+					} else {
+						require.NoError(t, a.EnableRBACWithError(path))
+					}
 
-				outcome = a.prepareHTTPServer()
+					outcome = a.prepareHTTPServer()
+				})
 			})
+
+			logs := stdout + stderr
 
 			assert.Equal(t, tc.wantOutcome, outcome, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 			if tc.wantLog == "" {
 				assert.NotContains(t, logs, "RBAC route check failed", "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, logs, "covered by no RBAC rule", "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
 				assert.Contains(t, logs, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"gofr.dev/pkg/gofr/rbac"
 )
 
 // telemetryFlushTimeout bounds the metrics and traces flush/shutdown performed
@@ -312,19 +314,37 @@ func (a *App) prepareHTTPServer() startupOutcome {
 		return startupOK
 	}
 
-	if !a.rbacStrict {
-		a.Logger().Errorf("RBAC route check failed: %v. These rules protect nothing, so a route they were meant "+
-			"to guard is served without role checks. Use EnableRBACWithError to stop startup instead.", err)
-
-		return startupOK
+	// CheckRoutes joins a dead-rule error and an uncovered-route error; each is logged on its own line.
+	for _, part := range splitJoined(err) {
+		switch {
+		case a.rbacStrict:
+			a.Logger().Errorf("RBAC route check failed: %v.", part)
+		case errors.Is(part, rbac.ErrUncoveredRoutes):
+			a.Logger().Warnf("RBAC: %v. They are served without role checks; use EnableRBACWithError "+
+				"to stop startup instead.", part)
+		default:
+			a.Logger().Errorf("RBAC route check failed: %v. These rules protect nothing; use "+
+				"EnableRBACWithError to stop startup instead.", part)
+		}
 	}
 
-	a.Logger().Errorf("RBAC route check failed: %v. Fix the rule paths or methods in the RBAC config, "+
-		"or remove the rules.", err)
+	if !a.rbacStrict {
+		return startupOK
+	}
 
 	a.shutdownAfterFailedStartup()
 
 	return startupFailed
+}
+
+// splitJoined returns the errors joined by errors.Join, or err itself when it is not a join.
+func splitJoined(err error) []error {
+	var joined interface{ Unwrap() []error }
+	if errors.As(err, &joined) {
+		return joined.Unwrap()
+	}
+
+	return []error{err}
 }
 
 // shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned

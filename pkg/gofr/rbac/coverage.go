@@ -15,6 +15,11 @@ import (
 // was written for unguarded.
 var ErrDeadRules = errors.New("RBAC rules match no registered route")
 
+// ErrUncoveredRoutes is returned by [Config.CheckRoutes] when a registered route is covered by no
+// rule. Such a route is served without role checks; one meant to be open is declared with
+// "public": true.
+var ErrUncoveredRoutes = errors.New("registered routes are covered by no RBAC rule")
+
 // anyMethod stands for "every method", on a rule declared with "*" and on a route registered
 // without a method matcher, such as a static-file prefix.
 const anyMethod = "*"
@@ -38,13 +43,15 @@ type registeredRoute struct {
 // CheckRoutes compares the config against the routes registered on router, which must hold the
 // complete route table.
 //
-// A registered route that no rule covers is served without role checks. That is often intended,
-// so the routes are reported in one warning line and are not an error. GoFr's own /.well-known/*
-// routes and /favicon.ico are left out of it.
+// It reports two kinds of mismatch, each listing its entries as "METHOD path", and joins them with
+// [errors.Join] when both are present, so the caller can tell them apart with errors.Is:
 //
-// A rule that matches no registered route - usually a typo in its path, or a method the route does
-// not register - is returned as an error wrapping [ErrDeadRules] that lists every such rule. A dead
-// public rule cannot leave a route unguarded, so it is only warned about.
+//   - [ErrDeadRules]: a rule matches no registered route - usually a typo in its path, or a method
+//     the route does not register - so the route it was written for is unguarded. A dead public rule
+//     cannot leave a route unguarded, so it is only warned about.
+//   - [ErrUncoveredRoutes]: a registered route is covered by no rule, so it is served without role
+//     checks. A route meant to be open is declared with "public": true. GoFr's own /.well-known/*
+//     routes and /favicon.ico are left out.
 //
 // The PathPrefix("/") catch-all is ignored: it would otherwise make every rule look live.
 func (c *Config) CheckRoutes(router *mux.Router) error {
@@ -74,22 +81,23 @@ func (c *Config) CheckRoutes(router *mux.Router) error {
 	sort.Strings(deadPublic)
 	sort.Strings(uncoveredLabels)
 
-	if c.Logger != nil {
-		if len(uncoveredLabels) > 0 {
-			c.Logger.Warnf("RBAC: %d registered route(s) are not covered by any rule and are served without role checks: %s",
-				len(uncoveredLabels), strings.Join(uncoveredLabels, ", "))
-		}
-
-		if len(deadPublic) > 0 {
-			c.Logger.Warnf("RBAC: public rule(s) match no registered route: %s", strings.Join(deadPublic, ", "))
-		}
+	if c.Logger != nil && len(deadPublic) > 0 {
+		c.Logger.Warnf("RBAC: public rule(s) match no registered route: %s", strings.Join(deadPublic, ", "))
 	}
+
+	var errs []error
 
 	if len(deadGuards) > 0 {
-		return fmt.Errorf("%w: %s", ErrDeadRules, strings.Join(deadGuards, ", "))
+		errs = append(errs, fmt.Errorf("%w: %s. Fix each rule's path or methods, or remove it",
+			ErrDeadRules, strings.Join(deadGuards, ", ")))
 	}
 
-	return nil
+	if len(uncoveredLabels) > 0 {
+		errs = append(errs, fmt.Errorf("%w: %s. Add a rule for each, with \"public\": true for a route meant "+
+			"to be open", ErrUncoveredRoutes, strings.Join(uncoveredLabels, ", ")))
+	}
+
+	return errors.Join(errs...)
 }
 
 // routeCoverage splits the config against routes into the rules that match none of them and the
