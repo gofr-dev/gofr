@@ -33,10 +33,12 @@ func main() {
 	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
 	// Uses rbac.DefaultConfigPath internally (empty string triggers default path resolution)
 	// Tries configs/rbac.json, then configs/rbac.yaml, then configs/rbac.yml
-	app.EnableRBAC()
+	if err := app.EnableRBACWithError(); err != nil {
+		app.Logger().Fatalf("%v", err)
+	}
 	
 	// Or with custom config path
-	app.EnableRBAC("configs/custom-rbac.json")
+	// if err := app.EnableRBACWithError("configs/custom-rbac.json"); err != nil { ... }
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -84,6 +86,18 @@ func main() {
 ```
 
 > **💡 Best Practice**: For production/public APIs, use JWT-based RBAC instead of header-based RBAC for better security.
+
+### Config Load Failures
+
+`EnableRBACWithError` returns an error when the config cannot be used: the file is missing or
+unreadable, it is not valid JSON/YAML, its extension is not `.json`, `.yaml` or `.yml`, it fails
+validation, or no path is given and none of the default files exist. In that case no RBAC
+middleware is installed, so handle the error — typically by stopping the app, as above. Starting
+anyway would serve every route with no role checks.
+
+`EnableRBAC` (without `WithError`) is deprecated. On the same failures it logs an error saying
+authorization is **DISABLED** and the app keeps starting with every route unprotected. It will be
+removed in the next major release.
 
 
 ## Configuration
@@ -297,10 +311,14 @@ For production/public APIs, use JWT-based role extraction:
 app := gofr.New()
 
 // Enable OAuth middleware first (required for JWT validation)
-app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
+if err := app.EnableOAuthWithError("https://auth.example.com/.well-known/jwks.json", 10); err != nil {
+	app.Logger().Fatalf("%v", err)
+}
 
-// Enable RBAC with config path (or use app.EnableRBAC() for default paths using rbac.DefaultConfigPath)
-app.EnableRBAC("configs/rbac.json")
+// Enable RBAC with config path (or call app.EnableRBACWithError() for the default paths)
+if err := app.EnableRBACWithError("configs/rbac.json"); err != nil {
+	app.Logger().Fatalf("%v", err)
+}
 ```
 
 **Configuration** (`configs/rbac.json`):
@@ -542,8 +560,12 @@ Or use role inheritance to avoid duplication:
 - Verify JWT claim path is correct
 
 **Config file not found**
-- Ensure config file exists at the specified path
+- Ensure config file exists at the specified path — relative paths resolve against the process's
+  working directory, which inside a container is often not where the file was copied
 - Or use default paths (`configs/rbac.json`, `configs/rbac.yaml`, `configs/rbac.yml`)
+- With the deprecated `EnableRBAC`, a startup log line `Authorization is DISABLED` means the app
+  is serving every route without role checks; switch to `EnableRBACWithError` so this stops
+  startup instead (see [Config Load Failures](#config-load-failures))
 
 **Route not being protected by RBAC**
 - Verify the route is explicitly configured in `endpoints[]` array

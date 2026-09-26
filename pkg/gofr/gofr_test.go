@@ -585,22 +585,19 @@ func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
 
 	for _, endpoint := range invalidEndpoints {
 		t.Run(endpoint, func(t *testing.T) {
-			port := testutil.GetFreePort(t)
-			c := container.NewContainer(config.NewMockConfig(nil))
+			var a *App
 
-			a := &App{
-				httpServer: &httpServer{
-					router: gofrHTTP.NewRouter(),
-					port:   port,
-				},
-				container: c,
-			}
-
-			a.EnableOAuth(endpoint, 600)
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				a.EnableOAuth(endpoint, 600)
+			})
 
 			// Service should NOT be registered for invalid endpoints
 			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
 				"gofr_oauth service should not be registered for invalid endpoint: %q", endpoint)
+			assert.Contains(t, logs, "OAuth authentication is DISABLED", "endpoint: %q", endpoint)
+			assert.Contains(t, logs, "EnableOAuthWithError", "endpoint: %q", endpoint)
+			assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "endpoint: %q", endpoint)
 		})
 	}
 }
@@ -1727,17 +1724,29 @@ func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
 	}
 }
 
-func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+func Test_EnableBasicAuth_InvalidCredentials(t *testing.T) {
+	tests := []struct {
+		desc string
+		args []string
+	}{
+		{desc: "no credentials", args: nil},
+		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"}},
+	}
 
-	app := New()
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var a *App
 
-	// Should log error but not panic
-	app.EnableBasicAuth()
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				a.EnableBasicAuth(tc.args...)
+			})
 
-	// No middleware should be added — handler responds without auth
-	assert.NotNil(t, app.httpServer)
+			assert.Contains(t, logs, "Basic authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, logs, "EnableBasicAuthWithError", "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
 }
 
 func TestHandleStartupHooks(t *testing.T) {
