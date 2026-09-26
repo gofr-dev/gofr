@@ -64,6 +64,9 @@ func (a *App) EnableRBACWithError(configPath ...string) error {
 	middlewareFunc := rbac.Middleware(config)
 	a.UseMiddleware(middlewareFunc)
 
+	a.rbacConfig = config
+	a.rbacStrict = true
+
 	return nil
 }
 
@@ -74,5 +77,9 @@ func (a *App) EnableRBACWithError(configPath ...string) error {
 func (a *App) EnableRBAC(configPath ...string) {
 	if err := a.EnableRBACWithError(configPath...); err != nil {
 		a.Logger().Errorf(authDisabledMsg, err, "Authorization", "EnableRBACWithError")
+
+		return
 	}
+
+	a.rbacStrict = false
 }

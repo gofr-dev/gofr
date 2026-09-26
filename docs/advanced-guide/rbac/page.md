@@ -303,6 +303,43 @@ request, so it is NOT enforced - any route it was meant to govern is currently u
 
 Treat that line as an open route, not a warning about a typo.
 
+### Startup Route Check
+
+The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
+When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
+them and reports two kinds of mismatch.
+
+**A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
+`/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
+is **not protected**. A rule counts as dead when neither its path nor its method can match any
+registered route. A rule whose method the route does not register (`DELETE` on a route that only
+has `GET`) is dead too.
+
+- With `EnableRBACWithError`, a dead rule **stops startup**: the app logs the error, releases
+  what it opened, and exits with a non-zero status, the same as a failed `OnStart` hook.
+- With the deprecated `EnableRBAC`, the app logs the same error and keeps running.
+- A dead rule marked `"public": true` never stops startup. It cannot leave a route unprotected,
+  so it is reported only as a warning.
+
+```
+RBAC route check failed: RBAC rules match no registered route: DELETE /api/user/{id}. Fix the
+rule paths or methods in the RBAC config, or remove the rules.
+```
+
+**An uncovered route** is a registered route that no rule matches, so it is served without role
+checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). This is often on purpose, so
+it is reported as one warning line and never stops startup. GoFr's own `/.well-known/*` routes and
+`/favicon.ico` are left out of it.
+
+```
+RBAC: 2 registered route(s) are not covered by any rule and are served without role checks:
+GET /api/posts, POST /api/users
+```
+
+The check errs toward "this rule might match". Two path variables with different constraints —
+`{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, even though no
+request could satisfy both, so a rule like that is not reported as dead.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
@@ -631,7 +668,9 @@ This design allows you to:
 RBAC middleware implements industry-standard security practices to protect sensitive data:
 
 **Traces (OpenTelemetry):**
-- ✅ HTTP method and route patterns included
+- ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
+  `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
+  When the two disagree, the rule is broader or narrower than the route.
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)

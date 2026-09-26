@@ -446,3 +446,40 @@ func TestGetEndpointForRequest_SlashConstraintDoesNotOutrankNarrowRule(t *testin
 		assert.Equal(t, "/files/private/{name}", endpoint.Path)
 	}
 }
+
+func Test_patternsMayOverlap(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		rule     string
+		template string
+		want     bool
+	}{
+		{"identical literals", "/api/users", "/api/users", true},
+		{"different literals", "/api/users", "/api/posts", false},
+		{"typo in a literal segment", "/api/user/{id}", "/api/users/{id}", false},
+		{"free variable against literal", "/api/users/{id}", "/api/users/me", true},
+		{"literal against free variable", "/api/users/me", "/api/users/{id}", true},
+		{"constraint admits the literal", "/api/users/{id:[0-9]+}", "/api/users/42", true},
+		{"constraint rejects the literal", "/api/users/{id:[0-9]+}", "/api/users/me", false},
+		{"route constraint rejects the literal", "/api/users/me", "/api/users/{id:[0-9]+}", false},
+		{"variable against variable", "/api/users/{id:[0-9]+}", "/api/users/{id:[a-z0-9]+}", true},
+		{"more segments in the rule", "/api/users/{id}/posts", "/api/users/{id}", false},
+		{"fewer segments in the rule", "/api", "/api/users", false},
+		{"catch-all in the rule absorbs the rest", "/api/{path:.*}", "/api/users/{id}/posts", true},
+		{"catch-all in the rule absorbs nothing", "/api/{path:.*}", "/api", true},
+		{"catch-all in the route absorbs the rest", "/static/css/site.css", "/static/{path:.*}", true},
+		{"catch-all after a different literal", "/admin/{path:.*}", "/api/users", false},
+		{"trailing slash is ignored", "/api/users/", "/api/users", true},
+		{"root against root", "/", "/", true},
+		{"root against a path", "/", "/api", false},
+		{"constraint containing a slash spans segments", "/files/{path:[a-z/]+}", "/files/a/b/c", true},
+		{"uncompilable constraint is assumed to overlap", "/api/{id:[}", "/api/users", true},
+		{"empty rule matches nothing", "", "/api", false},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.want, patternsMayOverlap(tc.rule, tc.template), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
