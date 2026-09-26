@@ -15,7 +15,9 @@ func main() {
 	setupAPIKeyAuth(a)
 
 	//For OAuth
-	//a.EnableOAuth("<JWKS-Endpoint>", 10)
+	//if err := a.EnableOAuthWithError("<JWKS-Endpoint>", 10); err != nil {
+	//	a.Logger().Fatalf("%v", err)
+	//}
 
 	a.GET("/test-auth", testHandler)
 	a.Run()
