@@ -24,7 +24,7 @@ func newCoverageRouter() *mux.Router {
 		{http.MethodGet, "/api/posts"},
 		{http.MethodGet, "/.well-known/health"},
 		{http.MethodGet, "/.well-known/alive"},
-		{http.MethodGet, "/favicon.ico"},
+		{http.MethodGet, faviconPath},
 	} {
 		router.NewRoute().Methods(r.method).Path(r.path).Handler(noop)
 	}
@@ -105,8 +105,8 @@ func TestConfig_CheckRoutes(t *testing.T) {
 		{
 			desc: "a dead public rule is a warning, not an error",
 			endpoints: append(coveringRules(),
-				EndpointMapping{Path: "/helth", Methods: []string{http.MethodGet}, Public: true}),
-			wantWarn: []string{"GET /helth"},
+				EndpointMapping{Path: "/healthz", Methods: []string{http.MethodGet}, Public: true}),
+			wantWarn: []string{"GET /healthz"},
 		},
 		{
 			desc: "uncovered routes are listed in one warning, built-in routes left out",
@@ -116,7 +116,7 @@ func TestConfig_CheckRoutes(t *testing.T) {
 				guard("/static/{path:.*}", "*"),
 			},
 			wantWarn:  []string{"2 registered route(s)", "POST /api/users", "GET /api/posts"},
-			notInWarn: []string{"/.well-known", "/favicon.ico", "GET /api/users,", "/api/users/{id}"},
+			notInWarn: []string{"/.well-known", faviconPath, "GET /api/users,", "/api/users/{id}"},
 		},
 		{
 			desc:      "an uncovered static prefix is reported",

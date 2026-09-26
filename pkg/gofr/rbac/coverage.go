@@ -19,6 +19,9 @@ var ErrDeadRules = errors.New("RBAC rules match no registered route")
 // without a method matcher, such as a static-file prefix.
 const anyMethod = "*"
 
+// faviconPath is the built-in favicon route GoFr registers itself.
+const faviconPath = "/favicon.ico"
+
 // registeredRoute is one (method, path) pair the router serves, as the coverage check sees it.
 type registeredRoute struct {
 	// method is the upper-cased method, or anyMethod for a route with no method matcher.
@@ -141,7 +144,7 @@ func ruleMayMatchRoute(rule *endpointRule, route *registeredRoute) bool {
 // isBuiltInRoute reports whether a template belongs to a route GoFr registers itself, which is left
 // out of the uncovered-route report because the application did not write it.
 func isBuiltInRoute(template string) bool {
-	return strings.HasPrefix(template, "/.well-known/") || template == "/favicon.ico"
+	return strings.HasPrefix(template, "/.well-known/") || template == faviconPath
 }
 
 // collectRoutes lists every (method, path) pair router serves, skipping the PathPrefix("/")
