@@ -10,9 +10,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -860,6 +863,7 @@ func TestHandleAuthError(t *testing.T) {
 // mockLogger implements the datasource.Logger interface for testing.
 type mockLogger struct {
 	errorLogs []string
+	warnLogs  []string
 	infoLogs  []string // Capture actual log messages
 	logs      []string
 	infoArgs  []any // Capture structured log arguments (used for both Info and Debug)
@@ -891,7 +895,10 @@ func (m *mockLogger) Errorf(format string, args ...any) {
 
 func (m *mockLogger) Warn(_ ...any) { m.logs = append(m.logs, "WARN") }
 
-func (m *mockLogger) Warnf(_ string, _ ...any) { m.logs = append(m.logs, "WARNF") }
+func (m *mockLogger) Warnf(format string, args ...any) {
+	m.logs = append(m.logs, "WARNF")
+	m.warnLogs = append(m.warnLogs, fmt.Sprintf(format, args...))
+}
 
 func TestMiddleware_WithTracing(t *testing.T) {
 	t.Run("starts tracing when tracer is available", func(t *testing.T) {
@@ -1059,4 +1066,54 @@ func TestSanitizeErrorForTrace(t *testing.T) {
 		assert.Equal(t, "authorization error", sanitized.Error(), "wrapped unknown errors should be sanitized")
 		assert.NotContains(t, sanitized.Error(), "secret key", "sensitive information should be removed")
 	})
+}
+
+func TestMiddleware_TraceRouteLabels(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		router    string
+		path      string
+		wantRoute string
+		wantRule  string
+	}{
+		{"mux: route and rule differ", gofrHTTP.MatcherMux, "/api/users/42", "/api/users/{id}", "/api/{path:.*}"},
+		{"trie: route and rule differ", gofrHTTP.MatcherTrie, "/api/users/42", "/api/users/{id}", "/api/{path:.*}"},
+		{"mux: no route and no rule", gofrHTTP.MatcherMux, "/nowhere", unknownRouteLabel, unknownRouteLabel},
+		{"trie: no route and no rule", gofrHTTP.MatcherTrie, "/nowhere", unknownRouteLabel, unknownRouteLabel},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv(gofrHTTP.RouterEnvVar, tc.router)
+
+			recorder := tracetest.NewSpanRecorder()
+			provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+
+			config := newTestConfig(t, []EndpointMapping{
+				{Path: "/api/{path:.*}", Methods: []string{http.MethodGet}, Public: true},
+			}, nil)
+			config.Tracer = provider.Tracer("test")
+
+			ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+			router := gofrHTTP.NewRouter()
+			router.Use(Middleware(config))
+			router.Add(http.MethodGet, "/api/users/{id}", ok)
+			router.PathPrefix("/").Handler(ok)
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
+			router.ServeHTTP(httptest.NewRecorder(), req)
+
+			spans := recorder.Ended()
+			require.Len(t, spans, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			attrs := make(map[string]string)
+			for _, kv := range spans[0].Attributes() {
+				attrs[string(kv.Key)] = kv.Value.String()
+			}
+
+			assert.Equal(t, tc.wantRoute, attrs["http.route"], "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantRule, attrs["rbac.rule"], "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
 }
