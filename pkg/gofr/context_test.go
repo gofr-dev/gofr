@@ -368,6 +368,23 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		assert.NotEqual(t, "00000000000000000000000000000000", correlationID, "Expected non-empty correlation ID")
 	})
 
+	t.Run("cached on repeated calls", func(t *testing.T) {
+		ctx, span := tracer.Start(t.Context(), "test-span-cached")
+		defer span.End()
+
+		gofCtx := &Context{Context: ctx}
+		first := gofCtx.GetCorrelationID()
+		second := gofCtx.GetCorrelationID()
+
+		assert.Equal(t, first, second)
+		assert.Equal(t, first, gofCtx.traceID)
+
+		allocs := testing.AllocsPerRun(10, func() {
+			_ = gofCtx.GetCorrelationID()
+		})
+		assert.Equal(t, float64(0), allocs, "Expected 0 allocations on cached GetCorrelationID calls")
+	})
+
 	t.Run("without span", func(t *testing.T) {
 		gofCtx := &Context{Context: t.Context()}
 		correlationID := gofCtx.GetCorrelationID()
@@ -375,6 +392,43 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		expected := "00000000000000000000000000000000"
 		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
 	})
+
+	t.Run("nil context", func(t *testing.T) {
+		gofCtx := &Context{}
+		correlationID := gofCtx.GetCorrelationID()
+
+		expected := "00000000000000000000000000000000"
+		assert.Equal(t, expected, correlationID, "Expected empty TraceID when Context is nil")
+	})
+}
+
+func BenchmarkContext_GetCorrelationID_Cached(b *testing.B) {
+	tp := trace.NewTracerProvider()
+	tracer := tp.Tracer("bench")
+	ctx, span := tracer.Start(b.Context(), "bench-span")
+	defer span.End()
+
+	gofCtx := &Context{Context: ctx}
+	_ = gofCtx.GetCorrelationID() // prime cache
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = gofCtx.GetCorrelationID()
+	}
+}
+
+func BenchmarkContext_Trace(b *testing.B) {
+	gofCtx := &Context{Context: b.Context()}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		span := gofCtx.Trace("bench-op")
+		span.End()
+	}
 }
 
 // BenchmarkContext_New measures the cost of constructing a fresh
