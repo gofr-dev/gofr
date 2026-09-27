@@ -143,8 +143,8 @@ func TestNewRequest_OptionParsing(t *testing.T) {
 			},
 		},
 		{
-			name: "non-option arguments are ignored",
-			args: []string{"command", "not-an-option", ""},
+			name:           "non-option arguments are ignored",
+			args:           []string{"command", "not-an-option", ""},
 			expectedParams: map[string]string{},
 		},
 		{
