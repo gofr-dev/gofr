@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -201,4 +202,69 @@ func getMockKey() string {
 	const mockKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAnzQw\n-----END RSA PRIVATE KEY-----`
 
 	return mockKey
+}
+
+func TestSetPubSubDB(t *testing.T) {
+	tests := []struct {
+		desc    string
+		conf    map[string]string
+		options *redis.Options
+		expDB   int
+	}{
+		{desc: "default when not configured", conf: map[string]string{}, options: &redis.Options{}, expDB: defaultPubSubDB},
+		{desc: "configured value", conf: map[string]string{"REDIS_PUBSUB_DB": "3"}, options: &redis.Options{}, expDB: 3},
+		{desc: "non numeric value falls back to default", conf: map[string]string{"REDIS_PUBSUB_DB": "abc"},
+			options: &redis.Options{DB: 1}, expDB: defaultPubSubDB},
+		{desc: "negative value falls back to default", conf: map[string]string{"REDIS_PUBSUB_DB": "-1"},
+			options: &redis.Options{DB: 1}, expDB: defaultPubSubDB},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := &Config{DB: 1, Options: tc.options}
+
+			setPubSubDB(config.NewMockConfig(tc.conf), cfg)
+
+			assert.Equal(t, tc.expDB, cfg.DB)
+			assert.Equal(t, tc.expDB, cfg.Options.DB)
+		})
+	}
+}
+
+func TestSetPubSubDB_NilOptions(t *testing.T) {
+	tests := []struct {
+		desc  string
+		conf  map[string]string
+		expDB int
+	}{
+		{desc: "valid value", conf: map[string]string{"REDIS_PUBSUB_DB": "4"}, expDB: 4},
+		{desc: "invalid value", conf: map[string]string{"REDIS_PUBSUB_DB": "x"}, expDB: defaultPubSubDB},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := &Config{}
+
+			setPubSubDB(config.NewMockConfig(tc.conf), cfg)
+
+			assert.Equal(t, tc.expDB, cfg.DB)
+			assert.Nil(t, cfg.Options)
+		})
+	}
+}
+
+func TestNewPubSub_HostNameMissing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	ps := NewPubSub(config.NewMockConfig(map[string]string{"REDIS_HOST": ""}),
+		logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
+
+	assert.Nil(t, ps)
+}
+
+func TestRedis_Close_NilClient(t *testing.T) {
+	r := &Redis{stopSignal: make(chan struct{})}
+
+	require.NoError(t, r.Close())
+	require.NoError(t, r.Close(), "closing twice must not panic on the stop signal")
 }

@@ -510,16 +510,20 @@ func (*graphQLManager) parseOperation(query, operationName string) (opName, opTy
 	return opName, opType
 }
 
-func (*graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
+func (m *graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	err := json.NewEncoder(w).Encode(map[string]any{
 		"errors": []map[string]any{
 			{"message": message},
 		},
 	})
+	if err != nil {
+		m.container.Errorf("error encoding GraphQL error response: %v", err)
+	}
 }
+
 func (m *graphQLManager) GetHandler() http.Handler {
 	return http.HandlerFunc(m.Handle)
 }

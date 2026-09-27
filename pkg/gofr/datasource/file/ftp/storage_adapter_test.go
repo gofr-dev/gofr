@@ -993,3 +993,189 @@ func TestLimitedReadCloser_Close(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestStorageAdapter_Connect_Errors(t *testing.T) {
+	server, _, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	wrongPassword := getTestConfig(server.Port)
+	wrongPassword.Password = "wrong"
+
+	tests := []struct {
+		desc   string
+		cfg    *Config
+		expMsg string
+	}{
+		{desc: "empty host", cfg: &Config{Port: 21}, expMsg: errFTPConfigInvalid.Error()},
+		{desc: "invalid port", cfg: &Config{Host: "127.0.0.1", Port: 0}, expMsg: errFTPConfigInvalid.Error()},
+		{desc: "login failure", cfg: wrongPassword, expMsg: `FTP login failed for user "test"`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			adapter := &storageAdapter{cfg: tc.cfg}
+
+			err := adapter.Connect(t.Context())
+
+			require.ErrorContains(t, err, tc.expMsg)
+			assert.Nil(t, adapter.conn)
+		})
+	}
+}
+
+func TestStorageAdapter_ClosedConnection(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, tmpDir, "file.txt", []byte("data"))
+
+	tests := []struct {
+		desc   string
+		call   func(s *storageAdapter) error
+		expMsg string
+	}{
+		{
+			desc: "NewReader",
+			call: func(s *storageAdapter) error {
+				_, err := s.NewReader(t.Context(), "file.txt")
+				return err
+			},
+			expMsg: `failed to create reader for "file.txt"`,
+		},
+		{
+			desc: "NewRangeReader",
+			call: func(s *storageAdapter) error {
+				_, err := s.NewRangeReader(t.Context(), "file.txt", 1, 2)
+				return err
+			},
+			expMsg: `failed to create reader for "file.txt" at offset 1`,
+		},
+		{
+			desc:   "DeleteObject",
+			call:   func(s *storageAdapter) error { return s.DeleteObject(t.Context(), "file.txt") },
+			expMsg: `failed to delete object "file.txt"`,
+		},
+		{
+			desc:   "CopyObject",
+			call:   func(s *storageAdapter) error { return s.CopyObject(t.Context(), "file.txt", "copy.txt") },
+			expMsg: `failed to read source object "file.txt"`,
+		},
+		{
+			desc: "StatObject",
+			call: func(s *storageAdapter) error {
+				_, err := s.StatObject(t.Context(), "file.txt")
+				return err
+			},
+			expMsg: `failed to get object attrs for "file.txt"`,
+		},
+		{
+			desc: "ListObjects",
+			call: func(s *storageAdapter) error {
+				_, err := s.ListObjects(t.Context(), "dir")
+				return err
+			},
+			expMsg: `failed to list objects with prefix "dir"`,
+		},
+		{
+			desc: "ListDir",
+			call: func(s *storageAdapter) error {
+				_, _, err := s.ListDir(t.Context(), "dir")
+				return err
+			},
+			expMsg: `failed to list directory "dir"`,
+		},
+		{
+			desc: "writer Close",
+			call: func(s *storageAdapter) error {
+				w := s.NewWriter(t.Context(), "new.txt")
+
+				_, _ = w.Write([]byte("data"))
+
+				return w.Close()
+			},
+			expMsg: `failed to create writer for "new.txt"`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+			require.NoError(t, adapter.Connect(t.Context()))
+			require.NoError(t, adapter.conn.Quit())
+
+			err := tc.call(adapter)
+
+			require.ErrorContains(t, err, tc.expMsg)
+		})
+	}
+}
+
+func TestStorageAdapter_StatObject_EmptyDirectory(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "empty"), 0o700))
+
+	adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, adapter.Connect(t.Context()))
+
+	info, err := adapter.StatObject(t.Context(), "empty")
+
+	require.ErrorIs(t, err, errObjectNotFound)
+	assert.Nil(t, info)
+}
+
+func TestStorageAdapter_ListWithPrefix(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "sub"), 0o700))
+	createTestFile(t, tmpDir, "sub/a.txt", []byte("abc"))
+
+	adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, adapter.Connect(t.Context()))
+
+	objects, err := adapter.ListObjects(t.Context(), "sub")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"sub/a.txt"}, objects)
+
+	infos, dirs, err := adapter.ListDir(t.Context(), "sub")
+	require.NoError(t, err)
+	assert.Empty(t, dirs)
+	require.Len(t, infos, 1)
+	assert.Equal(t, "sub/a.txt", infos[0].Name)
+	assert.Equal(t, int64(3), infos[0].Size)
+}
+
+func TestStorageAdapter_NewRangeReader_NoLength(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, tmpDir, "range.txt", []byte("0123456789"))
+
+	adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, adapter.Connect(t.Context()))
+
+	reader, err := adapter.NewRangeReader(t.Context(), "range.txt", 7, 0)
+	require.NoError(t, err)
+
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	assert.Equal(t, "789", string(data))
+}
+
+func TestStorageAdapter_CopyObject_DestinationWriteFails(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, tmpDir, "src.txt", []byte("data"))
+
+	adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, adapter.Connect(t.Context()))
+
+	err := adapter.CopyObject(t.Context(), "src.txt", "missing/dir/copy.txt")
+
+	require.ErrorContains(t, err, `failed to write destination object "missing/dir/copy.txt"`)
+}

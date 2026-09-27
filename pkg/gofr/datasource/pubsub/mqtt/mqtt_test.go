@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -237,12 +238,26 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(nil)
 
+	// Publish only once Subscribe has registered the topic: reading the map before that
+	// yields a zero subscription whose nil channel would block the send forever.
 	go func() {
-		client.subscriptions["test/topic"].msgs <- &pubsub.Message{
-			Topic:     "test/topic",
-			Value:     msg,
-			MetaData:  nil,
-			Committer: &message{msg: mockMessage{}},
+		for {
+			client.mu.RLock()
+			sub, ok := client.subscriptions["test/topic"]
+			client.mu.RUnlock()
+
+			if ok {
+				sub.msgs <- &pubsub.Message{
+					Topic:     "test/topic",
+					Value:     msg,
+					MetaData:  nil,
+					Committer: &message{msg: mockMessage{}},
+				}
+
+				return
+			}
+
+			runtime.Gosched()
 		}
 	}()
 
