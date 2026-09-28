@@ -12,7 +12,7 @@ import (
 
 func TestGetConfigs(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
-		"ACCESS_CONTROL_ALLOW_ORIGIN":       "*",
+		keyAccessControlAllowOrigin:         "*",
 		"ACCESS_CONTROL_ALLOW_HEADERS":      "Authorization, Content-Type",
 		"ACCESS_CONTROL_ALLOW_CREDENTIALS":  "true",
 		"ACCESS_CONTROL_ALLOW_CUSTOMHEADER": "abc",
@@ -67,6 +67,46 @@ func TestGetConfigs_ValidCORSValueIsKept(t *testing.T) {
 	}
 }
 
+// Browsers read these max-age spellings as a definite duration, so dropping them would
+// replace the configured behavior with the 5 second default. They are rewritten to the
+// canonical form, which every browser reads the same way, and the rewrite is reported.
+func TestGetConfigs_NonCanonicalMaxAgeIsNormalized(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected string
+	}{
+		{"negative disables caching", "-1", "0"},
+		{"large negative disables caching", "-3600", "0"},
+		{"negative zero", "-0", "0"},
+		{"explicit plus sign", "+600", "600"},
+		{"zero padded", "0600", "600"},
+		{"zero padded zero", "00", "0"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{keyAccessControlMaxAge: tc.value})
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				middlewareConfigs := GetConfigs(mockConfig, logging.NewMockLogger(logging.WARN))
+
+				assert.Equal(t, tc.expected, middlewareConfigs.CorsHeaders["Access-Control-Max-Age"])
+			})
+
+			assert.Contains(t, logs, keyAccessControlMaxAge, "the warning must name the config key")
+			assert.Contains(t, logs, tc.value, "the warning must name the configured value")
+			assert.Contains(t, logs, "not in canonical form", "a rewrite must not be reported as a dropped header")
+		})
+	}
+}
+
+func TestGetConfigs_NonCanonicalMaxAgeWithoutLogger(t *testing.T) {
+	middlewareConfigs := GetConfigs(config.NewMockConfig(map[string]string{keyAccessControlMaxAge: "-1"}))
+
+	assert.Equal(t, "0", middlewareConfigs.CorsHeaders["Access-Control-Max-Age"])
+}
+
 func TestGetConfigs_InvalidCORSValueIsDroppedAndLogged(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -76,10 +116,9 @@ func TestGetConfigs_InvalidCORSValueIsDroppedAndLogged(t *testing.T) {
 	}{
 		{"max age with a duration unit", keyAccessControlMaxAge, "10m", "Access-Control-Max-Age"},
 		{"max age with a seconds suffix", keyAccessControlMaxAge, "600s", "Access-Control-Max-Age"},
-		{"negative max age", keyAccessControlMaxAge, "-1", "Access-Control-Max-Age"},
 		{"non numeric max age", keyAccessControlMaxAge, "abc", "Access-Control-Max-Age"},
-		{"signed max age", keyAccessControlMaxAge, "+600", "Access-Control-Max-Age"},
-		{"zero padded max age", keyAccessControlMaxAge, "0600", "Access-Control-Max-Age"},
+		{"max age overflowing int64", keyAccessControlMaxAge, "99999999999999999999", "Access-Control-Max-Age"},
+		{"max age with surrounding space", keyAccessControlMaxAge, " 600", "Access-Control-Max-Age"},
 		{"non boolean credentials", keyAccessControlAllowCredentials, "yes", "Access-Control-Allow-Credentials"},
 		{"numeric credentials", keyAccessControlAllowCredentials, "1", "Access-Control-Allow-Credentials"},
 		{"upper case credentials", keyAccessControlAllowCredentials, "TRUE", "Access-Control-Allow-Credentials"},
@@ -129,8 +168,8 @@ func TestGetConfigs_CredentialsFalseIsOmittedWithoutWarning(t *testing.T) {
 // compiling; an invalid value is still dropped when no logger is supplied.
 func TestGetConfigs_WithoutLoggerArgument(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
-		keyAccessControlMaxAge:        "10m",
-		"ACCESS_CONTROL_ALLOW_ORIGIN": "*",
+		keyAccessControlMaxAge:      "10m",
+		keyAccessControlAllowOrigin: "*",
 	})
 
 	middlewareConfigs := GetConfigs(mockConfig)

@@ -12,9 +12,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// CORS configuration keys whose values have a defined syntax, and are therefore
-// validated before being emitted as response headers.
+// CORS configuration keys. MaxAge and AllowCredentials have a defined value syntax,
+// and are therefore validated before being emitted as response headers.
 const (
+	keyAccessControlAllowOrigin      = "ACCESS_CONTROL_ALLOW_ORIGIN"
 	keyAccessControlMaxAge           = "ACCESS_CONTROL_MAX_AGE"
 	keyAccessControlAllowCredentials = "ACCESS_CONTROL_ALLOW_CREDENTIALS"
 )
@@ -46,8 +47,9 @@ type configLogger interface {
 }
 
 // GetConfigs reads the middleware configuration from c. CORS values with a defined
-// syntax are validated; an invalid one is dropped and reported through the optional
-// logger instead of being emitted as a malformed response header.
+// syntax are validated: one a browser would read the same way is rewritten to its
+// canonical form, and one it cannot read is dropped. Either is reported through the
+// optional logger instead of being emitted as a malformed response header.
 func GetConfigs(c config.Config, logger ...configLogger) Config {
 	middlewareConfigs := Config{
 		CorsHeaders: make(map[string]string),
@@ -59,7 +61,7 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 	}
 
 	allowedCORSHeaders := []string{
-		"ACCESS_CONTROL_ALLOW_ORIGIN",
+		keyAccessControlAllowOrigin,
 		"ACCESS_CONTROL_ALLOW_METHODS",
 		"ACCESS_CONTROL_ALLOW_HEADERS",
 		keyAccessControlAllowCredentials,
@@ -69,11 +71,13 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 
 	for _, v := range allowedCORSHeaders {
 		val := c.Get(v)
-		if val == "" || !shouldEmitCORSHeader(v, val, warnLogger) {
+		if val == "" {
 			continue
 		}
 
-		middlewareConfigs.CorsHeaders[convertHeaderNames(v)] = val
+		if headerVal, ok := corsHeaderValue(v, val, warnLogger); ok {
+			middlewareConfigs.CorsHeaders[convertHeaderNames(v)] = headerVal
+		}
 	}
 
 	// Config values for Log Probes
@@ -91,22 +95,18 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 	return middlewareConfigs
 }
 
-// shouldEmitCORSHeader reports whether val should be sent as the response header
-// for the given CORS configuration key, warning when the value is malformed. A
-// browser discards a malformed CORS header and falls back to its own default, so
-// an invalid value is dropped and reported rather than sent — left in place it is
-// invisible in the logs and looks present in the response. Keys without a defined
-// value syntax are emitted unchanged.
-func shouldEmitCORSHeader(key, val string, logger configLogger) bool {
+// corsHeaderValue returns the value to send as the response header for the given
+// CORS configuration key, and whether to send it at all. A browser discards a
+// malformed CORS header, so a value it cannot read is dropped and reported rather
+// than sent — left in place it is invisible in the logs and looks present in the
+// response. Keys without a defined value syntax are emitted unchanged.
+func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
 	var expected string
 
 	switch key {
 	case keyAccessControlMaxAge:
-		// Only a canonical decimal count of seconds is accepted. strconv.Atoi alone would
-		// also admit "+600" and "0600", which are stored verbatim and would reach the
-		// browser in a form the Fetch standard does not define.
-		if seconds, err := strconv.Atoi(val); err == nil && seconds >= 0 && val == strconv.Itoa(seconds) {
-			return true
+		if maxAge, ok := canonicalMaxAge(val, logger); ok {
+			return maxAge, true
 		}
 
 		expected = "a non-negative number of seconds"
@@ -114,25 +114,46 @@ func shouldEmitCORSHeader(key, val string, logger configLogger) bool {
 		// The Fetch standard matches this header against the literal "true", so the other
 		// spellings strconv.ParseBool accepts (1, t, TRUE) are discarded by the browser.
 		if val == allowCredentialsTrue {
-			return true
+			return val, true
 		}
 
 		// "false" is an explicit opt-out rather than a mistake, so it is not reported:
 		// omitting the header is exactly what the browser does with that value anyway.
 		if val == "false" {
-			return false
+			return "", false
 		}
 
 		expected = `exactly "true" or "false"`
 	default:
-		return true
+		return val, true
 	}
 
 	if logger != nil {
 		logger.Warnf("invalid value %q for config %s, expected %s: dropping the header", val, key, expected)
 	}
 
-	return false
+	return "", false
+}
+
+// canonicalMaxAge rewrites an Access-Control-Max-Age value to the canonical decimal
+// form the Fetch standard defines, preserving what browsers already make of it.
+// Browsers read "+600" and "0600" as 600 seconds, and a negative value as "do not
+// cache the preflight" — which is what 0 means — so dropping any of them would
+// quietly replace the configured behavior with the browser's 5 second default.
+// A value that is not an integer at all is not rewritten, and reports false.
+func canonicalMaxAge(val string, logger configLogger) (string, bool) {
+	seconds, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return "", false
+	}
+
+	canonical := strconv.FormatInt(max(seconds, 0), 10)
+	if canonical != val && logger != nil {
+		logger.Warnf("value %q for config %s is not in canonical form: sending %q instead",
+			val, keyAccessControlMaxAge, canonical)
+	}
+
+	return canonical, true
 }
 
 func convertHeaderNames(header string) string {
