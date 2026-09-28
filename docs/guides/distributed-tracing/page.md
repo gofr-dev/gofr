@@ -70,27 +70,36 @@ going. A secret pasted into `TRACE_EXPORTER` is redacted too, while a plain typo
 ### Resource attributes from the environment
 
 Every exported span carries a resource — the attributes that describe *which* service emitted it.
-GoFr fills it with `service.name` (from `APP_NAME`) and `framework_version`, and merges in the
-standard `OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the
-backend without a code change:
+GoFr fills it with `service.name` and `framework_version`, and merges in the standard
+`OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the backend
+without a code change:
 
 ```bash
 OTEL_RESOURCE_ATTRIBUTES="deployment.environment=prod,cloud.region=asia-south1"
 ```
 
-**`service.name` is the one exception.** GoFr always takes it from `APP_NAME`, so
-`OTEL_SERVICE_NAME` — and a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES` — is
-discarded. Setting either logs a warning naming the value that was dropped:
+**`service.name` defaults to `APP_NAME`, and the environment overrides it.** Set
+`OTEL_SERVICE_NAME`, or a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES`, and that value
+is what reaches the backend. `OTEL_SERVICE_NAME` outranks the `OTEL_RESOURCE_ATTRIBUTES` form when
+both are set, as the OpenTelemetry specification requires. An override is logged once at startup, so
+a backend showing a name that is not `APP_NAME` is explainable from the logs:
 
 ```
-traces: service.name="checkout-from-env" from the environment is ignored; GoFr sets it from APP_NAME ("checkout"). Set APP_NAME to rename the service.
+traces: service.name="checkout-from-env" from the environment overrides APP_NAME ("checkout")
 ```
 
-Rename the service with `APP_NAME`. The reason for the exception is consistency across signals:
-GoFr's metrics resource resolves `service.name` from `APP_NAME` the same way, and letting only
-traces follow `OTEL_SERVICE_NAME` would report one service name to your trace backend and a
-different one to your metric backend — breaking the join between a service's traces and its
-metrics exactly where you need it.
+An empty value is not an override: `OTEL_RESOURCE_ATTRIBUTES="service.name="` parses to a valid
+attribute with an empty value, and shipping that would leave your backend with a nameless service,
+so GoFr falls back to `APP_NAME` and stays silent.
+
+Both signals follow the environment together. GoFr's metrics resource resolves `service.name`
+exactly the same way, so a service reports one name to your trace backend and your metric backend
+alike — the join between a service's traces and its metrics holds either way you configure it. The
+metrics side logs its own line (`metrics: …`), because an application with tracing switched off
+never reaches the tracing code at all.
+
+`framework_version` is not overridable from the environment; GoFr applies it after the environment
+so it always reflects the framework actually running.
 
 ## End-to-end example
 
