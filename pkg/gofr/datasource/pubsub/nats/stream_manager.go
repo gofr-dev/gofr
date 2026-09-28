@@ -3,7 +3,6 @@ package nats
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -53,7 +52,7 @@ func (sm *StreamManager) CreateStream(ctx context.Context, cfg *StreamConfig) er
 
 	_, err := sm.js.CreateStream(ctx, jsCfg)
 	if err != nil {
-		if strings.Contains(err.Error(), "stream name already in use") {
+		if errors.Is(err, jetstream.ErrStreamNameAlreadyInUse) {
 			return nil
 		}
 
