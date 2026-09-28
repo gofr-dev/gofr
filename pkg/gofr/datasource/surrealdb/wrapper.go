@@ -32,6 +32,11 @@ func (w *DBWrapper) Info(ctx context.Context) (any, error) {
 	return w.db.Info(ctx)
 }
 
+// close closes the underlying SurrealDB connection.
+func (w *DBWrapper) close(ctx context.Context) error {
+	return w.db.Close(ctx)
+}
+
 // GetDB returns the underlying *surrealdb.DB for package-level operations.
 // This is used internally for Query, Select, Create, Update, Insert, Delete operations.
 func (w *DBWrapper) GetDB() *surrealdb.DB {
