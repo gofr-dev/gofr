@@ -40,6 +40,8 @@ The Circuit Breaker counts a request as "failed" if:
 
 > **Note:** HTTP 500 Internal Server Error is **NOT** counted as a failure for the circuit breaker. This distinguishes between application bugs (500) and service availability issues (> 500).
 
+> **Note:** A request canceled by its own caller (its `context` is canceled, for example because the client that triggered it disconnected, including a context canceled through `context.WithCancelCause` with a custom cause) is **neither a failure nor a success**: it does not add to the failure count and does not reset it, because the upstream never answered. A request that runs out of time (`context.DeadlineExceeded`) still counts as a failure, since a timeout is evidence of a slow upstream. Set `REQUEST_TIMEOUT` or give each call a context deadline, so that an upstream which hangs without answering still opens the breaker: without a deadline its callers can only cancel, and those cancellations are not counted.
+
 ## Health Check Requirement
 
 For the Circuit Breaker to recover from an **Open** state, the downstream service **must** expose a health check endpoint that returns a `200 OK` status code.

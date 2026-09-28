@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
@@ -150,7 +152,7 @@ func Test_ClickHouse_Exec(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 
-	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
+	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", gomock.Any(), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "INSERT")
 
 	err := c.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "gofr", "10")
@@ -175,7 +177,7 @@ func Test_ClickHouse_Select(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 
-	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
+	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", gomock.Any(), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "SELECT")
 
 	err := c.Select(ctx, &user, "SELECT * FROM users")
@@ -191,7 +193,7 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 	mockConn.EXPECT().AsyncInsert(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", true,
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10").Return(nil)
 
-	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
+	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", gomock.Any(), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "INSERT")
 
 	mockLogger.EXPECT().Debug(gomock.Any())
@@ -200,6 +202,228 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10")
 
 	require.NoError(t, err)
+}
+
+// slowCall is how long the fake driver takes; every recorded duration must cover it.
+const slowCall = 50 * time.Millisecond
+
+var errDriver = errors.New("driver failed")
+
+// recordingSpan keeps the attributes set on it and counts End calls.
+type recordingSpan struct {
+	noop.Span
+
+	mu    sync.Mutex
+	attrs map[attribute.Key]attribute.Value
+	ended int
+}
+
+func (s *recordingSpan) SetAttributes(kv ...attribute.KeyValue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, a := range kv {
+		s.attrs[a.Key] = a.Value
+	}
+}
+
+func (s *recordingSpan) End(...trace.SpanEndOption) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ended++
+}
+
+// recordingTracer hands out a single recordingSpan.
+type recordingTracer struct {
+	noop.Tracer
+
+	span *recordingSpan
+}
+
+func (t *recordingTracer) Start(ctx context.Context, _ string, _ ...trace.SpanStartOption) (context.Context, trace.Span) {
+	return ctx, t.span
+}
+
+func Test_ClickHouse_OperationDurationCoversTheDriverCall(t *testing.T) {
+	const query = "SELECT id FROM users WHERE id = ?"
+
+	var dest []struct{}
+
+	tests := []struct {
+		desc      string
+		span      string
+		driverErr error
+		expect    func(conn *MockConn, driverErr error)
+		call      func(ctx context.Context, c *Client) error
+	}{
+		{desc: "exec", span: "exec", expect: expectSlowExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
+		}},
+		{desc: "exec error", span: "exec", driverErr: errDriver, expect: expectSlowExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
+		}},
+		{desc: "select", span: "select", expect: expectSlowSelect(&dest), call: func(ctx context.Context, c *Client) error {
+			return c.Select(ctx, &dest, query, 1)
+		}},
+		{desc: "select error", span: "select", driverErr: errDriver, expect: expectSlowSelect(&dest),
+			call: func(ctx context.Context, c *Client) error {
+				return c.Select(ctx, &dest, query, 1)
+			}},
+		{desc: "async insert", span: "async-insert", expect: expectSlowAsyncInsert, call: func(ctx context.Context, c *Client) error {
+			return c.AsyncInsert(ctx, query, true, 1)
+		}},
+		{desc: "async insert error", span: "async-insert", driverErr: errDriver, expect: expectSlowAsyncInsert,
+			call: func(ctx context.Context, c *Client) error {
+				return c.AsyncInsert(ctx, query, true, 1)
+			}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
+
+			span := &recordingSpan{attrs: map[attribute.Key]attribute.Value{}}
+			c.tracer = &recordingTracer{span: span}
+
+			tc.expect(mockConn, tc.driverErr)
+
+			var observed float64
+
+			mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_clickhouse_stats", gomock.Any(),
+				"hosts", c.config.Hosts, "database", c.config.Database, "type", "SELECT").
+				Do(func(_ context.Context, _ string, value float64, _ ...string) { observed = value })
+
+			var logged *Log
+
+			mockLogger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) { logged, _ = args[0].(*Log) })
+
+			err := tc.call(t.Context(), &c)
+
+			if tc.driverErr != nil {
+				require.ErrorIs(t, err, tc.driverErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			floor := slowCall.Microseconds()
+
+			assert.GreaterOrEqual(t, observed, float64(floor), "histogram must cover the driver call (µs)")
+
+			require.NotNil(t, logged)
+			assert.GreaterOrEqual(t, logged.Duration, floor, "debug log must cover the driver call (µs)")
+
+			attr, ok := span.attrs[attribute.Key(fmt.Sprintf("clickhouse.%v.duration", tc.span))]
+			require.True(t, ok, "span duration attribute must be set")
+			assert.GreaterOrEqual(t, attr.AsInt64(), floor, "span attribute must cover the driver call (µs)")
+			assert.Equal(t, 1, span.ended, "span must be ended exactly once")
+		})
+	}
+}
+
+func expectSlowExec(conn *MockConn, driverErr error) {
+	conn.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, string, ...any) error {
+			time.Sleep(slowCall)
+
+			return driverErr
+		})
+}
+
+func expectSlowSelect(dest any) func(conn *MockConn, driverErr error) {
+	return func(conn *MockConn, driverErr error) {
+		conn.EXPECT().Select(gomock.Any(), dest, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, any, string, ...any) error {
+				time.Sleep(slowCall)
+
+				return driverErr
+			})
+	}
+}
+
+func expectSlowAsyncInsert(conn *MockConn, driverErr error) {
+	conn.EXPECT().AsyncInsert(gomock.Any(), gomock.Any(), true, gomock.Any()).
+		DoAndReturn(func(context.Context, string, bool, ...any) error {
+			time.Sleep(slowCall)
+
+			return driverErr
+		})
+}
+
+func Test_ClickHouse_TypeLabelIgnoresQueryFormatting(t *testing.T) {
+	mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
+
+	const query = "SELECT\n\tid\nFROM users"
+
+	mockConn.EXPECT().Exec(gomock.Any(), query).Return(nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_clickhouse_stats", gomock.Any(),
+		"hosts", c.config.Hosts, "database", c.config.Database, "type", "SELECT")
+
+	require.NoError(t, c.Exec(t.Context(), query))
+}
+
+func Test_getOperationType(t *testing.T) {
+	tests := []struct {
+		query    string
+		expected string
+	}{
+		{"INSERT INTO users VALUES (?)", "INSERT"},
+		{"\tSELECT\n *", "SELECT"},
+		{"\n\twith x as (select 1) select * from x", "WITH"},
+		{"insert\tinto t", "INSERT"},
+		{"select\r\nid from t", "SELECT"},
+		{"", ""},
+		{" \n\t", ""},
+	}
+
+	for _, tc := range tests {
+		assert.Equal(t, tc.expected, getOperationType(tc.query), "query %q", tc.query)
+	}
+}
+
+func Test_ClickHouse_ConcurrentExecEachRecordsItsOwnDuration(t *testing.T) {
+	const callers = 16
+
+	mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
+
+	mockConn.EXPECT().Exec(gomock.Any(), gomock.Any()).Times(callers).
+		DoAndReturn(func(context.Context, string, ...any) error {
+			time.Sleep(slowCall)
+
+			return nil
+		})
+	mockLogger.EXPECT().Debug(gomock.Any()).Times(callers)
+
+	var (
+		mu       sync.Mutex
+		observed []float64
+	)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_clickhouse_stats", gomock.Any(),
+		"hosts", c.config.Hosts, "database", c.config.Database, "type", "INSERT").Times(callers).
+		Do(func(_ context.Context, _ string, value float64, _ ...string) {
+			mu.Lock()
+			defer mu.Unlock()
+
+			observed = append(observed, value)
+		})
+
+	var wg sync.WaitGroup
+
+	for range callers {
+		wg.Go(func() {
+			assert.NoError(t, c.Exec(t.Context(), "INSERT INTO users VALUES (1)"))
+		})
+	}
+
+	wg.Wait()
+
+	require.Len(t, observed, callers)
+
+	for _, v := range observed {
+		assert.GreaterOrEqual(t, v, float64(slowCall.Microseconds()), "each caller must record its own call (µs)")
+	}
 }
 
 var errClickhouseOp = errors.New("clickhouse operation failed")
