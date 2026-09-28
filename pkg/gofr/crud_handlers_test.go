@@ -21,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -55,6 +56,10 @@ func (*userEntity) RestPath() string {
 
 func Test_scanEntity(t *testing.T) {
 	var invalidObject int
+
+	type invalidTagEntity struct {
+		ID int `sql:"bogus"`
+	}
 
 	type userTestEntity struct {
 		ID   int    `sql:"auto_increment"`
@@ -95,6 +100,12 @@ func Test_scanEntity(t *testing.T) {
 					"is_employed": {AutoIncrement: false, NotNull: false}, "name": {AutoIncrement: false, NotNull: false}},
 			},
 			err: nil,
+		},
+		{
+			desc:  "invalid sql tag",
+			input: &invalidTagEntity{},
+			resp:  nil,
+			err:   fmt.Errorf("%w: %s", errInvalidSQLTag, "bogus"),
 		},
 		{
 			desc:  "invalid object",
@@ -600,6 +611,14 @@ func Test_DeleteHandler(t *testing.T) {
 				expectedErr:  errEntityNotFound,
 				expectedResp: nil,
 			},
+			{
+				desc:         "rows affected error",
+				id:           "4",
+				mockResp:     sqlmock.NewErrorResult(errTest),
+				mockErr:      nil,
+				expectedErr:  errTest,
+				expectedResp: nil,
+			},
 		}
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
@@ -615,5 +634,149 @@ func Test_DeleteHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			})
 		}
+	}
+}
+
+type autoIncrementEntity struct {
+	ID   int    `json:"id" sql:"auto_increment"`
+	Name string `json:"name" sql:"not_null"`
+}
+
+type requiredMetaEntity struct {
+	ID   int `json:"id"`
+	Meta any `json:"meta" sql:"not_null"`
+}
+
+func Test_CreateHandler_AutoIncrementAndErrors(t *testing.T) {
+	const insertQuery = "INSERT INTO `auto_increment_entity` (`name`) VALUES (?)"
+
+	tests := []struct {
+		desc       string
+		object     any
+		reqBody    []byte
+		setupMocks func(m *container.Mocks)
+		expResp    any
+		expErr     string
+	}{
+		{
+			desc:    "auto increment id is read from the result",
+			object:  &autoIncrementEntity{},
+			reqBody: []byte(`{"name":"goFr"}`),
+			setupMocks: func(m *container.Mocks) {
+				m.SQL.ExpectDialect().WillReturnString("mysql")
+				m.SQL.ExpectExec(insertQuery).WithArgs("goFr").WillReturnResult(sqlmock.NewResult(10, 1))
+			},
+			expResp: "autoIncrementEntity successfully created with id: 10",
+		},
+		{
+			desc:    "last insert id error",
+			object:  &autoIncrementEntity{},
+			reqBody: []byte(`{"name":"goFr"}`),
+			setupMocks: func(m *container.Mocks) {
+				m.SQL.ExpectDialect().WillReturnString("mysql")
+				m.SQL.ExpectExec(insertQuery).WithArgs("goFr").WillReturnResult(sqlmock.NewErrorResult(errMock))
+			},
+			expErr: errMock.Error(),
+		},
+		{
+			desc:    "exec error",
+			object:  &autoIncrementEntity{},
+			reqBody: []byte(`{"name":"goFr"}`),
+			setupMocks: func(m *container.Mocks) {
+				m.SQL.ExpectDialect().WillReturnString("mysql")
+				m.SQL.ExpectExec(insertQuery).WithArgs("goFr").WillReturnError(errMock)
+			},
+			expErr: errMock.Error(),
+		},
+		{
+			desc:    "not null string left empty",
+			object:  &autoIncrementEntity{},
+			reqBody: []byte(`{"name":""}`),
+			setupMocks: func(m *container.Mocks) {
+				m.SQL.ExpectDialect().WillReturnString("mysql")
+			},
+			expErr: "field cannot be empty: name",
+		},
+		{
+			desc:       "not null interface field missing",
+			object:     &requiredMetaEntity{},
+			reqBody:    []byte(`{"id":1}`),
+			setupMocks: func(*container.Mocks) {},
+			expErr:     fmt.Sprintf("%v: meta", errFieldCannotBeNull),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			e, err := scanEntity(tc.object)
+			require.NoError(t, err)
+
+			c, mocks := container.NewMockContainer(t)
+			tc.setupMocks(mocks)
+
+			ctx := createTestContext(http.MethodPost, "/"+e.restPath, "", tc.reqBody, c)
+
+			resp, err := e.Create(ctx)
+
+			assert.Equal(t, tc.expResp, resp)
+			assert.Equal(t, tc.expErr, errString(err))
+		})
+	}
+}
+
+// errString returns the error message, or "" for a nil error, so expected errors can live in the test table.
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	return err.Error()
+}
+
+// customCRUDEntity overrides every generated CRUD handler.
+type customCRUDEntity struct {
+	ID int `json:"id"`
+}
+
+func (*customCRUDEntity) Create(*Context) (any, error) { return "custom create", nil }
+func (*customCRUDEntity) GetAll(*Context) (any, error) { return "custom getall", nil }
+func (*customCRUDEntity) Get(*Context) (any, error)    { return "custom get", nil }
+func (*customCRUDEntity) Update(*Context) (any, error) { return "custom update", nil }
+func (*customCRUDEntity) Delete(*Context) (any, error) { return "custom delete", nil }
+
+func Test_registerCRUDHandlers_CustomHandlers(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	obj := &customCRUDEntity{}
+
+	e, err := scanEntity(obj)
+	require.NoError(t, err)
+
+	app.registerCRUDHandlers(e, obj)
+
+	tests := []struct {
+		desc    string
+		method  string
+		path    string
+		expBody string
+	}{
+		{desc: "create", method: http.MethodPost, path: "/customcrudentity", expBody: "custom create"},
+		{desc: "get all", method: http.MethodGet, path: "/customcrudentity", expBody: "custom getall"},
+		{desc: "get", method: http.MethodGet, path: "/customcrudentity/1", expBody: "custom get"},
+		{desc: "update", method: http.MethodPut, path: "/customcrudentity/1", expBody: "custom update"},
+		{desc: "delete", method: http.MethodDelete, path: "/customcrudentity/1", expBody: "custom delete"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+
+			app.httpServer.router.ServeHTTP(rec, req)
+
+			assert.Contains(t, rec.Body.String(), tc.expBody)
+		})
 	}
 }

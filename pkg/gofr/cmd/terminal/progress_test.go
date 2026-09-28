@@ -131,3 +131,41 @@ func TestProgressBar_getString(t *testing.T) {
 		})
 	}
 }
+
+// fixedSizeOutput is an Out whose terminal size is fixed, standing in for an attached terminal.
+type fixedSizeOutput struct {
+	*Out
+	width int
+}
+
+func (f fixedSizeOutput) getSize() (width, height int, err error) { return f.width, 24, nil }
+
+func TestNewProgressBar_WithTerminalSize(t *testing.T) {
+	tests := []struct {
+		desc     string
+		total    int64
+		expTotal int64
+		expWidth int
+		expErr   error
+	}{
+		{desc: "valid total", total: 100, expTotal: 100, expWidth: 120, expErr: nil},
+		{desc: "zero total", total: 0, expTotal: 0, expWidth: 120, expErr: nil},
+		{desc: "negative total", total: -5, expTotal: 0, expWidth: 0, expErr: errInvalidTotal},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var out bytes.Buffer
+
+			stream := fixedSizeOutput{Out: &Out{terminal{isTerminal: true, fd: 1}, &out}, width: 120}
+
+			bar, err := NewProgressBar(stream, tc.total)
+
+			require.ErrorIs(t, err, tc.expErr)
+			require.NotNil(t, bar)
+			assert.Equal(t, tc.expTotal, bar.total)
+			assert.Equal(t, tc.expWidth, bar.tWidth)
+			assert.Empty(t, out.String())
+		})
+	}
+}

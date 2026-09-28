@@ -55,6 +55,7 @@ func Test_ColorForStatusCode(t *testing.T) {
 		{desc: "400 Bad Request", code: 400, expOut: 220},
 		{desc: "409 Conflict", code: 409, expOut: 220},
 		{desc: "500 Internal Srv Error", code: 500, expOut: 202},
+		{desc: "302 Found has no color", code: 302, expOut: 0},
 	}
 
 	for _, tc := range testCases {

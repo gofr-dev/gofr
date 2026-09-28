@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -222,4 +223,95 @@ func Test_SurrealCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 
 	err := m.commitMigration(c, data)
 	assert.NoError(t, err)
+}
+
+func Test_SurrealCheckAndCreateMigrationTable_QueryError(t *testing.T) {
+	migratorWithSurreal, mockSurreal, mockContainer := surrealSetup(t)
+
+	mockSurreal.EXPECT().Query(gomock.Any(), getMigrationTableQueries()[0], nil).Return(nil, context.DeadlineExceeded)
+
+	err := migratorWithSurreal.checkAndCreateMigrationTable(mockContainer)
+
+	require.ErrorIs(t, err, errExecuteQuery)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func Test_SurrealVersionToInt64(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		version any
+		exp     int64
+	}{
+		{desc: "uint64 overflowing int64", version: uint64(math.MaxInt64) + 1, exp: 0},
+		{desc: "unsupported type", version: "12", exp: 0},
+		{desc: "nil value", version: nil, exp: 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, surrealVersionToInt64(tc.version))
+		})
+	}
+}
+
+func Test_SurrealGetLastMigration_BaseMigrator(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		result     []any
+		baseResp   int64
+		baseErr    error
+		expVersion int64
+		expErr     error
+	}{
+		{desc: "non map row is ignored", result: []any{"bad"}, baseResp: 3, expVersion: 3},
+		{desc: "empty result", result: []any{}, baseResp: 0, expVersion: 0},
+		{
+			desc:       "base migrator error",
+			result:     []any{map[string]any{"version": int64(2)}},
+			baseErr:    context.DeadlineExceeded,
+			expVersion: -1,
+			expErr:     context.DeadlineExceeded,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+
+			m := surrealMigrator{SurrealDB: surrealDS{client: mocks.SurrealDB}, migrator: mockMigrator}
+
+			mocks.SurrealDB.EXPECT().Query(gomock.Any(), getLastSurrealDBGoFrMigration, nil).Return(tc.result, nil)
+			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
+
+			resp, err := m.getLastMigration(mockContainer)
+
+			assert.Equal(t, tc.expVersion, resp)
+			assert.Equal(t, tc.expErr, err)
+		})
+	}
+}
+
+func Test_SurrealMigratorDelegation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockContainer.Logger = mockLogger
+
+	m := surrealMigrator{migrator: mockMigrator}
+	data := transactionData{MigrationNumber: 4}
+
+	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockLogger.EXPECT().Fatalf("migration %v failed and rolled back", int64(4))
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(context.Canceled)
+	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(context.Canceled)
+
+	m.rollback(mockContainer, data)
+
+	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), context.Canceled)
+	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), context.Canceled)
+	assert.Equal(t, "SurrealDB", m.name())
 }

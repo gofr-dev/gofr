@@ -105,7 +105,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT.
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets; past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
 -  2000
 
 ---
@@ -127,8 +127,14 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  MCP_PORT
+-  Port on which the MCP server listens, bound to loopback. Only used when `app.EnableMCP()` is called; a port that cannot be claimed fails startup. Set to `0` to keep tools available in-process while serving no MCP transport. A non-numeric or out-of-range value refuses startup. Note the default collides with Vault's — see [MCP](/docs/advanced-guide/mcp).
+-  8200
+
+---
+
 -  TRACE_EXPORTER
--  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp.
+-  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp, gcp. `gcp` exports directly to Google Cloud's Telemetry (OTLP) API using Application Default Credentials, and requires the blank import `_ "gofr.dev/pkg/gofr/traces/exporters/gcp"`.
 
 ---
 
@@ -146,7 +152,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_URL
--  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger. An `http://` or `https://` scheme selects the transport; a schemeless `host:port` is governed by TRACER_INSECURE.
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin, jaeger or otlp; optional for gcp, which defaults to `telemetry.googleapis.com:443`. For zipkin, jaeger and otlp an `http://` or `https://` scheme selects the transport, and a schemeless `host:port` is governed by TRACER_INSECURE. For gcp the value must be a schemeless `host:port` — that destination is always TLS on 443, so a scheme is rejected at startup rather than interpreted.
 
 ---
 
@@ -157,7 +163,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_RATIO
--  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1.
+-  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1. A value that is not a valid number is rejected with an error log and also resolves to 1, so a typo over-samples rather than silently disabling tracing.
 
 ---
 
