@@ -36,8 +36,10 @@ range of values for which the cron should run and `*/n` to define number of time
 
 ## Adding cron jobs in GoFr applications
 Adding cron jobs to GoFr applications is made easy with a simple injection of user's function to the cron table maintained
-by the GoFr. The minimum time difference between cron job's two consecutive runs is a minute as it is the least significant
-scheduling time parameter.
+by the GoFr. With the 5-field format the minimum time difference between a cron job's two consecutive runs is a minute,
+since minute is then the least significant scheduling parameter — the job fires once per minute, at second 0. Adding the
+optional leading `second` field lowers that to a second, as GoFr's scheduler evaluates every registered schedule once per
+second.
 
 Cron job with generic format:
 ```go
@@ -68,8 +70,8 @@ import (
 func main() {
 	app := gofr.New()
 
-	// Run the cron job every 5 hours(*/5)
-	app.AddCronJob("* */5 * * *", "", func(ctx *gofr.Context) {
+	// Run the cron job every 5 hours(*/5), at minute 0
+	app.AddCronJob("0 */5 * * *", "", func(ctx *gofr.Context) {
 		ctx.Logger.Infof("current time is %v", time.Now())
 	})
 

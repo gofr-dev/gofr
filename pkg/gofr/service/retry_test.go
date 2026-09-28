@@ -72,6 +72,19 @@ func (*mockHTTP) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
+// Query/QueryWithHeaders stamp X-Mock-Method so a test can prove the decorator
+// delegated to Query and not to some other verb whose mock also returns 200.
+func (*mockHTTP) Query(_ context.Context, _ string, _ map[string]any, _ []byte) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody,
+		Header: http.Header{"X-Mock-Method": []string{methodQuery}}}, nil
+}
+
+func (*mockHTTP) QueryWithHeaders(_ context.Context, _ string, _ map[string]any, _ []byte,
+	_ map[string]string) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody,
+		Header: http.Header{"X-Mock-Method": []string{methodQuery}}}, nil
+}
+
 // Helper to create a retry HTTP instance.
 func newRetryHTTP() HTTP {
 	mockHTTP := &mockHTTP{}
@@ -128,6 +141,31 @@ func TestRetryProvider_PostWithHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+
+func TestRetryProvider_Query(t *testing.T) {
+	retryHTTP := newRetryHTTP()
+
+	resp, err := retryHTTP.Query(t.Context(), "/test", nil, []byte("body"))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "retry must delegate to Query, not another verb")
+}
+
+func TestRetryProvider_QueryWithHeaders(t *testing.T) {
+	retryHTTP := newRetryHTTP()
+
+	resp, err := retryHTTP.QueryWithHeaders(t.Context(), "/test", nil, []byte("body"),
+		map[string]string{"Content-Type": "application/json"})
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, methodQuery, resp.Header.Get("X-Mock-Method"), "retry must delegate to QueryWithHeaders, not another verb")
 }
 
 func TestRetryProvider_Put(t *testing.T) {

@@ -290,6 +290,17 @@ To disable the metrics server entirely, set the `METRICS_PORT` environment varia
 METRICS_PORT=0
 ```
 
+### Limiting Metric Cardinality
+
+Each metric instrument keeps a bounded number of distinct label sets per collection cycle; the remaining series
+collapse into a single `otel.metric.overflow` series, protecting the backend from a cardinality explosion. The
+limit is inclusive of that overflow slot, so a value of `n` keeps up to `n-1` real label sets. The default is
+`2000`; override it with `METRICS_CARDINALITY_LIMIT` (set `0` or a negative value for unlimited):
+
+```dotenv
+METRICS_CARDINALITY_LIMIT=5000
+```
+
 ### Example Dashboard
 
 These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
@@ -417,7 +428,35 @@ Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and
 
 
 
-#### 4. [GoFr Tracer](https://tracer.gofr.dev/):
+#### 4. [Google Cloud Trace](https://cloud.google.com/trace) (keyless):
+
+Exports spans straight to Google Cloud's Telemetry (OTLP) API — no key file and no Collector
+sidecar. Authentication uses Application Default Credentials, so on Cloud Run, GKE or GCE the
+attached service account is enough. The exporter lives in its own module, enabled by a blank import:
+
+```go
+import _ "gofr.dev/pkg/gofr/traces/exporters/gcp"
+```
+
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=gcp
+TRACER_RATIO=1.0
+# TRACER_URL is optional; it defaults to telemetry.googleapis.com:443
+```
+
+Grant the workload's service account `roles/telemetry.tracesWriter` on the project receiving the
+spans — the least-privilege predefined role carrying `telemetry.traces.write`, which is what
+`telemetry.googleapis.com` checks. Locally, run `gcloud auth application-default login` and set
+`GOOGLE_CLOUD_PROJECT`, since a user credential carries no project.
+
+`TRACER_URL` must be a schemeless `host:port` for `gcp`; a scheme is rejected at startup.
+
+See `examples/using-gcp-traces` for a full Cloud Run deployment.
+
+#### 5. [GoFr Tracer](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. Users can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service, available anywhere, anytime.
@@ -469,7 +508,7 @@ APP_NAME=my-service
 
 # Grafana Cloud OTLP endpoint with authentication
 TRACE_EXPORTER=otlp
-TRACER_URL=otlp-gateway-prod-us-east-0.grafana.net:443
+TRACER_URL=https://otlp-gateway-prod-us-east-0.grafana.net:443
 TRACER_HEADERS="Authorization=Basic dXNlcm5hbWU6cGFzc3dvcmQ=,X-Scope-OrgID=123456"
 TRACER_RATIO=1.0
 ```

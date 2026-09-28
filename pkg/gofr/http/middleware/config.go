@@ -8,6 +8,7 @@ import (
 	"golang.org/x/text/language"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -25,6 +26,12 @@ const allowCredentialsTrue = "true"
 type Config struct {
 	CorsHeaders map[string]string
 	LogProbes   LogProbes
+
+	// MetricsCardinalityLimit is the meter provider's effective per-instrument
+	// datapoint ceiling, from container.MetricsCardinalityLimit so the two cannot
+	// disagree. Zero or negative means unlimited. The Metrics middleware sizes its
+	// caller-controlled label budget from it; see WithCardinalityLimit.
+	MetricsCardinalityLimit int
 }
 
 type LogProbes struct {
@@ -78,6 +85,8 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 	if err == nil {
 		middlewareConfigs.LogProbes.Disabled = value
 	}
+
+	middlewareConfigs.MetricsCardinalityLimit = container.MetricsCardinalityLimit(c)
 
 	return middlewareConfigs
 }

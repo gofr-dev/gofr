@@ -45,3 +45,7 @@ func Test_lock_unlock(t *testing.T) {
 	err = ds.unlock(mockContainer, "owner")
 	require.NoError(t, err)
 }
+
+func Test_DatasourceName(t *testing.T) {
+	assert.Equal(t, "Base", Datasource{}.name())
+}

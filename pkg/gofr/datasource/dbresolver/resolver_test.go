@@ -1,6 +1,7 @@
 package dbresolver
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -850,6 +851,302 @@ func TestClean(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := clean(tt.input)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// openAllBreakers marks every replica circuit breaker as open with a recent failure,
+// so no replica is considered healthy.
+func openAllBreakers(r *Resolver) {
+	for _, w := range r.replicas {
+		openState := circuitStateOpen
+		now := time.Now()
+
+		w.breaker.state.Store(&openState)
+		w.breaker.lastFailure.Store(&now)
+	}
+}
+
+func TestResolver_UpdateMetrics(t *testing.T) {
+	tests := []struct {
+		desc      string
+		setStats  func(s *statistics)
+		expGauges map[string]float64
+	}{
+		{
+			desc: "gauges reflect current statistics",
+			setStats: func(s *statistics) {
+				s.primaryReads.Store(1)
+				s.primaryWrites.Store(2)
+				s.replicaReads.Store(3)
+				s.primaryFallbacks.Store(4)
+				s.replicaFailures.Store(5)
+			},
+			expGauges: map[string]float64{
+				"dbresolver_primary_reads":  1,
+				"dbresolver_primary_writes": 2,
+				"dbresolver_replica_reads":  3,
+				"dbresolver_fallbacks":      4,
+				"dbresolver_failures":       5,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			for name, val := range tc.expGauges {
+				mockMetrics.EXPECT().SetGauge(name, val)
+			}
+
+			r := &Resolver{metrics: mockMetrics, stats: &statistics{}}
+			tc.setStats(r.stats)
+
+			r.updateMetrics()
+		})
+	}
+}
+
+func TestResolver_SelectHealthyReplica(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setup      func(m *Mocks)
+		expReplica func(m *Mocks) *replicaWrapper
+	}{
+		{
+			desc:       "no replicas configured",
+			setup:      func(m *Mocks) { m.Resolver.replicas = nil },
+			expReplica: func(*Mocks) *replicaWrapper { return nil },
+		},
+		{
+			desc: "all circuit breakers open logs warning",
+			setup: func(m *Mocks) {
+				openAllBreakers(m.Resolver)
+				m.Logger.EXPECT().Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+			},
+			expReplica: func(*Mocks) *replicaWrapper { return nil },
+		},
+		{
+			desc: "all circuit breakers open without logger",
+			setup: func(m *Mocks) {
+				openAllBreakers(m.Resolver)
+				m.Resolver.logger = nil
+			},
+			expReplica: func(*Mocks) *replicaWrapper { return nil },
+		},
+		{
+			desc:       "strategy returns out of range index",
+			setup:      func(m *Mocks) { m.Strategy.EXPECT().Next(2).Return(5) },
+			expReplica: func(*Mocks) *replicaWrapper { return nil },
+		},
+		{
+			desc:       "strategy returns negative index",
+			setup:      func(m *Mocks) { m.Strategy.EXPECT().Next(2).Return(-1) },
+			expReplica: func(*Mocks) *replicaWrapper { return nil },
+		},
+		{
+			desc:       "healthy replica selected by strategy",
+			setup:      func(m *Mocks) { m.Strategy.EXPECT().Next(2).Return(1) },
+			expReplica: func(m *Mocks) *replicaWrapper { return m.Resolver.replicas[1] },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mocks := setupMocks(t)
+			tc.setup(mocks)
+
+			assert.Equal(t, tc.expReplica(mocks), mocks.Resolver.selectHealthyReplica())
+		})
+	}
+}
+
+func TestResolver_ReadsWithNoHealthyReplica(t *testing.T) {
+	const readQuery = "SELECT * FROM users"
+
+	expectedRows := &sql.Rows{}
+
+	tests := []struct {
+		desc            string
+		readFallback    bool
+		setupMocks      func(m *Mocks)
+		operation       func(ctx context.Context, r *Resolver) error
+		expErr          error
+		expFailures     uint64
+		expFallbacks    uint64
+		expPrimaryReads uint64
+	}{
+		{
+			desc:         "query falls back to primary",
+			readFallback: true,
+			setupMocks: func(m *Mocks) {
+				m.Logger.EXPECT().Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+				m.Logger.EXPECT().Warn("No healthy replica available, falling back to primary")
+				m.Primary.EXPECT().QueryContext(gomock.Any(), readQuery).Return(expectedRows, nil)
+			},
+			operation: func(ctx context.Context, r *Resolver) error {
+				rows, err := r.QueryContext(ctx, readQuery)
+				if err != nil {
+					return err
+				}
+
+				return rows.Err()
+			},
+			expFallbacks:    1,
+			expPrimaryReads: 1,
+		},
+		{
+			desc: "query fails when fallback disabled",
+			setupMocks: func(m *Mocks) {
+				m.Logger.EXPECT().Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+			},
+			operation: func(ctx context.Context, r *Resolver) error {
+				rows, err := r.QueryContext(ctx, readQuery)
+				if err != nil {
+					return err
+				}
+
+				return rows.Err()
+			},
+			expErr: errReplicaFailedNoFallback,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mocks := setupMocks(t)
+			mocks.Resolver.readFallback = tc.readFallback
+			openAllBreakers(mocks.Resolver)
+			tc.setupMocks(mocks)
+
+			err := tc.operation(WithHTTPMethod(t.Context(), "GET"), mocks.Resolver)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expFailures, mocks.Resolver.stats.replicaFailures.Load())
+			assert.Equal(t, tc.expFallbacks, mocks.Resolver.stats.primaryFallbacks.Load())
+			assert.Equal(t, tc.expPrimaryReads, mocks.Resolver.stats.primaryReads.Load())
+		})
+	}
+}
+
+// TestResolver_RowReadsWithNoHealthyReplica asserts only routing: with every replica breaker open,
+// QueryRow and Select must be served by the primary.
+func TestResolver_RowReadsWithNoHealthyReplica(t *testing.T) {
+	const readQuery = "SELECT * FROM users"
+
+	tests := []struct {
+		desc       string
+		setupMocks func(m *Mocks)
+		operation  func(ctx context.Context, r *Resolver)
+	}{
+		{
+			desc: "query row goes to primary",
+			setupMocks: func(m *Mocks) {
+				m.Logger.EXPECT().Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+				m.Primary.EXPECT().QueryRowContext(gomock.Any(), readQuery).Return(&sql.Row{})
+			},
+			operation: func(ctx context.Context, r *Resolver) {
+				_ = r.QueryRowContext(ctx, readQuery)
+			},
+		},
+		{
+			desc: "select goes to primary",
+			setupMocks: func(m *Mocks) {
+				m.Logger.EXPECT().Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+				m.Primary.EXPECT().Select(gomock.Any(), gomock.Any(), readQuery)
+			},
+			operation: func(ctx context.Context, r *Resolver) {
+				var users []string
+
+				r.Select(ctx, &users, readQuery)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mocks := setupMocks(t)
+			mocks.Resolver.readFallback = true
+			openAllBreakers(mocks.Resolver)
+			tc.setupMocks(mocks)
+
+			tc.operation(WithHTTPMethod(t.Context(), "GET"), mocks.Resolver)
+		})
+	}
+}
+
+func TestResolver_HealthCheck_CircuitStates(t *testing.T) {
+	tests := []struct {
+		desc      string
+		states    []circuitBreakerState
+		expStates []string
+	}{
+		{
+			desc:      "open and half-open replicas",
+			states:    []circuitBreakerState{circuitStateOpen, circuitStateHalfOpen},
+			expStates: []string{"OPEN", "HALF_OPEN"},
+		},
+		{
+			desc:      "closed replicas",
+			states:    []circuitBreakerState{circuitStateClosed, circuitStateClosed},
+			expStates: []string{"CLOSED", "CLOSED"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mocks := setupMocks(t)
+
+			mocks.Primary.EXPECT().HealthCheck().Return(&datasource.Health{Status: healthStatusUP})
+
+			for i, replica := range mocks.MockReplicas {
+				state := tc.states[i]
+				mocks.Resolver.replicas[i].breaker.state.Store(&state)
+
+				replica.EXPECT().HealthCheck().Return(&datasource.Health{Status: healthStatusUP})
+			}
+
+			health := mocks.Resolver.HealthCheck()
+
+			replicas := health.Details["replicas"].([]any)
+			require.Len(t, replicas, len(tc.expStates))
+
+			for i, exp := range tc.expStates {
+				assert.Equal(t, exp, replicas[i].(map[string]any)["circuit_state"])
+			}
+		})
+	}
+}
+
+func TestResolver_Close_ReplicaError(t *testing.T) {
+	tests := []struct {
+		desc       string
+		primaryErr error
+		replicaErr []error
+		expErr     error
+	}{
+		{
+			desc:       "replica close error is returned",
+			replicaErr: []error{nil, errTestReplicaFailed},
+			expErr:     errTestReplicaFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mocks := setupMocks(t)
+
+			mocks.Primary.EXPECT().Close().Return(tc.primaryErr)
+
+			for i, replica := range mocks.MockReplicas {
+				replica.EXPECT().Close().Return(tc.replicaErr[i])
+			}
+
+			err := mocks.Resolver.Close()
+
+			require.ErrorIs(t, err, tc.expErr)
 		})
 	}
 }

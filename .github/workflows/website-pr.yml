@@ -1,0 +1,98 @@
+name: Website Build Check
+permissions:
+  contents: read
+
+# Why this exists
+# ---------------
+# `docs/Dockerfile` overlays this repo's docs/ onto the gofr-dev/website
+# source bundle and runs `npm run build` (Next.js static export). Until now
+# that build was only ever exercised by website-stage.yml, which triggers on
+# `push: development` — i.e. *after* a docs PR is merged. A broken
+# navigation.js, a malformed events.json/team.json, or an MDX file next can't
+# parse therefore reached development and was discovered by a failed stage
+# deploy rather than by the PR that caused it.
+#
+# This runs the same two builds at PR time and stops there.
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+    # Everything docs/Dockerfile consumes lives under docs/ — including the
+    # Dockerfile itself. A PR that touches no docs/ file cannot change the
+    # website build, so it is not worth ~8 minutes of runner time.
+    #
+    # NOTE: because of this filter the check does not report on non-docs PRs,
+    # so it cannot be made a *required* status check without deadlocking them.
+    # Gate it in branch protection only if this filter is removed first.
+    paths:
+      - 'docs/**'
+      - '.github/workflows/website-pr.yml'
+  workflow_dispatch:
+
+# Deliberately the opposite of website-prod.yml / website-stage.yml, which set
+# `cancel-in-progress: false` because a half-finished *deploy* is worse than a
+# queued one. This workflow deploys nothing, so a superseded run is pure waste.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  website_build:
+    name: 🌐 Website Build
+    runs-on: ubuntu-latest
+    # Two docker builds, each doing its own npm install. website-stage.yml
+    # budgets 45m for the same pair plus yarn install, refresh-data and a
+    # registry push; without those 30m is ample.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout framework code
+        uses: actions/checkout@v7
+
+      # gofr-dev/website is public, so the default GITHUB_TOKEN is enough and
+      # this step works on pull requests from forks.
+      #
+      # fetch-depth is left at the default 1, unlike website-stage.yml: the
+      # full history there is only needed by utils/generate-doc-mtimes.mjs,
+      # which runs as part of `yarn refresh-data` — a step this workflow
+      # deliberately skips (see below).
+      - name: Checkout website source
+        uses: actions/checkout@v7
+        with:
+          repository: gofr-dev/website
+          ref: main
+          path: website-src
+
+      # No `yarn refresh-data` here, on purpose. It is `continue-on-error: true`
+      # in website-stage.yml — i.e. already not load-bearing for build success —
+      # and each of its scripts falls back to the snapshot committed under
+      # src/data. Those snapshots are exactly what this build uses. Skipping it
+      # keeps the check hermetic (no GitHub API calls, nothing to rate-limit)
+      # and removes the need for Node on the runner: both npm installs happen
+      # inside the docker builds below.
+
+      # Stage 1: the website "shell" — source + node_modules + npm. Identical
+      # invocation to website-stage.yml, including `--target builder`: the
+      # website Dockerfile's final stage is nginx and has no npm, so the
+      # framework's docs/Dockerfile could not run `npm run build` against it.
+      #
+      # Tagged ghcr.io/gofr-dev/website:stage for the *local* daemon only, so
+      # that docs/Dockerfile's `FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG}`
+      # resolves here instead of pulling. Nothing is pushed.
+      - name: Build website source-bundle
+        run: |
+          docker build \
+            --target builder \
+            -t ghcr.io/gofr-dev/website:stage \
+            -f ./website-src/Dockerfile \
+            ./website-src/
+
+      # Stage 2: the actual check. Overlays this PR's docs/ and runs
+      # `npm run build`. This is the step that fails on broken docs.
+      - name: Build framework docs image
+        run: |
+          docker build \
+            --build-arg WEBSITE_TAG=stage \
+            -t gofr-website:pr \
+            -f ./docs/Dockerfile \
+            .

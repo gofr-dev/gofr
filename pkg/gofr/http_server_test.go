@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -548,6 +550,84 @@ func TestRouter_Matcher(t *testing.T) {
 		t.Run("GOFR_ROUTER="+env, func(t *testing.T) {
 			t.Setenv(gofrHTTP.RouterEnvVar, env)
 			assert.Equal(t, want, gofrHTTP.NewRouter().Matcher())
+		})
+	}
+}
+
+func TestHTTPServer_run_DoesNotServe(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setup      func(t *testing.T) *httpServer
+		setupMocks func(l *container.MockLogger, port int)
+	}{
+		{
+			desc: "shut down before it started",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t), stopped: true}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Server was shut down before it started on port: %d", port)
+			},
+		},
+		{
+			desc: "certificate files missing",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: "missing-cert.pem", keyFile: "missing-key.pem"}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Error(fmt.Errorf("%w : %v", errInvalidCertificateFile, "missing-cert.pem"))
+			},
+		},
+		{
+			desc: "certificate files unparsable",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: createTempCertFile(t), keyFile: createTempKeyFile(t)}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to https server, err: %v", gomock.Any())
+			},
+		},
+		{
+			desc: "port already in use",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", ":0")
+				require.NoError(t, err)
+
+				t.Cleanup(func() { listener.Close() })
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: listener.Addr().(*net.TCPAddr).Port}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to http server, err: %v", gomock.Any())
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := tc.setup(t)
+			s.ws = websocket.New()
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger, s.port)
+
+			// run returns on its own in every case: nothing is left listening.
+			s.run(&container.Container{Logger: logger})
+
+			require.NoError(t, s.Shutdown(t.Context()))
 		})
 	}
 }

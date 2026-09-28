@@ -23,6 +23,7 @@ func setupMockMetrics(t *testing.T) *MockMetrics {
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	return mockMetric
 }
