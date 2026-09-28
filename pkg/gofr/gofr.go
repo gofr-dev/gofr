@@ -245,10 +245,7 @@ func (a *App) httpServerSetup() {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
 	}
 
-	a.httpServer.router.PathPrefix("/").Handler(handler{
-		function:  catchAllHandler,
-		container: a.container,
-	})
+	a.httpServer.router.PathPrefix("/").Handler(a.catchAll())
 
 	var registeredMethods []string
 
