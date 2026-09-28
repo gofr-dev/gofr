@@ -79,6 +79,13 @@ Response example:
 ]
 ```
 
+> **Return these response types by value, not as a pointer.** `response.Raw{...}` performs the raw
+> response; `&response.Raw{...}` does not — it falls through to the ordinary `{"data": ...}`
+> envelope and serializes the struct instead. The same applies to `response.File`, `response.XML`,
+> `response.Template`, `response.Redirect`, `response.Stream` and `response.Response`, so a
+> `&response.Redirect{...}` returns `200` with the URL inside the envelope rather than redirecting,
+> and a `&response.File{...}` is base64-encoded into it rather than served as a file.
+
 ### XML responses
 
 If you need to respond with XML without JSON encoding, return `response.XML`. It bypasses JSON encoding just like `response.File` or `response.Template` and writes the bytes directly to the client. The `ContentType` defaults to `application/xml` but can be overridden.

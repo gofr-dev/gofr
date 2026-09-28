@@ -359,6 +359,31 @@ func Test_ReadDir(t *testing.T) {
 					})
 			},
 		},
+		{
+			name:    "Root directory lists from bucket root and skips nil prefixes",
+			dirPath: ".",
+			expectedResults: []result{
+				{"root.txt", 5, false},
+				{"efg", 0, true},
+			},
+			setupMock: func() {
+				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
+						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+						require.Empty(t, *in.Prefix, "ReadDir(\".\") must list from the bucket root")
+
+						return &s3.ListObjectsV2Output{
+							Contents: []types.Object{
+								{Key: aws.String("root.txt"), Size: aws.Int64(5), LastModified: aws.Time(time.Now())},
+							},
+							CommonPrefixes: []types.CommonPrefix{
+								{Prefix: nil},
+								{Prefix: aws.String("efg/")},
+							},
+						}, nil
+					})
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -722,4 +747,147 @@ func Test_Stat_ListObjectsV2Fails_Error(t *testing.T) {
 	_, err := fs.Stat("test-file.txt")
 	require.Error(t, err, "Expected error when ListObjectsV2 fails")
 	require.Contains(t, err.Error(), "mocked error", "Expected error to contain mocked error")
+}
+
+// Test_RenameFile_ToSameName_LogsSuccess guards against the same-name no-op
+// being reported as an ERROR by observability while returning nil to the caller.
+func Test_RenameFile_ToSameName_LogsSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	logs := make([]FileLog, 0)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().Do(func(args ...any) {
+		if fl, ok := args[0].(*FileLog); ok {
+			logs = append(logs, *fl)
+		}
+	})
+
+	require.NoError(t, fs.Rename("abcd.json", "abcd.json"))
+
+	require.Len(t, logs, 1)
+	require.Equal(t, "RENAME", logs[0].Operation)
+	require.Equal(t, statusSuccess, *logs[0].Status)
+}
+
+func TestFileSystem_UseLogger(t *testing.T) {
+	logger := NewMockLogger(gomock.NewController(t))
+
+	tests := []struct {
+		name      string
+		logger    any
+		expLogger Logger
+	}{
+		{name: "valid logger is set", logger: logger, expLogger: logger},
+		{name: "invalid logger is ignored", logger: "not a logger", expLogger: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &FileSystem{config: defaultTestConfig()}
+
+			fs.UseLogger(tt.logger)
+
+			assert.Equal(t, tt.expLogger, fs.logger)
+		})
+	}
+}
+
+func TestFileSystem_UseMetrics(t *testing.T) {
+	metrics := NewMockMetrics(gomock.NewController(t))
+
+	tests := []struct {
+		name       string
+		metrics    any
+		expMetrics Metrics
+	}{
+		{name: "valid metrics is set", metrics: metrics, expMetrics: metrics},
+		{name: "invalid metrics is ignored", metrics: "not metrics", expMetrics: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &FileSystem{config: defaultTestConfig()}
+
+			fs.UseMetrics(tt.metrics)
+
+			assert.Equal(t, tt.expMetrics, fs.metrics)
+		})
+	}
+}
+
+func TestFileSystem_Connect_LoadConfigFails(t *testing.T) {
+	dir := t.TempDir()
+
+	// Point the SDK at empty shared config files and select a profile that does not exist,
+	// which makes LoadDefaultConfig fail without any network access.
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "config"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
+	t.Setenv("AWS_PROFILE", "gofr-profile-that-does-not-exist")
+
+	mocks := setupTestMocks(gomock.NewController(t))
+	fs := &FileSystem{config: defaultTestConfig(), logger: mocks.mockLogger}
+
+	mocks.mockLogger.EXPECT().Debugf("connecting to S3 bucket: %s", "test-bucket")
+	mocks.mockLogger.EXPECT().Errorf("failed to load configuration: %v", gomock.Any())
+	mocks.mockLogger.EXPECT().Debug(gomock.Any())
+
+	fs.Connect()
+
+	assert.Nil(t, fs.conn)
+}
+
+func TestRemove_DeleteObjectFails_Error(t *testing.T) {
+	mocks := setupTestMocks(gomock.NewController(t))
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Debug(gomock.Any())
+	mocks.mockLogger.EXPECT().Errorf("Error while deleting file: %v", errMock)
+	mocks.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
+
+	require.ErrorIs(t, fs.Remove("abc.json"), errMock)
+}
+
+func Test_RenameFile_Errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(m *testMocks)
+		expErr    error
+	}{
+		{
+			name: "copy object fails",
+			setupMock: func(m *testMocks) {
+				m.mockS3.EXPECT().CopyObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
+			},
+			expErr: errMock,
+		},
+		{
+			name: "removing old file fails",
+			setupMock: func(m *testMocks) {
+				m.mockS3.EXPECT().CopyObject(gomock.Any(), gomock.Any()).Return(&s3.CopyObjectOutput{}, nil)
+				m.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
+				m.mockLogger.EXPECT().Errorf("Error while deleting file: %v", errMock)
+				m.mockLogger.EXPECT().Debug(gomock.Any())
+			},
+			expErr: errMock,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mocks := setupTestMocks(gomock.NewController(t))
+			fs := setupTestFileSystem(mocks, nil)
+
+			mocks.mockLogger.EXPECT().Debug(gomock.Any())
+			tt.setupMock(mocks)
+
+			err := fs.Rename("abcd.json", "abc.json")
+
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
 }

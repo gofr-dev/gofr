@@ -139,11 +139,24 @@ The remote configuration URL is expected to be a JSON endpoint that returns the 
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
 func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.Duration) logging.Logger {
+	base := logging.NewLogger(level)
+
 	l := &remoteLogger{
 		remoteURL:          remoteConfigURL,
-		Logger:             logging.NewLogger(level),
+		Logger:             base,
 		levelFetchInterval: loggerFetchInterval,
 		currentLevel:       level,
+	}
+
+	if e, ok := base.(logEnabler); ok {
+		l.enabler = e
+	}
+
+	// Resolved once, here, for the same reason as enabler: the embedded logger is
+	// assigned in New and never reassigned, so a per-request assertion would pay
+	// for a question whose answer cannot change.
+	if e, ok := base.(entryLogger); ok {
+		l.entries = e
 	}
 
 	if remoteConfigURL != "" {
@@ -153,12 +166,90 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 	return l
 }
 
+// entryLogger is the optional interface a logger implements when it can take an
+// already-built entry directly, without the one-element slice a variadic Log
+// allocates to carry it. It mirrors the middleware's own contract.
+type entryLogger interface {
+	LogEntry(any)
+	ErrorEntry(any)
+}
+
+// logEnabler is the optional interface a logger implements when it can report,
+// without being handed an entry, whether an entry written through Log would be
+// emitted. It mirrors the middleware's own contract.
+type logEnabler interface {
+	LogEnabled() bool
+}
+
 type remoteLogger struct {
 	remoteURL          string
 	levelFetchInterval time.Duration
 	mu                 sync.RWMutex
 	currentLevel       logging.Level
+	// enabler is the embedded logger's LogEnabled, resolved once in New. nil
+	// when the embedded logger does not implement it.
+	enabler logEnabler
+	// entries is the embedded logger's single-value log path, resolved once in
+	// New. nil when the embedded logger does not implement it.
+	entries entryLogger
 	logging.Logger
+}
+
+// LogEntry forwards a single pre-built entry to the embedded logger's
+// allocation-free path, bypassing the slice a variadic Log allocates.
+//
+// Forwarding is safe with respect to the dynamic level: this type does not gate
+// on currentLevel, it PUSHES level changes down with ChangeLevel, and the
+// embedded logger applies them to its own atomic before deciding. So an entry
+// routed this way passes exactly the same gate as one routed through Log.
+//
+// An embedded logger without the fast path leaves entries nil and falls back to
+// Log, which is what every external Logger implementation will do.
+func (r *remoteLogger) LogEntry(entry any) {
+	if r.entries == nil {
+		r.Log(entry)
+
+		return
+	}
+
+	r.entries.LogEntry(entry)
+}
+
+// ErrorEntry forwards a single pre-built entry at ERROR, mirroring LogEntry.
+func (r *remoteLogger) ErrorEntry(entry any) {
+	if r.entries == nil {
+		r.Error(entry)
+
+		return
+	}
+
+	r.entries.ErrorEntry(entry)
+}
+
+// LogEnabled reports whether an entry written through Log survives the level
+// currently in force.
+//
+// The embedded logger is the authority: this type only tracks currentLevel so
+// it can push changes down via ChangeLevel, and the logger applies them
+// immediately, so asking the logger itself is both correct and current.
+//
+// No lock is taken. r.mu guards currentLevel, which this method never reads,
+// and ChangeLevel is called outside r.mu anyway -- so an RLock here would give
+// no ordering against a level change while adding a process-wide atomic to
+// every request. The gate is advisory: the worst a racing level change can do
+// is build one entry that is then discarded, or skip one at the instant the
+// level is lowered.
+//
+// The embedded logger is assigned once in New and never reassigned, so the
+// logEnabler assertion is resolved there rather than per request. An embedded
+// logger that cannot answer is treated as enabled, which preserves the previous
+// behavior of always building the entry.
+func (r *remoteLogger) LogEnabled() bool {
+	if r.enabler == nil {
+		return true
+	}
+
+	return r.enabler.LogEnabled()
 }
 
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval

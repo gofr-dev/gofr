@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
+	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
 
 func Test_newContextSuccess(t *testing.T) {
@@ -395,5 +397,158 @@ func BenchmarkContext_New(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_ = newContext(w, r, c)
+	}
+}
+
+// TestNewHTTPContextMatchesNewContext pins that co-allocating the Context with
+// its Request and Responder changes nothing observable: the same path params,
+// query params and context are reachable either way.
+func TestNewHTTPContextMatchesNewContext(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+	newReq := func() *http.Request {
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/42?q=x", http.NoBody)
+
+		return mux.SetURLVars(r, map[string]string{"id": "42"})
+	}
+
+	viaOld := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet),
+		gofrHTTP.NewRequest(newReq()), c)
+	viaNew := newHTTPContext(httptest.NewRecorder(), newReq(), c)
+
+	require.Equal(t, viaOld.PathParam("id"), viaNew.PathParam("id"))
+	require.Equal(t, "42", viaNew.PathParam("id"))
+	require.Equal(t, viaOld.Param("q"), viaNew.Param("q"))
+	require.Equal(t, "x", viaNew.Param("q"))
+	require.NotNil(t, viaNew.Context)
+	require.NotNil(t, viaNew.Container)
+}
+
+// TestNewHTTPContextResponderWired proves the private responder is reachable and
+// writes through to the recorder it was built from.
+func TestNewHTTPContextResponderWired(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	rec := httptest.NewRecorder()
+
+	ctx := newHTTPContext(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody), c)
+	ctx.responder.Respond("hello", nil)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), "hello")
+}
+
+// dialRecordingWSServer starts a WebSocket server that forwards every message it receives to the
+// returned channel, and returns a client connection to it.
+func dialRecordingWSServer(t *testing.T) (conn *gofrWebsocket.Connection, received <-chan string) {
+	t.Helper()
+
+	messages := make(chan string, 1)
+	upgrader := websocket.Upgrader{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+
+			messages <- string(msg)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, resp, err := websocket.DefaultDialer.Dial("ws"+srv.URL[len("http"):], nil)
+	require.NoError(t, err)
+
+	resp.Body.Close()
+	t.Cleanup(func() { client.Close() })
+
+	return &gofrWebsocket.Connection{Conn: client}, messages
+}
+
+func TestContext_WriteMessageToService_Cases(t *testing.T) {
+	tests := []struct {
+		desc    string
+		service string
+		data    any
+		expErr  error
+		expMsg  string
+	}{
+		{desc: "message delivered", service: "svc", data: map[string]string{"a": "b"}, expErr: nil, expMsg: `{"a":"b"}`},
+		{desc: "unknown service", service: "other", data: "hi", expErr: ErrConnectionNotFound, expMsg: wsEndMarker},
+		{desc: "unserializable data", service: "svc", data: make(chan int), expErr: ErrMarshalingResponse, expMsg: wsEndMarker},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			conn, received := dialRecordingWSServer(t)
+
+			c := &container.Container{WSManager: gofrWebsocket.New()}
+			c.AddConnection("svc", conn)
+
+			req := gofrHTTP.NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+			ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), req, c)
+
+			err := ctx.WriteMessageToService(tc.service, tc.data)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expMsg, firstMessageBeforeEnd(t, conn, received))
+		})
+	}
+}
+
+func TestContext_WriteMessageToSocket_Cases(t *testing.T) {
+	tests := []struct {
+		desc   string
+		data   any
+		expErr error
+		expMsg string
+	}{
+		{desc: "message delivered", data: []byte("hello"), expErr: nil, expMsg: "hello"},
+		{desc: "unserializable data", data: func() {}, expErr: ErrMarshalingResponse, expMsg: wsEndMarker},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			conn, received := dialRecordingWSServer(t)
+
+			c := &container.Container{WSManager: gofrWebsocket.New()}
+
+			reqCtx := context.WithValue(t.Context(), gofrWebsocket.WSConnectionKey, conn)
+			req := gofrHTTP.NewRequest(httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/", http.NoBody))
+			ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), req, c)
+
+			err := ctx.WriteMessageToSocket(tc.data)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expMsg, firstMessageBeforeEnd(t, conn, received))
+		})
+	}
+}
+
+// wsEndMarker is written after the call under test; seeing it first means the call wrote nothing.
+const wsEndMarker = "END"
+
+// firstMessageBeforeEnd writes wsEndMarker on conn and returns the first message the server received.
+// Messages on one connection arrive in order, so this is the call's message if it wrote one.
+func firstMessageBeforeEnd(t *testing.T, conn *gofrWebsocket.Connection, received <-chan string) string {
+	t.Helper()
+
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(wsEndMarker)))
+
+	select {
+	case msg := <-received:
+		return msg
+	case <-time.After(5 * time.Second):
+		t.Fatal("websocket server received nothing")
+
+		return ""
 	}
 }

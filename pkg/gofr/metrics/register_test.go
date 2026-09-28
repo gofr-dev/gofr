@@ -1,12 +1,16 @@
 package metrics
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
@@ -185,4 +189,179 @@ func BenchmarkAttrBuild_HTTP(b *testing.B) {
 			"status", "200",
 		)
 	}
+}
+
+// benchHistogramAttrs are the labels a request metric carries: for a given route, method and status
+// they are byte-identical on every single observation.
+func benchHistogramAttrs() []attribute.KeyValue {
+	return []attribute.KeyValue{
+		attribute.String("path", "/users/{id}"),
+		attribute.String("method", http.MethodGet),
+		attribute.String("status", "200"),
+	}
+}
+
+// benchManager returns the concrete manager, because the option-based recorder is a capability of
+// the implementation rather than part of the Manager interface -- callers reach it by assertion.
+func benchManager(b *testing.B) *metricsManager {
+	b.Helper()
+
+	cfg := exporters.Config{AppName: "bench-app", AppVersion: "v1.0.0"}
+	shutdown, meter := exporters.Build(b.Context(), &cfg, logging.NewMockLogger(logging.ERROR))
+
+	b.Cleanup(func() {
+		if shutdown != nil {
+			_ = shutdown(context.Background())
+		}
+	})
+
+	m, ok := NewMetricsManager(meter, logging.NewMockLogger(logging.ERROR)).(*metricsManager)
+	if !ok {
+		b.Fatal("NewMetricsManager did not return *metricsManager")
+	}
+
+	m.NewHistogram("bench-histogram", "histogram used by the benchmarks")
+
+	return m
+}
+
+// BenchmarkRecordHistogramAttrs is the cost of an observation when the measurement option is rebuilt
+// each time: metric.WithAttributes sorts and deduplicates the attributes into a new attribute.Set
+// and wraps it, on every single request.
+func BenchmarkRecordHistogramAttrs(b *testing.B) {
+	m := benchManager(b)
+	attrs := benchHistogramAttrs()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		m.RecordHistogramAttrs(b.Context(), "bench-histogram", 1, attrs...)
+	}
+}
+
+// BenchmarkRecordHistogramOpt is the same observation with the option built once by the caller and
+// reused, which is what a request metric can do because its label combinations come from a small
+// fixed set.
+func BenchmarkRecordHistogramOpt(b *testing.B) {
+	m := benchManager(b)
+
+	cached := []metric.RecordOption{metric.WithAttributes(benchHistogramAttrs()...)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		m.RecordHistogramOpt(b.Context(), "bench-histogram", 1, cached...)
+	}
+}
+
+func Test_RecordHistogramFastPaths(t *testing.T) {
+	attrs := []attribute.KeyValue{attribute.String("route", "/users")}
+	scope := `otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0",route="/users"`
+
+	tests := []struct {
+		desc     string
+		name     string
+		record   func(ctx context.Context, m *metricsManager, name string)
+		expSum   string
+		expCount string
+	}{
+		{
+			desc: "record with pre-built attributes",
+			name: "histogram-attrs",
+			record: func(ctx context.Context, m *metricsManager, name string) {
+				m.RecordHistogramAttrs(ctx, name, 3, attrs...)
+			},
+			expSum:   `histogram_attrs_sum{` + scope + `} 3`,
+			expCount: `histogram_attrs_count{` + scope + `} 1`,
+		},
+		{
+			desc: "record with pre-built option",
+			name: "histogram-opt",
+			record: func(ctx context.Context, m *metricsManager, name string) {
+				m.RecordHistogramOpt(ctx, name, 7, metric.WithAttributes(attrs...))
+			},
+			expSum:   `histogram_opt_sum{` + scope + `} 7`,
+			expCount: `histogram_opt_count{` + scope + `} 1`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := newTestMetricsManager(t)
+
+			m.NewHistogram(tc.name, "histogram for fast record paths")
+
+			tc.record(t.Context(), m, tc.name)
+
+			server := httptest.NewServer(GetHandler(m))
+			defer server.Close()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+			require.NoError(t, err)
+
+			resp, err := server.Client().Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Contains(t, string(body), tc.expSum)
+			assert.Contains(t, string(body), tc.expCount)
+		})
+	}
+}
+
+func Test_RecordHistogramFastPathsNotRegistered(t *testing.T) {
+	tests := []struct {
+		desc   string
+		record func(ctx context.Context, m *metricsManager)
+		expLog string
+	}{
+		{
+			desc: "attrs path logs unregistered metric",
+			record: func(ctx context.Context, m *metricsManager) {
+				m.RecordHistogramAttrs(ctx, "missing-attrs-histogram", 1, attribute.String("k", "v"))
+			},
+			expLog: "Metrics missing-attrs-histogram is not registered",
+		},
+		{
+			desc: "option path logs unregistered metric",
+			record: func(ctx context.Context, m *metricsManager) {
+				m.RecordHistogramOpt(ctx, "missing-opt-histogram", 1)
+			},
+			expLog: "Metrics missing-opt-histogram is not registered",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			log := testutil.StderrOutputForFunc(func() {
+				m := newTestMetricsManager(t)
+
+				tc.record(t.Context(), m)
+			})
+
+			assert.Contains(t, log, tc.expLog)
+		})
+	}
+}
+
+// newTestMetricsManager returns the concrete manager backed by a Prometheus-only provider, because the
+// fast histogram recorders are methods of the implementation rather than of the Manager interface.
+func newTestMetricsManager(t *testing.T) *metricsManager {
+	t.Helper()
+
+	cfg := exporters.Config{AppName: "testing-app", AppVersion: "v1.0.0"}
+	shutdown, meter := exporters.Build(t.Context(), &cfg, logging.NewMockLogger(logging.INFO))
+
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	m, ok := NewMetricsManager(meter, logging.NewMockLogger(logging.INFO)).(*metricsManager)
+	require.True(t, ok)
+
+	return m
 }

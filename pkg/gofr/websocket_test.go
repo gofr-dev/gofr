@@ -1,12 +1,16 @@
 package gofr
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
+	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
 
 var errWebSocketNotReady = errors.New("websocket server not ready")
@@ -68,6 +73,46 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+// Test_WebSocket_PlainHTTPRequestDoesNotPanic pins the fix for #3862: a plain
+// HTTP request to a route registered via app.WebSocket (no Upgrade headers,
+// so no WSConnectionKey is ever set on the request context) must get a clean
+// 400 error response instead of panicking. Before the fix, the unsafe type
+// assertion on WSConnectionKey panicked; the panic-recovery middleware then
+// converted that into a generic 500 "Internal Server Error" response, which
+// is indistinguishable by status code alone from a naive fix that also
+// returned 500. The response is checked for both the 400 status (per RFC
+// 6455 4.2.1 - a request that never attempted an upgrade is a client error,
+// same as a request whose upgrade attempt failed, handled a few lines away
+// in middleware/web_socket.go) and the specific message, since only the
+// panic-recovery path produces the generic one.
+func Test_WebSocket_PlainHTTPRequestDoesNotPanic(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.WebSocket("/ws", func(*Context) (any, error) {
+		return "unreachable: handler must not run without a WebSocket connection", nil
+	})
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/ws", http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, string(body), "request did not include a WebSocket upgrade",
+		"expected the websocket.ErrorNotWebSocketUpgrade message, not a panic-recovery response")
 }
 
 func Test_AddWSService(t *testing.T) {
@@ -179,6 +224,144 @@ func TestSerializeMessage(t *testing.T) {
 			if !reflect.DeepEqual(expectedFormatted, actualFormatted) {
 				t.Errorf("serializeMessage() = %s, want %s", string(actual), string(tt.expected))
 			}
+		})
+	}
+}
+
+func TestApp_OverrideWebsocketUpgrader(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	custom := &websocket.Upgrader{ReadBufferSize: 42}
+
+	app.OverrideWebsocketUpgrader(custom)
+
+	assert.Same(t, custom, app.httpServer.ws.WebSocketUpgrader.Upgrader)
+}
+
+func Test_WebSocket_ConnectionMissingFromManager(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	app.WebSocket("/ws", func(*Context) (any, error) {
+		return "unreachable: handler must not run without a registered connection", nil
+	})
+
+	ctx := context.WithValue(t.Context(), gofrWebsocket.WSConnectionKey, "unknown-conn-id")
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/ws", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	app.httpServer.router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), gofrWebsocket.ErrorConnection.Error())
+}
+
+// flakyUpgradeServer rejects the first `rejects` handshakes with 400 and upgrades the rest.
+func flakyUpgradeServer(t *testing.T, rejects int32) *httptest.Server {
+	t.Helper()
+
+	var attempts atomic.Int32
+
+	upgrader := websocket.Upgrader{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) <= rejects {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		_, _, _ = conn.ReadMessage()
+	}))
+
+	t.Cleanup(srv.Close)
+
+	return srv
+}
+
+func Test_AddWSService_Failures(t *testing.T) {
+	tests := []struct {
+		desc               string
+		rejects            int32
+		enableReconnection bool
+		expErr             error
+		assertConn         func(t *testing.T, app *App)
+	}{
+		{
+			desc:               "dial failure without reconnection returns error",
+			rejects:            1000,
+			enableReconnection: false,
+			expErr:             websocket.ErrBadHandshake,
+			assertConn: func(t *testing.T, app *App) {
+				t.Helper()
+
+				// Without reconnection AddWSService returns synchronously and never stores a connection.
+				assert.Nil(t, app.container.GetWSConnectionByServiceName("svc"))
+			},
+		},
+		{
+			desc:               "dial failure with reconnection connects in background",
+			rejects:            2,
+			enableReconnection: true,
+			expErr:             nil,
+			assertConn: func(t *testing.T, app *App) {
+				t.Helper()
+
+				var conn *gofrWebsocket.Connection
+
+				require.Eventually(t, func() bool {
+					conn = app.container.GetWSConnectionByServiceName("svc")
+
+					return conn != nil
+				}, 3*time.Second, 10*time.Millisecond)
+
+				// Registered after the server's cleanup, so it runs first and unblocks the server handler.
+				t.Cleanup(func() { _ = conn.Close() })
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+
+			app := New()
+			srv := flakyUpgradeServer(t, tc.rejects)
+			wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+			err := app.AddWSService("svc", wsURL, http.Header{}, tc.enableReconnection, 5*time.Millisecond)
+
+			require.ErrorIs(t, err, tc.expErr)
+			tc.assertConn(t, app)
+		})
+	}
+}
+
+func TestSerializeMessage_Error(t *testing.T) {
+	tests := []struct {
+		desc   string
+		input  any
+		expErr error
+	}{
+		{desc: "channel cannot be marshaled", input: make(chan int), expErr: ErrMarshalingResponse},
+		{desc: "function cannot be marshaled", input: func() {}, expErr: ErrMarshalingResponse},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			msg, err := serializeMessage(tc.input)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, msg)
 		})
 	}
 }

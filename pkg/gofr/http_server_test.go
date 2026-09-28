@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -351,27 +353,50 @@ func (d *benchDiscardResponseWriter) Header() http.Header {
 	return d.h
 }
 
+// reset returns the writer to the state a FRESH request would find it in.
+//
+// Without it one writer is reused across every iteration, so a header written
+// only when absent -- Content-Type is exactly that -- is set on the first
+// iteration and measured as free on every one after. Any benchmark that reaches
+// Responder.Respond must call this, or it silently understates the response
+// path by one allocation.
+func (d *benchDiscardResponseWriter) reset() {
+	clear(d.Header())
+	d.code = 0
+}
+
 func (*benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (d *benchDiscardResponseWriter) WriteHeader(c int)         { d.code = c }
 
-// buildBenchRouter reconstructs the same middleware chain that
-// gofr.New() / newHTTPServer + httpServer.run wire — Tracer, Logging,
-// CORS, Metrics, WSHandlerUpgrade — so we can measure end-to-end request
-// cost through the real chain without binding to a port.
+// useGoFrMiddleware applies the same middleware chain that gofr.New() /
+// newHTTPServer + httpServer.run wire — Tracer, Logging, CORS, Metrics,
+// WSHandlerUpgrade — so a benchmark can measure end-to-end request cost
+// through the real chain without binding to a port.
+//
+// This is the ONE definition of that chain for benchmarks. Every bench
+// router goes through it, because a second hand-rolled copy drifts: the
+// first one dropped WSHandlerUpgrade while still claiming to mirror what a
+// GoFr application serves.
 //
 // Keep this in sync with newHTTPServer in http_server.go. Any change to
 // GoFr's middleware composition needs a matching change here.
-func buildBenchRouter(c *container.Container) http.Handler {
-	r := gofrHTTP.NewRouter()
-	wsManager := websocket.New()
-
+func useGoFrMiddleware(r *gofrHTTP.Router, c *container.Container) {
 	r.Use(
 		middleware.Tracer,
 		middleware.Logging(middleware.LogProbes{}, c.Logger),
 		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),
-		middleware.WSHandlerUpgrade(c, wsManager),
+		middleware.WSHandlerUpgrade(c, websocket.New()),
 	)
+}
+
+// buildBenchRouter is the router BenchmarkRequest_FullChain measures: the
+// real chain in front of raw http.HandlerFunc routes, so it isolates the
+// middleware cost from GoFr's own handler wrapper.
+func buildBenchRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+
+	useGoFrMiddleware(r, c)
 
 	r.Add(http.MethodGet, "/plaintext", http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
@@ -406,12 +431,20 @@ func BenchmarkRequest_FullChain(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
 
 // BenchmarkRequest_FullChain_JSON runs the same chain against the /json
 // handler. Pairs with the /json endpoint in the wrk benchmarks.
+//
+// It does NOT exercise the response-envelope pooling in this PR, and should not
+// be cited as evidence for it: /json is registered as a raw http.HandlerFunc
+// that writes its bytes directly, so it never reaches Responder.Respond. The
+// responder-level benchmarks are what demonstrate that change. The writer reset
+// below is kept for symmetry with the sibling benchmarks, where it is load
+// bearing.
 func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)
@@ -422,6 +455,7 @@ func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
@@ -453,6 +487,7 @@ func BenchmarkRequest_FullChain_SDK(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w.reset()
 		h.ServeHTTP(w, req)
 	}
 }
@@ -515,6 +550,84 @@ func TestRouter_Matcher(t *testing.T) {
 		t.Run("GOFR_ROUTER="+env, func(t *testing.T) {
 			t.Setenv(gofrHTTP.RouterEnvVar, env)
 			assert.Equal(t, want, gofrHTTP.NewRouter().Matcher())
+		})
+	}
+}
+
+func TestHTTPServer_run_DoesNotServe(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setup      func(t *testing.T) *httpServer
+		setupMocks func(l *container.MockLogger, port int)
+	}{
+		{
+			desc: "shut down before it started",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t), stopped: true}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Server was shut down before it started on port: %d", port)
+			},
+		},
+		{
+			desc: "certificate files missing",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: "missing-cert.pem", keyFile: "missing-key.pem"}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Error(fmt.Errorf("%w : %v", errInvalidCertificateFile, "missing-cert.pem"))
+			},
+		},
+		{
+			desc: "certificate files unparsable",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: createTempCertFile(t), keyFile: createTempKeyFile(t)}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to https server, err: %v", gomock.Any())
+			},
+		},
+		{
+			desc: "port already in use",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", ":0")
+				require.NoError(t, err)
+
+				t.Cleanup(func() { listener.Close() })
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: listener.Addr().(*net.TCPAddr).Port}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to http server, err: %v", gomock.Any())
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := tc.setup(t)
+			s.ws = websocket.New()
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger, s.port)
+
+			// run returns on its own in every case: nothing is left listening.
+			s.run(&container.Container{Logger: logger})
+
+			require.NoError(t, s.Shutdown(t.Context()))
 		})
 	}
 }

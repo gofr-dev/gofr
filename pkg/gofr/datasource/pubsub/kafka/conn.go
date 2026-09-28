@@ -44,14 +44,43 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 	k.logger.Logf("connected to %d Kafka brokers", len(conns))
 
 	k.connMu.Lock()
+
+	// Close only signals the retry goroutine; it cannot interrupt a dial
+	// already in flight. Re-check under the same lock Close takes, so a
+	// retryConnect that got past its own check cannot revive a closed client
+	// and leak this conn pool and writer for the life of the process.
+	// A nil k.closed (a client built without New) never fires, so the
+	// default arm is the normal path.
+	select {
+	case <-k.closed:
+		k.connMu.Unlock()
+
+		return errors.Join(errClientClosed, multi.Close(), writer.Close())
+	default:
+	}
+
 	k.dialer = dialer
 	k.conn = multi
+
+	// writer is published under connMu alongside conn: retryConnect calls
+	// initialize from its own goroutine, so this is a pointer swap that
+	// Publish, Close and Health can all be reading concurrently.
+	k.writer = writer
+
 	k.connMu.Unlock()
 
-	// writer and reader are not guarded by connMu — k.mu protects the
-	// reader map; writer is set once and never swapped.
-	k.writer = writer
-	k.reader = reader
+	// retryConnect calls initialize from its own goroutine, so this swap can
+	// land while a Subscribe is reading or growing the map. Take k.mu for it,
+	// the same lock Subscribe uses, and keep any readers a concurrent
+	// Subscribe already created rather than dropping them on the floor —
+	// their committers are already handed out to callers.
+	k.mu.Lock()
+
+	if k.reader == nil {
+		k.reader = reader
+	}
+
+	k.mu.Unlock()
 
 	return nil
 }

@@ -34,11 +34,13 @@ When that context is canceled, a goroutine creates a timeout context using `SHUT
 6. `container.ShutdownMetrics(ctx)` and `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
 7. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
 
+`App.Run` does not return until that goroutine has finished, so a `main` that does nothing but call `app.Run()` cannot let the process exit halfway through the drain. The wait is bounded: if shutdown has not finished one second after `SHUTDOWN_GRACE_PERIOD` expires, GoFr logs `graceful shutdown did not finish` and returns anyway rather than holding the process open until Kubernetes `SIGKILL`s it.
+
 The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers finish in-progress queries. It runs second-to-last on purpose: every producer of datasource traffic — handlers, streams, cron jobs — is drained before the connections they use are torn down. Application code does not need to coordinate this order.
 
 ## OnStart hooks vs shutdown hooks
 
-GoFr exposes [OnStart hooks](/docs/advanced-guide/startup-hooks) for synchronous startup work (cache warmup, seeding). There is no public `OnShutdown` hook today; `App.Shutdown` is what gets called and it operates on the framework's own resources. If you need cleanup on exit for resources you own (custom goroutines, file handles, third-party clients), use context-cancellation: pass a `context.Context` derived from `signal.NotifyContext(...)` into your goroutines and have each goroutine `defer` its own cleanup when that context is cancelled. The framework's `App.Shutdown` runs concurrently with this, so total wind-down stays within `SHUTDOWN_GRACE_PERIOD`.
+GoFr exposes [OnStart hooks](/docs/advanced-guide/startup-hooks) for synchronous startup work (cache warmup, seeding). There is no public `OnShutdown` hook today; `App.Shutdown` is what gets called and it operates on the framework's own resources. If you need cleanup on exit for resources you own (custom goroutines, file handles, third-party clients), use context-cancellation: pass a `context.Context` derived from `signal.NotifyContext(...)` into your goroutines and have each goroutine `defer` its own cleanup when that context is canceled. The framework's `App.Shutdown` runs concurrently with this, so total wind-down stays within `SHUTDOWN_GRACE_PERIOD`.
 
 ## The Kubernetes termination flow
 
@@ -89,7 +91,7 @@ For a service with 2s P99, that's 5s + 30s + 10s = 45–60s.
 - **SQL.** `database/sql` waits for active queries to finish on `Close()`. Long-running transactions can extend shutdown — keep request timeouts shorter than `SHUTDOWN_GRACE_PERIOD`.
 - **Redis / NoSQL.** Clients close idle connections immediately and wait for in-flight commands.
 - **Pub/Sub.** GoFr's subscription manager respects the shutdown context — consumers stop polling and commit current offsets where the broker supports it (Kafka, NATS JetStream).
-- **Cron jobs.** `App.Shutdown` stops the cron scheduler and waits for jobs that are already running before it closes datasource connections, so a job mid-write is not cut off by `container.Close()`. The wait is bounded by the shutdown deadline (`SHUTDOWN_GRACE_PERIOD`): if a job is still running when that expires, `Shutdown` returns and the job is abandoned. The jobs themselves run with `context.Background()`, so a job's own `ctx` is never cancelled — anything that needs to be interruptible has to watch something else. For cron work that routinely outlasts `SHUTDOWN_GRACE_PERIOD`, run it as a Kubernetes `CronJob` in its own pod rather than inside the service.
+- **Cron jobs.** `App.Shutdown` stops the cron scheduler and waits for jobs that are already running before it closes datasource connections, so a job mid-write is not cut off by `container.Close()`. The wait is bounded by the shutdown deadline (`SHUTDOWN_GRACE_PERIOD`): if a job is still running when that expires, `Shutdown` returns and the job is abandoned. The jobs themselves run with `context.Background()`, so a job's own `ctx` is never canceled — anything that needs to be interruptible has to watch something else. For cron work that routinely outlasts `SHUTDOWN_GRACE_PERIOD`, run it as a Kubernetes `CronJob` in its own pod rather than inside the service.
 
 ## Verification
 
@@ -110,6 +112,6 @@ You should see `Shutting down server with a timeout of 30s` followed by `Applica
 Yes, on Kubernetes. The preStop sleep covers the brief window before kube-proxy updates iptables on every node — without it, pods can receive new connections after SIGTERM has already started the drain.
 {% /faq-item %}
 {% faq-item question="What happens if shutdown takes longer than SHUTDOWN_GRACE_PERIOD?" %}
-The shutdown context expires, `App.Shutdown` returns the deadline error, and Kubernetes will eventually `SIGKILL` the process when `terminationGracePeriodSeconds` elapses.
+The shutdown context expires, `App.Shutdown` returns the deadline error, and Kubernetes will eventually `SIGKILL` the process when `terminationGracePeriodSeconds` elapses. `App.Run` stops waiting one second after that deadline and returns, so the process exits on its own rather than waiting for the `SIGKILL`.
 {% /faq-item %}
 {% /faq %}

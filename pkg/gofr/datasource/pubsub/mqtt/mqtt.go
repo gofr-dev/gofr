@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -21,6 +20,7 @@ const (
 	defaultQueryMessageLimit   = 10
 	defaultQueryCollectTimeout = 5 * time.Second
 	unsubscribeOpTimeout       = 2 * time.Second
+	mqttBackend                = "MQTT"
 )
 
 var (
@@ -109,7 +109,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	subs, ok := m.subscriptions[topic]
 	if !ok {
 		subs.msgs = make(chan *pubsub.Message, messageBuffer)
-		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
+		subs.handler = m.createMqttHandler(subs.msgs)
 		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
 
 		if token.Wait() && token.Error() != nil {
@@ -124,10 +124,24 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 	m.mu.Unlock()
 
+	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
 	select {
 	// blocks if there are no messages in the channel
 	case msg := <-subs.msgs:
-		m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+		spanCtx, span := startSubscribeSpan(ctx, topic)
+		defer span.End()
+
+		m.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+
+		m.logger.Debug(&pubsub.Log{
+			Mode:          "SUB",
+			CorrelationID: span.SpanContext().TraceID().String(),
+			MessageValue:  string(msg.Value),
+			Topic:         msg.Topic,
+			Host:          m.config.Hostname,
+			PubSubBackend: mqttBackend,
+		})
 
 		return msg, nil
 	case <-ctx.Done():
@@ -177,7 +191,7 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
+	ctx, span := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -202,7 +216,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          m.config.Hostname,
-		PubSubBackend: "MQTT",
+		PubSubBackend: mqttBackend,
 		Time:          t.Microseconds(),
 	})
 

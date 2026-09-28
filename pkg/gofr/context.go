@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -11,6 +12,7 @@ import (
 
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -159,6 +161,52 @@ func (a *authInfo) GetAPIKey() string {
 //	c.Context = nil
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
+
+// httpContext bundles a Context with the concrete HTTP Request and Responder it
+// uses. All three are created together, live for exactly one request and die
+// together, so giving them one allocation instead of three changes nothing
+// observable -- Context still holds them through the same interfaces.
+//
+// One consequence is worth knowing: sharing an allocation means they are now
+// reachable as a unit, so a handler that retains any one of them past the
+// request keeps the other two -- including the ResponseWriter -- alive with it.
+// Retaining any of them after the handler returns was already a bug, since
+// net/http forbids using the ResponseWriter then, but the cost of doing it is
+// larger now.
+//
+// The framework itself has one such path, and it is not a user bug: App.WebSocket
+// assigns ctx.Request = conn and then loops in handleWebSocketConnection for as
+// long as the socket lives. Reassigning that interface field used to make the
+// *gofrHTTP.Request unreachable, so the underlying *http.Request -- headers, URL,
+// the pathParams map -- could be collected while the connection stayed open. It
+// now shares an allocation with the still-live Context, so it is retained for the
+// connection's whole lifetime. Small per connection, but it scales with the number
+// of concurrent long-lived sockets.
+type httpContext struct {
+	ctx  Context
+	req  gofrHTTP.Request
+	resp gofrHTTP.Responder
+}
+
+// newHTTPContext builds the request Context for the HTTP server in a single
+// allocation. The other transports (CMD, GraphQL, cron, subscribers) supply
+// their own Request implementations and keep using newContext.
+func newHTTPContext(w http.ResponseWriter, r *http.Request, c *container.Container) *Context {
+	a := &httpContext{
+		req:  gofrHTTP.RequestFor(r),
+		resp: gofrHTTP.ResponderFor(w, r.Method),
+	}
+
+	a.ctx = Context{
+		Context:       r.Context(),
+		Request:       &a.req,
+		responder:     &a.resp,
+		Container:     c,
+		ContextLogger: logging.ContextLoggerFor(r.Context(), c.Logger),
+	}
+
+	return &a.ctx
+}
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{

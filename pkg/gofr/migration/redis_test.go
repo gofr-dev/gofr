@@ -441,3 +441,70 @@ func TestRedisMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	val := s.HGet("gofr_migrations", "1")
 	assert.Empty(t, val, "no migration record should be written when Redis was not used")
 }
+
+func TestRedisMigrator_GetLastMigration_BaseMigratorError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
+		goRedis.NewMapStringStringResult(map[string]string{"1": `{"method":"UP"}`}, nil))
+	mockMigrator.EXPECT().getLastMigration(c).Return(int64(0), errRedis)
+
+	lastMigration, err := m.getLastMigration(c)
+
+	assert.Equal(t, int64(-1), lastMigration)
+	require.ErrorIs(t, err, errRedis)
+}
+
+func TestRedisMigrator_Lock_ContextCanceledWhileRetrying(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	c, mocks := container.NewMockContainer(t)
+	mockLogger := container.NewMockLogger(ctrl)
+	c.Logger = mockLogger
+	m := redisMigrator{Redis: mocks.Redis, migrator: NewMockmigrator(ctrl)}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "owner-1", defaultLockTTL).Return(goRedis.NewBoolResult(false, nil))
+	// Cancel the context while the lock is being retried so the retry wait exits via ctx.Done.
+	mockLogger.EXPECT().Debugf("Redis lock already held, retrying in %v... (attempt %d)", defaultRetry, 1).
+		Do(func(string, ...any) { cancel() })
+
+	err := m.lock(ctx, cancel, c, "owner-1")
+
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestRedisMigrator_Unlock_NotOwned(t *testing.T) {
+	tests := []struct {
+		desc   string
+		result any
+	}{
+		{desc: "lock already released", result: int64(0)},
+		{desc: "unexpected result type", result: "OK"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			c, mocks := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			c.Logger = mockLogger
+			m := redisMigrator{Redis: mocks.Redis, migrator: NewMockmigrator(ctrl)}
+
+			mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "owner-1").
+				Return(goRedis.NewCmdResult(tc.result, nil))
+			mockLogger.EXPECT().Errorf("failed to release Redis lock: lock was already released or stolen")
+
+			err := m.unlock(c, "owner-1")
+
+			assert.Equal(t, errLockReleaseFailed, err)
+		})
+	}
+}

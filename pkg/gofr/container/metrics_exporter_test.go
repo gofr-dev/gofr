@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
@@ -25,6 +27,18 @@ func Test_metricsExporterConfig(t *testing.T) {
 			want: exporters.Config{
 				AppName: "app", AppVersion: "v1",
 				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			// Covers the wiring seam: removing the CardinalityLimit line from
+			// metricsExporterConfig makes the feature a silent no-op, and this is
+			// the only case that would catch it.
+			name: "cardinality limit is wired into the config",
+			env:  map[string]string{"METRICS_CARDINALITY_LIMIT": "500"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
+				CardinalityLimit: func() *int { n := 500; return &n }(),
 			},
 		},
 		{
@@ -82,6 +96,66 @@ func Test_metricsExporterConfig(t *testing.T) {
 	}
 }
 
+func Test_metricsCardinalityLimit(t *testing.T) {
+	ptr := func(n int) *int { return &n }
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want *int
+	}{
+		{"unset leaves SDK default", map[string]string{}, nil},
+		{"positive limit", map[string]string{"METRICS_CARDINALITY_LIMIT": "500"}, ptr(500)},
+		{"zero means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, ptr(0)},
+		{"negative means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "-1"}, ptr(-1)},
+		{"whitespace is trimmed", map[string]string{"METRICS_CARDINALITY_LIMIT": "  100  "}, ptr(100)},
+		{"invalid falls back to default", map[string]string{"METRICS_CARDINALITY_LIMIT": "abc"}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricsCardinalityLimit(config.NewMockConfig(tc.env), logging.NewMockLogger(logging.ERROR))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("metricsCardinalityLimit() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMetricsCardinalityLimit_OTelFallback(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want int
+	}{
+		{"unset uses SDK default", map[string]string{}, defaultMetricsCardinalityLimit},
+		{"gofr limit wins", map[string]string{"METRICS_CARDINALITY_LIMIT": "500", "OTEL_GO_X_CARDINALITY_LIMIT": "700"}, 500},
+		{"otel limit used when gofr limit unset", map[string]string{"OTEL_GO_X_CARDINALITY_LIMIT": " 700 "}, 700},
+		{"invalid gofr limit falls back to otel limit", map[string]string{
+			"METRICS_CARDINALITY_LIMIT": "abc", "OTEL_GO_X_CARDINALITY_LIMIT": "700"}, 700},
+		{"invalid otel limit uses SDK default", map[string]string{"OTEL_GO_X_CARDINALITY_LIMIT": "abc"}, defaultMetricsCardinalityLimit},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, MetricsCardinalityLimit(config.NewMockConfig(tc.env)))
+		})
+	}
+}
+
+// Test_metricsCardinalityLimit_invalidDoesNotLogValue ensures an invalid value is
+// not echoed into logs (CodeQL: clear-text logging of externally controlled input).
+func Test_metricsCardinalityLimit_invalidDoesNotLogValue(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		l := logging.NewMockLogger(logging.WARN)
+		metricsCardinalityLimit(config.NewMockConfig(map[string]string{"METRICS_CARDINALITY_LIMIT": "sneaky-value"}), l)
+	})
+
+	if strings.Contains(out, "sneaky-value") {
+		t.Errorf("raw METRICS_CARDINALITY_LIMIT value leaked into logs: %q", out)
+	}
+}
+
 // Test_metricsExporterConfig_otelFallback covers interval/temporality falling
 // back to the OpenTelemetry standard env vars, with METRICS_* taking precedence.
 func Test_metricsExporterConfig_otelFallback(t *testing.T) {
@@ -116,6 +190,14 @@ func Test_metricsExporterConfig_otelFallback(t *testing.T) {
 			want: exporters.Config{
 				AppName: "app", AppVersion: "v1",
 				Protocol: "grpc", Interval: 5 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			name: "invalid OTEL interval falls back to default",
+			env:  map[string]string{"OTEL_METRIC_EXPORT_INTERVAL": "not-a-number"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
 			},
 		},
 		{

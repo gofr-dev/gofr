@@ -7,165 +7,94 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMatchEndpoint_ExactMatch(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_PublicEndpoint(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/health", Methods: []string{"GET"}, Public: true},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/health", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.True(t, isPublic)
-}
-
-func TestMatchEndpoint_DifferentMethod(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api/users", endpoints, config)
-	require.Nil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_WildcardMethod(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_MuxPatternPath(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_MuxPatternWithConstraint(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/users/123", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_NotFound(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("GET", "/api/posts", endpoints, config)
-	require.Nil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchEndpoint_EmptyMethods(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:*"}},
-		},
-	}
-	_ = config.processUnifiedConfig()
-	endpoints := config.Endpoints
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
-	require.NotNil(t, endpoint)
-	assert.False(t, isPublic)
-}
-
-func TestMatchesHTTPMethod(t *testing.T) {
+// TestConfig_resolve_Cases covers the resolution cases that used to be exercised through the
+// now-deleted matchEndpoint helper. They run against config.resolve, which is the single entry
+// point the middleware and GetEndpointPermission both use.
+func TestConfig_resolve_Cases(t *testing.T) {
 	testCases := []struct {
 		desc           string
+		endpoints      []EndpointMapping
 		method         string
-		allowedMethods []string
-		expected       bool
+		path           string
+		expectedPath   string
+		expectedPublic bool
 	}{
 		{
-			desc:           "matches exact method",
-			method:         "GET",
-			allowedMethods: []string{"GET"},
-			expected:       true,
+			desc:         "exact match",
+			endpoints:    []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users",
+			expectedPath: "/api/users",
 		},
 		{
-			desc:           "matches case-insensitive method",
-			method:         "get",
-			allowedMethods: []string{"GET"},
-			expected:       true,
+			desc:           "public endpoint",
+			endpoints:      []EndpointMapping{{Path: "/health", Methods: []string{"GET"}, Public: true}},
+			method:         http.MethodGet,
+			path:           "/health",
+			expectedPath:   "/health",
+			expectedPublic: true,
 		},
 		{
-			desc:           "matches wildcard method",
-			method:         "POST",
-			allowedMethods: []string{"*"},
-			expected:       true,
+			desc:      "declared method does not cover the request method",
+			endpoints: []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:    http.MethodPost,
+			path:      "/api/users",
 		},
 		{
-			desc:           "matches empty methods as all",
-			method:         "DELETE",
-			allowedMethods: []string{},
-			expected:       true,
+			desc:         "wildcard method",
+			endpoints:    []EndpointMapping{{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodPost,
+			path:         "/api",
+			expectedPath: "/api",
 		},
 		{
-			desc:           "does not match different method",
-			method:         "POST",
-			allowedMethods: []string{"GET"},
-			expected:       false,
+			desc:         "omitted methods behaves as wildcard",
+			endpoints:    []EndpointMapping{{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodPost,
+			path:         "/api",
+			expectedPath: "/api",
 		},
 		{
-			desc:           "matches one of multiple methods",
-			method:         "PUT",
-			allowedMethods: []string{"GET", "PUT", "POST"},
-			expected:       true,
+			desc:         "mux pattern path",
+			endpoints:    []EndpointMapping{{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users",
+			expectedPath: "/api/{resource}",
+		},
+		{
+			desc:         "mux pattern with constraint",
+			endpoints:    []EndpointMapping{{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:       http.MethodGet,
+			path:         "/api/users/123",
+			expectedPath: "/api/users/{id:[0-9]+}",
+		},
+		{
+			desc:      "no configured endpoint matches",
+			endpoints: []EndpointMapping{{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}}},
+			method:    http.MethodGet,
+			path:      "/api/posts",
 		},
 	}
 
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesHTTPMethod(tc.method, tc.allowedMethods)
+			config := newTestConfig(t, tc.endpoints, nil)
 
-			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+			endpoint, isPublic := config.resolve(tc.method, tc.path)
+
+			assert.Equal(t, tc.expectedPublic, isPublic)
+
+			if tc.expectedPath == "" {
+				assert.Nil(t, endpoint)
+				return
+			}
+
+			require.NotNil(t, endpoint)
+			assert.Equal(t, tc.expectedPath, endpoint.Path)
 		})
 	}
 }
@@ -243,12 +172,14 @@ func TestMatchesEndpointPattern(t *testing.T) {
 		},
 	}
 
-	config := &Config{}
-	_ = config.processUnifiedConfig()
-
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesEndpointPattern(tc.endpoint, tc.route, config)
+			rule := endpointRule{
+				pattern: tc.endpoint.Path,
+				route:   compilePattern(tc.endpoint.Path),
+			}
+
+			result := rule.matchesPath(tc.route, newMatchContext(http.MethodGet, tc.route))
 
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
@@ -539,85 +470,58 @@ func TestIsMuxPattern(t *testing.T) {
 	}
 }
 
-func TestMatchMuxPattern(t *testing.T) {
-	router := mux.NewRouter()
-
+func TestCompilePattern(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		pattern  string
-		method   string
 		path     string
+		compiled bool
 		expected bool
 	}{
-		{
-			desc:     "matches single variable",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "matches variable with constraint",
-			pattern:  "/api/users/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "does not match constraint violation",
-			pattern:  "/api/users/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/users/abc",
-			expected: false,
-		},
-		{
-			desc:     "matches multi-level pattern",
-			pattern:  "/api/{path:.*}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "matches middle variable",
-			pattern:  "/api/{category}/posts",
-			method:   "GET",
-			path:     "/api/tech/posts",
-			expected: true,
-		},
-		{
-			desc:     "matches multiple variables",
-			pattern:  "/api/{category}/posts/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/tech/posts/123",
-			expected: true,
-		},
-		{
-			desc:     "does not match different path",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/posts/123",
-			expected: false,
-		},
-		{
-			desc:     "returns false for nil router",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: false,
-		},
+		{"matches single variable", "/api/users/{id}", "/api/users/123", true, true},
+		{"matches variable with constraint", "/api/users/{id:[0-9]+}", "/api/users/123", true, true},
+		{"does not match constraint violation", "/api/users/{id:[0-9]+}", "/api/users/abc", true, false},
+		{"matches multi-level pattern", "/api/{path:.*}", "/api/users/123", true, true},
+		{"matches middle variable", "/api/{category}/posts", "/api/tech/posts", true, true},
+		{"matches multiple variables", "/api/{category}/posts/{id:[0-9]+}", "/api/tech/posts/123", true, true},
+		{"does not match different path", "/api/users/{id}", "/api/posts/123", true, false},
+		{"literal path is not compiled", "/api/users", "/api/users", false, false},
+		{"empty path is not compiled", "", "/api/users", false, false},
+		{"uncompilable pattern matches nothing", "/api/{id:[}", "/api/users", true, false},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			var testRouter *mux.Router
+			route := compilePattern(tc.pattern)
 
-			if tc.desc != "returns false for nil router" {
-				testRouter = router
+			if !tc.compiled {
+				assert.Nil(t, route, "a literal path carries no compiled route")
+
+				return
 			}
 
-			result := matchMuxPattern(tc.pattern, tc.method, tc.path, testRouter)
-			assert.Equal(t, tc.expected, result)
+			require.NotNil(t, route)
+			assert.Equal(t, tc.expected, newMatchContext(http.MethodGet, tc.path).matches(route))
 		})
+	}
+}
+
+// TestCompilePattern_routeIsNotShared pins the fix for the unbounded router growth: compiling a
+// pattern must not append to any router that outlives the call.
+func TestCompilePattern_routeIsNotShared(t *testing.T) {
+	const pattern = "/api/users/{id}"
+
+	first, second := compilePattern(pattern), compilePattern(pattern)
+
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+	assert.NotSame(t, first, second, "each pattern must compile onto a router of its own")
+
+	mc := newMatchContext(http.MethodGet, "/api/users/123")
+
+	// Matching repeatedly must be a pure read - the same answer, every time.
+	for range 3 {
+		assert.True(t, mc.matches(first))
 	}
 }
 

@@ -108,12 +108,9 @@ func TestContextLogger_WithTraceInfo_WithTraceID(t *testing.T) {
 
 	assert.Len(t, result, 2)
 
-	traceMap, ok := result[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok := traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok := result[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 }
 
 func TestContextLogger_LoggingMethods_NoTrace(t *testing.T) {
@@ -153,35 +150,23 @@ func TestContextLogger_LoggingMethods_WithTrace(t *testing.T) {
 	require.True(t, ok, "Expected message to be []any")
 	require.Len(t, infoMsg, 2)
 
-	traceMap, ok := infoMsg[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok := traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok := infoMsg[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 
 	errorMsg, ok := baseLogger.logs[1].Message.([]any)
 	require.True(t, ok, "Expected message to be []any")
 	require.Len(t, errorMsg, 2)
 
-	traceMap, ok = errorMsg[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok = traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok = errorMsg[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 }
 
 func TestContextLogger_Integration(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-	realLogger := &logger{
-		level:      DEBUG,
-		normalOut:  buf,
-		errorOut:   buf,
-		isTerminal: false,
-		lock:       make(chan struct{}, 1),
-	}
+	realLogger := newLoggerAt(DEBUG, buf, buf)
 
 	ctx, expectedTraceID := mockTracedContext()
 
@@ -208,20 +193,14 @@ func TestContextLogger_Integration(t *testing.T) {
 }
 
 func TestContextLogger_ChangeLevel(t *testing.T) {
-	baseLogger := &logger{
-		level:      INFO,
-		normalOut:  io.Discard,
-		errorOut:   io.Discard,
-		isTerminal: false,
-		lock:       make(chan struct{}, 1),
-	}
+	baseLogger := newLoggerAt(INFO, io.Discard, io.Discard)
 
 	ctx := t.Context()
 	ctxLogger := NewContextLogger(ctx, baseLogger)
 
 	ctxLogger.ChangeLevel(DEBUG)
 
-	assert.Equal(t, DEBUG, baseLogger.level)
+	assert.Equal(t, DEBUG, Level(baseLogger.level.Load()))
 }
 
 // TestContextLogger_TraceID_SurfacedAndReused verifies that a request-scoped
@@ -263,7 +242,7 @@ func TestContextLogger_NoTrace_NoMarker(t *testing.T) {
 	base := newBufLogger(buf)
 
 	cl := NewContextLogger(context.Background(), base)
-	assert.Nil(t, cl.traceArg, "no precomputed marker when there is no valid trace")
+	assert.False(t, cl.spanCtx.IsValid(), "no valid span means no marker will be attached")
 
 	cl.Info("x")
 
@@ -297,5 +276,107 @@ func BenchmarkContextLoggerInfo(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		cl.Info("request handled successfully")
+	}
+}
+
+// TestContextLoggerForMatchesPointerConstructor pins that the value constructor
+// and the pointer constructor produce identical loggers, so the per-request
+// construction site can use either.
+func TestContextLoggerForMatchesPointerConstructor(t *testing.T) {
+	ctx := benchSpanContext()
+	base := newBufLogger(&bytes.Buffer{})
+
+	ptr := NewContextLogger(ctx, base)
+	val := ContextLoggerFor(ctx, base)
+
+	require.Equal(t, ptr.spanCtx, val.spanCtx)
+	require.True(t, val.spanCtx.IsValid())
+	require.Equal(t, ptr.withTraceInfo("m"), val.withTraceInfo("m"),
+		"both constructors must attach the same marker")
+}
+
+// TestContextLoggerForNoTrace covers the no-span case: no trace ID, no marker.
+func TestContextLoggerForNoTrace(t *testing.T) {
+	val := ContextLoggerFor(context.Background(), newBufLogger(&bytes.Buffer{}))
+
+	require.False(t, val.spanCtx.IsValid())
+	require.Equal(t, []any{"m"}, val.withTraceInfo("m"), "no marker without a valid span")
+}
+
+// TestContextLoggerForStillLogsTraceID is the feature guard: the trace ID must
+// still reach the emitted log line.
+func TestContextLoggerForStillLogsTraceID(t *testing.T) {
+	buf := &bytes.Buffer{}
+	val := ContextLoggerFor(benchSpanContext(), newBufLogger(buf))
+
+	val.Info("hello")
+
+	require.Contains(t, buf.String(), "0102030405060708090a0b0c0d0e0f10")
+}
+
+// TestContextLoggerSilentRequestIsFree pins the point of deferring the trace ID:
+// building a logger for a request that never logs must allocate nothing.
+func TestContextLoggerSilentRequestIsFree(t *testing.T) {
+	ctx := benchSpanContext()
+	base := newBufLogger(&bytes.Buffer{})
+
+	got := testing.AllocsPerRun(1000, func() {
+		ctxLoggerSink = ContextLoggerFor(ctx, base)
+	})
+
+	require.Zero(t, got, "a request that never logs must not pay for a trace ID")
+}
+
+//nolint:gochecknoglobals // standard Go benchmarking idiom; a local would be optimized away.
+var ctxLoggerSink ContextLogger
+
+// TestContextLoggerStillEmitsTraceIDWhenLogging is the feature guard: deferring
+// must not lose the trace ID from an emitted line.
+func TestContextLoggerStillEmitsTraceIDWhenLogging(t *testing.T) {
+	buf := &bytes.Buffer{}
+	cl := ContextLoggerFor(benchSpanContext(), newBufLogger(buf))
+
+	cl.Info("hello")
+
+	require.Contains(t, buf.String(), "0102030405060708090a0b0c0d0e0f10")
+}
+
+// BenchmarkContextLogger_PerRequest is the cost a request pays for its own logger: one is built per
+// request, and then used a handful of times.
+//
+// Both halves are measured together because that is how it is used, and because the change moves
+// work between them — the trace marker is no longer materialized when the logger is constructed,
+// only when an entry is actually built.
+func BenchmarkContextLogger_PerRequest(b *testing.B) {
+	base := NewMockLogger(ERROR)
+	// A traced context and the value constructor, because that is the production
+	// call site (pkg/gofr/context.go uses ContextLoggerFor). context.Background()
+	// carries no valid span, so neither the deferred trace-ID formatting nor the
+	// avoided wrapper allocation would be exercised.
+	ctx := benchSpanContext()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		l := ContextLoggerFor(ctx, base)
+		l.Debug("request served")
+		l.Debugf("status %d", 200)
+	}
+}
+
+// BenchmarkContextLogger_Discarded is the production shape: the service runs above DEBUG, so the
+// entry is assembled and then dropped. Anything spent building it is waste.
+func BenchmarkContextLogger_Discarded(b *testing.B) {
+	base := NewMockLogger(ERROR)
+	// Traced, so the per-call trace-ID formatting this PR moves here is actually
+	// measured -- this is the cost side of the trade, and it must be visible.
+	l := ContextLoggerFor(benchSpanContext(), base)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		l.Debug("this entry is below the configured level")
 	}
 }

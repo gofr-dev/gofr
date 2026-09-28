@@ -25,53 +25,10 @@ const (
 var (
 	// errUnbalancedBraces is returned when a mux pattern has unbalanced braces.
 	errUnbalancedBraces = errors.New("unbalanced braces in pattern")
+
+	// errInvalidPattern is returned when mux cannot compile a pattern.
+	errInvalidPattern = errors.New("invalid mux pattern")
 )
-
-// matchEndpoint checks if the request matches an endpoint configuration.
-// This is the primary authorization check using the unified Endpoints configuration.
-// Returns the matched endpoint and whether it's public.
-func matchEndpoint(method, route string, endpoints []EndpointMapping, config *Config) (*EndpointMapping, bool) {
-	for i := range endpoints {
-		endpoint := &endpoints[i]
-
-		// Check if endpoint is public
-		if endpoint.Public {
-			if matchesEndpointPattern(endpoint, route, config) {
-				return endpoint, true
-			}
-
-			continue
-		}
-
-		// Check method match
-		if !matchesHTTPMethod(method, endpoint.Methods) {
-			continue
-		}
-
-		// Check route match
-		if matchesEndpointPattern(endpoint, route, config) {
-			return endpoint, false
-		}
-	}
-
-	return nil, false
-}
-
-// matchesHTTPMethod checks if the HTTP method matches the endpoint's allowed methods.
-func matchesHTTPMethod(method string, allowedMethods []string) bool {
-	// Empty methods or "*" means all methods
-	if len(allowedMethods) == 0 {
-		return true
-	}
-
-	for _, m := range allowedMethods {
-		if m == "*" || strings.EqualFold(m, method) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // isMuxPattern detects if a pattern contains mux-style variables.
 // Returns true if pattern contains { and }.
@@ -79,38 +36,60 @@ func isMuxPattern(pattern string) bool {
 	return strings.Contains(pattern, "{") && strings.Contains(pattern, "}")
 }
 
-// matchMuxPattern uses mux Route.Match() to test if a path matches a mux pattern.
-// Creates a temporary mux Route and uses Route.Match() to test the pattern.
-// Handles all mux pattern types: {id}, {id:[0-9]+}, {path:.*}, etc.
-func matchMuxPattern(pattern, method, path string, router *mux.Router) bool {
-	if router == nil {
-		return false
+// compilePattern compiles an endpoint path into a mux route, once, at load time.
+// Returns nil for a literal path, which is cheaper to compare as a string.
+//
+// Each pattern is compiled onto a router of its own. mux.Router.NewRoute appends to the router it
+// is called on, so compiling against a router shared by every request - as this package used to -
+// both mutated that router without synchronization and grew it by one entry per rule per request,
+// for the life of the process. A router built here is never written to again, and Route.Match only
+// reads the route, so the compiled result is safe to share across goroutines.
+func compilePattern(pattern string) *mux.Route {
+	if pattern == "" || !isMuxPattern(pattern) {
+		return nil
 	}
 
-	// Create a temporary route with the pattern
-	route := router.NewRoute().Path(pattern)
+	// StrictSlash(false) matches the application router's behavior.
+	return mux.NewRouter().StrictSlash(false).NewRoute().Path(pattern)
+}
 
-	// If method is specified, add it to the route
-	if method != "" {
-		route = route.Methods(method)
-	}
+// matchContext carries the values one resolution scan matches its compiled routes against.
+//
+// mux writes its result into the RouteMatch, so a single one is reused across the scan and reset
+// before each use; nothing here reads it. Hoisting it out of the per-rule call keeps the scan's
+// allocation count flat instead of growing with the number of rules in the config.
+type matchContext struct {
+	req   *http.Request
+	match mux.RouteMatch
+}
 
-	// Create a mock request for matching
-	req := &http.Request{
-		Method: method,
-		URL: &url.URL{
-			Path: path,
+// newMatchContext builds the context for resolving one request. mux matchers only read the
+// request, so one value serves the whole scan.
+func newMatchContext(methodUpper, path string) *matchContext {
+	return &matchContext{
+		req: &http.Request{
+			Method: methodUpper,
+			URL: &url.URL{
+				Path: path,
+			},
 		},
 	}
+}
 
-	// Use Route.Match() to test if the request matches the pattern
-	var match mux.RouteMatch
+// matches reports whether the context's request matches a route returned by compilePattern.
+// A pattern mux could not compile carries the error on the route and matches nothing, which is the
+// unguarded-endpoint case logUncompilablePattern reports at load.
+func (m *matchContext) matches(route *mux.Route) bool {
+	m.match = mux.RouteMatch{}
 
-	return route.Match(req, &match)
+	return route.Match(m.req, &m.match)
 }
 
 // validateMuxPattern validates mux pattern syntax.
 // Ensures balanced braces and validates regex constraints format.
+//
+// Whether mux can actually compile the pattern is checked separately and non-fatally by
+// logUncompilablePattern - see the note there.
 func validateMuxPattern(pattern string) error {
 	// Check for balanced braces
 	openCount := strings.Count(pattern, "{")
@@ -127,29 +106,28 @@ func validateMuxPattern(pattern string) error {
 		return fmt.Errorf("%w: %s", errUnbalancedBraces, pattern)
 	}
 
-	// Basic validation: check that braces are properly formatted
-	// More detailed validation would require parsing, which mux will do anyway
 	return nil
 }
 
-// matchesEndpointPattern checks if the route matches the endpoint pattern.
-// Method matching is handled separately in matchEndpoint before this function is called.
-// Uses mux Route.Match() for mux patterns, exact match for non-pattern paths.
-func matchesEndpointPattern(endpoint *EndpointMapping, route string, config *Config) bool {
-	if endpoint.Path == "" {
-		return false
+// logUncompilablePattern reports, at error level, an endpoint pattern that mux cannot compile -
+// an unterminated character class such as "{id:[}", for example.
+//
+// It does not fail the load. A pattern like that passes the brace-balance check, loads cleanly,
+// and then never matches any request, so the endpoint it was written to govern is left unguarded:
+// the same failure shape as an unreachable wildcard-method rule, reached a different way. Refusing
+// to start would close that hole, but GoFr's position is to log and stay up rather than abort on a
+// config defect (gofr-dev/gofr#2378), and reversing that is not something a bugfix should do.
+// Closing it properly needs the fail-closed default for unmatched routes tracked in #3935; until
+// then the operator gets a loud line naming the pattern instead of silence.
+func (c *Config) logUncompilablePattern(pattern string, index int) {
+	err := mux.NewRouter().NewRoute().Path(pattern).GetError()
+	if err == nil || c.Logger == nil {
+		return
 	}
 
-	pattern := endpoint.Path
-
-	// Exact match for non-pattern paths
-	if !isMuxPattern(pattern) {
-		return pattern == route
-	}
-
-	// Use mux Route.Match() for patterns
-	// Method is handled separately, so pass empty string here
-	return matchMuxPattern(pattern, "", route, config.muxRouter)
+	c.Logger.Errorf("RBAC: endpoint[%d]: %v: %q: %v. This endpoint will never match a request, "+
+		"so it is NOT enforced - any route it was meant to govern is currently unguarded.",
+		index, errInvalidPattern, pattern, err)
 }
 
 // checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
@@ -197,17 +175,7 @@ func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, b
 		return nil, false
 	}
 
-	method := strings.ToUpper(r.Method)
-	path := r.URL.Path
-	key := fmt.Sprintf("%s:%s", method, path)
-
-	// Try exact match first (O(1) lookup)
-	if endpoint, isPublic := config.getExactEndpoint(key); endpoint != nil {
-		return endpoint, isPublic
-	}
-
-	// Try pattern matching (O(n) but only for patterns, not exact matches)
-	return config.findEndpointByPattern(method, path)
+	return config.resolve(strings.ToUpper(r.Method), r.URL.Path)
 }
 
 // ResolveRBACConfigPath resolves the RBAC config file path.
