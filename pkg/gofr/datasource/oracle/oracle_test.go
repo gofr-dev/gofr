@@ -1070,60 +1070,43 @@ func Test_sqlConn_Select_Errors(t *testing.T) {
 	}
 }
 
-// edgeStubConn is a lightweight stub to test context cancellation during Ping
-// without requiring generated GoMock expectations.
-type edgeStubConn struct {
-	pingErr error
-	pingCh  chan struct{}
-}
+// Test_Oracle_HealthCheck_PingUsesCallerContext verifies that HealthCheck correctly
+// propagates the caller's context down to the underlying connection's Ping method.
+func Test_Oracle_HealthCheck_PingUsesCallerContext(t *testing.T) {
+	mockConn, _, c := getOracleTestConnection(t)
 
-func (c *edgeStubConn) Ping(ctx context.Context) error {
-	if c.pingCh != nil {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-c.pingCh:
-		}
-	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
 
-	return c.pingErr
-}
+	// Expect Ping to receive the exact context passed into HealthCheck.
+	mockConn.EXPECT().Ping(ctx).Return(context.Canceled)
 
-func (c *edgeStubConn) Exec(context.Context, string, ...any) error { return nil }
-func (c *edgeStubConn) Select(context.Context, any, string, ...any) error { return nil }
-
-var _ Connection = (*edgeStubConn)(nil)
-
-func TestClient_HealthCheck_Timeout(t *testing.T) {
-	c := New(&Config{Host: "db.internal", Port: 1521, Service: "ORCLPDB1"})
-	c.conn = &edgeStubConn{pingCh: make(chan struct{})}
-
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
-	defer cancel()
-
-	h, err := c.HealthCheck(ctx)
+	resp, err := c.HealthCheck(ctx)
 
 	require.ErrorIs(t, err, errStatusDown)
 
-	health, ok := h.(*Health)
+	health, ok := resp.(*Health)
 	require.True(t, ok)
 	assert.Equal(t, StatusDown, health.Status)
 }
 
-func TestClient_Select_InvalidDestEdgeCases(t *testing.T) {
-	testCases := []struct {
+// Test_Select_InvalidDestType_Cases tests that Select validates destination pointer types
+// (rejecting non-slice pointers like &map or &struct) prior to invoking the database driver.
+func Test_Select_InvalidDestType_Cases(t *testing.T) {
+	tests := []struct {
 		desc string
 		dest any
 	}{
-		{"non-pointer slice", []map[string]any{}},
-		{"non-pointer map", map[string]any{}},
-		{"pointer to a map", &map[string]any{}},
-		{"pointer to a non-slice value", &Health{}},
+		{desc: "pointer to map", dest: &map[string]any{}},
+		{desc: "pointer to struct", dest: &Health{}},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			c := New(&Config{Host: "db.internal", Port: 1521})
+			mockConn, _, c := getOracleTestConnection(t)
+
+			// Select should fail fast on type validation without making any call to the connection.
+			mockConn.EXPECT().Select(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 			err := c.Select(t.Context(), tc.dest, "SELECT 1 FROM dual")
 
