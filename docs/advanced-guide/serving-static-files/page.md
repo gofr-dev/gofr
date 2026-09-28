@@ -35,6 +35,12 @@ is treated as not found, and an `openapi.json` in a served folder returns 403 in
 the API specification is reachable only through `/.well-known/swagger` and
 `/.well-known/openapi.json`.
 
+Every request is resolved inside the served folder, symlinks included. A symlink is followed only
+while its target stays inside the folder: one that points outside it returns 404, exactly as a
+missing file does. Symlinks inside the folder must be **relative** (`current.png -> assets/logo.png`);
+an absolute one is refused even when its target is inside the folder. The served folder itself may
+be a symlink, so serving through a release link such as `current -> releases/42` keeps working.
+
 Example project structure:
 
 ```dotenv

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/gorilla/mux"
 
@@ -446,7 +447,7 @@ func isDotSegment(p string, idx int) bool {
 // directly, avoiding the per-request child span and attribute slice grow
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	rou.markOwned(rou.Router.NewRoute().Path(pattern).Methods(method).Handler(handler))
+	rou.markOwned(rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler))
 }
 
 // markOwned records a route whose handler is the one GoFr installed and never
@@ -459,26 +460,40 @@ func (rou *Router) markOwned(route *mux.Route) {
 	rou.own.Store(route, struct{}{})
 }
 
-// AllowedMethods returns the sorted list of HTTP methods accepted for the given request's path.
+// AllowedMethods returns the sorted list of HTTP methods registered for the request's path, whatever
+// the request's own method. Routes that match any method — the catch-all and static endpoints —
+// declare none and are skipped, so an unregistered path yields nil.
+//
+// It walks every route, so it is meant for the cold path that has already failed to match. Each
+// route is matched once, against the request as it arrived: gorilla/mux reports a request that
+// satisfies every matcher except the method as ErrMethodMismatch (route.go, after the matcher
+// loop), which is exactly "this path is registered, for other methods".
 func (rou *Router) AllowedMethods(r *http.Request) []string {
-	var allowed []string
-
-	testReq := r.Clone(r.Context())
+	var (
+		allowed []string
+		match   mux.RouteMatch
+	)
 
 	_ = rou.Router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-		methods, err := route.GetMethods()
-		if err != nil || len(methods) == 0 {
+		// Reset per route: Match clears a mismatch recorded by an earlier route as soon as one of
+		// this route's matchers succeeds, so a carried-over one would misreport. One variable reset,
+		// rather than one declared per route, because it escapes to the heap through Match.
+		match = mux.RouteMatch{}
+
+		if !route.Match(r, &match) && !errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
 			return nil
 		}
 
-		var match mux.RouteMatch
+		// Only now: GetMethods copies the route's method list on every call, and on a 404 no route
+		// gets this far.
+		methods, err := route.GetMethods()
+		if err != nil {
+			return nil
+		}
 
 		for _, m := range methods {
-			testReq.Method = m
-			if route.Match(testReq, &match) {
-				if !slices.Contains(allowed, m) {
-					allowed = append(allowed, m)
-				}
+			if !slices.Contains(allowed, m) {
+				allowed = append(allowed, m)
 			}
 		}
 
@@ -500,16 +515,38 @@ func (rou *Router) UseMiddleware(mws ...Middleware) {
 	rou.Use(middlewares...)
 }
 
+// staticFileConfig serves files from one directory through an os.Root, which is what keeps every
+// request inside it.
+//
+// Containment used to be a string comparison on the joined path, and a string comparison cannot
+// see a symlink: public/evil.txt -> ../secrets/passwords.txt is lexically inside public/ and was
+// served. os.Root resolves each component, symlinks included, and refuses a path that lands outside
+// the directory — with no window between the check and the open for the link to be repointed in,
+// which is what a filepath.EvalSymlinks check before os.Open would leave.
+//
+// It also refuses an absolute symlink whose target is inside the directory, since that target is
+// expressed from the filesystem root. Symlinks within a served directory have to be relative. The
+// served directory itself may still be reached through a symlink (current -> releases/42); only
+// links below it are resolved by the root.
+//
+// The root is opened per request, not once at registration. An os.Root holds the directory it was
+// opened on, so a root held for the life of the app would keep serving the old release after
+// current -> releases/42 is repointed at releases/43, and a directory replaced in place would never
+// be seen. Resolving directoryName on each request keeps that as it has always been.
 type staticFileConfig struct {
 	directoryName string
 	logger        logging.Logger
+
+	// root is the served directory opened for the request in flight; staticHandler sets it on its
+	// own copy of the config.
+	root *os.Root
+
+	// errEscapes is the error os.Root reports for a path that resolves outside it. The os package
+	// does not export it, so it is captured from a root at registration.
+	errEscapes error
 }
 
 func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
-	// staticHandler resolves each request to an absolute, cleaned path and the containment check
-	// compares it against directoryName as a string, so the two have to be in the same form.
-	// Resolving once here covers a relative name and an absolute one carrying a trailing separator
-	// — both of which would otherwise match nothing and answer every request with 403.
 	absDir, err := filepath.Abs(dirName)
 	if err != nil {
 		logger.Errorf("error in registering '%v' static endpoint, cannot resolve directory %v: %v", endpoint, dirName, err)
@@ -517,24 +554,26 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 		return
 	}
 
-	evalDir, err := filepath.EvalSymlinks(absDir)
+	// App.AddStaticFiles only stats the path, so a regular file passes registration. Refusing to
+	// register a non-directory keeps the endpoint from serving that file verbatim at its root.
+	if info, statErr := os.Stat(absDir); statErr != nil || !info.IsDir() {
+		logger.Errorf("error in registering '%v' static endpoint, %v is not a directory", endpoint, absDir)
+
+		return
+	}
+
+	root, err := os.OpenRoot(absDir)
 	if err != nil {
-		logger.Errorf("error in registering '%v' static endpoint, cannot evaluate directory %v: %v", endpoint, absDir, err)
+		logger.Errorf("error in registering '%v' static endpoint, cannot open directory %v: %v", endpoint, absDir, err)
 
 		return
 	}
 
-	// App.AddStaticFiles only stats the path, so a regular file passes registration. The containment
-	// check admits the served path itself now that the endpoint root has to resolve to it, which
-	// would turn that misconfiguration into the file being served verbatim at the endpoint. Refusing
-	// to register a non-directory keeps that guard closed where the prefix comparison used to.
-	if info, statErr := os.Stat(evalDir); statErr != nil || !info.IsDir() {
-		logger.Errorf("error in registering '%v' static endpoint, %v is not a directory", endpoint, evalDir)
+	errEscapes := escapeError(root)
 
-		return
-	}
+	root.Close()
 
-	cfg := staticFileConfig{directoryName: evalDir, logger: logger}
+	cfg := staticFileConfig{directoryName: absDir, logger: logger, errEscapes: errEscapes}
 
 	handler := cfg.staticHandler()
 
@@ -573,60 +612,80 @@ func (staticConfig staticFileConfig) staticHandler() http.Handler {
 			return
 		}
 
-		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
-		if err != nil {
-			staticConfig.respondWithError(w, "failed to resolve absolute path", url, err, http.StatusInternalServerError)
-			return
-		}
-
 		// Restrict direct access to openapi.json via static routes.
 		// Allow access only through /.well-known/swagger or /.well-known/openapi.json.
-		if staticConfig.isRestrictedFile(url, absPath) {
+		if staticConfig.isRestrictedFile(url) {
 			staticConfig.respondWithError(w, "unauthorized attempt to access restricted file", url, nil, http.StatusForbidden)
 			return
 		}
 
-		resolvedPath, err := staticConfig.validateFile(absPath)
+		name := rootRelativeName(url)
+
+		// A copy, so the per-request root never touches the config the handler closes over and
+		// concurrent requests share.
+		reqConfig := staticConfig
+
+		root, err := os.OpenRoot(reqConfig.directoryName)
 		if err != nil {
-			staticConfig.respondWithFileError(w, absPath, err)
+			// The served directory is gone (a release removed, a volume unmounted): a miss, not an
+			// application failure. There is no root to read a custom 404 page from.
+			reqConfig.respondWithFileError(w, name, err)
 			return
 		}
 
-		staticConfig.logger.Debugf("serving file: %s", resolvedPath)
+		defer root.Close()
 
-		if err := staticConfig.serveFile(w, r, resolvedPath); err != nil {
-			staticConfig.respondWithFileError(w, resolvedPath, err)
+		reqConfig.root = root
+
+		file, info, err := reqConfig.openFile(name)
+		if err != nil {
+			reqConfig.respondWithFileError(w, name, err)
+			return
 		}
+
+		defer file.Close()
+
+		reqConfig.logger.Debugf("serving file: %s", file.Name())
+
+		reqConfig.serveFile(w, r, file, info)
 	})
 }
 
-// serveFile writes the contents of path to w.
+// rootRelativeName turns the request path left after the endpoint prefix is stripped into a name
+// relative to the served root: "" and "/" are the root itself.
+func rootRelativeName(url string) string {
+	name := strings.TrimPrefix(path.Clean("/"+url), "/")
+	if name == "" {
+		return "."
+	}
+
+	return filepath.FromSlash(name)
+}
+
+// escapeError captures the error os.Root returns for a path that leaves it, by asking for the one
+// path that always does. It is compared with errors.Is so an escape can answer 404 rather than 500.
+func escapeError(root *os.Root) error {
+	_, err := root.Stat("..")
+
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+
+	return nil
+}
+
+// serveFile writes the contents of the open file to w.
 //
 // This is what breaks the redirects. http.FileServer answers a directory with a redirect to the
 // trailing-slash form of the URL, and ".../index.html" with a redirect back to "./" — and
 // ServeHTTP's path.Clean strips the slash straight back off, so the directory case sends the
 // client in a circle it can never satisfy. http.ServeFile carries the same index.html rule.
 // http.ServeContent has neither: it writes the bytes it is handed and never redirects. Combined
-// with validateFile resolving a directory to its index file, every request either gets content or
+// with openFile resolving a directory to its index file, every request either gets content or
 // an error.
-//
-// It also re-uses the open file's own FileInfo rather than stat-ing the path a second time.
-func (staticFileConfig) serveFile(w http.ResponseWriter, r *http.Request, filePath string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return err
-	}
-
-	http.ServeContent(w, r, filepath.Base(filePath), fileInfo.ModTime(), file)
-
-	return nil
+func (staticFileConfig) serveFile(w http.ResponseWriter, r *http.Request, file *os.File, info fs.FileInfo) {
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
 // Checks if the file is restricted.
@@ -635,111 +694,111 @@ func (staticFileConfig) serveFile(w http.ResponseWriter, r *http.Request, filePa
 // case-insensitive one — every macOS machine, and Windows — "/static/openapi.JSON" opens the very
 // file an exact comparison refuses to serve, leaving the restriction only as strong as the one
 // spelling it knows.
-func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool {
-	fileName := filepath.Base(url)
-
-	return !staticConfig.isWithinDirectory(absPath) || strings.EqualFold(fileName, DefaultSwaggerFileName)
-}
-
-// isWithinDirectory reports whether absPath is the served directory itself or a path inside it.
 //
-// The trailing separator is what keeps a sibling directory with a shared prefix out — /app/public
-// must not admit /app/publicother. But it also excludes the directory's own path, which carries no
-// trailing separator, and that is the path a request for the endpoint root resolves to. Comparing
-// against the directory as well lets the root be served without letting a sibling in.
-func (staticConfig staticFileConfig) isWithinDirectory(absPath string) bool {
-	return absPath == staticConfig.directoryName ||
-		strings.HasPrefix(absPath, staticConfig.directoryName+string(os.PathSeparator))
+// Containment is not checked here: the root refuses any path that leaves the served directory.
+func (staticFileConfig) isRestrictedFile(url string) bool {
+	return strings.EqualFold(filepath.Base(url), DefaultSwaggerFileName)
 }
 
-// Validates file existence and permissions, and resolves a directory to the file that represents
-// it. The returned path is absPath for an ordinary file, and absPath's index file for a directory.
-func (staticConfig staticFileConfig) validateFile(absPath string) (resolvedPath string, err error) {
-	evalPath, err := filepath.EvalSymlinks(absPath)
+// openFile opens name through the root, resolving a directory to its index file, and returns the
+// open file with its FileInfo once it is known to be servable. Every lookup goes through the root,
+// so a symlink that leaves the served directory fails here.
+//
+// The file is opened once and the checks read the open file's own FileInfo. An os.Root resolves a
+// path one component at a time, so a Stat before the Open would walk the path twice; this also
+// leaves no window for the file to be swapped between the check and the open.
+func (staticConfig staticFileConfig) openFile(name string) (*os.File, fs.FileInfo, error) {
+	file, info, err := staticConfig.openAndStat(name)
 	if err != nil {
-		return "", err
-	}
-
-	if !staticConfig.isWithinDirectory(evalPath) {
-		return "", fs.ErrNotExist
-	}
-
-	fileInfo, err := os.Stat(evalPath)
-	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 
 	// A directory is served only through its index file. Handing the directory itself to
 	// http.FileServer would render a listing of its contents, which a static endpoint has no
-	// business disclosing. Without an index, os.Stat reports the same not-exist error a missing
+	// business disclosing. Without an index, the open reports the same not-exist error a missing
 	// file gives, so the request takes the ordinary 404 path.
-	if fileInfo.IsDir() {
-		indexPath := filepath.Join(evalPath, staticServerIndexFileName)
+	if info.IsDir() {
+		file.Close()
 
-		evalIndexPath, err := filepath.EvalSymlinks(indexPath)
+		file, info, err = staticConfig.openAndStat(filepath.Join(name, staticServerIndexFileName))
 		if err != nil {
-			return "", err
-		}
-
-		if !staticConfig.isWithinDirectory(evalIndexPath) {
-			return "", fs.ErrNotExist
-		}
-
-		evalPath = evalIndexPath
-
-		fileInfo, err = os.Stat(evalPath)
-		if err != nil {
-			return "", err
+			return nil, nil, err
 		}
 	}
 
 	// Only regular files are servable. Dropping http.FileServer left nothing else checking the
 	// type of the resolved path, and a non-regular one reaches http.ServeContent, which writes a
 	// Content-Length from its FileInfo and then no body (a directory named index.html — a 200 the
-	// client reads as an unexpected EOF), or blocks forever in os.Open (a fifo). fs.ErrNotExist
-	// puts both on the ordinary 404 path, the same one the no-index case takes.
-	if !fileInfo.Mode().IsRegular() {
-		return "", fs.ErrNotExist
+	// client reads as an unexpected EOF). fs.ErrNotExist puts it on the ordinary 404 path, the
+	// same one the no-index case takes.
+	if !info.Mode().IsRegular() {
+		file.Close()
+
+		return nil, nil, fs.ErrNotExist
 	}
 
 	// Ensure file has at least read (`r--`) permission.
 	//
 	// This asks whether anyone holds a read bit, not whether this process can read the file, so it
-	// is not the authority on the question: os.Open in serveFile is, and its EACCES covers the cases
-	// the mode bits cannot (a file readable only by another user, a directory in the path that
-	// cannot be traversed). Both now answer 403, so this only decides which route reports it — it is
-	// kept because it refuses a mode-0000 file identically whatever user the process runs as, where
-	// os.Open alone would serve it to root.
-	if fileInfo.Mode().Perm()&0444 == 0 {
-		return "", errReadPermissionDenied
+	// is not the authority on the question: the open is, and its EACCES covers the cases the mode
+	// bits cannot (a file readable only by another user, a directory in the path that cannot be
+	// traversed). Both answer 403, so this only decides which route reports it — it is kept because
+	// it refuses a mode-0000 file identically whatever user the process runs as, where the open
+	// alone would succeed for root.
+	if info.Mode().Perm()&0444 == 0 {
+		file.Close()
+
+		return nil, nil, errReadPermissionDenied
 	}
 
-	return evalPath, nil
+	return file, info, nil
+}
+
+// openAndStat opens name read-only through the root and stats the open file.
+//
+// O_NONBLOCK is what makes opening before checking the type safe: a blocking open of a fifo waits
+// for a writer that never comes, and would hang the request. It changes nothing for a regular
+// file or a directory, and Windows ignores it.
+func (staticConfig staticFileConfig) openAndStat(name string) (*os.File, fs.FileInfo, error) {
+	file, err := staticConfig.root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+
+		return nil, nil, err
+	}
+
+	return file, info, nil
 }
 
 // Handles different file-related errors.
-func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, absPath string, err error) {
+func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, name string, err error) {
 	// An unreadable file is the caller being refused, not the server failing: net/http's own
 	// toHTTPError maps fs.ErrPermission to 403, as do nginx and Apache. Answering 500 tells a monitor
 	// the application is broken when what it has is a file mode. Both routes here satisfy
-	// fs.ErrPermission — a real EACCES from os.Stat/os.Open, and validateFile's own
+	// fs.ErrPermission — a real EACCES from the open, and openFile's own
 	// errReadPermissionDenied, which wraps it.
 	if errors.Is(err, fs.ErrPermission) {
-		staticConfig.respondWithError(w, "no read permission for file", absPath, err, http.StatusForbidden)
+		staticConfig.respondWithError(w, "no read permission for file", name, err, http.StatusForbidden)
 		return
 	}
 
-	if errors.Is(err, fs.ErrNotExist) {
-		staticConfig.logger.Debugf("requested file not found: %s", absPath)
+	// A path that resolves outside the served directory answers exactly as a missing file does, so
+	// the response does not confirm that the link exists. The escape error satisfies neither
+	// fs.ErrNotExist nor fs.ErrPermission, and would otherwise fall through to 500.
+	if errors.Is(err, fs.ErrNotExist) || (staticConfig.errEscapes != nil && errors.Is(err, staticConfig.errEscapes)) {
+		staticConfig.logger.Debugf("requested file not found: %s", name)
 
 		// Serve custom 404.html if available. The body is written out here rather than handed to
 		// http.ServeFile because the status has to be 404, not the 200 a file server writes — and
 		// because ServeFile would answer a request whose own path ends in "/index.html" with a
-		// redirect instead of the page.
-		notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
-
-		if page, readErr := os.ReadFile(notFoundPath); readErr == nil {
-			staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
+		// redirect instead of the page. It is read through the root like any other file.
+		if page, ok := staticConfig.notFoundPage(); ok {
+			staticConfig.logger.Debugf("serving custom 404 page: %s", staticServerNotFoundFileName)
 
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusNotFound)
@@ -756,7 +815,7 @@ func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter,
 		return
 	}
 
-	staticConfig.respondWithError(w, "error accessing file", absPath, err, http.StatusInternalServerError)
+	staticConfig.respondWithError(w, "error accessing file", name, err, http.StatusInternalServerError)
 }
 
 // Generic error response handler.
@@ -770,4 +829,16 @@ func (staticConfig staticFileConfig) respondWithError(w http.ResponseWriter, mes
 	w.WriteHeader(status)
 
 	fmt.Fprintf(w, "%d %s", status, http.StatusText(status))
+}
+
+// notFoundPage returns the served directory's custom 404 page, read through the root like any
+// other file. There is none when the directory itself could not be opened.
+func (staticConfig staticFileConfig) notFoundPage() ([]byte, bool) {
+	if staticConfig.root == nil {
+		return nil, false
+	}
+
+	page, err := staticConfig.root.ReadFile(staticServerNotFoundFileName)
+
+	return page, err == nil
 }
