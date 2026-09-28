@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1412,6 +1413,40 @@ func TestResponder_Char_ContentTypeNotOverwritten(t *testing.T) {
 			assert.JSONEq(t, `{"data":"x"}`, w.Body.String())
 		})
 	}
+}
+
+// TestResponder_ContentLengthSet pins that Respond sets Content-Length matching the exact body length.
+func TestResponder_ContentLengthSet(t *testing.T) {
+	tests := []struct {
+		name string
+		data any
+		err  error
+	}{
+		{"string", "hello", nil},
+		{"map", map[string]string{"k": "v"}, nil},
+		{"nil", nil, nil},
+		{"struct", struct{ ID int }{ID: 42}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			NewResponder(w, http.MethodGet).Respond(tc.data, tc.err)
+
+			bodyLen := strconv.Itoa(w.Body.Len())
+			assert.Equal(t, bodyLen, w.Header().Get("Content-Length"))
+		})
+	}
+}
+
+// TestResponder_ContentLengthNotOverwritten pins that an existing Content-Length header is preserved.
+func TestResponder_ContentLengthNotOverwritten(t *testing.T) {
+	w := httptest.NewRecorder()
+	w.Header().Set("Content-Length", "999")
+
+	NewResponder(w, http.MethodGet).Respond("hello", nil)
+
+	assert.Equal(t, "999", w.Header().Get("Content-Length"))
 }
 
 // TestResponder_Char_EncodeFailure pins the fallback written when the payload

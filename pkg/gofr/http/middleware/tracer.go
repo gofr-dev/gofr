@@ -132,6 +132,34 @@ const (
 	headerBaggage     = "baggage"
 )
 
+const maxCachedStatusCode = 600
+
+// statusKVCache precomputes the http.response.status_code attribute.KeyValue
+// for HTTP status codes [100, 600) so recording spans do not allocate an
+// attribute.KeyValue per request.
+//
+//nolint:gochecknoglobals // immutable, process-wide lookup table.
+var statusKVCache = buildStatusCodeCache()
+
+func buildStatusCodeCache() [maxCachedStatusCode]attribute.KeyValue {
+	var cache [maxCachedStatusCode]attribute.KeyValue
+	for i := 100; i < maxCachedStatusCode; i++ {
+		cache[i] = attribute.Int("http.response.status_code", i)
+	}
+
+	return cache
+}
+
+// statusCodeKV returns the precomputed attribute.KeyValue for standard HTTP status
+// codes [100, 600), or constructs one dynamically if outside that range.
+func statusCodeKV(status int) attribute.KeyValue {
+	if status >= 100 && status < maxCachedStatusCode {
+		return statusKVCache[status]
+	}
+
+	return attribute.Int("http.response.status_code", status)
+}
+
 // canonicalPropagationKeys maps the lowercase header names the W3C propagators
 // look up to their canonical spellings.
 //
@@ -276,7 +304,7 @@ func Tracer(inner http.Handler) http.Handler {
 			// implicit 200 in that case, so the span attribute must report 200
 			// rather than be omitted, or worse recorded as 0.
 			defer func(s trace.Span, rw *StatusResponseWriter) {
-				s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
+				s.SetAttributes(statusCodeKV(rw.Status()))
 			}(span, srw)
 		}
 
