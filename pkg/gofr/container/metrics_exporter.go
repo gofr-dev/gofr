@@ -85,6 +85,33 @@ func metricsCardinalityLimit(conf config.Config, logger exporters.Logger) *int {
 	return &n
 }
 
+// defaultMetricsCardinalityLimit is the OTel SDK's per-instrument default.
+const defaultMetricsCardinalityLimit = 2000
+
+// MetricsCardinalityLimit returns the per-instrument datapoint ceiling the meter
+// provider will actually apply: METRICS_CARDINALITY_LIMIT when it parses (the
+// override metricsExporterConfig passes to the provider), otherwise
+// OTEL_GO_X_CARDINALITY_LIMIT, which the SDK reads itself, otherwise the SDK
+// default. Zero or negative means unlimited.
+//
+// Reading the OTel key through conf agrees with the SDK reading it through
+// os.Getenv: GoFr's env loader loads configs/.env into the process environment
+// before either runs, so a value set only in .env is visible to both.
+//
+// It is a function rather than a Container method so that it is not promoted
+// onto every handler's Context.
+func MetricsCardinalityLimit(conf config.Config) int {
+	if n := metricsCardinalityLimit(conf, nil); n != nil {
+		return *n
+	}
+
+	if n, err := strconv.Atoi(strings.TrimSpace(conf.Get("OTEL_GO_X_CARDINALITY_LIMIT"))); err == nil {
+		return n
+	}
+
+	return defaultMetricsCardinalityLimit
+}
+
 // metricsExportInterval resolves the push interval, preferring the GoFr-native
 // METRICS_EXPORT_INTERVAL (seconds), then the OpenTelemetry standard
 // OTEL_METRIC_EXPORT_INTERVAL (milliseconds, per spec), then the default.

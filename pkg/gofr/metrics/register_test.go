@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -253,4 +254,114 @@ func BenchmarkRecordHistogramOpt(b *testing.B) {
 	for range b.N {
 		m.RecordHistogramOpt(b.Context(), "bench-histogram", 1, cached...)
 	}
+}
+
+func Test_RecordHistogramFastPaths(t *testing.T) {
+	attrs := []attribute.KeyValue{attribute.String("route", "/users")}
+	scope := `otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0",route="/users"`
+
+	tests := []struct {
+		desc     string
+		name     string
+		record   func(ctx context.Context, m *metricsManager, name string)
+		expSum   string
+		expCount string
+	}{
+		{
+			desc: "record with pre-built attributes",
+			name: "histogram-attrs",
+			record: func(ctx context.Context, m *metricsManager, name string) {
+				m.RecordHistogramAttrs(ctx, name, 3, attrs...)
+			},
+			expSum:   `histogram_attrs_sum{` + scope + `} 3`,
+			expCount: `histogram_attrs_count{` + scope + `} 1`,
+		},
+		{
+			desc: "record with pre-built option",
+			name: "histogram-opt",
+			record: func(ctx context.Context, m *metricsManager, name string) {
+				m.RecordHistogramOpt(ctx, name, 7, metric.WithAttributes(attrs...))
+			},
+			expSum:   `histogram_opt_sum{` + scope + `} 7`,
+			expCount: `histogram_opt_count{` + scope + `} 1`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := newTestMetricsManager(t)
+
+			m.NewHistogram(tc.name, "histogram for fast record paths")
+
+			tc.record(t.Context(), m, tc.name)
+
+			server := httptest.NewServer(GetHandler(m))
+			defer server.Close()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+			require.NoError(t, err)
+
+			resp, err := server.Client().Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Contains(t, string(body), tc.expSum)
+			assert.Contains(t, string(body), tc.expCount)
+		})
+	}
+}
+
+func Test_RecordHistogramFastPathsNotRegistered(t *testing.T) {
+	tests := []struct {
+		desc   string
+		record func(ctx context.Context, m *metricsManager)
+		expLog string
+	}{
+		{
+			desc: "attrs path logs unregistered metric",
+			record: func(ctx context.Context, m *metricsManager) {
+				m.RecordHistogramAttrs(ctx, "missing-attrs-histogram", 1, attribute.String("k", "v"))
+			},
+			expLog: "Metrics missing-attrs-histogram is not registered",
+		},
+		{
+			desc: "option path logs unregistered metric",
+			record: func(ctx context.Context, m *metricsManager) {
+				m.RecordHistogramOpt(ctx, "missing-opt-histogram", 1)
+			},
+			expLog: "Metrics missing-opt-histogram is not registered",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			log := testutil.StderrOutputForFunc(func() {
+				m := newTestMetricsManager(t)
+
+				tc.record(t.Context(), m)
+			})
+
+			assert.Contains(t, log, tc.expLog)
+		})
+	}
+}
+
+// newTestMetricsManager returns the concrete manager backed by a Prometheus-only provider, because the
+// fast histogram recorders are methods of the implementation rather than of the Manager interface.
+func newTestMetricsManager(t *testing.T) *metricsManager {
+	t.Helper()
+
+	cfg := exporters.Config{AppName: "testing-app", AppVersion: "v1.0.0"}
+	shutdown, meter := exporters.Build(t.Context(), &cfg, logging.NewMockLogger(logging.INFO))
+
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	m, ok := NewMetricsManager(meter, logging.NewMockLogger(logging.INFO)).(*metricsManager)
+	require.True(t, ok)
+
+	return m
 }

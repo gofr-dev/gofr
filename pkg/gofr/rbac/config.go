@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 
@@ -124,7 +123,6 @@ type Config struct {
 	endpointPermissionMap map[string][]string         `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
 	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
-	muxRouter             *mux.Router                 `json:"-" yaml:"-"` // Used for mux pattern matching
 
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
@@ -162,10 +160,6 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	config.Logger = logger
 	config.Metrics = metrics
 	config.Tracer = tracer
-
-	// Initialize mux router for pattern matching
-	// Use StrictSlash(false) to match the application router's behavior
-	config.muxRouter = mux.NewRouter().StrictSlash(false)
 
 	// Validate config before processing
 	if err := config.validate(); err != nil {
@@ -282,8 +276,6 @@ func (c *Config) initializeMaps() {
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 	c.endpointMap = make(map[string]*EndpointMapping)
-	// Use StrictSlash(false) to match the application router's behavior
-	c.muxRouter = mux.NewRouter().StrictSlash(false)
 }
 
 // buildRolePermissionsMap builds the role permissions map from Roles.
