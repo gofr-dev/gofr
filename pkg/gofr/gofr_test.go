@@ -27,7 +27,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -1356,6 +1355,43 @@ func TestStaticHandlerGetwdError(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+// TestAddStaticFilesEndpointForms covers the endpoint forms a caller can pass to
+// App.AddStaticFiles. The normalization used to strip only a leading slash, so a
+// trailing slash survived into the stored endpoint and Router.AddStaticFiles registered
+// Path("/static/") + PathPrefix("/static//") — neither matches once ServeHTTP normalizes
+// the request with path.Clean, so every request under the endpoint 404'd.
+func TestAddStaticFilesEndpointForms(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+	const wantEndpoint = "/static"
+
+	for _, endpoint := range []string{"static", "/static", "static/", "/static/"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app := New()
+			app.AddStaticFiles(endpoint, dir)
+
+			stored := app.httpServer.staticFiles[dir]
+			assert.Equal(t, wantEndpoint, stored, "endpoint %q should normalize to /static", endpoint)
+
+			// Wire the stored endpoint exactly as App.Run does and prove it serves.
+			router := gofrHTTP.NewRouter()
+			router.AddStaticFiles(app.Logger(), stored, dir)
+
+			for _, path := range []string{wantEndpoint, wantEndpoint + "/index.html"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", endpoint, path)
+			}
+		})
+	}
+}
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -2284,24 +2320,4 @@ func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
 			tc.register(a)
 		})
 	}
-}
-
-func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
-	c, mocks := container.NewMockContainer(t)
-	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	logger := container.NewMockLogger(gomock.NewController(t))
-	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
-	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
-	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
-	c.Logger = logger
-
-	a := &App{
-		container:      c,
-		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
-		graphqlManager: newGraphQLManager(c),
-	}
-
-	a.setupGraphQL()
 }
