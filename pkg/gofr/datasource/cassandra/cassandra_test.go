@@ -24,6 +24,7 @@ type mockDependencies struct {
 	mockQuery   *Mockquery
 	mockBatch   *Mockbatch
 	mockIter    *Mockiterator
+	ctrl        *gomock.Controller
 }
 
 func initTest(t *testing.T) (*Client, *mockDependencies) {
@@ -60,7 +61,8 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockLogger.EXPECT().Error("we did not get a pointer. data is not settable.").AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 
-	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
+	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
+		mockIter: mockIter, ctrl: ctrl}
 }
 
 func Test_Connect(t *testing.T) {
@@ -310,14 +312,14 @@ func Test_HealthCheck(t *testing.T) {
 	}{
 		{"success case", func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
+			mockDeps.mockQuery.EXPECT().execWithCtx(gomock.Any()).Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
 			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
+			mockDeps.mockQuery.EXPECT().execWithCtx(gomock.Any()).Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
@@ -325,9 +327,6 @@ func Test_HealthCheck(t *testing.T) {
 		}, errStatusDown},
 		{"failure case: cassandra not initializes", func() {
 			client.cassandra.session = nil
-
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
@@ -361,4 +360,29 @@ func Test_cassandraSession_Query(t *testing.T) {
 
 	assert.NotNil(t, q, "Test Failed")
 	assert.IsType(t, &cassandraQuery{}, q, "Test Failed")
+}
+
+// Test_HealthCheck_PropagatesContext asserts the context passed to HealthCheck is
+// forwarded to the health-check query, so a caller's deadline/cancellation applies.
+func Test_HealthCheck_PropagatesContext(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	type ctxKey string
+
+	const key ctxKey = "health-check"
+
+	ctx := context.WithValue(t.Context(), key, "yes")
+
+	mockDeps.mockSession.EXPECT().query("SELECT now() FROM system.local").Return(mockDeps.mockQuery).Times(1)
+	mockDeps.mockQuery.EXPECT().
+		execWithCtx(gomock.Cond(func(x any) bool {
+			c, ok := x.(context.Context)
+			return ok && c.Value(key) == "yes"
+		})).
+		Return(nil).Times(1)
+
+	_, err := client.HealthCheck(ctx)
+
+	require.NoError(t, err)
+	require.True(t, mockDeps.ctrl.Satisfied(), "health-check query was not executed")
 }

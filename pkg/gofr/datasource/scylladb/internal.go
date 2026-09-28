@@ -43,6 +43,12 @@ func (s *scylladbQuery) Exec() error {
 	return s.query.Exec()
 }
 
+// ExecWithCtx performs a ScyllaDB Query Exec bound to ctx, so the caller's
+// deadline or cancellation applies to the query.
+func (s *scylladbQuery) ExecWithCtx(ctx context.Context) error {
+	return s.query.WithContext(ctx).Exec()
+}
+
 // Iter returns a ScyllaDB iterator.
 func (s *scylladbQuery) Iter() iterator {
 	iter := scylladbIterator{iter: s.query.Iter()}

@@ -1,6 +1,7 @@
 package cassandra
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
@@ -39,6 +40,13 @@ type cassandraQuery struct {
 // This method wraps the `Exec` method of the underlying `query` object.
 func (c *cassandraQuery) exec() error {
 	return c.query.Exec()
+}
+
+// execWithCtx performs a Cassandra's Query Exec bound to ctx, so the caller's
+// deadline or cancellation applies to the query.
+// This method wraps `WithContext(ctx).Exec()` of the underlying `query` object.
+func (c *cassandraQuery) execWithCtx(ctx context.Context) error {
+	return c.query.WithContext(ctx).Exec()
 }
 
 // iter returns a Cassandra iterator.

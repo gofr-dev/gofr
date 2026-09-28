@@ -6,9 +6,11 @@
 //	mockgen -source=interfaces.go -destination=mock_interfaces.go -package=cassandra
 //
 
+// Package cassandra is a generated GoMock package.
 package cassandra
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gocql "github.com/gocql/gocql"
@@ -19,6 +21,7 @@ import (
 type MockclusterConfig struct {
 	ctrl     *gomock.Controller
 	recorder *MockclusterConfigMockRecorder
+	isgomock struct{}
 }
 
 // MockclusterConfigMockRecorder is the mock recorder for MockclusterConfig.
@@ -57,6 +60,7 @@ func (mr *MockclusterConfigMockRecorder) createSession() *gomock.Call {
 type Mocksession struct {
 	ctrl     *gomock.Controller
 	recorder *MocksessionMockRecorder
+	isgomock struct{}
 }
 
 // MocksessionMockRecorder is the mock recorder for Mocksession.
@@ -147,6 +151,7 @@ func (mr *MocksessionMockRecorder) query(stmt any, values ...any) *gomock.Call {
 type Mockquery struct {
 	ctrl     *gomock.Controller
 	recorder *MockqueryMockRecorder
+	isgomock struct{}
 }
 
 // MockqueryMockRecorder is the mock recorder for Mockquery.
@@ -178,6 +183,20 @@ func (m *Mockquery) exec() error {
 func (mr *MockqueryMockRecorder) exec() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "exec", reflect.TypeOf((*Mockquery)(nil).exec))
+}
+
+// execWithCtx mocks base method.
+func (m *Mockquery) execWithCtx(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "execWithCtx", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// execWithCtx indicates an expected call of execWithCtx.
+func (mr *MockqueryMockRecorder) execWithCtx(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "execWithCtx", reflect.TypeOf((*Mockquery)(nil).execWithCtx), ctx)
 }
 
 // iter mocks base method.
@@ -232,6 +251,7 @@ func (mr *MockqueryMockRecorder) scanCAS(dest ...any) *gomock.Call {
 type Mockbatch struct {
 	ctrl     *gomock.Controller
 	recorder *MockbatchMockRecorder
+	isgomock struct{}
 }
 
 // MockbatchMockRecorder is the mock recorder for Mockbatch.
@@ -286,6 +306,7 @@ func (mr *MockbatchMockRecorder) getBatch() *gomock.Call {
 type Mockiterator struct {
 	ctrl     *gomock.Controller
 	recorder *MockiteratorMockRecorder
+	isgomock struct{}
 }
 
 // MockiteratorMockRecorder is the mock recorder for Mockiterator.
