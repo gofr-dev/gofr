@@ -358,7 +358,7 @@ func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 	if a.grpcRegistered {
 		wg.Add(1)
 
-		go func(s grpcRunner) {
+		go func(s *grpcServer) {
 			defer wg.Done()
 
 			s.Run(a.container)

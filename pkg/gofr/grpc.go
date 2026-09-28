@@ -61,7 +61,10 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 		return
 	}
 
-	g := a.grpcSrv()
+	// nil when newGRPCServer failed -- typically an out-of-range GRPC_PORT -- and
+	// factory.go logged and carried on. The same guard is on every method below
+	// that reaches the server; without it a config typo panics in setup code.
+	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Error("no gRPC server to add options to")
 		return
@@ -86,7 +89,7 @@ func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerIntercept
 		return
 	}
 
-	g := a.grpcSrv()
+	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Error("no gRPC server to add unary interceptors to")
 		return
@@ -102,7 +105,7 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 		return
 	}
 
-	g := a.grpcSrv()
+	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Error("no gRPC server to add stream interceptors to")
 		return
@@ -110,34 +113,6 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 
 	a.container.Logger.Debugf("adding %d stream interceptors", len(interceptors))
 	g.addStreamInterceptors(interceptors...)
-}
-
-// grpcSrv returns the concrete server behind App's grpcRunner field, or nil when
-// this app has none -- newGRPCRunner failed, typically on an out-of-range
-// GRPC_PORT, and factory.go logs and continues. The exported AddGRPC* methods
-// dereferenced the field blind before it became an interface and panicked in
-// exactly that case; they now log and return.
-func (a *App) grpcSrv() *grpcServer {
-	g, ok := a.grpcServer.(*grpcServer)
-	if !ok {
-		return nil
-	}
-
-	return g
-}
-
-// newGRPCRunner is the enabled half of the pair declared in grpc_runner.go.
-//
-// It returns the interface, not *grpcServer, so that a nil result cannot reach
-// App as a non-nil interface holding a nil pointer -- the typed-nil trap that
-// container.isNil exists to catch elsewhere.
-func newGRPCRunner(c *container.Container, port int, cfg config.Config) (grpcRunner, error) {
-	srv, err := newGRPCServer(c, port, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return srv, nil
 }
 
 func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcServer, error) {
@@ -292,7 +267,7 @@ func (g *grpcServer) forceStop() {
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	g := a.grpcSrv()
+	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Errorf("no gRPC server to register service %s on", desc.ServiceName)
 		return

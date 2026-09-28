@@ -6,7 +6,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 
-	"gofr.dev/pkg/gofr/container"
 	grpcMiddleware "gofr.dev/pkg/gofr/grpc/middleware"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
@@ -17,43 +16,39 @@ import (
 // an interceptor names gofr.dev/pkg/gofr/grpc/middleware, which imports
 // google.golang.org/grpc. auth.go is not tagged -- HTTP auth works in every
 // build -- so it must not name those types. What crosses the boundary is the
-// credentials themselves, which are plain Go values.
+// HTTP middleware's provider struct, which carries the same credentials and
+// validators in plain Go values.
 //
 // grpc_auth_disabled.go holds the no-op counterparts.
 
-// addGRPCBasicAuth registers basic-auth interceptors on the gRPC server. Exactly
-// one of the three validation modes is set by the caller; BasicAuthProvider
-// picks between them the same way the HTTP provider does.
-func (a *App) addGRPCBasicAuth(users map[string]string,
-	validateFunc func(username, password string) bool,
-	validateFuncWithDatasources func(c *container.Container, username, password string) bool,
-) {
+// addGRPCBasicAuth registers basic-auth interceptors on the gRPC server. The
+// caller sets exactly one of Users, ValidateFunc and ValidateFuncWithDatasources;
+// the container is always the app's, whatever the HTTP half was given.
+func (a *App) addGRPCBasicAuth(p middleware.BasicAuthProvider) {
 	a.addGRPCInterceptors(func() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
-		p := grpcMiddleware.BasicAuthProvider{
-			Users:                       users,
-			ValidateFunc:                validateFunc,
-			ValidateFuncWithDatasources: validateFuncWithDatasources,
+		gp := grpcMiddleware.BasicAuthProvider{
+			Users:                       p.Users,
+			ValidateFunc:                p.ValidateFunc,
+			ValidateFuncWithDatasources: p.ValidateFuncWithDatasources,
 			Container:                   a.container,
 		}
 
-		return grpcMiddleware.BasicAuthUnaryInterceptor(p), grpcMiddleware.BasicAuthStreamInterceptor(p)
+		return grpcMiddleware.BasicAuthUnaryInterceptor(gp), grpcMiddleware.BasicAuthStreamInterceptor(gp)
 	})
 }
 
-// addGRPCAPIKeyAuth registers API-key interceptors on the gRPC server.
-func (a *App) addGRPCAPIKeyAuth(apiKeys []string,
-	validateFunc func(apiKey string) bool,
-	validateFuncWithDatasources func(c *container.Container, apiKey string) bool,
-) {
+// addGRPCAPIKeyAuth registers API-key interceptors on the gRPC server. The
+// caller sets exactly one of APIKeys, ValidateFunc and ValidateFuncWithDatasources.
+func (a *App) addGRPCAPIKeyAuth(p middleware.APIKeyAuthProvider) {
 	a.addGRPCInterceptors(func() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
-		p := grpcMiddleware.APIKeyAuthProvider{
-			APIKeys:                     apiKeys,
-			ValidateFunc:                validateFunc,
-			ValidateFuncWithDatasources: validateFuncWithDatasources,
+		gp := grpcMiddleware.APIKeyAuthProvider{
+			APIKeys:                     p.APIKeys,
+			ValidateFunc:                p.ValidateFunc,
+			ValidateFuncWithDatasources: p.ValidateFuncWithDatasources,
 			Container:                   a.container,
 		}
 
-		return grpcMiddleware.APIKeyAuthUnaryInterceptor(p), grpcMiddleware.APIKeyAuthStreamInterceptor(p)
+		return grpcMiddleware.APIKeyAuthUnaryInterceptor(gp), grpcMiddleware.APIKeyAuthStreamInterceptor(gp)
 	})
 }
 
@@ -70,8 +65,8 @@ func (a *App) addGRPCOAuth(publicKeyProvider middleware.PublicKeyProvider, optio
 // addGRPCInterceptors builds the pair only when there is a real gRPC server to
 // take them, so a gRPC-free app pays nothing for an auth call it made for HTTP.
 func (a *App) addGRPCInterceptors(build func() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor)) {
-	g, ok := a.grpcServer.(*grpcServer)
-	if !ok || g == nil {
+	g := a.grpcServer
+	if g == nil {
 		return
 	}
 

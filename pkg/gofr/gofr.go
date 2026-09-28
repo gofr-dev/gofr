@@ -46,7 +46,7 @@ type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 
-	grpcServer   grpcRunner
+	grpcServer   *grpcServer
 	httpServer   *httpServer
 	metricServer *metricServer
 	mcpServer    *mcpServer

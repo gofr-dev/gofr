@@ -727,8 +727,8 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	// observability), so the three Enable calls above must take the count to five.
 	// Asserting >= 2 -- as this did before the interceptors moved behind
 	// addGRPCInterceptors -- passes on the defaults alone and proves nothing.
-	assert.Len(t, app.grpcSrv().interceptors, 5, "gRPC unary interceptors should be registered")
-	assert.Len(t, app.grpcSrv().streamInterceptors, 5, "gRPC stream interceptors should be registered")
+	assert.Len(t, app.grpcServer.interceptors, 5, "gRPC unary interceptors should be registered")
+	assert.Len(t, app.grpcServer.streamInterceptors, 5, "gRPC stream interceptors should be registered")
 }
 
 func TestStartGRPCServer_Registered(t *testing.T) {
@@ -749,7 +749,7 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 
 	// Read through getServer rather than the field: createServer publishes it from the serve
 	// goroutine, so an unguarded read here races that write.
-	if g := app.grpcSrv(); g != nil {
+	if g := app.grpcServer; g != nil {
 		g.forceStop()
 	}
 
@@ -759,14 +759,14 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 // TestGRPCSetters_NoServerIsANoOp pins the panic-to-log fix on every method that
 // reaches the gRPC server through App.
 //
-// newGRPCRunner fails on an out-of-range GRPC_PORT and factory.go logs and
-// continues, so App runs on with no gRPC server at all. Before grpcSrv these
+// newGRPCServer fails on an out-of-range GRPC_PORT and factory.go logs and
+// continues, so App runs on with no gRPC server at all. Before the nil guard these
 // setters dereferenced the field blind and took the process down in exactly that
 // case -- a config typo turning into a nil-pointer panic in the user's own setup
 // code. Four methods share the guard, so all four are asserted: a later edit is
 // as likely to reintroduce it in one of them as in the one that was reported.
 func TestGRPCSetters_NoServerIsANoOp(t *testing.T) {
-	// 99999 is out of range, so newGRPCRunner returns an error and App is left
+	// 99999 is out of range, so newGRPCServer returns an error and App is left
 	// without a server. This is the state the guard exists for.
 	t.Setenv("GRPC_PORT", "99999")
 	t.Setenv("METRICS_PORT", "0")
@@ -774,7 +774,7 @@ func TestGRPCSetters_NoServerIsANoOp(t *testing.T) {
 	app := New()
 	app.container.Logger = logging.NewMockLogger(logging.ERROR)
 
-	require.Nil(t, app.grpcSrv(), "the premise: this app has no gRPC server to configure")
+	require.Nil(t, app.grpcServer, "the premise: this app has no gRPC server to configure")
 
 	calls := map[string]func(){
 		"AddGRPCServerOptions": func() {

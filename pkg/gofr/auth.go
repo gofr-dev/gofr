@@ -34,7 +34,7 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	}
 
 	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
-	a.addGRPCBasicAuth(users, nil, nil)
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{Users: users})
 }
 
 // EnableBasicAuthWithFunc enables basic authentication for the HTTP server with a custom validation function.
@@ -44,7 +44,7 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
 	a.addAuthMiddleware(middleware.BasicAuthMiddleware(
 		middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
-	a.addGRPCBasicAuth(nil, validateFunc, nil)
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{ValidateFunc: validateFunc})
 }
 
 // EnableBasicAuthWithValidator enables basic authentication for the HTTP server with a custom validator.
@@ -54,7 +54,7 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
 		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
-	a.addGRPCBasicAuth(nil, nil, validateFunc)
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{ValidateFuncWithDatasources: validateFunc})
 }
 
 // EnableAPIKeyAuth enables API key authentication for the application.
@@ -62,7 +62,7 @@ func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Contai
 // It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
-	a.addGRPCAPIKeyAuth(apiKeys, nil, nil)
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{APIKeys: apiKeys})
 }
 
 // EnableAPIKeyAuthWithFunc enables API key authentication for the application with a custom validation function.
@@ -74,7 +74,7 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 		ValidateFunc: validateFunc,
 		Container:    a.container,
 	}))
-	a.addGRPCAPIKeyAuth(nil, validateFunc, nil)
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{ValidateFunc: validateFunc})
 }
 
 // EnableAPIKeyAuthWithValidator enables API key authentication for the application with a custom validation function.
@@ -86,7 +86,7 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 		ValidateFuncWithDatasources: validateFunc,
 		Container:                   a.container,
 	}))
-	a.addGRPCAPIKeyAuth(nil, nil, validateFunc)
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc})
 }
 
 // EnableOAuth configures OAuth middleware for the application.
