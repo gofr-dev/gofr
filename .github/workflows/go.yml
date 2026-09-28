@@ -763,7 +763,10 @@ jobs:
           # introduces, not the ones the repo already carries. Without it the step
           # reports every pre-existing goconst and exhaustive finding in the tree.
           only-new-issues: true
-          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp" --timeout 9m0s
+          # ./pkg/... for the same reason as the gofr_nogrpc build step: the gRPC
+          # examples call RegisterService, which that tag removes, so they fail
+          # typecheck under it. only-new-issues does not filter typecheck errors.
+          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp" --timeout 9m0s ./pkg/...
 
       # Building and testing under a tag proves the tagged code still compiles. It
       # does not prove the tag REMOVED anything, which is the only reason the tag
