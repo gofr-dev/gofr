@@ -187,11 +187,11 @@ func Test_Exec(t *testing.T) {
 		expErr   error
 	}{
 		{"success case", func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, nil},
 		{"failure case", func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
 		}, errMock},
 	}
@@ -226,27 +226,27 @@ func Test_ExecCAS(t *testing.T) {
 		expErr     error
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).Times(1)
 		}, true, nil},
 		{"success case: int dest, applied true", &mockInt, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(true, nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().scanCAS(&mockInt).Return(true, nil).Times(1)
 		}, true, nil},
 		{"failure case: struct dest, error", &mockStruct, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: int dest, error", &mockInt, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().scanCAS(&mockInt).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: dest is not pointer", mockInt, func() {}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]any{}, func() {
-			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedMap},
 	}
 
@@ -257,6 +257,68 @@ func Test_ExecCAS(t *testing.T) {
 
 		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_ExecForwardsBindValues(t *testing.T) {
+	const stmt = "INSERT INTO users (id, name) VALUES (?, ?)"
+
+	testCases := []struct {
+		desc   string
+		values []any
+	}{
+		{desc: "no values", values: nil},
+		{desc: "two values", values: []any{1, "a"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
+
+			mockDeps.mockSession.EXPECT().query(stmt, tc.values...).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().exec().Return(nil)
+
+			require.NoError(t, client.Exec(stmt, tc.values...))
+		})
+	}
+}
+
+func Test_ExecCASForwardsValuesAndDest(t *testing.T) {
+	const stmt = "UPDATE users SET name = ? WHERE id = ? IF name = ?"
+
+	values := []any{"b", 1, "a"}
+
+	testCases := []struct {
+		desc       string
+		scanErr    error
+		expApplied bool
+		expErr     error
+		expName    string
+	}{
+		{desc: "applied", expApplied: true, expName: ""},
+		{desc: "not applied, existing value scanned", expApplied: false, expName: "current"},
+		{desc: "error", scanErr: errMock, expApplied: false, expErr: errMock},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
+
+			var name string
+
+			mockDeps.mockSession.EXPECT().query(stmt, values...).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().scanCAS(&name).DoAndReturn(func(dest ...any) (bool, error) {
+				*(dest[0].(*string)) = tc.expName
+
+				return tc.expApplied, tc.scanErr
+			})
+
+			applied, err := client.ExecCAS(&name, stmt, values...)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expApplied, applied)
+			assert.Equal(t, tc.expName, name)
+		})
 	}
 }
 

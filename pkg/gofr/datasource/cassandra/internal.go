@@ -58,7 +58,7 @@ func (c *cassandraQuery) mapScanCAS(dest map[string]any) (applied bool, err erro
 // scanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
 // This method wraps the `ScanCAS` method of the underlying `query` object.
 func (c *cassandraQuery) scanCAS(dest ...any) (applied bool, err error) {
-	return c.query.ScanCAS(dest)
+	return c.query.ScanCAS(dest...)
 }
 
 // cassandraClusterConfig implements clusterConfig interface.

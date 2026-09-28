@@ -127,7 +127,7 @@ func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) er
 
 // ExecCAS performs Compare and Set operation on ScyllaDB cluster.
 func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
-	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
+	return c.ExecCASWithCtx(context.Background(), dest, stmt, values...)
 }
 
 // ExecCASWithCtx takes default context,destination,statement,values and  return bool and error.
@@ -168,7 +168,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 		return false, errUnexpectedMap
 
 	default:
-		applied = true
+		applied, err = q.ScanCAS(dest)
 	}
 
 	return applied, err
