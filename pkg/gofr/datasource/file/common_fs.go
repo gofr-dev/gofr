@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -44,9 +45,9 @@ type CommonFileSystem struct {
 	Metrics  StorageMetrics    // Metrics for observability
 
 	registerHistogram sync.Once
-	connected         bool
-	disableRetry      bool
-	ProviderName      string // Provider name for observability (e.g., "Azure", "GCS", "S3")
+	connected         atomic.Bool // written by Connect (possibly from a provider retry goroutine)
+	disableRetry      atomic.Bool // read by provider retry goroutines
+	ProviderName      string      // Provider name for observability (e.g., "Azure", "GCS", "S3")
 }
 
 // Connect calls the provider's Connect and performs common bookkeeping (metrics / logs / observe).
@@ -69,7 +70,7 @@ func (c *CommonFileSystem) Connect(ctx context.Context) error {
 	}
 
 	// already connected fast-path
-	if c.connected {
+	if c.connected.Load() {
 		st = StatusSuccess
 		msg = "already connected"
 
@@ -82,7 +83,8 @@ func (c *CommonFileSystem) Connect(ctx context.Context) error {
 	}
 
 	// success bookkeeping
-	c.connected = true
+	c.connected.Store(true)
+
 	st = StatusSuccess
 	msg = "connected"
 
@@ -628,23 +630,24 @@ func (c *CommonFileSystem) Observe(operation string, startTime time.Time, status
 	})
 }
 
+// IsConnected reports whether the provider has connected successfully.
 func (c *CommonFileSystem) IsConnected() bool {
-	return c.connected
+	return c.connected.Load()
 }
 
 // SetDisableRetry enables or disables background retry behavior.
 func (c *CommonFileSystem) SetDisableRetry(disable bool) {
-	c.disableRetry = disable
+	c.disableRetry.Store(disable)
 }
 
 // IsRetryDisabled returns true if background retry is disabled.
 func (c *CommonFileSystem) IsRetryDisabled() bool {
-	return c.disableRetry
+	return c.disableRetry.Load()
 }
 
 // SetConnected manually sets the connected state (for testing).
 func (c *CommonFileSystem) SetConnected(connected bool) {
-	c.connected = connected
+	c.connected.Store(connected)
 }
 
 // CreateWithOptions creates a file with optional metadata (content-type, content-disposition,
