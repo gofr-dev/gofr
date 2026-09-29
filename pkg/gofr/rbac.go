@@ -72,7 +72,6 @@ func (a *App) enableRBAC(configPath ...string) error {
 	a.UseMiddleware(middlewareFunc)
 
 	a.rbacConfig = config
-	a.rbacStrict = true
 
 	return nil
 }

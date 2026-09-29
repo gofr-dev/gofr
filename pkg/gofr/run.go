@@ -86,11 +86,7 @@ func (a *App) Run() {
 		return
 	}
 
-	if outcome := a.prepareHTTPServer(); outcome != startupOK {
-		a.finishAbandonedStartup(outcome)
-
-		return
-	}
+	a.prepareHTTPServer()
 
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
@@ -292,49 +288,35 @@ func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
 
 // prepareHTTPServer registers GoFr's built-in routes and then checks the RBAC config against the
 // complete route table, before any server starts. The application adds its routes after calling
-// EnableRBAC*, and the built-in ones are added only here, so this is the first point at which a rule
+// EnableRBAC, and the built-in ones are added only here, so this is the first point at which a rule
 // that matches no route can be told apart from one whose route is still to come.
 //
-// A rule that matches no route stops startup when RBAC was enabled with EnableRBACWithError: the
-// caller asked to be told when authorization cannot be enforced as configured, and a typo in a rule
-// leaves the route it was written for unguarded. The deprecated EnableRBAC logs and carries on.
-func (a *App) prepareHTTPServer() startupOutcome {
+// A mismatch is logged as an error and the app keeps starting: a rule that matches no route
+// protects nothing, and a route that no rule covers is served without role checks.
+func (a *App) prepareHTTPServer() {
 	if !a.httpRegistered {
-		return startupOK
+		return
 	}
 
 	a.httpServerSetup()
 
 	if a.rbacConfig == nil {
-		return startupOK
+		return
 	}
 
 	err := a.rbacConfig.CheckRoutes(&a.httpServer.router.Router)
 	if err == nil {
-		return startupOK
+		return
 	}
 
 	// CheckRoutes joins a dead-rule error and an uncovered-route error; each is logged on its own line.
 	for _, part := range splitJoined(err) {
-		switch {
-		case a.rbacStrict:
-			a.Logger().Errorf("RBAC route check failed: %v.", part)
-		case errors.Is(part, rbac.ErrUncoveredRoutes):
-			a.Logger().Warnf("RBAC: %v. They are served without role checks; use EnableRBACWithError "+
-				"to stop startup instead.", part)
-		default:
-			a.Logger().Errorf("RBAC route check failed: %v. These rules protect nothing; use "+
-				"EnableRBACWithError to stop startup instead.", part)
+		if errors.Is(part, rbac.ErrUncoveredRoutes) {
+			a.Logger().Errorf("RBAC route check failed: %v. They are served without role checks.", part)
+		} else {
+			a.Logger().Errorf("RBAC route check failed: %v. These rules protect nothing.", part)
 		}
 	}
-
-	if !a.rbacStrict {
-		return startupOK
-	}
-
-	a.shutdownAfterFailedStartup()
-
-	return startupFailed
 }
 
 // splitJoined returns the errors joined by errors.Join, or err itself when it is not a join.

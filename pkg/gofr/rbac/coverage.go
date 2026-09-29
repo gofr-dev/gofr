@@ -208,7 +208,8 @@ func collectRoutes(router *mux.Router) []registeredRoute {
 // patternsMayOverlap reports whether a request path could match both the rule pattern and the
 // route template. Both use mux syntax.
 //
-// It errs toward "yes", because a wrong "no" reports a live rule as dead, and that stops startup.
+// It errs toward "yes", because a wrong "no" reports a live rule as dead, telling the operator
+// its route is unguarded when it is not.
 // Two variables always overlap, even when their constraints could never agree, and a constraint
 // that does not compile overlaps anything. The cost is that such a rule can go unreported.
 func patternsMayOverlap(rule, template string) bool {

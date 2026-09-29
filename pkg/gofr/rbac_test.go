@@ -176,21 +176,13 @@ const rbacLeavingPingUncovered = `{"roleHeader":"X-User-Role",` +
 
 func TestApp_prepareHTTPServer(t *testing.T) {
 	tests := []struct {
-		desc        string
-		config      string
-		deprecated  bool // EnableRBAC instead of EnableRBACWithError
-		wantOutcome startupOutcome
-		wantLog     string
+		desc    string
+		config  string
+		wantLog string // on stderr, where ERROR lines go; empty means no route check failure is logged
 	}{
-		{desc: "rules that all match a route start the app", config: rbacGuardingPing, wantOutcome: startupOK},
-		{desc: "a dead rule stops startup under EnableRBACWithError", config: rbacWithDeadRule,
-			wantOutcome: startupFailed, wantLog: "DELETE /api/user/{id}"},
-		{desc: "a dead rule is logged under the deprecated EnableRBAC", config: rbacWithDeadRule, deprecated: true,
-			wantOutcome: startupOK, wantLog: "DELETE /api/user/{id}"},
-		{desc: "an uncovered route stops startup under EnableRBACWithError", config: rbacLeavingPingUncovered,
-			wantOutcome: startupFailed, wantLog: "GET /ping"},
-		{desc: "an uncovered route is logged under the deprecated EnableRBAC", config: rbacLeavingPingUncovered,
-			deprecated: true, wantOutcome: startupOK, wantLog: "GET /ping"},
+		{desc: "rules that all match a route log nothing", config: rbacGuardingPing},
+		{desc: "a dead rule is logged as an error", config: rbacWithDeadRule, wantLog: "DELETE /api/user/{id}"},
+		{desc: "an uncovered route is logged as an error", config: rbacLeavingPingUncovered, wantLog: "GET /ping"},
 	}
 
 	for i, tc := range tests {
@@ -199,58 +191,20 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 
 			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
 
-			var (
-				outcome startupOutcome
-				stdout  string
-			)
-
-			// Errors go to stderr and warnings to stdout, so both are captured.
 			stderr := testutil.StderrOutputForFunc(func() {
-				stdout = testutil.StdoutOutputForFunc(func() {
-					a := New()
-					a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+				a := New()
+				a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+				require.NoError(t, a.EnableRBAC(path))
 
-					if tc.deprecated {
-						a.EnableRBAC(path)
-					} else {
-						require.NoError(t, a.EnableRBACWithError(path))
-					}
-
-					outcome = a.prepareHTTPServer()
-				})
+				a.prepareHTTPServer()
 			})
 
-			logs := stdout + stderr
-
-			assert.Equal(t, tc.wantOutcome, outcome, "TEST[%d], Failed.\n%s", i, tc.desc)
-
 			if tc.wantLog == "" {
-				assert.NotContains(t, logs, "RBAC route check failed", "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.NotContains(t, logs, "covered by no RBAC rule", "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, stderr, "RBAC route check failed", "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
-				assert.Contains(t, logs, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, stderr, "RBAC route check failed", "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, stderr, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 		})
 	}
-}
-
-// TestRun_RBACDeadRuleExitsNonZero covers the process-level outcome: a dead rule under
-// EnableRBACWithError must be reported to the orchestrator as a failed start, not as a clean exit.
-func TestRun_RBACDeadRuleExitsNonZero(t *testing.T) {
-	testutil.NewServerConfigs(t)
-
-	path := writeRBACConfig(t, t.TempDir(), "rbac.json", rbacWithDeadRule)
-
-	var codes []int
-
-	_ = testutil.StderrOutputForFunc(func() {
-		app := New()
-		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
-		require.NoError(t, app.EnableRBACWithError(path))
-		app.exit = func(code int) { codes = append(codes, code) }
-
-		app.Run()
-	})
-
-	require.Equal(t, []int{exitCodeStartupFailed}, codes, "a dead RBAC rule must stop startup")
 }

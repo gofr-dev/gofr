@@ -80,11 +80,9 @@ type App struct {
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
 
-	// rbacConfig is the RBAC config installed by EnableRBACWithError, kept so Run can check it
-	// against the complete route table. rbacStrict is false when it came from the deprecated
-	// EnableRBAC, which logs a failed check instead of stopping startup. See prepareHTTPServer.
+	// rbacConfig is the RBAC config installed by EnableRBAC, kept so Run can check it against the
+	// complete route table. See prepareHTTPServer.
 	rbacConfig *rbac.Config
-	rbacStrict bool
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
 	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.

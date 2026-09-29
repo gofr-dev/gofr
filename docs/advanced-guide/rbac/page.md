@@ -306,20 +306,19 @@ Treat that line as an open route, not a warning about a typo.
 
 The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
 When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
-them and reports two kinds of mismatch. With `EnableRBACWithError`, either one **stops startup**:
-the app logs the error, releases what it opened, and exits with a non-zero status, the same as a
-failed `OnStart` hook. With the deprecated `EnableRBAC`, the app logs them and keeps running.
+them and logs each kind of mismatch below as an **error**. The app keeps starting, so read the
+startup logs: each line names a route that is not protected the way the config intends.
 
 **A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
 `/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
 is **not protected**. A rule counts as dead when neither its path nor its method can match any
 registered route. A rule whose method the route does not register (`DELETE` on a route that only
-has `GET`) is dead too. A dead rule marked `"public": true` never stops startup: it cannot leave a
-route unprotected, so it is reported only as a warning.
+has `GET`) is dead too. A dead rule marked `"public": true` cannot leave a route unprotected, so it
+is reported only as a warning.
 
 ```
 RBAC route check failed: RBAC rules match no registered route: DELETE /api/user/{id}. Fix each
-rule's path or methods, or remove it.
+rule's path or methods, or remove it. These rules protect nothing.
 ```
 
 **An uncovered route** is a registered route, for a given method, that no rule matches, so it would
@@ -331,7 +330,8 @@ when GraphQL is enabled.
 
 ```
 RBAC route check failed: registered routes are covered by no RBAC rule: GET /api/posts,
-POST /api/users. Add a rule for each, with "public": true for a route meant to be open.
+POST /api/users. Add a rule for each, with "public": true for a route meant to be open. They are
+served without role checks.
 ```
 
 ```json
@@ -661,9 +661,9 @@ In this configuration:
 - `GET /api/posts` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
 - `GET /health` → **Not in RBAC config** → Allowed to proceed (will work if route exists)
 
-With `EnableRBACWithError`, the app in this example does not start: `POST /api/users` and
-`GET /api/posts` are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
-Every registered route needs a rule, and a route meant to be open gets one with `"public": true`.
+At startup, the app in this example logs an error for `POST /api/users` and `GET /api/posts`:
+they are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
+Give every registered route a rule, and a route meant to be open one with `"public": true`.
 The runtime behavior above still applies to a request no rule matches, for example one that only
 part of a pattern covers.
 
