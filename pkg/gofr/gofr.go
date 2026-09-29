@@ -19,7 +19,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -31,7 +30,16 @@ const (
 	configLocation = "./configs"
 )
 
-var errStartupHookPanic = errors.New("startup hook panicked")
+var (
+	errStartupHookPanic = errors.New("startup hook panicked")
+
+	// errMCPPortNotANumber and errMCPPortOutOfRange are the two MCP_PORT values that can never be
+	// served. Neither message repeats the configured value: it comes from Config.Get, which CodeQL
+	// treats as a potentially sensitive source, and the operator knows what they set. The range
+	// error carries the parsed number, which is safe -- it parsed as an integer.
+	errMCPPortNotANumber = errors.New("MCP_PORT is not a number")
+	errMCPPortOutOfRange = errors.New("MCP_PORT is outside the valid port range")
+)
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -56,7 +64,7 @@ type App struct {
 	grpcRegistered      bool
 	httpRegistered      bool
 	subscriptionManager SubscriptionManager
-	graphqlManager      *graphQLManager
+	graphqlManager      graphQLRunner
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
 
@@ -64,6 +72,47 @@ type App struct {
 	// evaluated in registration order; empty means the endpoint keeps its default behavior.
 	// Guarded by mu: registration is documented as pre-Run, but probes run concurrently.
 	readinessChecks []readinessCheck
+
+	// mcpConfigErr records an MCP_PORT that cannot be served -- a value that is not a number, or
+	// one outside the valid TCP range. It is recorded rather than acted on because EnableMCP runs
+	// in the application's own setup, where there is nothing to abort yet; Run reports it at the
+	// same point it reports a port it could not claim. See bindMCPServer.
+	mcpConfigErr error
+
+	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
+	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
+	exit func(int)
+}
+
+// exitCodeStartupFailed is what Run reports to the process when startup was abandoned: a failed
+// OnStart hook, an unclaimable MCP port, or an MCP_PORT that could never be served.
+//
+// It matters because an orchestrator reads it and nothing else. Under restartPolicy: OnFailure, or
+// in a Job, a service that refused to start and exited 0 is recorded as having succeeded and is
+// never retried -- the process-level version of the silent partial startup this package exists to
+// prevent.
+const exitCodeStartupFailed = 1
+
+// abortStartup reports a failed startup to the process.
+//
+// This is not the Logger.Fatalf it replaced. Fatalf was os.Exit from library code, mid-setup, with
+// the container's datasources still open and nothing unwound. This runs at the bottom of Run, after
+// shutdownAfterFailedStartup has released everything, with no server started and nothing left to
+// clean up -- the top of the call stack, which is where a Go program is supposed to decide its exit
+// status.
+func (a *App) abortStartup() {
+	if a.exit != nil {
+		a.exit(exitCodeStartupFailed)
+
+		return
+	}
+
+	// deep-exit is the right rule and this is the exception it exists to make you argue for: Run is
+	// the last call in an application's main, everything startup opened has already been released,
+	// and the alternative is an orchestrator reading success for a service that refused to start.
+	// The logger's Fatal carries the same exemption for the same kind of reason.
+	//nolint:revive // deep-exit: see above -- top of the call stack, after cleanup, nothing skipped.
+	os.Exit(exitCodeStartupFailed)
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -180,7 +229,7 @@ func (a *App) httpServerSetup() {
 	a.checkAndAddOpenAPIDocumentation()
 
 	// Register GraphQL Playground UI under /.well-known/ if GraphQL is enabled
-	if a.graphqlManager != nil {
+	if a.graphQLActive() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
@@ -287,7 +336,7 @@ func (a *App) GraphQLQuery(name string, handler Handler) {
 	a.mu.Lock()
 
 	if a.graphqlManager == nil {
-		a.graphqlManager = newGraphQLManager(a.container)
+		a.graphqlManager = newGraphQLRunner(a.container)
 	}
 
 	a.mu.Unlock()
@@ -307,7 +356,7 @@ func (a *App) GraphQLMutation(name string, handler Handler) {
 	a.mu.Lock()
 
 	if a.graphqlManager == nil {
-		a.graphqlManager = newGraphQLManager(a.container)
+		a.graphqlManager = newGraphQLRunner(a.container)
 	}
 
 	a.mu.Unlock()
@@ -423,7 +472,7 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	// Normalize the endpoint up front so every error log below reports the same
 	// '/endpoint' form (previously the getwd and os.Stat logs disagreed).
-	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+	endpoint = "/" + strings.Trim(endpoint, "/")
 
 	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
 		filePath = "./" + filePath
@@ -472,8 +521,14 @@ func (a *App) OnStart(hook func(ctx *Context) error) {
 	a.onStartHooks = append(a.onStartHooks, hook)
 }
 
+// graphQLActive reports whether this app has GraphQL resolvers registered AND was
+// built with the engine linked in.
+func (a *App) graphQLActive() bool {
+	return graphQLLinked && a.graphqlManager != nil
+}
+
 func (a *App) setupGraphQL() {
-	if a.graphqlManager != nil {
+	if a.graphQLActive() {
 		err := a.graphqlManager.buildSchema()
 		if err != nil {
 			a.container.Logger.Fatalf("GraphQL build error: %v", err)
@@ -482,9 +537,4 @@ func (a *App) setupGraphQL() {
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
 		a.httpServer.router.Add(http.MethodPost, "/graphql", a.graphqlManager.GetHandler())
 	}
-}
-
-// playgroundHandler serves the GraphQL interactive playground UI.
-func playgroundHandler(_ *Context) (any, error) {
-	return response.File{Content: []byte(graphiqlHTML), ContentType: "text/html"}, nil
 }

@@ -26,6 +26,7 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
+	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
 
 func Test_newContextSuccess(t *testing.T) {
@@ -434,4 +435,120 @@ func TestNewHTTPContextResponderWired(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), "hello")
+}
+
+// dialRecordingWSServer starts a WebSocket server that forwards every message it receives to the
+// returned channel, and returns a client connection to it.
+func dialRecordingWSServer(t *testing.T) (conn *gofrWebsocket.Connection, received <-chan string) {
+	t.Helper()
+
+	messages := make(chan string, 1)
+	upgrader := websocket.Upgrader{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+
+			messages <- string(msg)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, resp, err := websocket.DefaultDialer.Dial("ws"+srv.URL[len("http"):], nil)
+	require.NoError(t, err)
+
+	resp.Body.Close()
+	t.Cleanup(func() { client.Close() })
+
+	return &gofrWebsocket.Connection{Conn: client}, messages
+}
+
+func TestContext_WriteMessageToService_Cases(t *testing.T) {
+	tests := []struct {
+		desc    string
+		service string
+		data    any
+		expErr  error
+		expMsg  string
+	}{
+		{desc: "message delivered", service: "svc", data: map[string]string{"a": "b"}, expErr: nil, expMsg: `{"a":"b"}`},
+		{desc: "unknown service", service: "other", data: "hi", expErr: ErrConnectionNotFound, expMsg: wsEndMarker},
+		{desc: "unserializable data", service: "svc", data: make(chan int), expErr: ErrMarshalingResponse, expMsg: wsEndMarker},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			conn, received := dialRecordingWSServer(t)
+
+			c := &container.Container{WSManager: gofrWebsocket.New()}
+			c.AddConnection("svc", conn)
+
+			req := gofrHTTP.NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+			ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), req, c)
+
+			err := ctx.WriteMessageToService(tc.service, tc.data)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expMsg, firstMessageBeforeEnd(t, conn, received))
+		})
+	}
+}
+
+func TestContext_WriteMessageToSocket_Cases(t *testing.T) {
+	tests := []struct {
+		desc   string
+		data   any
+		expErr error
+		expMsg string
+	}{
+		{desc: "message delivered", data: []byte("hello"), expErr: nil, expMsg: "hello"},
+		{desc: "unserializable data", data: func() {}, expErr: ErrMarshalingResponse, expMsg: wsEndMarker},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			conn, received := dialRecordingWSServer(t)
+
+			c := &container.Container{WSManager: gofrWebsocket.New()}
+
+			reqCtx := context.WithValue(t.Context(), gofrWebsocket.WSConnectionKey, conn)
+			req := gofrHTTP.NewRequest(httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/", http.NoBody))
+			ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), req, c)
+
+			err := ctx.WriteMessageToSocket(tc.data)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expMsg, firstMessageBeforeEnd(t, conn, received))
+		})
+	}
+}
+
+// wsEndMarker is written after the call under test; seeing it first means the call wrote nothing.
+const wsEndMarker = "END"
+
+// firstMessageBeforeEnd writes wsEndMarker on conn and returns the first message the server received.
+// Messages on one connection arrive in order, so this is the call's message if it wrote one.
+func firstMessageBeforeEnd(t *testing.T, conn *gofrWebsocket.Connection, received <-chan string) string {
+	t.Helper()
+
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(wsEndMarker)))
+
+	select {
+	case msg := <-received:
+		return msg
+	case <-time.After(5 * time.Second):
+		t.Fatal("websocket server received nothing")
+
+		return ""
+	}
 }

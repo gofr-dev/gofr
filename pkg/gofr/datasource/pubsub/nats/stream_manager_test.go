@@ -2,6 +2,7 @@ package nats
 
 import (
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
@@ -230,4 +231,60 @@ func TestStreamManager_GetStream_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, stream)
 	assert.Equal(t, expectedErr, err)
+}
+
+func TestStreamManager_CreateStream_Config(t *testing.T) {
+	tests := []struct {
+		name      string
+		cfg       *StreamConfig
+		expJSCfg  jetstream.StreamConfig
+		createErr error
+		expErr    error
+	}{
+		{
+			name: "file storage with limits retention",
+			cfg: &StreamConfig{Stream: "s", Subjects: []string{"a"}, MaxBytes: 10, MaxAge: time.Hour,
+				Storage: "file", Retention: "limits"},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}, MaxBytes: 10, MaxAge: time.Hour,
+				Storage: jetstream.FileStorage, Retention: jetstream.LimitsPolicy},
+		},
+		{
+			name: "memory storage with interest retention",
+			cfg:  &StreamConfig{Stream: "s", Subjects: []string{"a"}, Storage: "memory", Retention: "interest"},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"},
+				Storage: jetstream.MemoryStorage, Retention: jetstream.InterestPolicy},
+		},
+		{
+			name:     "workqueue retention with unknown storage left at default",
+			cfg:      &StreamConfig{Stream: "s", Subjects: []string{"a"}, Storage: "tape", Retention: "workqueue"},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}, Retention: jetstream.WorkQueuePolicy},
+		},
+		{
+			name:     "unknown retention left at default",
+			cfg:      &StreamConfig{Stream: "s", Subjects: []string{"a"}, Retention: "forever"},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
+		},
+		{
+			name:      "stream already in use is treated as success",
+			cfg:       &StreamConfig{Stream: "s", Subjects: []string{"a"}},
+			expJSCfg:  jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
+			createErr: jetstream.ErrStreamNameAlreadyInUse,
+			expErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockJS := NewMockJetStream(ctrl)
+
+			sm := newStreamManager(mockJS, logging.NewMockLogger(logging.DEBUG))
+
+			mockJS.EXPECT().CreateStream(gomock.Any(), tt.expJSCfg).Return(nil, tt.createErr)
+
+			err := sm.CreateStream(t.Context(), tt.cfg)
+
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -507,6 +509,17 @@ func TestConnect_ConsumerGroupProvided(t *testing.T) {
 type mockConsumerClient struct {
 	getPropsFunc func(ctx context.Context,
 		options *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error)
+	// closeErr is what Close reports.
+	closeErr error
+	// partitionCalls records every NewPartitionClient request, so tests can assert which partitions
+	// were opened and with which start position.
+	partitionCalls []partitionCall
+}
+
+// partitionCall is one recorded NewPartitionClient request.
+type partitionCall struct {
+	partitionID   string
+	startPosition azeventhubs.StartPosition
 }
 
 func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
@@ -522,12 +535,14 @@ func (m *mockConsumerClient) GetEventHubProperties(ctx context.Context,
 // constructed -- &azeventhubs.PartitionClient{} compiles -- but not into anything usable: every
 // field is unexported, so ReceiveEvents nil-derefs on it. And handing back a nil client would
 // nil-deref on the deferred Close in the first test that reached tryReadFromPartition.
-func (*mockConsumerClient) NewPartitionClient(string,
-	*azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
+func (m *mockConsumerClient) NewPartitionClient(partitionID string,
+	options *azeventhubs.PartitionClientOptions) (*azeventhubs.PartitionClient, error) {
+	m.partitionCalls = append(m.partitionCalls, partitionCall{partitionID: partitionID, startPosition: options.StartPosition})
+
 	return nil, errPartitionClientUnavailable
 }
 
-func (*mockConsumerClient) Close(context.Context) error { return nil }
+func (m *mockConsumerClient) Close(context.Context) error { return m.closeErr }
 
 // newHealthTestClient returns a client that looks connected to Health without a live namespace.
 func newHealthTestClient(t *testing.T, consumer consumerClient) *Client {
@@ -623,8 +638,8 @@ func Test_Health_BoundsAProbeThatIgnoresContext(t *testing.T) {
 	require.Less(t, elapsed, 2*eventHubPropsTimeout,
 		"Health must return on its own deadline even when the probe ignores the context, took %v", elapsed)
 	require.Equal(t, datasource.StatusDown, health.Status, "an unanswered probe must report down")
-	require.Equal(t, context.DeadlineExceeded.Error(), health.Details["error"],
-		"the caller must see the deadline, not a nil error")
+	require.Equal(t, errProbeInFlight.Error(), health.Details["error"],
+		"a caller whose deadline expires while the probe is still parked must report the in-flight probe, not a nil error")
 	require.NotContains(t, health.Details, "partitionCount", "an unanswered probe has no partition count")
 }
 
@@ -675,4 +690,509 @@ func Test_Health_ProbeDeadlineIsTwoSeconds(t *testing.T) {
 	require.True(t, gotDeadline, "the probe must be given a deadline")
 	require.Greater(t, remaining, 1500*time.Millisecond, "deadline is shorter than expected, got %v", remaining)
 	require.LessOrEqual(t, remaining, 2*time.Second, "deadline is longer than expected, got %v", remaining)
+}
+
+// Test_Health_ParkedProbeIsCappedAtOne proves a broker that accepts the probe but never answers
+// cannot leak a goroutine per health poll. probeWithin returns on each caller's own deadline while
+// the SDK call stays parked (see Test_Health_BoundsAProbeThatIgnoresContext); without the cap,
+// every concurrent poll would strand another SDK call -- an unbounded leak on the hot health path.
+// The fake blocks in GetEventHubProperties without reading ctx -- what the SDK does once a
+// management link exists -- so once one probe is parked, no number of overlapping polls may enter
+// the fake a second time. Drop the singleflight share so each poll spawns its own probe and
+// callCount climbs past one: this goes red.
+func Test_Health_ParkedProbeIsCappedAtOne(t *testing.T) {
+	release := make(chan struct{})
+
+	var callCount int32
+
+	entered := make(chan struct{}, 1)
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			atomic.AddInt32(&callCount, 1)
+
+			select { // signal the first entry without blocking later ones
+			case entered <- struct{}{}:
+			default:
+			}
+
+			<-release
+
+			return azeventhubs.EventHubProperties{}, nil
+		},
+	})
+
+	// Fire a burst of overlapping polls; the first parks a probe and the rest must collapse onto it.
+	var wg sync.WaitGroup
+
+	for range 5 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			client.Health()
+		}()
+	}
+
+	<-entered // one probe is now parked in the fake
+
+	// While it stays parked, no overlapping poll may enter the fake a second time.
+	require.Never(t, func() bool { return atomic.LoadInt32(&callCount) > 1 },
+		300*time.Millisecond, 20*time.Millisecond,
+		"only one SDK probe may run while one is parked; more means a goroutine leaks per poll")
+
+	close(release)
+	wg.Wait()
+
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+		"the SDK probe must run at most once while one is still parked; more means a goroutine leaks per poll")
+}
+
+// Test_Health_ProbeRecoversAfterParkedCallReturns pins the release half of the cap: once a parked
+// probe's SDK call finally returns, the lock must free so the next poll runs a fresh probe rather
+// than stay wedged on errProbeInFlight forever. Drop the Unlock in probeWithin and a client that
+// probed once can never report up again -- a permanent false DOWN that the cap test alone does not
+// catch, because it never lets its parked probe return.
+func Test_Health_ProbeRecoversAfterParkedCallReturns(t *testing.T) {
+	release := make(chan struct{})
+
+	var calls int32
+
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			if atomic.AddInt32(&calls, 1) == 1 {
+				<-release // the first probe parks until released; later probes answer immediately
+			}
+
+			return azeventhubs.EventHubProperties{PartitionIDs: []string{"0"}}, nil
+		},
+	})
+
+	// First poll parks the probe and returns down on the deadline.
+	require.Equal(t, datasource.StatusDown, client.Health().Status)
+
+	// Let the parked probe finish. Its goroutine must release the lock as it returns.
+	close(release)
+
+	// A subsequent poll must therefore be able to run a fresh probe and report up. Eventually,
+	// because the release races the parked goroutine's return by a hair.
+	require.Eventually(t, func() bool {
+		return client.Health().Status == datasource.StatusUp
+	}, 5*time.Second, 20*time.Millisecond,
+		"probe must recover once the parked call returns and releases the lock")
+}
+
+// Test_Health_ConcurrentPollsOnHealthyBroker guards the review's blocking concern: capping probes
+// must not turn a healthy broker DOWN for a concurrent poller. /.well-known/health is an ordinary
+// HTTP handler, so Go serves overlapping pollers (k8s liveness + readiness, a load balancer plus a
+// monitor) on their own goroutines. A healthy probe is milliseconds but not instant, so two polls
+// can overlap; both must see UP. Rejecting the second caller with errProbeInFlight (the pre-share
+// TryLock design) makes this go red with up=1.
+func Test_Health_ConcurrentPollsOnHealthyBroker(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			time.Sleep(100 * time.Millisecond) // healthy, but not instant
+
+			return azeventhubs.EventHubProperties{PartitionIDs: []string{"0"}}, nil
+		},
+	})
+
+	var (
+		wg    sync.WaitGroup
+		up    int32
+		start = make(chan struct{})
+	)
+
+	for range 2 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			if client.Health().Status == datasource.StatusUp {
+				atomic.AddInt32(&up, 1)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	require.Equal(t, int32(2), atomic.LoadInt32(&up),
+		"a healthy broker must report UP to every concurrent poller")
+}
+
+// errConsumerClose stands in for whatever the SDK returns when closing the consumer fails.
+var errConsumerClose = errors.New("consumer close failed")
+
+// propsFunc returns a GetEventHubProperties stub that reports the given partitions and error.
+func propsFunc(partitionIDs []string, err error) func(context.Context,
+	*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+	return func(context.Context, *azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+		return azeventhubs.EventHubProperties{PartitionIDs: partitionIDs}, err
+	}
+}
+
+// newTestProducer builds a producer against the unresolvable test namespace. Construction does not
+// dial, so this needs no network; every operation that does dial fails.
+func newTestProducer(t *testing.T) *azeventhubs.ProducerClient {
+	t.Helper()
+
+	cfg := getTestConfigs()
+
+	producer, err := azeventhubs.NewProducerClientFromConnectionString(cfg.ConnectionString, cfg.EventhubName, cfg.ProducerOptions)
+	require.NoError(t, err)
+
+	return producer
+}
+
+func TestSubscribe_NotConnected(t *testing.T) {
+	testCases := []struct {
+		name      string
+		producer  *azeventhubs.ProducerClient
+		consumer  consumerClient
+		processor *azeventhubs.Processor
+	}{
+		{
+			name:      "producer_missing",
+			consumer:  &mockConsumerClient{},
+			processor: &azeventhubs.Processor{},
+		},
+		{
+			name:      "consumer_missing",
+			producer:  &azeventhubs.ProducerClient{},
+			processor: &azeventhubs.Processor{},
+		},
+		{
+			name:     "processor_missing",
+			producer: &azeventhubs.ProducerClient{},
+			consumer: &mockConsumerClient{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := New(getTestConfigs())
+			client.producer = tc.producer
+			client.consumer = tc.consumer
+			client.processor = tc.processor
+
+			msg, err := client.Subscribe(t.Context(), client.cfg.EventhubName)
+
+			require.Nil(t, msg)
+			require.ErrorIs(t, err, errClientNotConnected)
+		})
+	}
+}
+
+// TestSubscribe_DirectConsumerFallback drives Subscribe down the fallback path: a zero-value
+// processor never has a partition client ready, so with a canceled context NextPartitionClient
+// returns nil and Subscribe reads from the consumer directly. The fake consumer cannot hand back a
+// usable partition client, so each partition read fails and is skipped.
+func TestSubscribe_DirectConsumerFallback(t *testing.T) {
+	latest := azeventhubs.StartPosition{Latest: boolPtr(true)}
+
+	testCases := []struct {
+		name          string
+		consumer      *mockConsumerClient
+		setupMocks    func(logger *MockLogger)
+		expectedCalls []partitionCall
+		expectedError error
+	}{
+		{
+			name:     "properties_error",
+			consumer: &mockConsumerClient{getPropsFunc: propsFunc(nil, errHealthProbe)},
+			setupMocks: func(logger *MockLogger) {
+				logger.EXPECT().Errorf("Failed to get Event Hub properties: %v", errHealthProbe)
+			},
+			expectedError: errHealthProbe,
+		},
+		{
+			name:          "no_partitions",
+			consumer:      &mockConsumerClient{getPropsFunc: propsFunc(nil, nil)},
+			setupMocks:    func(*MockLogger) {},
+			expectedError: nil,
+		},
+		{
+			name:     "every_partition_fails_to_open",
+			consumer: &mockConsumerClient{getPropsFunc: propsFunc([]string{"0", "1"}, nil)},
+			setupMocks: func(logger *MockLogger) {
+				logger.EXPECT().Debugf("Error reading from partition %s: %v", "0", errPartitionClientUnavailable)
+				logger.EXPECT().Debugf("Error reading from partition %s: %v", "1", errPartitionClientUnavailable)
+			},
+			expectedCalls: []partitionCall{
+				{partitionID: "0", startPosition: latest},
+				{partitionID: "1", startPosition: latest},
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			tc.setupMocks(mockLogger)
+
+			client := New(getTestConfigs())
+			client.UseLogger(mockLogger)
+			client.producer = &azeventhubs.ProducerClient{}
+			client.processor = &azeventhubs.Processor{}
+			client.consumer = tc.consumer
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			msg, err := client.Subscribe(ctx, client.cfg.EventhubName)
+
+			require.Nil(t, msg)
+			require.ErrorIs(t, err, tc.expectedError)
+			require.Equal(t, tc.expectedCalls, tc.consumer.partitionCalls)
+		})
+	}
+}
+
+func TestGetReceiveTimeout(t *testing.T) {
+	testCases := []struct {
+		name            string
+		consumer        consumerClient
+		expectedBasic   bool
+		expectedTimeout time.Duration
+	}{
+		{
+			name:            "not_connected",
+			consumer:        nil,
+			expectedBasic:   false,
+			expectedTimeout: time.Second,
+		},
+		{
+			name:            "properties_error",
+			consumer:        &mockConsumerClient{getPropsFunc: propsFunc(nil, errHealthProbe)},
+			expectedBasic:   false,
+			expectedTimeout: time.Second,
+		},
+		{
+			name:            "basic_tier_partition_count",
+			consumer:        &mockConsumerClient{getPropsFunc: propsFunc([]string{"0", "1"}, nil)},
+			expectedBasic:   true,
+			expectedTimeout: basicTierReceiveTimeout,
+		},
+		{
+			name:            "standard_tier_partition_count",
+			consumer:        &mockConsumerClient{getPropsFunc: propsFunc([]string{"0", "1", "2", "3"}, nil)},
+			expectedBasic:   false,
+			expectedTimeout: time.Second,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := New(getTestConfigs())
+			client.consumer = tc.consumer
+
+			require.Equal(t, tc.expectedBasic, client.isLikelyBasicTier())
+			require.Equal(t, tc.expectedTimeout, client.getReceiveTimeout())
+		})
+	}
+}
+
+func TestPublish(t *testing.T) {
+	testCases := []struct {
+		name          string
+		topic         string
+		setupMocks    func(logger *MockLogger, metrics *MockMetrics)
+		expectedError error
+	}{
+		{
+			name:          "topic_mismatch",
+			topic:         "other-topic",
+			setupMocks:    func(*MockLogger, *MockMetrics) {},
+			expectedError: ErrTopicMismatch,
+		},
+		{
+			// The namespace is unreachable and the context is already canceled, so the SDK gives up
+			// acquiring a link before a batch can be created.
+			name:  "batch_creation_fails",
+			topic: "event-hub-name",
+			setupMocks: func(logger *MockLogger, metrics *MockMetrics) {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "event-hub-name")
+				logger.EXPECT().Errorf("failed to create event batch %v", gomock.Any())
+			},
+			expectedError: context.Canceled,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+			tc.setupMocks(mockLogger, mockMetrics)
+
+			client := New(getTestConfigs())
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+			client.producer = newTestProducer(t)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := client.Publish(ctx, tc.topic, []byte("my-message"))
+
+			require.ErrorIs(t, err, tc.expectedError)
+		})
+	}
+}
+
+func TestQuery_ReadMessages(t *testing.T) {
+	earliest := azeventhubs.StartPosition{Earliest: boolPtr(true)}
+	latest := azeventhubs.StartPosition{Latest: boolPtr(true)}
+
+	testCases := []struct {
+		name          string
+		consumer      *mockConsumerClient
+		ctx           func(t *testing.T) context.Context
+		args          []any
+		expectedCalls []partitionCall
+		expectedError error
+	}{
+		{
+			name:          "properties_error",
+			consumer:      &mockConsumerClient{getPropsFunc: propsFunc(nil, errHealthProbe)},
+			ctx:           (*testing.T).Context,
+			expectedError: errHealthProbe,
+		},
+		{
+			name:     "default_start_position_on_every_partition",
+			consumer: &mockConsumerClient{getPropsFunc: propsFunc([]string{"0", "1"}, nil)},
+			ctx:      (*testing.T).Context,
+			expectedCalls: []partitionCall{
+				{partitionID: "0", startPosition: earliest},
+				{partitionID: "1", startPosition: earliest},
+			},
+		},
+		{
+			name:     "caller_deadline_and_latest_start_position",
+			consumer: &mockConsumerClient{getPropsFunc: propsFunc([]string{"0"}, nil)},
+			ctx: func(t *testing.T) context.Context {
+				t.Helper()
+
+				ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+				t.Cleanup(cancel)
+
+				return ctx
+			},
+			args: []any{"latest", 5},
+			expectedCalls: []partitionCall{
+				{partitionID: "0", startPosition: latest},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := New(Config{EventhubName: "test-hub"})
+			client.consumer = tc.consumer
+
+			result, err := client.Query(tc.ctx(t), "test-hub", tc.args...)
+
+			require.Nil(t, result, "no partition can be read, so nothing is returned")
+			require.ErrorIs(t, err, tc.expectedError)
+			require.Equal(t, tc.expectedCalls, tc.consumer.partitionCalls)
+		})
+	}
+}
+
+func TestClose(t *testing.T) {
+	testCases := []struct {
+		name          string
+		producer      func(t *testing.T) *azeventhubs.ProducerClient
+		consumer      consumerClient
+		processor     func(t *testing.T) (context.Context, context.CancelFunc)
+		setupMocks    func(logger *MockLogger)
+		expectedError error
+		expectedCtx   error
+	}{
+		{
+			name:          "nothing_to_close",
+			producer:      func(*testing.T) *azeventhubs.ProducerClient { return nil },
+			processor:     withoutProcessorContext,
+			setupMocks:    func(*MockLogger) {},
+			expectedError: nil,
+			expectedCtx:   nil,
+		},
+		{
+			name:          "producer_and_consumer_closed",
+			producer:      newTestProducer,
+			consumer:      &mockConsumerClient{},
+			processor:     withoutProcessorContext,
+			setupMocks:    func(*MockLogger) {},
+			expectedError: nil,
+			expectedCtx:   nil,
+		},
+		{
+			name:      "consumer_close_error",
+			producer:  func(*testing.T) *azeventhubs.ProducerClient { return nil },
+			consumer:  &mockConsumerClient{closeErr: errConsumerClose},
+			processor: withoutProcessorContext,
+			setupMocks: func(logger *MockLogger) {
+				logger.EXPECT().Errorf("failed to close Event Hub consumer: %v", errConsumerClose)
+			},
+			expectedError: errConsumerClose,
+			expectedCtx:   nil,
+		},
+		{
+			name:      "processor_context_canceled",
+			producer:  func(*testing.T) *azeventhubs.ProducerClient { return nil },
+			consumer:  &mockConsumerClient{},
+			processor: withProcessorContext,
+			setupMocks: func(logger *MockLogger) {
+				logger.EXPECT().Debug("Event Hub processor context canceled")
+			},
+			expectedError: nil,
+			expectedCtx:   context.Canceled,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			tc.setupMocks(mockLogger)
+
+			client := New(getTestConfigs())
+			client.UseLogger(mockLogger)
+			client.producer = tc.producer(t)
+			client.consumer = tc.consumer
+
+			processorCtx, processorCancel := tc.processor(t)
+			client.processorCtx = processorCancel
+
+			err := client.Close()
+
+			require.ErrorIs(t, err, tc.expectedError)
+			require.Equal(t, tc.expectedCtx, processorCtx.Err())
+		})
+	}
+}
+
+// withoutProcessorContext models a client that never started a processor.
+func withoutProcessorContext(*testing.T) (context.Context, context.CancelFunc) {
+	return context.Background(), nil
+}
+
+// withProcessorContext models a client whose processor is running under a cancelable context.
+func withProcessorContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	return ctx, cancel
 }

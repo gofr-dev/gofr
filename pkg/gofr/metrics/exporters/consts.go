@@ -12,4 +12,9 @@ const (
 	temporalityCumulative = "cumulative"
 	temporalityDelta      = "delta"
 	temporalityLowMemory  = "lowmemory"
+
+	// otlpMetricsSignalPath is the OTLP/HTTP metrics signal path otlpmetrichttp
+	// appended by default before otel v1.45; buildOTLPExporter re-appends it for a
+	// path-less scheme-bearing endpoint so the bump does not silently reroute exports.
+	otlpMetricsSignalPath = "/v1/metrics"
 )
