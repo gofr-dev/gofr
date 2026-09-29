@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -624,8 +625,8 @@ func Test_Health_BoundsAProbeThatIgnoresContext(t *testing.T) {
 	require.Less(t, elapsed, 2*eventHubPropsTimeout,
 		"Health must return on its own deadline even when the probe ignores the context, took %v", elapsed)
 	require.Equal(t, datasource.StatusDown, health.Status, "an unanswered probe must report down")
-	require.Equal(t, context.DeadlineExceeded.Error(), health.Details["error"],
-		"the caller must see the deadline, not a nil error")
+	require.Equal(t, errProbeInFlight.Error(), health.Details["error"],
+		"a caller whose deadline expires while the probe is still parked must report the in-flight probe, not a nil error")
 	require.NotContains(t, health.Details, "partitionCount", "an unanswered probe has no partition count")
 }
 
@@ -679,39 +680,58 @@ func Test_Health_ProbeDeadlineIsTwoSeconds(t *testing.T) {
 }
 
 // Test_Health_ParkedProbeIsCappedAtOne proves a broker that accepts the probe but never answers
-// cannot leak a goroutine per health poll. probeWithin returns on its own deadline while the SDK
-// call stays parked (see Test_Health_BoundsAProbeThatIgnoresContext); without a cap, every poll
-// would strand another goroutine on the hot health path. The fake blocks in GetEventHubProperties
-// without reading ctx -- what the SDK does once a management link exists -- so the first Health
-// parks a goroutine, and every poll while it is parked must report the in-flight probe rather than
-// spawn another. Revert the TryLock cap and callCount climbs with each poll: this goes red.
+// cannot leak a goroutine per health poll. probeWithin returns on each caller's own deadline while
+// the SDK call stays parked (see Test_Health_BoundsAProbeThatIgnoresContext); without the cap,
+// every concurrent poll would strand another SDK call -- an unbounded leak on the hot health path.
+// The fake blocks in GetEventHubProperties without reading ctx -- what the SDK does once a
+// management link exists -- so once one probe is parked, no number of overlapping polls may enter
+// the fake a second time. Drop the singleflight share so each poll spawns its own probe and
+// callCount climbs past one: this goes red.
 func Test_Health_ParkedProbeIsCappedAtOne(t *testing.T) {
 	release := make(chan struct{})
-	defer close(release)
 
 	var callCount int32
+
+	entered := make(chan struct{}, 1)
 
 	client := newHealthTestClient(t, &mockConsumerClient{
 		getPropsFunc: func(context.Context,
 			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
 			atomic.AddInt32(&callCount, 1)
+
+			select { // signal the first entry without blocking later ones
+			case entered <- struct{}{}:
+			default:
+			}
+
 			<-release
 
 			return azeventhubs.EventHubProperties{}, nil
 		},
 	})
 
-	// The first poll parks a goroutine in the fake and returns down on the deadline.
-	first := client.Health()
-	require.Equal(t, datasource.StatusDown, first.Status)
+	// Fire a burst of overlapping polls; the first parks a probe and the rest must collapse onto it.
+	var wg sync.WaitGroup
 
-	// Every poll while that goroutine is still parked must short-circuit without entering the fake.
 	for range 5 {
-		h := client.Health()
-		require.Equal(t, datasource.StatusDown, h.Status)
-		require.Equal(t, errProbeInFlight.Error(), h.Details["error"],
-			"a poll while a probe is parked must report the in-flight probe, not spawn another")
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			client.Health()
+		}()
 	}
+
+	<-entered // one probe is now parked in the fake
+
+	// While it stays parked, no overlapping poll may enter the fake a second time.
+	require.Never(t, func() bool { return atomic.LoadInt32(&callCount) > 1 },
+		300*time.Millisecond, 20*time.Millisecond,
+		"only one SDK probe may run while one is parked; more means a goroutine leaks per poll")
+
+	close(release)
+	wg.Wait()
 
 	require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
 		"the SDK probe must run at most once while one is still parked; more means a goroutine leaks per poll")
@@ -750,4 +770,47 @@ func Test_Health_ProbeRecoversAfterParkedCallReturns(t *testing.T) {
 		return client.Health().Status == datasource.StatusUp
 	}, 5*time.Second, 20*time.Millisecond,
 		"probe must recover once the parked call returns and releases the lock")
+}
+
+// Test_Health_ConcurrentPollsOnHealthyBroker guards the review's blocking concern: capping probes
+// must not turn a healthy broker DOWN for a concurrent poller. /.well-known/health is an ordinary
+// HTTP handler, so Go serves overlapping pollers (k8s liveness + readiness, a load balancer plus a
+// monitor) on their own goroutines. A healthy probe is milliseconds but not instant, so two polls
+// can overlap; both must see UP. Rejecting the second caller with errProbeInFlight (the pre-share
+// TryLock design) makes this go red with up=1.
+func Test_Health_ConcurrentPollsOnHealthyBroker(t *testing.T) {
+	client := newHealthTestClient(t, &mockConsumerClient{
+		getPropsFunc: func(context.Context,
+			*azeventhubs.GetEventHubPropertiesOptions) (azeventhubs.EventHubProperties, error) {
+			time.Sleep(100 * time.Millisecond) // healthy, but not instant
+
+			return azeventhubs.EventHubProperties{PartitionIDs: []string{"0"}}, nil
+		},
+	})
+
+	var (
+		wg    sync.WaitGroup
+		up    int32
+		start = make(chan struct{})
+	)
+
+	for range 2 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			if client.Health().Status == datasource.StatusUp {
+				atomic.AddInt32(&up, 1)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	require.Equal(t, int32(2), atomic.LoadInt32(&up),
+		"a healthy broker must report UP to every concurrent poller")
 }
