@@ -784,3 +784,15 @@ func TestAzureFileSystem_startRetryConnect_ExitsOnDisable(t *testing.T) {
 	// Give it time to check and exit
 	time.Sleep(100 * time.Millisecond)
 }
+
+func TestAzureFileSystem_logRetryExit_NilLogger(t *testing.T) {
+	fs := &azureFileSystem{
+		CommonFileSystem: &file.CommonFileSystem{
+			Location:     "testshare",
+			ProviderName: "Azure",
+		},
+	}
+
+	// Without the nil-logger guard this would dereference a nil logger.
+	assert.NotPanics(t, fs.logRetryExit)
+}

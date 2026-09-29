@@ -3,6 +3,7 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -992,4 +993,77 @@ func logCharLoggerAt(level Level, l *logger) *logger {
 	l.level.Store(int64(level))
 
 	return l
+}
+
+var errPlainLog = errors.New("plain error")
+
+type levelResponderErr struct {
+	level Level
+}
+
+func (levelResponderErr) Error() string { return "level responder error" }
+
+func (e levelResponderErr) LogLevel() Level { return e.level }
+
+func TestGetLogLevelForError(t *testing.T) {
+	tests := []struct {
+		desc     string
+		err      error
+		expLevel Level
+	}{
+		{desc: "nil error defaults to ERROR", err: nil, expLevel: ERROR},
+		{desc: "plain error defaults to ERROR", err: errPlainLog, expLevel: ERROR},
+		{desc: "error with WARN log level", err: levelResponderErr{level: WARN}, expLevel: WARN},
+		{desc: "error with DEBUG log level", err: levelResponderErr{level: DEBUG}, expLevel: DEBUG},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expLevel, GetLogLevelForError(tc.err))
+		})
+	}
+}
+
+func TestPrettyPrint_TraceID(t *testing.T) {
+	tests := []struct {
+		desc      string
+		traceID   string
+		expOutput string
+	}{
+		{desc: "without trace id", traceID: "",
+			expOutput: "\u001B[38;5;6mINFO\u001B[0m [00:00:00] hello\n"},
+		{desc: "with trace id", traceID: "abc123",
+			expOutput: "\u001B[38;5;6mINFO\u001B[0m [00:00:00] \u001B[38;5;8mabc123\u001B[0m hello\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			out := &bytes.Buffer{}
+			l := &logger{isTerminal: true, lock: make(chan struct{}, 1)}
+
+			l.prettyPrint(&logEntry{Level: INFO, Message: "hello", TraceID: tc.traceID}, out)
+
+			assert.Equal(t, tc.expOutput, out.String())
+		})
+	}
+}
+
+func TestLogger_CloseWithoutFile(t *testing.T) {
+	tests := []struct {
+		desc   string
+		logger Logger
+		expErr error
+	}{
+		{desc: "stdout logger", logger: NewLogger(INFO), expErr: nil},
+		{desc: "file logger with empty path", logger: NewFileLogger(""), expErr: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			closer, ok := tc.logger.(io.Closer)
+			require.True(t, ok)
+
+			assert.Equal(t, tc.expErr, closer.Close())
+		})
+	}
 }

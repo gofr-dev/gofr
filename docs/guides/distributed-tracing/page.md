@@ -40,8 +40,9 @@ Tracing is opt-in. Set:
 
 | Env var          | Purpose                                              | Notes                                    |
 |------------------|------------------------------------------------------|------------------------------------------|
-| `TRACE_EXPORTER` | `otlp`, `jaeger`, `zipkin` (deprecated)              | Required to enable                       |
-| `TRACER_URL`     | Endpoint URL or `host:port`                          | Required when exporter is set            |
+| `TRACE_EXPORTER` | `otlp`, `jaeger`, `gcp`, `zipkin` (deprecated)        | Required to enable                       |
+| `TRACER_URL`     | Endpoint URL or `host:port`                          | Required except for `gcp`, which defaults it |
+| `TRACER_INSECURE`| Plaintext for a schemeless `TRACER_URL`              | Defaults to `true`; ignored when the URL carries a scheme |
 | `TRACER_RATIO`   | Sample ratio (0.0–1.0)                               | Defaults to `1` (100%); an unparsable value also resolves to `1` |
 | `TRACER_HEADERS` | Custom headers (e.g., for SaaS auth)                 | Comma-separated `key=value` pairs        |
 | `TRACER_AUTH_KEY`| Single auth header value                             | Use `TRACER_HEADERS` for multiple        |

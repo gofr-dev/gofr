@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
+	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
 
 var errWebSocketNotReady = errors.New("websocket server not ready")
@@ -69,6 +73,55 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+// Test_WebSocket_ContextIsNotSelfReferential pins the fix for the
+// self-referential ctx.Context found in review of #4111 (see the issue
+// linked from that PR): App.WebSocket built the handler's context with
+// context.WithValue(ctx, ...) instead of context.WithValue(ctx.Context, ...).
+// ctx is a *Context, which embeds context.Context, so the parent of the
+// resulting value-context was ctx itself -- and ctx.Context was the very
+// value-context being constructed. Any walk of the parent chain other than
+// the lucky first lookup recursed forever.
+//
+// Calling .Done() is what recurses -- not receiving from the channel it
+// returns -- so this handler need only make that call, not read the result,
+// to exercise the bug. Pre-fix, that call alone crashes the whole test
+// binary with "fatal error: stack overflow" (unrecoverable: recover() cannot
+// catch a fatal error), rather than this test failing cleanly.
+func Test_WebSocket_ContextIsNotSelfReferential(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.WebSocket("/ws-selfref", func(ctx *Context) (any, error) {
+		_ = ctx.Context.Done()
+
+		return "ok", nil
+	})
+
+	go app.Run()
+
+	time.Sleep(100 * time.Millisecond)
+
+	wsURL := "ws" + server.URL[len("http"):] + "/ws-selfref"
+
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	err = ws.WriteMessage(websocket.TextMessage, []byte("hi"))
+	require.NoError(t, err)
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+
+	assert.Equal(t, "ok", string(message))
 }
 
 // Test_WebSocket_PlainHTTPRequestDoesNotPanic pins the fix for #3862: a plain
@@ -220,6 +273,144 @@ func TestSerializeMessage(t *testing.T) {
 			if !reflect.DeepEqual(expectedFormatted, actualFormatted) {
 				t.Errorf("serializeMessage() = %s, want %s", string(actual), string(tt.expected))
 			}
+		})
+	}
+}
+
+func TestApp_OverrideWebsocketUpgrader(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	custom := &websocket.Upgrader{ReadBufferSize: 42}
+
+	app.OverrideWebsocketUpgrader(custom)
+
+	assert.Same(t, custom, app.httpServer.ws.WebSocketUpgrader.Upgrader)
+}
+
+func Test_WebSocket_ConnectionMissingFromManager(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	app.WebSocket("/ws", func(*Context) (any, error) {
+		return "unreachable: handler must not run without a registered connection", nil
+	})
+
+	ctx := context.WithValue(t.Context(), gofrWebsocket.WSConnectionKey, "unknown-conn-id")
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/ws", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	app.httpServer.router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), gofrWebsocket.ErrorConnection.Error())
+}
+
+// flakyUpgradeServer rejects the first `rejects` handshakes with 400 and upgrades the rest.
+func flakyUpgradeServer(t *testing.T, rejects int32) *httptest.Server {
+	t.Helper()
+
+	var attempts atomic.Int32
+
+	upgrader := websocket.Upgrader{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) <= rejects {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		defer conn.Close()
+
+		_, _, _ = conn.ReadMessage()
+	}))
+
+	t.Cleanup(srv.Close)
+
+	return srv
+}
+
+func Test_AddWSService_Failures(t *testing.T) {
+	tests := []struct {
+		desc               string
+		rejects            int32
+		enableReconnection bool
+		expErr             error
+		assertConn         func(t *testing.T, app *App)
+	}{
+		{
+			desc:               "dial failure without reconnection returns error",
+			rejects:            1000,
+			enableReconnection: false,
+			expErr:             websocket.ErrBadHandshake,
+			assertConn: func(t *testing.T, app *App) {
+				t.Helper()
+
+				// Without reconnection AddWSService returns synchronously and never stores a connection.
+				assert.Nil(t, app.container.GetWSConnectionByServiceName("svc"))
+			},
+		},
+		{
+			desc:               "dial failure with reconnection connects in background",
+			rejects:            2,
+			enableReconnection: true,
+			expErr:             nil,
+			assertConn: func(t *testing.T, app *App) {
+				t.Helper()
+
+				var conn *gofrWebsocket.Connection
+
+				require.Eventually(t, func() bool {
+					conn = app.container.GetWSConnectionByServiceName("svc")
+
+					return conn != nil
+				}, 3*time.Second, 10*time.Millisecond)
+
+				// Registered after the server's cleanup, so it runs first and unblocks the server handler.
+				t.Cleanup(func() { _ = conn.Close() })
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+
+			app := New()
+			srv := flakyUpgradeServer(t, tc.rejects)
+			wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+			err := app.AddWSService("svc", wsURL, http.Header{}, tc.enableReconnection, 5*time.Millisecond)
+
+			require.ErrorIs(t, err, tc.expErr)
+			tc.assertConn(t, app)
+		})
+	}
+}
+
+func TestSerializeMessage_Error(t *testing.T) {
+	tests := []struct {
+		desc   string
+		input  any
+		expErr error
+	}{
+		{desc: "channel cannot be marshaled", input: make(chan int), expErr: ErrMarshalingResponse},
+		{desc: "function cannot be marshaled", input: func() {}, expErr: ErrMarshalingResponse},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			msg, err := serializeMessage(tc.input)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, msg)
 		})
 	}
 }
