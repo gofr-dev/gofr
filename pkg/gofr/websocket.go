@@ -29,16 +29,29 @@ func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
 func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (any, error) {
-		connID := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
+		connID, ok := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
+		if !ok {
+			// The request never went through the WebSocket upgrade middleware
+			// (e.g. a plain HTTP GET with no Upgrade headers), so no
+			// WSConnectionKey was ever set on the context.
+			return nil, websocket.ErrorNotWebSocketUpgrade{}
+		}
 
 		conn := a.httpServer.ws.GetWebsocketConnection(connID)
-		if conn.Conn == nil {
+		if conn == nil || conn.Conn == nil {
 			return nil, websocket.ErrorConnection
 		}
 
 		ctx.Request = conn
 
-		ctx.Context = context.WithValue(ctx, websocket.WSConnectionKey, conn)
+		// The parent must be ctx.Context (the embedded context.Context), not ctx
+		// itself: ctx is a *Context, so passing ctx here would make the value
+		// context's parent be ctx, whose .Context field is the very value context
+		// being constructed. Any walk of the parent chain other than the lucky
+		// first lookup (e.g. .Done(), or a .Value() for any other key) would then
+		// recurse into itself forever -- an unrecoverable stack overflow, since
+		// recover() cannot catch a fatal error.
+		ctx.Context = context.WithValue(ctx.Context, websocket.WSConnectionKey, conn)
 
 		defer a.httpServer.ws.CloseConnection(connID)
 

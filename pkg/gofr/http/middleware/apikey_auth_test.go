@@ -59,6 +59,7 @@ func Test_NewAPIKeyAuthProviderWithValidateFunc(t *testing.T) {
 	}{
 		{err: errContainerNil},
 		{validateFunc: validateFunc, err: errContainerNil},
+		{container: &c, err: errValidateFuncEmpty},
 		{validateFunc: validateFunc, container: &c, provider: &provider},
 	}
 
@@ -173,5 +174,36 @@ func Test_validateAPIKey(t *testing.T) {
 }
 
 func Test_APIKeyAuthMiddleware(t *testing.T) {
-	t.Logf("Test_APIKeyAuthMiddleware")
+	testCases := []struct {
+		desc      string
+		header    string
+		expStatus int
+		expValue  any
+	}{
+		{desc: "missing api key", expStatus: http.StatusUnauthorized},
+		{desc: "invalid api key", header: "invalid-key", expStatus: http.StatusUnauthorized},
+		{desc: "valid api key", header: validKey2, expStatus: http.StatusOK, expValue: validKey2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var gotValue any
+
+			handler := APIKeyAuthMiddleware(APIKeyAuthProvider{}, validKey1, validKey2)(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					gotValue = r.Context().Value(APIKey)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.Header.Set(headerXAPIKey, tc.header)
+
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expStatus, rr.Code)
+			assert.Equal(t, tc.expValue, gotValue)
+		})
+	}
 }

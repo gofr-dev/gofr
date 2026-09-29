@@ -41,4 +41,8 @@ type iterator interface {
 	columns() []gocql.ColumnInfo
 	scan(dest ...any) bool
 	numRows() int
+	// close releases the iterator and returns the first error encountered
+	// while executing the query, if any. gocql only surfaces a failed
+	// query through Close, not through scan or numRows.
+	close() error
 }

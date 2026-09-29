@@ -12,7 +12,7 @@ GoFr promotes microservice architecture and to facilitate the same, it provides 
 at application level using `AddHTTPService()` method.
 
 Support for inter-service HTTP calls provide the following benefits:
-1. Access to the methods from container - GET, PUT, POST, PATCH, DELETE.
+1. Access to the methods from container - GET, PUT, POST, PATCH, DELETE, QUERY.
 2. Logs and traces for the request.
 3. {% new-tab-link newtab=false title="Circuit breaking" href="/docs/advanced-guide/circuit-breaker" /%} for enhanced resilience and fault tolerance.
 4. {% new-tab-link newtab=false title="Custom Health Check" href="/docs/advanced-guide/monitoring-service-health" /%} Endpoints
@@ -83,6 +83,8 @@ The HTTP service client provides methods for making requests to downstream servi
 
 - `Delete(ctx, path, body)`
 
+- `Query(ctx, path, queryParams, body)`
+
 **For scenarios requiring custom header propagation (authentication, multi-tenancy, user identity propagation), use the `WithHeaders` variants:**
 
 - `GetWithHeaders(ctx, path, queryParams, headers)`
@@ -94,6 +96,12 @@ The HTTP service client provides methods for making requests to downstream servi
 - `PatchWithHeaders(ctx, path, queryParams, body, headers)`
 
 - `DeleteWithHeaders(ctx, path, body, headers)`
+
+- `QueryWithHeaders(ctx, path, queryParams, body, headers)`
+
+> **QUERY** (RFC 10008) is a safe, idempotent method that carries the query in the
+> request body — bridging the gap between GET (no body) and POST (not safe/idempotent).
+> Like GET, QUERY calls are wrapped by the circuit-breaker and retry options when configured.
 
 ```go
 func Customer(ctx *gofr.Context) (any, error) {
@@ -173,7 +181,7 @@ echo -n "your-password" | base64
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
-- **RetryConfig** - This option allows the user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried.
+- **RetryConfig** - This option allows the user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried. Retries stop as soon as the caller's context is canceled or past its deadline -- including a deadline that passes while an attempt is already on the wire -- and the error of the attempt it ended is returned.
 - **RateLimiterConfig** -  This option allows the user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
 **Rate Limiter Store: Customization**

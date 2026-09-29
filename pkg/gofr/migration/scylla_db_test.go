@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -228,4 +229,56 @@ func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 
 	err := m.commitMigration(c, data)
 	assert.NoError(t, err)
+}
+
+func TestScyllaGetLastMigration_BaseMigrator(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		baseResp   int64
+		baseErr    error
+		expVersion int64
+		expErr     error
+	}{
+		{desc: "base version greater than scylla", baseResp: 7, expVersion: 7},
+		{desc: "base migrator error", baseErr: errScyllaConn, expVersion: -1, expErr: errScyllaConn},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+
+			m := scyllaMigrator{ScyllaDB: mocks.ScyllaDB, migrator: mockMigrator}
+
+			mocks.ScyllaDB.EXPECT().Query(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(dest any, _ string, _ ...any) error {
+					*(dest.(*[]migrationRow)) = []migrationRow{{Version: 2}}
+
+					return nil
+				})
+			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
+
+			got, err := m.getLastMigration(mockContainer)
+
+			assert.Equal(t, tc.expVersion, got)
+			assert.Equal(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestScyllaMigrator_LockUnlockName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := scyllaMigrator{migrator: mockMigrator}
+
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(errScyllaConn)
+	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(errScyllaConn)
+
+	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), errScyllaConn)
+	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), errScyllaConn)
+	assert.Equal(t, "ScyllaDB", m.name())
 }

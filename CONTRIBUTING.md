@@ -114,6 +114,12 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 * No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
 * Exported functions must have an associated godoc.
+* New integrations — a datasource, a message broker, an external service — ship as their own Go
+  module, not in core. The `gofr_no*` build tags are **not** the pattern to follow: they exist only
+  for subsystems that were already compiled into core before the module pattern, where moving them
+  out would change import paths and setup calls for every existing user. A new integration has no
+  such users, so there is nothing to break, and it stays out of everyone else's binary by default.
+  A PR proposing a new `gofr_no*` tag should almost always be a module instead.
 * Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
@@ -126,7 +132,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
       conflict.
 * External Library uses:
     - A little copying is better than a little dependency.
-    - All external dependencies should go through the same careful consideration, we would have done to our own written
+    - All external dependencies should go through the same careful consideration, we would have done for our own written
       code. We need to test the functionality we are going to use from an external library, as sometimes library
       implementation may change.
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
@@ -135,7 +141,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 
 ### Documentation
 * After adding or modifying existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
-* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
+* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://github.com/gofr-dev/gofr/blob/development/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](./docs/public) folder.
 * Make sure you don't break existing links and references.
