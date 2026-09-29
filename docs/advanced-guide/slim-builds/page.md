@@ -58,11 +58,6 @@ That is deliberate -- failing loudly beats running half a migration set against 
 migrator was compiled out -- but it means the tag is for services that do not configure Dgraph at
 all, not merely for services that do not migrate it.
 
-`gofr_nogrpc` is the one tag that changes the API surface: `app.RegisterService` and the `AddGRPC*`
-setters name gRPC types, so they cannot exist without the import. Code calling them does not compile
-under that tag -- which is the point, since a service that registers a gRPC service is not one that
-wanted the gRPC server removed.
-
 ## Tags share dependencies, so they compose
 
 A library goes out of the binary when its LAST importer does, not when the first tag that mentions
@@ -72,15 +67,19 @@ it is set. `google.golang.org/grpc` is the clearest case -- measured against `go
 |---|---|
 | none | 86 |
 | `gofr_nogrpc` | 82 |
-| `gofr_nogrpc gofr_nootlp` | 81 |
-| `gofr_nogrpc gofr_nootlp gofr_nodgraph` | 81 |
-| + `gofr_nopubsub` | **0** |
+| all four except `gofr_nogrpc` | 69 |
+| all four except `gofr_nootlp` | 66 |
+| all four except `gofr_nodgraph` | 64 |
+| all four except `gofr_nopubsub` | 81 |
+| all four: `gofr_nogrpc gofr_nootlp gofr_nodgraph gofr_nopubsub` | **0** |
 
-The OTLP exporters pin gRPC, and so does the Google Pub/Sub client through `cloud.google.com/go`. So
-setting one tag and measuring little or no change does not mean the tag did nothing -- it means
-something else still imports the same tree. `gofr_nogrpc` on its own takes 4 of the 86 packages;
-the other 82 leave only once the last of those importers is tagged out too. Set the tags for
-everything you do not use, then measure.
+Four things import gRPC: GoFr's own gRPC server, the OTLP exporters, the Dgraph client's protobuf
+package (`github.com/dgraph-io/dgo/v210/protos/api`), and the Google Pub/Sub client through
+`cloud.google.com/go`. Leave any one of the four tags off and between 64 and 81 packages stay
+linked. So setting one tag and measuring little or no change does not mean the tag did nothing --
+it means something else still imports the same tree. `gofr_nogrpc` on its own takes 4 of the 86
+packages; the other 82 leave only once the last of those importers is tagged out too. Set the tags
+for everything you do not use, then measure.
 
 ## Nothing in your code changes
 
@@ -108,6 +107,9 @@ The service still starts. A missing pub/sub client leaves `PubSub` unset, which 
 unconfigured service has, and GoFr already handles it — so a misbuilt deployment is visible in the
 logs rather than being a crash loop, and it cannot silently half-work.
 
+`gofr_nodgraph` is the exception: a service with a Dgraph datasource exits at `app.Migrate`, as the
+`gofr_nodgraph` section above explains.
+
 The SQL case reports through `database/sql` itself:
 
 ```
@@ -125,8 +127,9 @@ import _ "github.com/lib/pq"
 ## When it is worth it
 
 Only when the binary size or the memory matters to you — a container image budget, a serverless
-deployment, a memory-capped runtime. The tags change nothing about how a service behaves at runtime,
-so there is no reason to reach for them otherwise.
+deployment, a memory-capped runtime. Apart from `gofr_nodgraph` on a service that configures Dgraph,
+the tags change nothing about how a service behaves at runtime, so there is no reason to reach for
+them otherwise.
 
 `gofr_nosqldrivers` is the one with a memory effect rather than only a size effect: the SQLite driver
 pulls in `modernc.org/libc`, whose initialization parses embedded copies of `/etc/protocols` and
