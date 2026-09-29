@@ -352,7 +352,7 @@ func TestApp_startMCPServer(t *testing.T) {
 }
 
 // TestApp_runCMD_exitCode drives runCMD end to end and records what it reports to the process
-// through the exit seam: a failed command must exit with exitCodeCommandFailed, and anything else
+// through the exit seam: a failed command must exit with exitCodeFailure, and anything else
 // must not exit at all (returning from main is exit status 0). The expected code is the literal 1,
 // not the constant, because it is the contract shells and CI branch on.
 func TestApp_runCMD_exitCode(t *testing.T) {
