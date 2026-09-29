@@ -39,7 +39,8 @@ type Config struct {
 	ProjectID        string
 	SubscriptionName string
 
-	// Optional pull flow control. Zero uses the corresponding Default* (which mirrors the SDK).
+	// Optional pull flow control, applied per subscribed topic (each topic gets its own
+	// Receive flow controller). Zero uses the corresponding Default* (which mirrors the SDK).
 	// A negative value is passed through to the SDK: for MaxOutstandingMessages and
 	// MaxOutstandingBytes it means no limit, whereas NumGoroutines below 1 falls back to 10.
 	// NumGoroutines is the number of StreamingPull streams, not handler concurrency, and does not
@@ -295,7 +296,8 @@ func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]
 
 	timeout, limit := parseQueryArgs(args...)
 
-	// Get topic and subscription
+	// Query is a one-shot, bounded read via getQuerySubscription, so the subscriber's
+	// ReceiveSettings (Config flow control) deliberately do not apply here.
 	topic, err := g.getTopic(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topic: %w", err)
