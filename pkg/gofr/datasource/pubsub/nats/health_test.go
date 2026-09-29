@@ -123,3 +123,9 @@ type healthTestCase struct {
 	expectedStatus  string
 	expectedDetails map[string]any
 }
+
+func TestNATSClient_Health_NotConnected(t *testing.T) {
+	client := &Client{Config: &Config{Server: NATSServer}, logger: logging.NewMockLogger(logging.DEBUG)}
+
+	assert.Equal(t, datasource.Health{Status: datasource.StatusDown}, client.Health())
+}

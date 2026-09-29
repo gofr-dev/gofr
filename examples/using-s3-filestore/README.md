@@ -17,7 +17,7 @@ Start a MinIO server (any S3-compatible backend works):
 ```bash
 docker run -d --name minio \
   -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-  quay.io/minio/minio server /data
+  cgr.dev/chainguard/minio server /data
 ```
 
 Point `configs/.env` (`S3_ENDPOINT`, `S3_BUCKET_NAME`, credentials) at it, make

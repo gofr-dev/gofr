@@ -216,3 +216,38 @@ func Test_Client_DropCollection_Error(t *testing.T) {
 	require.Error(t, err, "Expected error when trying to drop a non-existent collection")
 	require.Equal(t, "collection not found", err.Error())
 }
+
+func Test_Client_CreateCollection_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setupMocks func(m *arangoMocks)
+		expErr     error
+	}{
+		{
+			desc: "database lookup fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(nil, errDBNotFound)
+			},
+			expErr: errDBNotFound,
+		},
+		{
+			desc: "existence check fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().CollectionExists(gomock.Any(), "coll").Return(false, errCollectionNotFound)
+			},
+			expErr: errCollectionNotFound,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, m := newArangoTestClient(t)
+			tc.setupMocks(m)
+
+			err := client.CreateCollection(t.Context(), "testDB", "coll", false)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
