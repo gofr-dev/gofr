@@ -33,10 +33,12 @@ For full code examples, see [Authentication](/docs/advanced-guide/authentication
 ### Public IdP (Auth0, Okta, Google, Azure AD)
 
 ```go
-err := app.EnableOAuth("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
+if err := app.EnableOAuth("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
     jwt.WithAudience("https://api.example.com"),
     jwt.WithIssuer("https://your-tenant.auth0.com/"),
-    jwt.WithExpirationRequired())
+    jwt.WithExpirationRequired()); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
 ```
 
 Egress from your cluster must be allowed to reach the IdP. If you have a strict NetworkPolicy, allowlist the IdP CIDR or use a forward proxy.
@@ -46,7 +48,9 @@ Egress from your cluster must be allowed to reach the IdP. If you have a strict 
 If your IdP runs in the same cluster, point at its in-cluster Service DNS:
 
 ```go
-err := app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600)
+if err := app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
 ```
 
 The JWKS fetch is cheap, and the `refreshInterval` controls how stale your key cache can be. A typical value is 600–3600 seconds. After key rotation by the IdP, requests with old tokens fail until the cache refreshes.

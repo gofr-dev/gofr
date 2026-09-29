@@ -27,7 +27,9 @@ var errNoRBACConfig = errors.New("no RBAC config file found at configs/rbac.json
 //	}
 //
 //	// Or with custom config path
-//	err := app.EnableRBAC("configs/custom-rbac.json")
+//	if err := app.EnableRBAC("configs/custom-rbac.json"); err != nil {
+//		app.Logger().Fatalf("%v", err)
+//	}
 //
 // Role extraction is configured in the config file:
 // - Set "roleHeader" for header-based extraction (e.g., "X-User-Role")
