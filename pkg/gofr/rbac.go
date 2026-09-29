@@ -11,7 +11,7 @@ import (
 
 var errNoRBACConfig = errors.New("no RBAC config file found at configs/rbac.json, configs/rbac.yaml or configs/rbac.yml")
 
-// EnableRBACWithError enables RBAC by loading configuration from a JSON or YAML file.
+// EnableRBAC enables RBAC by loading configuration from a JSON or YAML file.
 // It loads the config directly and sets up the middleware.
 //
 // Pure config-based: All authorization rules are defined in the config file using:
@@ -22,20 +22,25 @@ var errNoRBACConfig = errors.New("no RBAC config file found at configs/rbac.json
 //
 //	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
 //	// Uses rbac.DefaultConfigPath internally
-//	if err := app.EnableRBACWithError(); err != nil {
+//	if err := app.EnableRBAC(); err != nil {
 //		app.Logger().Fatalf("%v", err)
 //	}
 //
 //	// Or with custom config path
-//	err := app.EnableRBACWithError("configs/custom-rbac.json")
+//	err := app.EnableRBAC("configs/custom-rbac.json")
 //
 // Role extraction is configured in the config file:
 // - Set "roleHeader" for header-based extraction (e.g., "X-User-Role")
 // - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles[0]").
 //
 // It returns an error, and installs no middleware, if the config cannot be found, read, parsed or
-// validated.
-func (a *App) EnableRBACWithError(configPath ...string) error {
+// validated. The error is also logged, so an app that ignores it still sees why authorization is
+// off; return or exit on it to stop startup instead.
+func (a *App) EnableRBAC(configPath ...string) error {
+	return a.authDisabled(a.enableRBAC(configPath...), "Authorization", "EnableRBAC")
+}
+
+func (a *App) enableRBAC(configPath ...string) error {
 	var path string
 	if len(configPath) > 0 {
 		path = configPath[0]
@@ -65,14 +70,4 @@ func (a *App) EnableRBACWithError(configPath ...string) error {
 	a.UseMiddleware(middlewareFunc)
 
 	return nil
-}
-
-// EnableRBAC enables RBAC by loading configuration from a JSON or YAML file.
-//
-// Deprecated: use [App.EnableRBACWithError], which returns the error instead of starting with
-// authorization disabled. EnableRBAC will be removed in the next major release.
-func (a *App) EnableRBAC(configPath ...string) {
-	if err := a.EnableRBACWithError(configPath...); err != nil {
-		a.Logger().Errorf(authDisabledMsg, err, "Authorization", "EnableRBACWithError")
-	}
 }

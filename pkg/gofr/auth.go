@@ -16,9 +16,10 @@ import (
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
-// authDisabledMsg is logged by the deprecated Enable* methods when their input is unusable and the
-// app starts without that auth middleware. Args: the error, the mechanism, the WithError method.
-const authDisabledMsg = "%v. %s is DISABLED: all routes are served without it. Use %s to stop startup instead"
+// authDisabledMsg is logged when an Enable* method's input is unusable and it installs no middleware,
+// so a caller that ignores the returned error still sees it. Args: the error, the mechanism, the method.
+const authDisabledMsg = "%v. %s is DISABLED: all routes are served without it. " +
+	"Check the error returned by %s to stop startup instead"
 
 var (
 	errNoBasicAuthCredentials  = errors.New("no credentials provided for basic auth")
@@ -26,12 +27,17 @@ var (
 	errInvalidJWKSEndpoint     = errors.New("invalid JWKS endpoint URL")
 )
 
-// EnableBasicAuthWithError enables basic authentication for the application.
+// EnableBasicAuth enables basic authentication for the application.
 //
 // It takes a variable number of credentials as alternating username and password strings.
 // It returns an error, and installs no middleware, if no credentials or an odd number of
-// arguments are provided.
-func (a *App) EnableBasicAuthWithError(credentials ...string) error {
+// arguments are provided. The error is also logged, so an app that ignores it still sees why
+// authentication is off; return or exit on it to stop startup instead.
+func (a *App) EnableBasicAuth(credentials ...string) error {
+	return a.authDisabled(a.enableBasicAuth(credentials...), "Basic authentication", "EnableBasicAuth")
+}
+
+func (a *App) enableBasicAuth(credentials ...string) error {
 	if len(credentials) == 0 {
 		return errNoBasicAuthCredentials
 	}
@@ -51,16 +57,6 @@ func (a *App) EnableBasicAuthWithError(credentials ...string) error {
 		grpcMiddleware.BasicAuthUnaryInterceptor(provider), grpcMiddleware.BasicAuthStreamInterceptor(provider))
 
 	return nil
-}
-
-// EnableBasicAuth enables basic authentication for the application.
-//
-// Deprecated: use [App.EnableBasicAuthWithError], which returns the error instead of starting with
-// authentication disabled. EnableBasicAuth will be removed in the next major release.
-func (a *App) EnableBasicAuth(credentials ...string) {
-	if err := a.EnableBasicAuthWithError(credentials...); err != nil {
-		a.container.Errorf(authDisabledMsg, err, "Basic authentication", "EnableBasicAuthWithError")
-	}
 }
 
 // EnableBasicAuthWithFunc enables basic authentication for the HTTP server with a custom validation function.
@@ -122,7 +118,7 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 	}), grpcMiddleware.APIKeyAuthUnaryInterceptor(provider), grpcMiddleware.APIKeyAuthStreamInterceptor(provider))
 }
 
-// EnableOAuthWithError configures OAuth middleware for the application.
+// EnableOAuth configures OAuth middleware for the application.
 //
 // It registers a new HTTP service for fetching JWKS and sets up OAuth middleware
 // with the given JWKS endpoint and refresh interval.
@@ -134,11 +130,13 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 // https://pkg.go.dev/github.com/golang-jwt/jwt/v4#ParserOption
 //
 // It returns an error, and installs no middleware, if jwksEndpoint is not an http or https URL
-// with a host.
-func (a *App) EnableOAuthWithError(jwksEndpoint string,
-	refreshInterval int,
-	options ...jwt.ParserOption,
-) error {
+// with a host. The error is also logged, so an app that ignores it still sees why authentication
+// is off; return or exit on it to stop startup instead.
+func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int, options ...jwt.ParserOption) error {
+	return a.authDisabled(a.enableOAuth(jwksEndpoint, refreshInterval, options...), "OAuth authentication", "EnableOAuth")
+}
+
+func (a *App) enableOAuth(jwksEndpoint string, refreshInterval int, options ...jwt.ParserOption) error {
 	parsedURL, err := url.Parse(jwksEndpoint)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errInvalidJWKSEndpoint, err)
@@ -176,14 +174,13 @@ func (a *App) EnableOAuthWithError(jwksEndpoint string,
 	return nil
 }
 
-// EnableOAuth configures OAuth middleware for the application.
-//
-// Deprecated: use [App.EnableOAuthWithError], which returns the error instead of starting with
-// authentication disabled. EnableOAuth will be removed in the next major release.
-func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int, options ...jwt.ParserOption) {
-	if err := a.EnableOAuthWithError(jwksEndpoint, refreshInterval, options...); err != nil {
-		a.container.Errorf(authDisabledMsg, err, "OAuth authentication", "EnableOAuthWithError")
+// authDisabled logs err, when it is not nil, as the reason mechanism is off and returns it unchanged.
+func (a *App) authDisabled(err error, mechanism, method string) error {
+	if err != nil {
+		a.Logger().Errorf(authDisabledMsg, err, mechanism, method)
 	}
+
+	return err
 }
 
 func (a *App) addAuthMiddleware(httpMW func(http.Handler) http.Handler,

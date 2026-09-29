@@ -499,7 +499,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
-	a.EnableOAuth(jwksServer.URL, 600)
+	require.NoError(t, a.EnableOAuth(jwksServer.URL, 600))
 
 	server := httptest.NewServer(a.httpServer.router)
 	defer server.Close()
@@ -554,7 +554,7 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	}
 
 	// Pass full JWKS URL with path — the fix should extract the base URL
-	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+	require.NoError(t, a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600))
 
 	// Verify the service is registered
 	oauthService := a.container.GetHTTPService("gofr_oauth")
@@ -584,19 +584,22 @@ func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
 
 	for _, endpoint := range invalidEndpoints {
 		t.Run(endpoint, func(t *testing.T) {
-			var a *App
+			port := testutil.GetFreePort(t)
+			c := container.NewContainer(config.NewMockConfig(nil))
 
-			logs := testutil.StderrOutputForFunc(func() {
-				a = newAuthTestApp(t)
-				a.EnableOAuth(endpoint, 600)
-			})
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: c,
+			}
+
+			require.Error(t, a.EnableOAuth(endpoint, 600), "endpoint: %q", endpoint)
 
 			// Service should NOT be registered for invalid endpoints
 			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
 				"gofr_oauth service should not be registered for invalid endpoint: %q", endpoint)
-			assert.Contains(t, logs, "OAuth authentication is DISABLED", "endpoint: %q", endpoint)
-			assert.Contains(t, logs, "EnableOAuthWithError", "endpoint: %q", endpoint)
-			assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "endpoint: %q", endpoint)
 		})
 	}
 }
@@ -667,7 +670,8 @@ func Test_EnableBasicAuth(t *testing.T) {
 				fmt.Fprintln(w, "Hello, world!")
 			}))
 
-			a.EnableBasicAuth(tt.args...)
+			// The odd-argument cases fail here and serve without auth; TestEnableBasicAuth_Errors checks the error.
+			_ = a.EnableBasicAuth(tt.args...)
 
 			server := httptest.NewServer(a.httpServer.router)
 			defer server.Close()
@@ -1617,9 +1621,9 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	app := New()
 
 	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
+	require.NoError(t, app.EnableBasicAuth("user", "pass"))
 	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
+	require.NoError(t, app.EnableOAuth("http://jwks", 3600))
 
 	// Verify HTTP middleware count (approximate check)
 	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
@@ -1756,31 +1760,6 @@ func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
 			defer resp.Body.Close()
 
 			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
-		})
-	}
-}
-
-func Test_EnableBasicAuth_InvalidCredentials(t *testing.T) {
-	tests := []struct {
-		desc string
-		args []string
-	}{
-		{desc: "no credentials", args: nil},
-		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"}},
-	}
-
-	for i, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			var a *App
-
-			logs := testutil.StderrOutputForFunc(func() {
-				a = newAuthTestApp(t)
-				a.EnableBasicAuth(tc.args...)
-			})
-
-			assert.Contains(t, logs, "Basic authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Contains(t, logs, "EnableBasicAuthWithError", "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }

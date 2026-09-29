@@ -46,7 +46,7 @@ func unauthenticatedStatus(t *testing.T, a *App) int {
 	return rec.Code
 }
 
-func TestEnableBasicAuthWithError(t *testing.T) {
+func TestEnableBasicAuth_Errors(t *testing.T) {
 	tests := []struct {
 		desc       string
 		args       []string
@@ -61,14 +61,22 @@ func TestEnableBasicAuthWithError(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			a := newAuthTestApp(t)
+			var (
+				a   *App
+				err error
+			)
 
-			err := a.EnableBasicAuthWithError(tc.args...)
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				err = a.EnableBasicAuth(tc.args...)
+			})
 
 			if tc.wantErr == "" {
 				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
 				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, "Basic authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -76,7 +84,7 @@ func TestEnableBasicAuthWithError(t *testing.T) {
 	}
 }
 
-func TestEnableOAuthWithError(t *testing.T) {
+func TestEnableOAuth_Errors(t *testing.T) {
 	jwks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"keys":[]}`))
@@ -101,16 +109,24 @@ func TestEnableOAuthWithError(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			a := newAuthTestApp(t)
+			var (
+				a   *App
+				err error
+			)
 
-			err := a.EnableOAuthWithError(tc.endpoint, 600)
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				err = a.EnableOAuth(tc.endpoint, 600)
+			})
 
 			if tc.wantErr == "" {
 				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.NotNil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
 				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, "OAuth authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)

@@ -44,10 +44,10 @@ func writeRBACConfig(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func TestEnableRBACWithError(t *testing.T) {
+func TestEnableRBAC(t *testing.T) {
 	tests := []struct {
 		desc       string
-		setup      func(t *testing.T) []string // returns the EnableRBACWithError arguments
+		setup      func(t *testing.T) []string // returns the EnableRBAC arguments
 		wantErr    string
 		wantStatus int
 	}{
@@ -131,72 +131,23 @@ func TestEnableRBACWithError(t *testing.T) {
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			args := tc.setup(t)
-			a := newAuthTestApp(t)
 
-			err := a.EnableRBACWithError(args...)
-
-			if tc.wantErr == "" {
-				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			} else {
-				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
-
-			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
-func TestEnableRBAC(t *testing.T) {
-	tests := []struct {
-		desc         string
-		configPath   func(t *testing.T) string
-		wantDisabled bool
-		wantStatus   int
-	}{
-		{
-			desc: "valid config installs the middleware",
-			configPath: func(t *testing.T) string {
-				t.Helper()
-				return writeRBACConfig(t, t.TempDir(), "rbac.json", rbacGuardingRoot)
-			},
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			desc: "missing file logs that authorization is disabled",
-			configPath: func(t *testing.T) string {
-				t.Helper()
-				return filepath.Join(t.TempDir(), "does-not-exist.yaml")
-			},
-			wantDisabled: true,
-			wantStatus:   http.StatusOK,
-		},
-		{
-			desc: "invalid config logs that authorization is disabled",
-			configPath: func(t *testing.T) string {
-				t.Helper()
-				return writeRBACConfig(t, t.TempDir(), "rbac.json", `invalid json content{`)
-			},
-			wantDisabled: true,
-			wantStatus:   http.StatusOK,
-		},
-	}
-
-	for i, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			path := tc.configPath(t)
-
-			var a *App
+			var (
+				a   *App
+				err error
+			)
 
 			logs := testutil.StderrOutputForFunc(func() {
 				a = newAuthTestApp(t)
-				a.EnableRBAC(path)
+				err = a.EnableRBAC(args...)
 			})
 
-			if tc.wantDisabled {
-				assert.Contains(t, logs, "Authorization is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.Contains(t, logs, "EnableRBACWithError", "TEST[%d], Failed.\n%s", i, tc.desc)
-			} else {
+			if tc.wantErr == "" {
+				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, "Authorization is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
