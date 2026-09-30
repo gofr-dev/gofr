@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	gcPubSub "cloud.google.com/go/pubsub"
+	gcPubSub "cloud.google.com/go/pubsub" //nolint:staticcheck // pubsub v1 is deprecated in favor of v2; the migration is a separate change
 	"google.golang.org/api/iterator"
 )
 
