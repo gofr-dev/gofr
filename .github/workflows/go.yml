@@ -699,14 +699,16 @@ jobs:
           # The GraphQL stubs have their own tests, which only exist under the tag.
           go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
 
-      # gofr_nogrpc is scoped to ./pkg/... on purpose. Unlike the other tags it
-      # removes exported methods -- RegisterService and the AddGRPC* setters name
-      # grpc types and cannot exist without the import -- so the gRPC examples do
-      # not compile under it, which is the intended behaviour and not a failure.
+      # Unlike the other tags gofr_nogrpc removes exported methods -- RegisterService
+      # and the AddGRPC* setters name grpc types and cannot exist without the
+      # import -- so the gRPC server examples are built only without it: their
+      # gofr-dependent files carry //go:build !gofr_nogrpc. Several are generated
+      # by gofr-cli, which drops the tag on regeneration; building ./... here is
+      # what catches that.
       - name: Build and test with the gRPC server omitted
         run: |
           set -euo pipefail
-          go build -tags gofr_nogrpc ./pkg/...
+          go build -tags gofr_nogrpc ./...
           go vet   -tags gofr_nogrpc ./pkg/gofr/
           go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
 
@@ -739,14 +741,13 @@ jobs:
 
       # Every tag above is built on its own, and #4167's three together. A symbol
       # that resolves under one tag but breaks under two would still ship green, so
-      # all six are also built, vetted and tested at once. ./pkg/... for the same
-      # reason as the gofr_nogrpc step.
+      # all six are also built, vetted and tested at once.
       - name: Build with every optional subsystem omitted at once
         run: |
           set -euo pipefail
           ALL="gofr_nosqldrivers gofr_nopubsub gofr_nographql gofr_nogrpc gofr_nodgraph gofr_nootlp"
           PKGS="./pkg/gofr/container/ ./pkg/gofr/datasource/sql/ ./pkg/gofr/migration/ ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/"
-          go build -tags "$ALL" ./pkg/...
+          go build -tags "$ALL" ./...
           go vet   -tags "$ALL" ./pkg/gofr/ $PKGS
           go test  -tags "$ALL" -count=1 $PKGS
           go test  -tags "$ALL" -count=1 -run 'TestGRPCDisabled|TestGraphQLDisabled' ./pkg/gofr/
