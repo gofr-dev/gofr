@@ -35,6 +35,17 @@ const (
 	defaultRefresh = 5 * time.Second
 )
 
+// Field names and values of the migration record that every migrator writes.
+const (
+	// migrationMethodUP is the method recorded for an applied (UP) migration.
+	migrationMethodUP = "UP"
+
+	migrationFieldVersion   = "version"
+	migrationFieldMethod    = "method"
+	migrationFieldStartTime = "start_time"
+	migrationFieldDuration  = "duration"
+)
+
 type MigrateFunc func(d Datasource) error
 
 type Migrate struct {

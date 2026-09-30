@@ -115,10 +115,10 @@ func (am arangoMigrator) beginTransaction(c *container.Container) transactionDat
 func (am arangoMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsArangoDB] {
 		bindVars := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime,
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime,
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		var result []map[string]any

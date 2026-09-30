@@ -86,7 +86,7 @@ func (m redisMigrator) commitMigration(c *container.Container, data *transaction
 
 	if data.UsedDatasources[dsRedis] {
 		jsonData, err := json.Marshal(redisData{
-			Method:    "UP",
+			Method:    migrationMethodUP,
 			StartTime: data.StartTime,
 			Duration:  time.Since(data.StartTime).Milliseconds(),
 		})

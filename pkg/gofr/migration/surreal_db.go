@@ -110,7 +110,7 @@ func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	if len(result) > 0 {
 		if row, ok := result[0].(map[string]any); ok {
-			lastMigration = surrealVersionToInt64(row["version"])
+			lastMigration = surrealVersionToInt64(row[migrationFieldVersion])
 		}
 	}
 
@@ -135,10 +135,10 @@ func (s surrealMigrator) beginTransaction(c *container.Container) transactionDat
 func (s surrealMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsSurrealDB] {
 		_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime,
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime,
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		})
 		if err != nil {
 			return err

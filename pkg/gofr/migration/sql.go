@@ -131,7 +131,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data *transactionDa
 }
 
 func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
-	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
+	_, err := tx.Exec(query, version, migrationMethodUP, startTime, time.Since(startTime).Milliseconds())
 
 	return err
 }

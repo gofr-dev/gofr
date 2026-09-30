@@ -16,4 +16,9 @@ const (
 	defaultReflection      = "false"
 	helpFlagShort          = "-h"
 	helpFlagLong           = "--help"
+
+	// contentTypeJSON is the media type of JSON request and response bodies.
+	contentTypeJSON = "application/json"
+	// serviceNameAttributeKey is the attribute under which a registered HTTP service records its name.
+	serviceNameAttributeKey = "name"
 )

@@ -179,7 +179,7 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data *transa
 	// Add new migration entry
 	newRecord := tsdbMigrationRecord{
 		Version:   data.MigrationNumber,
-		Method:    "UP",
+		Method:    migrationMethodUP,
 		StartTime: data.StartTime.Format(time.RFC3339),
 		Duration:  time.Since(data.StartTime).Milliseconds(),
 	}

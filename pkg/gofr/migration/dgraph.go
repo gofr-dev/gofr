@@ -16,9 +16,6 @@ import (
 
 var errInvalidDgraphTxn = errors.New("invalid Dgraph transaction")
 
-// migrationMethodUP is the method recorded for an applied (UP) migration.
-const migrationMethodUP = "UP"
-
 // dgraphTxn is the subset of the Dgraph transaction used to record migrations.
 // The value returned by Dgraph.NewTxn satisfies it at runtime.
 type dgraphTxn interface {

@@ -89,7 +89,7 @@ func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactio
 func (ch clickHouseMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsClickhouse] {
 		err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
-			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+			migrationMethodUP, data.StartTime, time.Since(data.StartTime).Milliseconds())
 		if err != nil {
 			return err
 		}

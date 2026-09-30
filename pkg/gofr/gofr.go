@@ -311,7 +311,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
+	options = append([]service.Options{service.WithAttributes(map[string]string{serviceNameAttributeKey: serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }

@@ -93,7 +93,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data *transactio
 
 		err := s.ScyllaDB.Exec(insertStmt,
 			data.MigrationNumber,
-			"UP",
+			migrationMethodUP,
 			data.StartTime,
 			time.Since(data.StartTime).Milliseconds(),
 		)

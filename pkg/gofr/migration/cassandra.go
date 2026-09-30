@@ -80,7 +80,7 @@ func (cs cassandraMigrator) beginTransaction(c *container.Container) transaction
 func (cs cassandraMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsCassandra] {
 		err := cs.CassandraWithContext.ExecWithCtx(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
-			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+			migrationMethodUP, data.StartTime, time.Since(data.StartTime).Milliseconds())
 		if err != nil {
 			return err
 		}
