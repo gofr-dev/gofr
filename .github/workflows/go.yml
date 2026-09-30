@@ -295,6 +295,14 @@ jobs:
 
             # Run tests for root gofr package.
             #
+            # -race here specifically (not the sub-packages run below, which is
+            # slower and heavier on external services) is what makes concurrency
+            # fixes in this package durable: the WebSocket/serveWithGoroutine
+            # data race fixed alongside this line had no CI signal until now
+            # (#3930) — go test -race stayed a claim in a doc comment nobody
+            # could fail on. -race requires cgo, which ubuntu-latest provides by
+            # default.
+            #
             # `-coverpkg=./pkg/gofr/...`, not `./pkg/gofr`: the narrow form
             # instruments only the 29 top-level pkg/gofr/*.go files, so every
             # in-repo sub-package — http, http/middleware, container, service,
@@ -304,7 +312,7 @@ jobs:
             # statements; the tree measures 10,482, and the figure went from
             # 86.5% to 90.0% without a new test being written (#4202).
             exit_code=0
-            go test -v -short -covermode=atomic \
+            go test -v -short -race -covermode=atomic \
               -coverpkg=./pkg/gofr/... -coverprofile=root_pkg.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
@@ -653,6 +661,203 @@ jobs:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
+
+  slim_build_tags:
+    name: Slim Build Tags🪶
+    runs-on: ubuntu-latest
+    # Only builds and runs the packages the tags touch, so it stays well inside
+    # the time the rest of the matrix takes.
+    timeout-minutes: 15
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v7
+        with:
+          # The package-list check below diffs against the merge base, so it
+          # needs the history to find one.
+          fetch-depth: 0
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+
+      # Half of the code the build tags add is compiled only when the tags are
+      # set, so without this job nothing ever builds it. A later edit to
+      # container.go that referenced kafka. or google. directly would compile and
+      # pass every other job while silently breaking the tagged build.
+      - name: Build and test with optional subsystems omitted
+        run: |
+          set -euo pipefail
+          for tags in "gofr_nosqldrivers" "gofr_nopubsub" "gofr_nographql" "gofr_nosqldrivers gofr_nopubsub gofr_nographql"; do
+            echo "::group::-tags '$tags'"
+            go build -tags "$tags" ./...
+            go vet   -tags "$tags" ./pkg/gofr/ ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
+            go test  -tags "$tags" -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
+            echo "::endgroup::"
+          done
+
+          # The GraphQL stubs have their own tests, which only exist under the tag.
+          go test -tags gofr_nographql -count=1 -run TestGraphQLDisabled ./pkg/gofr/
+
+      # Unlike the other tags gofr_nogrpc removes exported methods -- RegisterService
+      # and the AddGRPC* setters name grpc types and cannot exist without the
+      # import -- so the gRPC server examples are built only without it: their
+      # gofr-dependent files carry //go:build !gofr_nogrpc. Several are generated
+      # by gofr-cli, which drops the tag on regeneration; building ./... here is
+      # what catches that.
+      - name: Build and test with the gRPC server omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nogrpc ./...
+          go vet   -tags gofr_nogrpc ./pkg/gofr/
+          go test  -tags gofr_nogrpc -count=1 -run TestGRPCDisabled ./pkg/gofr/
+
+      # gofr_nodgraph drops the Dgraph migrator, the one place in GoFr that imports
+      # dgo. The stub has to keep implementing migrator, so a change to that
+      # interface must update both halves; without this step only the real one
+      # would ever be compiled.
+      - name: Build and test with the Dgraph migrator omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nodgraph ./...
+          go vet   -tags gofr_nodgraph ./pkg/gofr/migration/
+          go test  -tags gofr_nodgraph -count=1 ./pkg/gofr/migration/
+
+      # gofr_nootlp drops the OTLP exporters, which pin google.golang.org/grpc --
+      # otlpmetrichttp included -- so gofr_nogrpc pays off only once this is set
+      # too. It is not sufficient on its own: measured against gofr.dev/pkg/gofr,
+      # which links 86 grpc packages by default, gofr_nogrpc alone leaves 82,
+      # adding gofr_nootlp and gofr_nodgraph leaves 81, and only adding
+      # gofr_nopubsub reaches 0, because the Google Pub/Sub client pins grpc
+      # through cloud.google.com/go. A shared dependency goes when its last
+      # importer does. Both halves of the trace and metric transports have tests
+      # that exist only under the tag.
+      - name: Build and test with the OTLP exporters omitted
+        run: |
+          set -euo pipefail
+          go build -tags gofr_nootlp ./...
+          go vet   -tags gofr_nootlp ./pkg/gofr/ ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/
+          go test  -tags gofr_nootlp -count=1 ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/
+
+      # Every tag above is built on its own, and #4167's three together. A symbol
+      # that resolves under one tag but breaks under two would still ship green, so
+      # all six are also built, vetted and tested at once.
+      - name: Build with every optional subsystem omitted at once
+        run: |
+          set -euo pipefail
+          ALL="gofr_nosqldrivers gofr_nopubsub gofr_nographql gofr_nogrpc gofr_nodgraph gofr_nootlp"
+          PKGS="./pkg/gofr/container/ ./pkg/gofr/datasource/sql/ ./pkg/gofr/migration/ ./pkg/gofr/metrics/exporters/ ./pkg/gofr/traces/exporters/"
+          go build -tags "$ALL" ./...
+          go vet   -tags "$ALL" ./pkg/gofr/ $PKGS
+          go test  -tags "$ALL" -count=1 $PKGS
+          go test  -tags "$ALL" -count=1 -run 'TestGRPCDisabled|TestGraphQLDisabled' ./pkg/gofr/
+
+      # Lint under the tags too. The tagged files are half of what these tags add
+      # and the default lint job never sees them -- moving noopResponder and
+      # configTrue in this PR was prompted by a tagged-build lint failure that
+      # nothing in CI would have caught.
+      - name: Lint with optional subsystems omitted
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          # Same scoping as the code_quality job: this reports issues THIS branch
+          # introduces, not the ones the repo already carries. Without it the step
+          # reports every pre-existing goconst and exhaustive finding in the tree.
+          only-new-issues: true
+          # ./pkg/... for the same reason as the gofr_nogrpc build step: the gRPC
+          # examples call RegisterService, which that tag removes, so they fail
+          # typecheck under it. only-new-issues does not filter typecheck errors.
+          args: --build-tags "gofr_nosqldrivers,gofr_nopubsub,gofr_nographql,gofr_nogrpc,gofr_nodgraph,gofr_nootlp" --timeout 9m0s ./pkg/...
+
+      # Building and testing under a tag proves the tagged code still compiles. It
+      # does not prove the tag REMOVED anything, which is the only reason the tag
+      # exists. Dropping the `//go:build !gofr_nosqldrivers` constraint from
+      # drivers.go, or adding an import elsewhere that pulls lib/pq back in by
+      # another path, leaves every other step in this job green while the tag
+      # silently does nothing.
+      #
+      # This is also the assertion the sql package cannot make from a test. Its
+      # suite blank-imports pq and modernc.org/sqlite as fixtures
+      # (drivers_testdeps_test.go) because TestNewSQL_GetDBDialect opens a
+      # postgres DSN, so the test binary has those drivers registered in both
+      # configurations. What the *library* links is only observable from outside
+      # the test binary, and this step is where that is observed.
+      #
+      # `go list -deps` is given the PACKAGE PATH, never `./...`: with a pattern,
+      # every matched package is listed whether or not anything links it, so
+      # `./...` reports a tagged-out package as still present.
+      - name: Each tag removes the packages it claims to
+        run: |
+          set -euo pipefail
+
+          # Written to files rather than piped: `grep -q` exits on its first match,
+          # which SIGPIPEs `go list` and trips `pipefail` depending on where in the
+          # list the match happens to fall.
+          go list -deps gofr.dev/pkg/gofr > /tmp/deps.default
+
+          check() {
+            tag=$1
+            pattern=$2
+
+            # Also fails when the packages are absent from the DEFAULT build, so a
+            # renamed or dropped module cannot make this check pass vacuously.
+            if ! grep -Eq "$pattern" /tmp/deps.default; then
+              echo "::error::the default build does not link $pattern, so '-tags $tag' cannot be shown to remove it"
+              exit 1
+            fi
+
+            go list -tags "$tag" -deps gofr.dev/pkg/gofr > "/tmp/deps.$tag"
+
+            if grep -E "$pattern" "/tmp/deps.$tag"; then
+              echo "::error::-tags $tag still links the packages listed above; the tag is not removing what it claims to"
+              exit 1
+            fi
+
+            echo "-tags $tag: $(wc -l < /tmp/deps.default) packages -> $(wc -l < "/tmp/deps.$tag")"
+          }
+
+          check gofr_nosqldrivers '^(github\.com/lib/pq|modernc\.org/sqlite)($|/)'
+          check gofr_nopubsub     '^(github\.com/segmentio/kafka-go|cloud\.google\.com/go/pubsub|github\.com/eclipse/paho\.mqtt\.golang)($|/)'
+          check gofr_nographql    '^github\.com/graphql-go/graphql($|/)'
+          check gofr_nootlp       '^go\.opentelemetry\.io/otel/exporters/otlp($|/)'
+          check gofr_nodgraph     '^github\.com/dgraph-io/dgo($|/)'
+
+          # gofr_nogrpc is checked against the COMBINED tag set, not on its own. grpc is pinned by
+          # the OTLP exporters, the Dgraph protos and cloud.google.com/go as well as by the server,
+          # so on its own it takes 4 of 86 packages and a "still linked" assertion would fail for
+          # reasons that have nothing to do with the tag working.
+          check gofr_nogrpc,gofr_nootlp,gofr_nodgraph,gofr_nopubsub '^google\.golang\.org/grpc($|/)'
+
+          go list -tags gofr_nosqldrivers,gofr_nopubsub,gofr_nographql -deps gofr.dev/pkg/gofr > /tmp/deps.slim
+
+          full=$(wc -l < /tmp/deps.default)
+          slim=$(wc -l < /tmp/deps.slim)
+
+          echo "gofr.dev/pkg/gofr links $full packages by default and $slim with all three tags"
+
+          if [ "$slim" -ge "$full" ]; then
+            echo "::error::all three tags together removed no packages"
+            exit 1
+          fi
+
+      # There is deliberately NO step here diffing the default build's whole package
+      # list against the merge base.
+      #
+      # An earlier revision had one, and it was the wrong gate: this job runs on every
+      # pull request, so a whole-module `go list -deps ./...` diff means "no PR may add
+      # a package or a dependency, ever". That is not a rule this repo has, and the
+      # step would have gone red on changes that have nothing to do with build tags.
+      #
+      # What it was trying to protect is already covered, and covered better, by the
+      # step above: its `grep -Eq "$pattern" /tmp/deps.default` guard fails when a
+      # tagged-out package is missing from the DEFAULT build, so the tags cannot start
+      # passing vacuously and an untagged build cannot quietly stop linking them.
+      # Please do not re-add the broad diff.
+      - name: The tagged packages still build and test untagged
+        run: |
+          set -euo pipefail
+
+          go test -count=1 ./pkg/gofr/container/ ./pkg/gofr/datasource/sql/
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
