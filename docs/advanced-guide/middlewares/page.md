@@ -43,6 +43,16 @@ Configuration is read only under the exact names listed above (plus
   overridden by another entry. This keeps a stray key from replacing an origin that was
   correctly negotiated against `ACCESS_CONTROL_ALLOW_ORIGIN`.
 
+> Note: these values are validated as the configuration is read. `ACCESS_CONTROL_MAX_AGE` must be a whole number
+> of seconds, and `ACCESS_CONTROL_ALLOW_CREDENTIALS` must be exactly `true` or `false` — a browser honors the credentials
+> header only for the literal `true`. An invalid value is reported as a warning at startup and the header is omitted,
+> instead of being sent in a form the browser would discard. Setting `ACCESS_CONTROL_ALLOW_CREDENTIALS` to `false` omits
+> the header, which is what it means anyway.
+>
+> Use `ACCESS_CONTROL_MAX_AGE=0` to stop browsers caching the preflight response. A negative value such as `-1` means the
+> same thing to a browser, so it is sent as `0`; likewise `+600` and `0600` are sent as `600`. Each of these rewrites is
+> reported as a warning at startup.
+
 If you construct the middleware yourself with `middleware.CORS(map[string]string{...}, ...)`,
 entries are matched by canonical HTTP header name — so the spelling you use there does not change
 which header an entry controls — and any additional entry is sent as a response header as-is.
