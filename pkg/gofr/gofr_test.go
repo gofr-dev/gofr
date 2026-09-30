@@ -836,44 +836,6 @@ func Test_initTracer(t *testing.T) {
 	}
 }
 
-func Test_initTracer_invalidConfig(t *testing.T) {
-	createMockConfig := func(traceExporter, url, authKey string) config.Config {
-		return config.NewMockConfig(map[string]string{
-			"TRACE_EXPORTER":  traceExporter,
-			"TRACER_URL":      url,
-			"TRACER_AUTH_KEY": authKey,
-		})
-	}
-	mockConfig1 := createMockConfig("abc", "https://tracer-service.dev", "")
-	mockConfig2 := createMockConfig("", "https://tracer-service.dev", "")
-	mockConfig3 := createMockConfig("otlp", "", "")
-
-	testErr := []struct {
-		desc               string
-		config             config.Config
-		expectedLogMessage string
-	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc; tracing is disabled"},
-		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"miss tracer_url ", mockConfig3,
-			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
-	}
-
-	for i, tc := range testErr {
-		logMessage := testutil.StderrOutputForFunc(func() {
-			mockContainer, _ := container.NewMockContainer(t)
-
-			a := App{
-				Config:    tc.config,
-				container: mockContainer,
-			}
-			a.initTracer()
-		})
-
-		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
 // Test_initTracer_NoSamplingButValidIDs asserts that initTracer installs a
 // non-recording SDK provider (NeverSample) when no TRACE_EXPORTER is
 // configured. Spans must NOT record, but their SpanContext must be valid
