@@ -16,23 +16,55 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func Test_NewMongoClient(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestClient_Connect(t *testing.T) {
+	tests := []struct {
+		desc        string
+		config      Config
+		setupMocks  func(l *MockLogger, m *MockMetrics)
+		expURI      string
+		expDatabase string
+		expDBSet    bool
+	}{
+		{
+			desc:   "invalid config registers metrics and leaves database nil",
+			config: Config{Host: "mongo", Database: "test"},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Errorf("error generating MongoDB URI: %v", gomock.Any())
+			},
+		},
+		{
+			desc:   "server unreachable registers metrics and keeps the client",
+			config: Config{URI: "mongodb://127.0.0.1:1/test", Database: "test", ConnectionTimeout: 200 * time.Millisecond},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any())
+				l.EXPECT().Errorf(gomock.Any(), "127.0.0.1", gomock.Any())
+			},
+			expURI:      "127.0.0.1",
+			expDatabase: "test",
+			expDBSet:    true,
+		},
+	}
 
-	metrics := NewMockMetrics(ctrl)
-	logger := NewMockLogger(ctrl)
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := NewMockLogger(ctrl)
+			metrics := NewMockMetrics(ctrl)
 
-	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
-	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+			tc.setupMocks(logger, metrics)
 
-	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
-	client.Database = &mongo.Database{}
-	client.UseLogger(logger)
-	client.UseMetrics(metrics)
-	client.Connect()
+			client := New(tc.config)
+			client.UseLogger(logger)
+			client.UseMetrics(metrics)
+			client.Connect()
 
-	assert.NotNil(t, client)
+			require.Equal(t, tc.expURI, client.uri)
+			require.Equal(t, tc.expDatabase, client.database)
+			require.Equal(t, tc.expDBSet, client.Database != nil)
+		})
+	}
 }
 
 func TestGenerateMongoURI(t *testing.T) {
@@ -183,23 +215,6 @@ func TestGetDBHost(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_NewMongoClientError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	metrics := NewMockMetrics(ctrl)
-	logger := NewMockLogger(ctrl)
-
-	logger.EXPECT().Errorf("error generating MongoDB URI: %v", gomock.Any())
-
-	client := New(Config{Host: "mongo", Database: "test"})
-	client.UseLogger(logger)
-	client.UseMetrics(metrics)
-	client.Connect()
-
-	assert.Nil(t, client.Database)
 }
 
 func Test_InsertCommands(t *testing.T) {
@@ -731,6 +746,152 @@ func Test_HealthCheck(t *testing.T) {
 
 		require.ErrorIs(t, err, errStatusDown)
 
-		assert.Contains(t, fmt.Sprint(resp), "DOWN")
+		h, ok := resp.(*Health)
+		require.True(t, ok)
+		assert.Equal(t, statusDown, h.Status)
+		assert.Contains(t, h.Details["error"], "duplicate key error")
 	})
+}
+
+func notConnectedCalls() []struct {
+	desc string
+	call func(ctx context.Context, c *Client) error
+} {
+	return []struct {
+		desc string
+		call func(ctx context.Context, c *Client) error
+	}{
+		{"InsertOne", func(ctx context.Context, c *Client) error {
+			_, err := c.InsertOne(ctx, "col", bson.M{"a": 1})
+			return err
+		}},
+		{"InsertMany", func(ctx context.Context, c *Client) error {
+			_, err := c.InsertMany(ctx, "col", []any{bson.M{"a": 1}})
+			return err
+		}},
+		{"Find", func(ctx context.Context, c *Client) error {
+			var res []bson.M
+			return c.Find(ctx, "col", bson.M{}, &res)
+		}},
+		{"FindOne", func(ctx context.Context, c *Client) error {
+			var res bson.M
+			return c.FindOne(ctx, "col", bson.M{}, &res)
+		}},
+		{"UpdateByID", func(ctx context.Context, c *Client) error {
+			_, err := c.UpdateByID(ctx, "col", 1, bson.M{"$set": bson.M{"a": 2}})
+			return err
+		}},
+		{"UpdateOne", func(ctx context.Context, c *Client) error {
+			return c.UpdateOne(ctx, "col", bson.M{}, bson.M{"$set": bson.M{"a": 2}})
+		}},
+		{"UpdateMany", func(ctx context.Context, c *Client) error {
+			_, err := c.UpdateMany(ctx, "col", bson.M{}, bson.M{"$set": bson.M{"a": 2}})
+			return err
+		}},
+		{"CountDocuments", func(ctx context.Context, c *Client) error {
+			_, err := c.CountDocuments(ctx, "col", bson.M{})
+			return err
+		}},
+		{"DeleteOne", func(ctx context.Context, c *Client) error {
+			_, err := c.DeleteOne(ctx, "col", bson.M{})
+			return err
+		}},
+		{"DeleteMany", func(ctx context.Context, c *Client) error {
+			_, err := c.DeleteMany(ctx, "col", bson.M{})
+			return err
+		}},
+		{"Drop", func(ctx context.Context, c *Client) error { return c.Drop(ctx, "col") }},
+		{"CreateCollection", func(ctx context.Context, c *Client) error { return c.CreateCollection(ctx, "col") }},
+	}
+}
+
+func TestClient_NotConnected(t *testing.T) {
+	tests := append(notConnectedCalls(), struct {
+		desc string
+		call func(ctx context.Context, c *Client) error
+	}{"StartSession", func(_ context.Context, c *Client) error {
+		_, err := c.StartSession()
+		return err
+	}})
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := NewMockLogger(ctrl)
+			metrics := NewMockMetrics(ctrl)
+
+			logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(),
+				gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			client := New(Config{})
+			client.UseLogger(logger)
+			client.UseMetrics(metrics)
+
+			err := tc.call(t.Context(), client)
+
+			require.ErrorIs(t, err, errNotConnected)
+		})
+	}
+}
+
+// TestClient_ServerUnreachable covers a valid config with no server listening: the client is kept, and every
+// operation returns the driver's error (bounded by the caller's context) instead of panicking.
+func TestClient_ServerUnreachable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := NewMockLogger(ctrl)
+	metrics := NewMockMetrics(ctrl)
+
+	metrics.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(),
+		"hostname", "127.0.0.1", "database", "test", "type", gomock.Any()).AnyTimes()
+	logger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any())
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	client := New(Config{URI: "mongodb://127.0.0.1:1/test", Database: "test", ConnectionTimeout: 100 * time.Millisecond})
+	client.UseLogger(logger)
+	client.UseMetrics(metrics)
+	client.Connect()
+
+	t.Cleanup(func() { _ = client.Client().Disconnect(context.Background()) })
+
+	for _, tc := range notConnectedCalls() {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+
+			err := tc.call(ctx, client)
+
+			require.Error(t, err)
+			require.NotErrorIs(t, err, errNotConnected)
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+
+	health, err := client.HealthCheck(ctx)
+
+	require.ErrorIs(t, err, errStatusDown)
+
+	h, ok := health.(*Health)
+	require.True(t, ok)
+	require.Equal(t, statusDown, h.Status)
+	require.Equal(t, "127.0.0.1", h.Details["host"])
+	require.Equal(t, "test", h.Details["database"])
+	require.NotEmpty(t, h.Details["error"])
+}
+
+func TestClient_HealthCheck_NotConnected(t *testing.T) {
+	client := New(Config{})
+
+	health, err := client.HealthCheck(t.Context())
+
+	require.ErrorIs(t, err, errNotConnected)
+	require.Equal(t, &Health{Status: statusDown, Details: map[string]any{
+		"host":     "",
+		"database": "",
+		"error":    errNotConnected.Error(),
+	}}, health)
 }

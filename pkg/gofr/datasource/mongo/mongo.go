@@ -18,6 +18,10 @@ import (
 )
 
 type Client struct {
+	// Database is the underlying driver database handle. It is nil until Connect succeeds in creating a driver
+	// client, which does not happen when the config is invalid. GoFr's wrapped methods return errNotConnected in
+	// that case, but driver methods promoted from this field (Collection, Client, RunCommand, ...) bypass that
+	// guard and must not be called while it is nil.
 	*mongo.Database
 
 	uri      string
@@ -39,13 +43,17 @@ type Config struct {
 	ConnectionTimeout time.Duration
 }
 
-const defaultTimeout = 5 * time.Second
+const (
+	defaultTimeout = 5 * time.Second
+	statusDown     = "DOWN"
+)
 
 var (
 	errStatusDown   = errors.New("status down")
 	errMissingField = errors.New("missing required field in config")
 	errIncorrectURI = errors.New("incorrect URI for MongoDB")
 	errParseHost    = errors.New("failed to parse host from MongoDB URI")
+	errNotConnected = errors.New("not connected to MongoDB, check the Connect error logs")
 )
 
 /*
@@ -90,11 +98,23 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
+	// Register the histogram before any step that can fail, so operations record latency even when
+	// the server is unreachable at startup and becomes available later.
+	mongoBuckets := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
+	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in microseconds.", mongoBuckets...)
+
 	uri, host, err := generateMongoURI(c.config)
 	if err != nil {
 		c.logger.Errorf("error generating MongoDB URI: %v", err)
 		return
 	}
+
+	// Only the host is stored, never the full URI, as it may contain credentials.
+	c.uri = host
+	c.database = c.config.Database
 
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
@@ -113,20 +133,27 @@ func (c *Client) Connect() {
 		return
 	}
 
+	// The driver connects lazily and reconnects on its own, so the client is kept even when the ping fails:
+	// operations start working once the server becomes reachable, without restarting the app.
+	c.Database = m.Database(c.config.Database)
+
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to MongoDB at %v due to err: %v", host, err)
+		c.logger.Errorf("could not connect to MongoDB at %v due to err: %v; operations will reconnect "+
+			"once the server is reachable", host, err)
+
 		return
 	}
 
-	mongoBuckets := []float64{
-		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
-		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
-	}
-	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in microseconds.", mongoBuckets...)
-
-	c.Database = m.Database(c.config.Database)
-
 	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.config.Database)
+}
+
+// db returns the underlying driver database, or errNotConnected when Connect failed before creating it.
+func (c *Client) db() (*mongo.Database, error) {
+	if c.Database == nil {
+		return nil, errNotConnected
+	}
+
+	return c.Database, nil
 }
 
 func generateMongoURI(config *Config) (uri, host string, err error) {
@@ -222,7 +249,12 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document any)
 	ctx, done := c.instrumentQuery(ctx, collection, "insertOne", document, nil, nil)
 	defer done()
 
-	return c.Database.Collection(collection).InsertOne(ctx, document)
+	db, err := c.db()
+	if err != nil {
+		return nil, err
+	}
+
+	return db.Collection(collection).InsertOne(ctx, document)
 }
 
 // InsertMany inserts multiple documents into the specified collection.
@@ -230,7 +262,12 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 	ctx, done := c.instrumentQuery(ctx, collection, "insertMany", documents, nil, nil)
 	defer done()
 
-	res, err := c.Database.Collection(collection).InsertMany(ctx, documents)
+	db, err := c.db()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := db.Collection(collection).InsertMany(ctx, documents)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +280,12 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results an
 	ctx, done := c.instrumentQuery(ctx, collection, "find", filter, nil, nil)
 	defer done()
 
-	cur, err := c.Database.Collection(collection).Find(ctx, filter)
+	db, err := c.db()
+	if err != nil {
+		return err
+	}
+
+	cur, err := db.Collection(collection).Find(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -258,7 +300,12 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 	ctx, done := c.instrumentQuery(ctx, collection, "findOne", filter, nil, nil)
 	defer done()
 
-	b, err := c.Database.Collection(collection).FindOne(ctx, filter).Raw()
+	db, err := c.db()
+	if err != nil {
+		return err
+	}
+
+	b, err := db.Collection(collection).FindOne(ctx, filter).Raw()
 	if err != nil {
 		return err
 	}
@@ -271,9 +318,17 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update a
 	ctx, done := c.instrumentQuery(ctx, collection, "updateByID", nil, id, update)
 	defer done()
 
-	res, err := c.Database.Collection(collection).UpdateByID(ctx, id, update)
+	db, err := c.db()
+	if err != nil {
+		return 0, err
+	}
 
-	return res.ModifiedCount, err
+	res, err := db.Collection(collection).UpdateByID(ctx, id, update)
+	if err != nil {
+		return 0, err
+	}
+
+	return res.ModifiedCount, nil
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
@@ -281,7 +336,12 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 	ctx, done := c.instrumentQuery(ctx, collection, "updateOne", filter, nil, update)
 	defer done()
 
-	_, err := c.Database.Collection(collection).UpdateOne(ctx, filter, update)
+	db, err := c.db()
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Collection(collection).UpdateOne(ctx, filter, update)
 
 	return err
 }
@@ -291,9 +351,17 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 	ctx, done := c.instrumentQuery(ctx, collection, "updateMany", filter, nil, update)
 	defer done()
 
-	res, err := c.Database.Collection(collection).UpdateMany(ctx, filter, update)
+	db, err := c.db()
+	if err != nil {
+		return 0, err
+	}
 
-	return res.ModifiedCount, err
+	res, err := db.Collection(collection).UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, err
+	}
+
+	return res.ModifiedCount, nil
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
@@ -301,7 +369,12 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter a
 	ctx, done := c.instrumentQuery(ctx, collection, "countDocuments", filter, nil, nil)
 	defer done()
 
-	return c.Database.Collection(collection).CountDocuments(ctx, filter)
+	db, err := c.db()
+	if err != nil {
+		return 0, err
+	}
+
+	return db.Collection(collection).CountDocuments(ctx, filter)
 }
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
@@ -309,7 +382,12 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter any) (
 	ctx, done := c.instrumentQuery(ctx, collection, "deleteOne", filter, nil, nil)
 	defer done()
 
-	res, err := c.Database.Collection(collection).DeleteOne(ctx, filter)
+	db, err := c.db()
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := db.Collection(collection).DeleteOne(ctx, filter)
 	if err != nil {
 		return 0, err
 	}
@@ -322,7 +400,12 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter any) 
 	ctx, done := c.instrumentQuery(ctx, collection, "deleteMany", filter, nil, nil)
 	defer done()
 
-	res, err := c.Database.Collection(collection).DeleteMany(ctx, filter)
+	db, err := c.db()
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := db.Collection(collection).DeleteMany(ctx, filter)
 	if err != nil {
 		return 0, err
 	}
@@ -335,7 +418,12 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 	ctx, done := c.instrumentQuery(ctx, collection, "drop", nil, nil, nil)
 	defer done()
 
-	return c.Database.Collection(collection).Drop(ctx)
+	db, err := c.db()
+	if err != nil {
+		return err
+	}
+
+	return db.Collection(collection).Drop(ctx)
 }
 
 // CreateCollection creates the specified collection in the database.
@@ -343,7 +431,12 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 	ctx, done := c.instrumentQuery(ctx, name, "createCollection", nil, nil, nil)
 	defer done()
 
-	return c.Database.CreateCollection(ctx, name)
+	db, err := c.db()
+	if err != nil {
+		return err
+	}
+
+	return db.CreateCollection(ctx, name)
 }
 
 type Health struct {
@@ -360,9 +453,18 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Details["host"] = c.uri
 	h.Details["database"] = c.database
 
-	err := c.Database.Client().Ping(ctx, readpref.Primary())
+	db, err := c.db()
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
+		h.Details["error"] = err.Error()
+
+		return &h, err
+	}
+
+	err = db.Client().Ping(ctx, readpref.Primary())
+	if err != nil {
+		h.Status = statusDown
+		h.Details["error"] = err.Error()
 
 		return &h, errStatusDown
 	}
@@ -376,7 +478,12 @@ func (c *Client) StartSession() (any, error) {
 	_, done := c.instrumentQuery(context.Background(), "", "startSession", nil, nil, nil)
 	defer done()
 
-	s, err := c.Client().StartSession()
+	db, err := c.db()
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := db.Client().StartSession()
 	ses := &session{s}
 
 	return ses, err
