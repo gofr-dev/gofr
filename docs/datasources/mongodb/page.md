@@ -13,7 +13,11 @@ To connect to `MongoDB`, you need to provide the following environment variables
 - `URI`: Mongodb server URL that the client connects to.
 - `DATABASE`: The name of the database to connect to.
 - `CONNECTIONTIMEOUT`: The maximum time the client will wait while trying to establish a connection.
-  
+
+If MongoDB is unreachable at startup, GoFr logs the error and keeps the client; the health check reports `DOWN` (with the connection error in `details.error`) until the server becomes reachable, after which operations and the `app_mongo_stats` metric work without a restart. While the server is down, an operation fails after the caller's context deadline or the driver's server-selection timeout (30 seconds by default); it does not fail immediately and does not panic.
+
+If the configuration is invalid (for example, a malformed `URI`), GoFr logs the error, the health check reports `DOWN` with the reason in `details.error`, and the GoFr methods return a "not connected to MongoDB" error instead of panicking. Methods of the embedded `*mongo.Database` field (such as `Collection` or `RunCommand`) are not guarded: that field is `nil` in this case and must not be called directly.
+
 
 ## Setup
 GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
