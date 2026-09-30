@@ -193,7 +193,8 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 	}
 	defer reader.Close()
 
-	readCtx := k.getReadContext(ctx)
+	readCtx, cancel := k.getReadContext(ctx)
+	defer cancel()
 
 	return k.readMessages(readCtx, reader, limit)
 }
