@@ -147,7 +147,7 @@ func (em elasticsearchMigrator) beginTransaction(c *container.Container) transac
 }
 
 // commitMigration records the migration in the tracking index.
-func (em elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (em elasticsearchMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsElasticsearch] {
 		migrationDoc := map[string]any{
 			"version":    data.MigrationNumber,
@@ -171,7 +171,7 @@ func (em elasticsearchMigrator) commitMigration(c *container.Container, data tra
 }
 
 // rollback is a no-op for Elasticsearch migrations.
-func (em elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
+func (em elasticsearchMigrator) rollback(c *container.Container, data *transactionData) {
 	em.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }

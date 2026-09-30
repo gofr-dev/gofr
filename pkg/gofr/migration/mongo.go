@@ -96,7 +96,7 @@ func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData
 	return mg.migrator.beginTransaction(c)
 }
 
-func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (mg mongoMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsMongo] {
 		migrationDoc := map[string]any{
 			"version":    data.MigrationNumber,
@@ -116,7 +116,7 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 	return mg.migrator.commitMigration(c, data)
 }
 
-func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
+func (mg mongoMigrator) rollback(c *container.Container, data *transactionData) {
 	mg.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }

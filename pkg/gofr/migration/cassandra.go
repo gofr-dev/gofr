@@ -77,7 +77,7 @@ func (cs cassandraMigrator) beginTransaction(c *container.Container) transaction
 	return cmt
 }
 
-func (cs cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (cs cassandraMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsCassandra] {
 		err := cs.CassandraWithContext.ExecWithCtx(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
 			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
@@ -91,7 +91,7 @@ func (cs cassandraMigrator) commitMigration(c *container.Container, data transac
 	return cs.migrator.commitMigration(c, data)
 }
 
-func (cs cassandraMigrator) rollback(c *container.Container, data transactionData) {
+func (cs cassandraMigrator) rollback(c *container.Container, data *transactionData) {
 	cs.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)

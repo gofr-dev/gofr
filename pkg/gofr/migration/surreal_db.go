@@ -132,7 +132,7 @@ func (s surrealMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-func (s surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s surrealMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsSurrealDB] {
 		_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
 			"version":    data.MigrationNumber,
@@ -150,7 +150,7 @@ func (s surrealMigrator) commitMigration(c *container.Container, data transactio
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s surrealMigrator) rollback(c *container.Container, data transactionData) {
+func (s surrealMigrator) rollback(c *container.Container, data *transactionData) {
 	s.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)

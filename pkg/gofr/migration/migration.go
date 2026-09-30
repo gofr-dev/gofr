@@ -179,7 +179,7 @@ func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds 
 		// Check if lock refresh failed after starting the transaction but before execution
 		select {
 		case <-ctx.Done():
-			mg.rollback(c, migrationInfo)
+			mg.rollback(c, &migrationInfo)
 			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
 
 			return
@@ -210,7 +210,7 @@ func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds 
 		// Check if lock refresh failed during migration execution
 		select {
 		case <-ctx.Done():
-			mg.rollback(c, migrationInfo)
+			mg.rollback(c, &migrationInfo)
 			c.Fatalf("migration %v aborted: lock refresh failed during execution", currentMigration)
 
 			return
@@ -219,16 +219,16 @@ func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds 
 
 		if err != nil {
 			c.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
-			mg.rollback(c, migrationInfo)
+			mg.rollback(c, &migrationInfo)
 
 			return
 		}
 
-		err = mg.commitMigration(c, migrationInfo)
+		err = mg.commitMigration(c, &migrationInfo)
 		if err != nil {
 			c.Errorf("failed to commit migration, err: %v", err)
 
-			mg.rollback(c, migrationInfo)
+			mg.rollback(c, &migrationInfo)
 
 			return
 		}

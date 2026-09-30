@@ -155,7 +155,7 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 
 // commitMigration records the migration metadata in a Dgraph transaction so the
 // version record is committed atomically, then chains to the next migrator.
-func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (dm dgraphMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if !data.UsedDatasources[dsDGraph] {
 		return dm.migrator.commitMigration(c, data)
 	}
@@ -214,7 +214,7 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 }
 
 // rollback handles migration failure and rollback.
-func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) {
+func (dm dgraphMigrator) rollback(c *container.Container, data *transactionData) {
 	dm.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
