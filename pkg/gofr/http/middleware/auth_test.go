@@ -38,7 +38,7 @@ func TestAuthMiddleware(t *testing.T) {
 			mockHandler := &MockHandler{t: t, authMethod: authProvider.method, authHeader: tc.expectedHeader}
 			middleware := AuthMiddleware(authProvider)
 			handler := middleware(mockHandler)
-			req := httptest.NewRequest(http.MethodGet, tc.url, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.url, http.NoBody)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
@@ -86,7 +86,7 @@ func Test_getAuthHeaderValue(t *testing.T) {
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Authorization", tc.header)
 			result, err := getAuthHeaderFromRequest(req, tc.key, tc.prefix)
 			assert.Equal(t, tc.result, result)
