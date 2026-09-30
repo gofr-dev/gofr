@@ -499,7 +499,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
-	a.EnableOAuth(jwksServer.URL, 600)
+	require.NoError(t, a.EnableOAuth(jwksServer.URL, 600))
 
 	server := httptest.NewServer(a.httpServer.router)
 	defer server.Close()
@@ -554,7 +554,7 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	}
 
 	// Pass full JWKS URL with path — the fix should extract the base URL
-	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+	require.NoError(t, a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600))
 
 	// Verify the service is registered
 	oauthService := a.container.GetHTTPService("gofr_oauth")
@@ -595,7 +595,7 @@ func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
 				container: c,
 			}
 
-			a.EnableOAuth(endpoint, 600)
+			require.Error(t, a.EnableOAuth(endpoint, 600), "endpoint: %q", endpoint)
 
 			// Service should NOT be registered for invalid endpoints
 			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
@@ -670,7 +670,8 @@ func Test_EnableBasicAuth(t *testing.T) {
 				fmt.Fprintln(w, "Hello, world!")
 			}))
 
-			a.EnableBasicAuth(tt.args...)
+			// The odd-argument cases fail here and serve without auth; TestEnableBasicAuth_Errors checks the error.
+			_ = a.EnableBasicAuth(tt.args...)
 
 			server := httptest.NewServer(a.httpServer.router)
 			defer server.Close()
@@ -1731,19 +1732,6 @@ func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
 			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
-}
-
-func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Should log error but not panic
-	app.EnableBasicAuth()
-
-	// No middleware should be added — handler responds without auth
-	assert.NotNil(t, app.httpServer)
 }
 
 func TestHandleStartupHooks(t *testing.T) {

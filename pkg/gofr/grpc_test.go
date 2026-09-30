@@ -718,9 +718,9 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	app := New()
 
 	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
+	require.NoError(t, app.EnableBasicAuth("user", "pass"))
 	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
+	require.NoError(t, app.EnableOAuth("http://jwks", 3600))
 
 	// The router's middleware slice is not inspectable without reflection, but the
 	// gRPC interceptors are. Two are registered by default (recovery and
