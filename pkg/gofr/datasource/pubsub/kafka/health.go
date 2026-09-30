@@ -28,7 +28,7 @@ func (k *kafkaClient) Health() datasource.Health {
 	defer k.connMu.RUnlock()
 
 	if k.conn == nil {
-		health.Details["error"] = "invalid connection type"
+		health.Details[healthKeyError] = "invalid connection type"
 		return health
 	}
 
@@ -42,7 +42,7 @@ func (k *kafkaClient) Health() datasource.Health {
 	}
 
 	health.Details["brokers"] = brokerStatus
-	health.Details["backend"] = "KAFKA"
+	health.Details["backend"] = kafkaBackend
 	health.Details["writer"] = k.getWriterStatsAsMap()
 	health.Details["readers"] = k.getReaderStatsAsMap(readers)
 
@@ -76,15 +76,15 @@ func (k *kafkaClient) evaluateBrokerHealth() ([]map[string]any, bool) {
 func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 	brokerAddr := conn.RemoteAddr().String()
 	status := map[string]any{
-		"broker":       brokerAddr,
-		"status":       "DOWN",
-		"isController": false,
-		"error":        nil,
+		healthKeyBroker: brokerAddr,
+		"status":        "DOWN",
+		"isController":  false,
+		healthKeyError:  nil,
 	}
 
 	_, err := conn.ReadPartitions()
 	if err != nil {
-		status["error"] = err.Error()
+		status[healthKeyError] = err.Error()
 		return status
 	}
 
@@ -93,7 +93,7 @@ func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 	if *controllerAddr == "" {
 		controller, err := conn.Controller()
 		if err != nil {
-			status["error"] = fmt.Sprintf("controller lookup failed: %v", err)
+			status[healthKeyError] = fmt.Sprintf("controller lookup failed: %v", err)
 		} else if controller.Host != "" {
 			*controllerAddr = net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
 		}

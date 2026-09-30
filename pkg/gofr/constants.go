@@ -14,4 +14,6 @@ const (
 	pingTimeout            = 5 * time.Second
 	defaultTelemetry       = "true"
 	defaultReflection      = "false"
+	helpFlagShort          = "-h"
+	helpFlagLong           = "--help"
 )
