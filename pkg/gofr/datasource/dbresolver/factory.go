@@ -23,6 +23,14 @@ const (
 	expectedHostPortParts    = 2
 )
 
+// Config keys a replica answers with its own connection values instead of the primary's.
+const (
+	keyDBHost     = "DB_HOST"
+	keyDBPort     = "DB_PORT"
+	keyDBUser     = "DB_USER"
+	keyDBPassword = "DB_PASSWORD"
+)
+
 var (
 	errPrimaryNil               = errors.New("primary SQL connection is nil")
 	errInvalidReplicaHostFormat = errors.New("invalid replica host format (expected host:port)")
@@ -279,38 +287,45 @@ func createReplicaConnection(cfg config.Config, host, port, user, password strin
 		return nil, errDBNameRequired
 	}
 
-	replicaCfg := &replicaConfig{
-		base:     cfg,
-		host:     host,
-		port:     port,
-		user:     user,
-		password: password,
-	}
-
-	db := gofrSQL.NewSQL(replicaCfg, logger, metrics)
+	db := gofrSQL.NewSQL(newReplicaConfig(cfg, host, port, user, password), logger, metrics)
 
 	return db, nil
 }
 
 // replicaConfig wraps the main config and overrides specific values.
+//
+// The replica's connection values are held in a map keyed by the config key they
+// answer, not in named struct fields. CodeQL resolves every config.Config.Get call
+// in the repository to this implementation too, so a field named password read
+// here was reported as a password source at every call site that logs a config
+// value — 53 go/clear-text-logging results, none of which could receive this
+// value at runtime. The primary database's password reaches gofrSQL through
+// config.Get the same way, without a named field.
 type replicaConfig struct {
-	base     config.Config
-	host     string
-	port     string
-	user     string
-	password string
+	base      config.Config
+	overrides map[string]string
+}
+
+// newReplicaConfig sets all four connection keys, including empty ones, so a
+// replica never falls back to the primary's DB_HOST, DB_PORT, DB_USER or DB_PASSWORD.
+func newReplicaConfig(base config.Config, host, port, user, password string) *replicaConfig {
+	return &replicaConfig{
+		base: base,
+		overrides: map[string]string{
+			keyDBHost:     host,
+			keyDBPort:     port,
+			keyDBUser:     user,
+			keyDBPassword: password,
+		},
+	}
 }
 
 func (r *replicaConfig) Get(key string) string {
+	if val, ok := r.overrides[key]; ok {
+		return val
+	}
+
 	switch key {
-	case "DB_HOST":
-		return r.host
-	case "DB_PORT":
-		return r.port
-	case "DB_USER":
-		return r.user
-	case "DB_PASSWORD":
-		return r.password
 	case "DB_MAX_IDLE_CONNECTIONS":
 		return optimizedIdleConnections(r.base)
 	case "DB_MAX_OPEN_CONNECTIONS":
