@@ -223,11 +223,11 @@ GOOGLE_PROJECT_ID=project-order         // google projectId where the PubSub is 
 GOOGLE_SUBSCRIPTION_NAME=order-consumer // unique subscription name to identify the subscribing entity
 
 # Optional pull flow control, applied per subscribed topic (unset or 0 = default; negative = no limit for messages/bytes)
-GOOGLE_MAX_OUTSTANDING_MESSAGES=1000    // max messages leased/held unacked at once, per topic (memory/goroutine bound)
-GOOGLE_MAX_OUTSTANDING_BYTES=1000000000 // max total bytes of unacked messages held at once, per topic
+GOOGLE_MAX_OUTSTANDING_MESSAGES=1000    // max messages held waiting for delivery to the handler, per topic (memory/goroutine bound)
+GOOGLE_MAX_OUTSTANDING_BYTES=1000000000 // max total bytes of messages held waiting for delivery, per topic
 GOOGLE_NUM_GOROUTINES=10                // number of StreamingPull streams per topic, not handler concurrency
 ```
-> **Note**: these limits apply **per subscribed topic** — each topic gets its own `Receive` flow controller, so an app subscribed to N topics can hold up to N × the configured messages/bytes and open N × the streams. `GOOGLE_NUM_GOROUTINES` is the number of StreamingPull streams, not the handler concurrency; GoFr drains one message per topic at a time, so raising it does not increase throughput today. `GOOGLE_MAX_OUTSTANDING_MESSAGES` bounds how many messages the client leases and holds unacknowledged (the goroutine/memory floor), not concurrent handler invocations.
+> **Note**: these limits apply **per subscribed topic** — each topic gets its own `Receive` flow controller, so an app subscribed to N topics can hold up to N × the configured messages/bytes and open N × the streams. `GOOGLE_NUM_GOROUTINES` is the number of StreamingPull streams, not the handler concurrency; GoFr drains one message per topic at a time, so raising it does not increase throughput today. `GOOGLE_MAX_OUTSTANDING_MESSAGES` bounds how many messages the client holds waiting to be delivered to the handler (the goroutine/memory floor), not concurrent handler invocations or unacknowledged messages.
 
 #### Docker setup
 ```shell

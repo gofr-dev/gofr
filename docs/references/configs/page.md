@@ -719,13 +719,13 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  GOOGLE_MAX_OUTSTANDING_MESSAGES
--  Max messages the client leases and holds unacknowledged at once, per subscribed topic (the memory/goroutine bound, not the handler concurrency). 0 uses the default; a negative value means no limit.
+-  Max messages the client holds waiting for delivery to the handler, per subscribed topic (the memory/goroutine bound, not the handler concurrency). 0 uses the default; a negative value means no limit.
 -  1000
 
 ---
 
 -  GOOGLE_MAX_OUTSTANDING_BYTES
--  Max total size (bytes) of unacknowledged messages held at once, per subscribed topic. 0 uses the default; a negative value means no limit.
+-  Max total size (bytes) of messages held waiting for delivery, per subscribed topic. 0 uses the default; a negative value means no limit.
 -  1000000000
 
 ---
