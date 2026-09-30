@@ -48,7 +48,7 @@ func TestGRPCDisabled_HTTPAuthStillWorks(t *testing.T) {
 	app := New()
 
 	require.NotPanics(t, func() {
-		app.EnableBasicAuth("user", "pass")
+		require.NoError(t, app.EnableBasicAuth("user", "pass"))
 		app.EnableAPIKeyAuth("key1")
 	})
 }
