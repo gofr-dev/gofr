@@ -1,3 +1,5 @@
+//go:build !gofr_nogrpc
+
 package gofr
 
 import (
@@ -59,8 +61,17 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 		return
 	}
 
+	// nil when newGRPCServer failed -- typically an out-of-range GRPC_PORT -- and
+	// factory.go logged and carried on. The same guard is on every method below
+	// that reaches the server; without it a config typo panics in setup code.
+	g := a.grpcServer
+	if g == nil {
+		a.container.Logger.Error("no gRPC server to add options to")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d gRPC server options", len(grpcOpts))
-	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
+	g.addServerOptions(grpcOpts...)
 }
 
 // AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
@@ -78,8 +89,14 @@ func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerIntercept
 		return
 	}
 
+	g := a.grpcServer
+	if g == nil {
+		a.container.Logger.Error("no gRPC server to add unary interceptors to")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d valid unary interceptors", len(interceptors))
-	a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
+	g.addUnaryInterceptors(interceptors...)
 }
 
 func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
@@ -88,8 +105,14 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 		return
 	}
 
+	g := a.grpcServer
+	if g == nil {
+		a.container.Logger.Error("no gRPC server to add stream interceptors to")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d stream interceptors", len(interceptors))
-	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
+	g.addStreamInterceptors(interceptors...)
 }
 
 func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcServer, error) {
@@ -244,7 +267,13 @@ func (g *grpcServer) forceStop() {
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	srv, err := a.grpcServer.ensureServer()
+	g := a.grpcServer
+	if g == nil {
+		a.container.Logger.Errorf("no gRPC server to register service %s on", desc.ServiceName)
+		return
+	}
+
+	srv, err := g.ensureServer()
 	if err != nil {
 		a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
 		return
