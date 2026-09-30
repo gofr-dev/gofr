@@ -18,7 +18,7 @@ import (
 )
 
 func Test_NewMetricsManagerSuccess(t *testing.T) {
-	metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+	metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 		logging.NewMockLogger(logging.INFO))
 
 	metrics.NewGauge("gauge-test", "this is metric to test gauge")
@@ -72,7 +72,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 
 func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.SetGauge("gauge-test", 50)
@@ -91,7 +91,7 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("", "counter metric with empty name")
@@ -110,7 +110,7 @@ func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewGauge("gauge-test", "this is metric to test gauge")
@@ -134,7 +134,7 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -150,7 +150,7 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 
 func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -174,7 +174,7 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 // drop B/op and allocs/op substantially after that PR.
 func BenchmarkAttrBuild_HTTP(b *testing.B) {
 	mgr := NewMetricsManager(
-		exporters.Prometheus("bench", "v0.0.0"),
+		testMeter(b, "bench", "v0.0.0"),
 		logging.NewMockLogger(logging.ERROR),
 	).(*metricsManager)
 
@@ -364,4 +364,26 @@ func newTestMetricsManager(t *testing.T) *metricsManager {
 	require.True(t, ok)
 
 	return m
+}
+
+// silentLogger discards exporters.Build's own diagnostics, as the deprecated exporters.Prometheus did, so
+// tests that capture output see only what the metrics manager itself logs.
+type silentLogger struct{}
+
+func (silentLogger) Debug(...any)          {}
+func (silentLogger) Infof(string, ...any)  {}
+func (silentLogger) Warnf(string, ...any)  {}
+func (silentLogger) Errorf(string, ...any) {}
+
+// testMeter is what the deprecated exporters.Prometheus(appName, appVersion) returned -- a meter from a
+// Prometheus-only provider built through exporters.Build -- plus the shutdown it never called.
+func testMeter(tb testing.TB, appName, appVersion string) metric.Meter {
+	tb.Helper()
+
+	cfg := exporters.Config{AppName: appName, AppVersion: appVersion}
+	shutdown, meter := exporters.Build(tb.Context(), &cfg, silentLogger{})
+
+	tb.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	return meter
 }
