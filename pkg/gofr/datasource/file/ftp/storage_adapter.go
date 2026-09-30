@@ -52,6 +52,12 @@ type storageAdapter struct {
 	// goroutines use the adapter, so conn is published under mu and read through serverConn.
 	mu   sync.RWMutex
 	conn *ftp.ServerConn
+
+	// cmdMu serializes commands on conn. An ftp.ServerConn is not safe for concurrent use
+	// and supports only one data transfer at a time, so every use of conn, including the
+	// data transfer it starts, runs under cmdMu. Readers use their own connection instead
+	// (see openReader), because their transfer stays open until the caller closes them.
+	cmdMu sync.Mutex
 }
 
 // Connect initializes the FTP client and logs in to the server.
@@ -61,12 +67,24 @@ func (s *storageAdapter) Connect(_ context.Context) error {
 		return nil
 	}
 
+	conn, err := s.dial()
+	if err != nil {
+		return err
+	}
+
+	s.publishConn(conn)
+
+	return nil
+}
+
+// dial opens a new control connection to the configured server and logs in.
+func (s *storageAdapter) dial() (*ftp.ServerConn, error) {
 	if s.cfg == nil {
-		return errFTPConfigNil
+		return nil, errFTPConfigNil
 	}
 
 	if s.cfg.Host == "" || s.cfg.Port <= 0 {
-		return errFTPConfigInvalid
+		return nil, errFTPConfigInvalid
 	}
 
 	// Set default timeout if not specified
@@ -79,17 +97,15 @@ func (s *storageAdapter) Connect(_ context.Context) error {
 
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(dialTimeout))
 	if err != nil {
-		return fmt.Errorf("failed to dial FTP server %q: %w", ftpServer, err)
+		return nil, fmt.Errorf("failed to dial FTP server %q: %w", ftpServer, err)
 	}
 
 	if err := conn.Login(s.cfg.User, s.cfg.Password); err != nil {
 		_ = conn.Quit()
-		return fmt.Errorf("FTP login failed for user %q: %w", s.cfg.User, err)
+		return nil, fmt.Errorf("FTP login failed for user %q: %w", s.cfg.User, err)
 	}
 
-	s.publishConn(conn)
-
-	return nil
+	return conn, nil
 }
 
 // publishConn stores the connection built by Connect. If a concurrent Connect call has
@@ -128,14 +144,11 @@ func (s *storageAdapter) NewReader(_ context.Context, name string) (io.ReadClose
 		return nil, errEmptyObjectName
 	}
 
-	conn, err := s.serverConn()
-	if err != nil {
+	if _, err := s.serverConn(); err != nil {
 		return nil, err
 	}
 
-	objectPath := s.buildPath(name)
-
-	reader, err := conn.Retr(objectPath)
+	reader, err := s.openReader(name, 0)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -145,6 +158,48 @@ func (s *storageAdapter) NewReader(_ context.Context, name string) (io.ReadClose
 	}
 
 	return reader, nil
+}
+
+// openReader starts a RETR of name from offset on a dedicated connection, so the transfer
+// can stay open until the caller closes the reader without blocking the shared connection.
+// The dedicated connection is closed together with the reader. The caller checks that the
+// adapter is connected first.
+func (s *storageAdapter) openReader(name string, offset uint64) (*connReader, error) {
+	conn, err := s.dial()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := conn.RetrFrom(s.buildPath(name), offset)
+	if err != nil {
+		_ = conn.Quit()
+
+		return nil, err
+	}
+
+	return &connReader{resp: resp, conn: conn}, nil
+}
+
+// connReader is a RETR transfer that owns its control connection.
+type connReader struct {
+	resp   *ftp.Response
+	conn   *ftp.ServerConn
+	closed bool
+}
+
+func (r *connReader) Read(p []byte) (int, error) {
+	return r.resp.Read(p)
+}
+
+// Close ends the transfer and closes the connection. Later calls do nothing.
+func (r *connReader) Close() error {
+	if r.closed {
+		return nil
+	}
+
+	r.closed = true
+
+	return errors.Join(r.resp.Close(), r.conn.Quit())
 }
 
 // NewRangeReader creates a range reader for the given object.
@@ -157,14 +212,11 @@ func (s *storageAdapter) NewRangeReader(_ context.Context, name string, offset, 
 		return nil, fmt.Errorf("%w (got: %d)", errInvalidOffset, offset)
 	}
 
-	conn, err := s.serverConn()
-	if err != nil {
+	if _, err := s.serverConn(); err != nil {
 		return nil, err
 	}
 
-	objectPath := s.buildPath(name)
-
-	reader, err := conn.RetrFrom(objectPath, uint64(offset))
+	reader, err := s.openReader(name, uint64(offset))
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -205,6 +257,7 @@ func (s *storageAdapter) NewWriter(_ context.Context, name string) io.WriteClose
 
 	return &ftpWriter{
 		conn:       conn,
+		cmdMu:      &s.cmdMu,
 		objectPath: objectPath,
 		buffer:     &bytes.Buffer{},
 	}
@@ -213,6 +266,7 @@ func (s *storageAdapter) NewWriter(_ context.Context, name string) io.WriteClose
 // ftpWriter buffers writes and uploads on Close.
 type ftpWriter struct {
 	conn       *ftp.ServerConn
+	cmdMu      *sync.Mutex // the adapter's cmdMu, held while Close uploads on conn
 	objectPath string
 	buffer     *bytes.Buffer
 	closed     bool
@@ -232,6 +286,9 @@ func (fw *ftpWriter) Close() error {
 	}
 
 	fw.closed = true
+
+	fw.cmdMu.Lock()
+	defer fw.cmdMu.Unlock()
 
 	if err := fw.conn.Stor(fw.objectPath, fw.buffer); err != nil {
 		return fmt.Errorf("%w for %q: %w", errFailedToCreateWriter, fw.objectPath, err)
@@ -264,6 +321,9 @@ func (s *storageAdapter) DeleteObject(_ context.Context, name string) error {
 		return err
 	}
 
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+
 	objectPath := s.buildPath(name)
 
 	if err := conn.Delete(objectPath); err != nil {
@@ -291,6 +351,9 @@ func (s *storageAdapter) CopyObject(_ context.Context, source, dest string) erro
 	if err != nil {
 		return err
 	}
+
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
 
 	// Read source file
 	sourcePath := s.buildPath(source)
@@ -339,7 +402,7 @@ func (s *storageAdapter) StatObject(_ context.Context, name string) (*file.Objec
 
 	objectPath := s.buildPath(name)
 
-	entries, err := conn.List(objectPath)
+	entries, err := s.list(conn, objectPath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -377,7 +440,7 @@ func (s *storageAdapter) ListObjects(_ context.Context, prefix string) ([]string
 		dirPath = s.cfg.RemoteDir
 	}
 
-	entries, err := conn.List(dirPath)
+	entries, err := s.list(conn, dirPath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return []string{}, nil // Return empty list for non-existent directories
@@ -412,12 +475,20 @@ func (s *storageAdapter) ListDir(_ context.Context, prefix string) ([]file.Objec
 
 	dirPath := s.resolveDirPath(prefix)
 
-	entries, err := conn.List(dirPath)
+	entries, err := s.list(conn, dirPath)
 	if err != nil {
 		return s.handleListError(err, prefix)
 	}
 
 	return s.processEntries(entries, prefix)
+}
+
+// list runs LIST on the shared connection under cmdMu.
+func (s *storageAdapter) list(conn *ftp.ServerConn, dirPath string) ([]*ftp.Entry, error) {
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+
+	return conn.List(dirPath)
 }
 
 // resolveDirPath resolves the directory path for listing.
