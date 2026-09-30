@@ -293,14 +293,16 @@ func createReplicaConnection(cfg config.Config, host, port, user, password strin
 }
 
 // replicaConfig wraps the main config and overrides specific values.
+// Build it with newReplicaConfig: a literal without overrides falls back to the
+// primary's connection values.
 //
 // The replica's connection values are held in a map keyed by the config key they
 // answer, not in named struct fields. CodeQL resolves every config.Config.Get call
 // in the repository to this implementation too, so a field named password read
 // here was reported as a password source at every call site that logs a config
-// value — 53 go/clear-text-logging results, none of which could receive this
-// value at runtime. The primary database's password reaches gofrSQL through
-// config.Get the same way, without a named field.
+// value (go/clear-text-logging), none of which could receive this value at
+// runtime. The primary database's password reaches gofrSQL through config.Get the
+// same way, without a named field.
 type replicaConfig struct {
 	base      config.Config
 	overrides map[string]string
