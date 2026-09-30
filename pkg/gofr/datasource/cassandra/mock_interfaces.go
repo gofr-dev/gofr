@@ -6,6 +6,7 @@
 //	mockgen -source=interfaces.go -destination=mock_interfaces.go -package=cassandra
 //
 
+// Package cassandra is a generated GoMock package.
 package cassandra
 
 import (
@@ -19,6 +20,7 @@ import (
 type MockclusterConfig struct {
 	ctrl     *gomock.Controller
 	recorder *MockclusterConfigMockRecorder
+	isgomock struct{}
 }
 
 // MockclusterConfigMockRecorder is the mock recorder for MockclusterConfig.
@@ -57,6 +59,7 @@ func (mr *MockclusterConfigMockRecorder) createSession() *gomock.Call {
 type Mocksession struct {
 	ctrl     *gomock.Controller
 	recorder *MocksessionMockRecorder
+	isgomock struct{}
 }
 
 // MocksessionMockRecorder is the mock recorder for Mocksession.
@@ -147,6 +150,7 @@ func (mr *MocksessionMockRecorder) query(stmt any, values ...any) *gomock.Call {
 type Mockquery struct {
 	ctrl     *gomock.Controller
 	recorder *MockqueryMockRecorder
+	isgomock struct{}
 }
 
 // MockqueryMockRecorder is the mock recorder for Mockquery.
@@ -232,6 +236,7 @@ func (mr *MockqueryMockRecorder) scanCAS(dest ...any) *gomock.Call {
 type Mockbatch struct {
 	ctrl     *gomock.Controller
 	recorder *MockbatchMockRecorder
+	isgomock struct{}
 }
 
 // MockbatchMockRecorder is the mock recorder for Mockbatch.
@@ -286,6 +291,7 @@ func (mr *MockbatchMockRecorder) getBatch() *gomock.Call {
 type Mockiterator struct {
 	ctrl     *gomock.Controller
 	recorder *MockiteratorMockRecorder
+	isgomock struct{}
 }
 
 // MockiteratorMockRecorder is the mock recorder for Mockiterator.
@@ -303,6 +309,20 @@ func NewMockiterator(ctrl *gomock.Controller) *Mockiterator {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *Mockiterator) EXPECT() *MockiteratorMockRecorder {
 	return m.recorder
+}
+
+// close mocks base method.
+func (m *Mockiterator) close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// close indicates an expected call of close.
+func (mr *MockiteratorMockRecorder) close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "close", reflect.TypeOf((*Mockiterator)(nil).close))
 }
 
 // columns mocks base method.

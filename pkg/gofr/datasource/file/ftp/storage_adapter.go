@@ -8,6 +8,7 @@ import (
 	"io"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jlaffaye/ftp"
@@ -45,14 +46,18 @@ type Config struct {
 
 // storageAdapter adapts FTP client to implement file.StorageProvider.
 type storageAdapter struct {
-	cfg  *Config
+	cfg *Config
+
+	// mu guards conn. Connect may run on the background retry goroutine while request
+	// goroutines use the adapter, so conn is published under mu and read through serverConn.
+	mu   sync.RWMutex
 	conn *ftp.ServerConn
 }
 
 // Connect initializes the FTP client and logs in to the server.
 func (s *storageAdapter) Connect(_ context.Context) error {
 	// fast-path: already connected
-	if s.conn != nil {
+	if _, err := s.serverConn(); err == nil {
 		return nil
 	}
 
@@ -82,9 +87,39 @@ func (s *storageAdapter) Connect(_ context.Context) error {
 		return fmt.Errorf("FTP login failed for user %q: %w", s.cfg.User, err)
 	}
 
-	s.conn = conn
+	s.publishConn(conn)
 
 	return nil
+}
+
+// publishConn stores the connection built by Connect. If a concurrent Connect call has
+// already stored one, that connection is kept and the redundant one is closed.
+func (s *storageAdapter) publishConn(conn *ftp.ServerConn) {
+	s.mu.Lock()
+
+	published := s.conn != nil
+	if !published {
+		s.conn = conn
+	}
+
+	s.mu.Unlock()
+
+	if published {
+		_ = conn.Quit()
+	}
+}
+
+// serverConn returns the connected FTP connection, or errFTPClientNotInitialized while
+// the adapter is not connected.
+func (s *storageAdapter) serverConn() (*ftp.ServerConn, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.conn == nil {
+		return nil, errFTPClientNotInitialized
+	}
+
+	return s.conn, nil
 }
 
 // NewReader creates a reader for the given object.
@@ -93,13 +128,14 @@ func (s *storageAdapter) NewReader(_ context.Context, name string) (io.ReadClose
 		return nil, errEmptyObjectName
 	}
 
-	if s.conn == nil {
-		return nil, errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return nil, err
 	}
 
 	objectPath := s.buildPath(name)
 
-	reader, err := s.conn.Retr(objectPath)
+	reader, err := conn.Retr(objectPath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -121,13 +157,14 @@ func (s *storageAdapter) NewRangeReader(_ context.Context, name string, offset, 
 		return nil, fmt.Errorf("%w (got: %d)", errInvalidOffset, offset)
 	}
 
-	if s.conn == nil {
-		return nil, errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return nil, err
 	}
 
 	objectPath := s.buildPath(name)
 
-	reader, err := s.conn.RetrFrom(objectPath, uint64(offset))
+	reader, err := conn.RetrFrom(objectPath, uint64(offset))
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -159,14 +196,15 @@ func (s *storageAdapter) NewWriter(_ context.Context, name string) io.WriteClose
 		return &failWriter{err: errEmptyObjectName}
 	}
 
-	if s.conn == nil {
-		return &failWriter{err: errFTPClientNotInitialized}
+	conn, err := s.serverConn()
+	if err != nil {
+		return &failWriter{err: err}
 	}
 
 	objectPath := s.buildPath(name)
 
 	return &ftpWriter{
-		conn:       s.conn,
+		conn:       conn,
 		objectPath: objectPath,
 		buffer:     &bytes.Buffer{},
 	}
@@ -221,13 +259,14 @@ func (s *storageAdapter) DeleteObject(_ context.Context, name string) error {
 		return errEmptyObjectName
 	}
 
-	if s.conn == nil {
-		return errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return err
 	}
 
 	objectPath := s.buildPath(name)
 
-	if err := s.conn.Delete(objectPath); err != nil {
+	if err := conn.Delete(objectPath); err != nil {
 		if isFTPNotFoundError(err) {
 			return fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
 		}
@@ -248,14 +287,15 @@ func (s *storageAdapter) CopyObject(_ context.Context, source, dest string) erro
 		return errSameSourceAndDest
 	}
 
-	if s.conn == nil {
-		return errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return err
 	}
 
 	// Read source file
 	sourcePath := s.buildPath(source)
 
-	resp, err := s.conn.Retr(sourcePath)
+	resp, err := conn.Retr(sourcePath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return fmt.Errorf("%w: %q", errObjectNotFound, source)
@@ -279,7 +319,7 @@ func (s *storageAdapter) CopyObject(_ context.Context, source, dest string) erro
 
 	// Write to destination
 	destPath := s.buildPath(dest)
-	if err := s.conn.Stor(destPath, bytes.NewReader(data)); err != nil {
+	if err := conn.Stor(destPath, bytes.NewReader(data)); err != nil {
 		return fmt.Errorf("failed to write destination object %q: %w", dest, err)
 	}
 
@@ -292,13 +332,14 @@ func (s *storageAdapter) StatObject(_ context.Context, name string) (*file.Objec
 		return nil, errEmptyObjectName
 	}
 
-	if s.conn == nil {
-		return nil, errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return nil, err
 	}
 
 	objectPath := s.buildPath(name)
 
-	entries, err := s.conn.List(objectPath)
+	entries, err := conn.List(objectPath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
@@ -324,8 +365,9 @@ func (s *storageAdapter) StatObject(_ context.Context, name string) (*file.Objec
 
 // ListObjects lists all objects with the given prefix.
 func (s *storageAdapter) ListObjects(_ context.Context, prefix string) ([]string, error) {
-	if s.conn == nil {
-		return nil, errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return nil, err
 	}
 
 	dirPath := s.buildPath(prefix)
@@ -335,7 +377,7 @@ func (s *storageAdapter) ListObjects(_ context.Context, prefix string) ([]string
 		dirPath = s.cfg.RemoteDir
 	}
 
-	entries, err := s.conn.List(dirPath)
+	entries, err := conn.List(dirPath)
 	if err != nil {
 		if isFTPNotFoundError(err) {
 			return []string{}, nil // Return empty list for non-existent directories
@@ -363,13 +405,14 @@ func (s *storageAdapter) ListObjects(_ context.Context, prefix string) ([]string
 
 // ListDir lists objects and prefixes (directories) under the given prefix.
 func (s *storageAdapter) ListDir(_ context.Context, prefix string) ([]file.ObjectInfo, []string, error) {
-	if s.conn == nil {
-		return nil, nil, errFTPClientNotInitialized
+	conn, err := s.serverConn()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	dirPath := s.resolveDirPath(prefix)
 
-	entries, err := s.conn.List(dirPath)
+	entries, err := conn.List(dirPath)
 	if err != nil {
 		return s.handleListError(err, prefix)
 	}
