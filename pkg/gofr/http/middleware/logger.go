@@ -93,16 +93,16 @@ func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
-	TraceID         string `json:"trace_id,omitempty"`
-	SpanID          string `json:"span_id,omitempty"`
-	StartTime       string `json:"start_time,omitempty"`
-	ResponseTime    int64  `json:"response_time,omitempty"`
+	TraceID          string `json:"trace_id,omitempty"`
+	SpanID           string `json:"span_id,omitempty"`
+	StartTime        string `json:"start_time,omitempty"`
+	ResponseTime     int64  `json:"response_time,omitempty"`
 	ResponseTimeUnit string `json:"response_time_unit,omitempty"`
-	Method          string `json:"method,omitempty"`
-	UserAgent       string `json:"user_agent,omitempty"`
-	IP              string `json:"ip,omitempty"`
-	URI             string `json:"uri,omitempty"`
-	Response        int    `json:"response,omitempty"`
+	Method           string `json:"method,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	IP               string `json:"ip,omitempty"`
+	URI              string `json:"uri,omitempty"`
+	Response         int    `json:"response,omitempty"`
 }
 
 // zeroTraceID is the canonical 32-zero string the W3C trace-context
