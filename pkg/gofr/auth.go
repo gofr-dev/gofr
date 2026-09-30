@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/container"
-	grpcMiddleware "gofr.dev/pkg/gofr/grpc/middleware"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -51,10 +49,8 @@ func (a *App) enableBasicAuth(credentials ...string) error {
 		users[credentials[i]] = credentials[i+1]
 	}
 
-	provider := grpcMiddleware.BasicAuthProvider{Users: users}
-
-	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}),
-		grpcMiddleware.BasicAuthUnaryInterceptor(provider), grpcMiddleware.BasicAuthStreamInterceptor(provider))
+	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{Users: users})
 
 	return nil
 }
@@ -64,10 +60,9 @@ func (a *App) enableBasicAuth(credentials ...string) error {
 // Deprecated: This method is deprecated and will be removed in future releases, users must use
 // [App.EnableBasicAuthWithValidator] as it has access to application datasources.
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
-	provider := grpcMiddleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}
-
-	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}),
-		grpcMiddleware.BasicAuthUnaryInterceptor(provider), grpcMiddleware.BasicAuthStreamInterceptor(provider))
+	a.addAuthMiddleware(middleware.BasicAuthMiddleware(
+		middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{ValidateFunc: validateFunc})
 }
 
 // EnableBasicAuthWithValidator enables basic authentication for the HTTP server with a custom validator.
@@ -75,21 +70,17 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 // The provided `validateFunc` is invoked for each authentication attempt. It receives a container instance,
 // username, and password. The function should return `true` if the credentials are valid, `false` otherwise.
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
-	provider := grpcMiddleware.BasicAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: a.container}
-
 	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
-		ValidateFuncWithDatasources: validateFunc, Container: a.container}),
-		grpcMiddleware.BasicAuthUnaryInterceptor(provider), grpcMiddleware.BasicAuthStreamInterceptor(provider))
+		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
+	a.addGRPCBasicAuth(middleware.BasicAuthProvider{ValidateFuncWithDatasources: validateFunc})
 }
 
 // EnableAPIKeyAuth enables API key authentication for the application.
 //
 // It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	provider := grpcMiddleware.APIKeyAuthProvider{APIKeys: apiKeys}
-
-	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...),
-		grpcMiddleware.APIKeyAuthUnaryInterceptor(provider), grpcMiddleware.APIKeyAuthStreamInterceptor(provider))
+	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{APIKeys: apiKeys})
 }
 
 // EnableAPIKeyAuthWithFunc enables API key authentication for the application with a custom validation function.
@@ -97,12 +88,11 @@ func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 // Deprecated: This method is deprecated and will be removed in future releases, users must use
 // [App.EnableAPIKeyAuthWithValidator] as it has access to application datasources.
 func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
-	provider := grpcMiddleware.APIKeyAuthProvider{ValidateFunc: validateFunc, Container: a.container}
-
 	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFunc: validateFunc,
 		Container:    a.container,
-	}), grpcMiddleware.APIKeyAuthUnaryInterceptor(provider), grpcMiddleware.APIKeyAuthStreamInterceptor(provider))
+	}))
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{ValidateFunc: validateFunc})
 }
 
 // EnableAPIKeyAuthWithValidator enables API key authentication for the application with a custom validation function.
@@ -110,12 +100,11 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 // The provided `validateFunc` is used to determine the validity of an API key. It receives the request container
 // and the API key as arguments and should return `true` if the key is valid, `false` otherwise.
 func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
-	provider := grpcMiddleware.APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: a.container}
-
 	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFuncWithDatasources: validateFunc,
 		Container:                   a.container,
-	}), grpcMiddleware.APIKeyAuthUnaryInterceptor(provider), grpcMiddleware.APIKeyAuthStreamInterceptor(provider))
+	}))
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc})
 }
 
 // EnableOAuth configures OAuth middleware for the application.
@@ -167,9 +156,8 @@ func (a *App) enableOAuth(jwksEndpoint string, refreshInterval int, options ...j
 
 	publicKeyProvider := middleware.NewOAuth(oauthOption)
 
-	a.addAuthMiddleware(middleware.OAuth(publicKeyProvider, options...),
-		grpcMiddleware.OAuthUnaryInterceptor(publicKeyProvider, options...),
-		grpcMiddleware.OAuthStreamInterceptor(publicKeyProvider, options...))
+	a.addAuthMiddleware(middleware.OAuth(publicKeyProvider, options...))
+	a.addGRPCOAuth(publicKeyProvider, options...)
 
 	return nil
 }
@@ -183,14 +171,10 @@ func (a *App) authDisabled(err error, mechanism, method string) error {
 	return err
 }
 
-func (a *App) addAuthMiddleware(httpMW func(http.Handler) http.Handler,
-	grpcUnary grpc.UnaryServerInterceptor, grpcStream grpc.StreamServerInterceptor) {
+// addAuthMiddleware installs the HTTP half. The gRPC half is a separate call at
+// each site -- see grpc_auth_enabled.go for why it cannot be done here.
+func (a *App) addAuthMiddleware(httpMW func(http.Handler) http.Handler) {
 	if a.httpServer != nil {
 		a.httpServer.router.Use(httpMW)
-	}
-
-	if a.grpcServer != nil {
-		a.grpcServer.addUnaryInterceptors(grpcUnary)
-		a.grpcServer.addStreamInterceptors(grpcStream)
 	}
 }
