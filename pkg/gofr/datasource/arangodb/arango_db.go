@@ -17,8 +17,13 @@ func (d *DB) CreateDB(ctx context.Context, database string) error {
 	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "createDB", Database: database})
 	defer done()
 
+	client, err := d.client.arangoClient()
+	if err != nil {
+		return err
+	}
+
 	// Check if the database already exists
-	exists, err := d.client.client.DatabaseExists(ctx, database)
+	exists, err := client.DatabaseExists(ctx, database)
 	if err != nil {
 		return err
 	}
@@ -28,7 +33,7 @@ func (d *DB) CreateDB(ctx context.Context, database string) error {
 		return ErrDatabaseExists
 	}
 
-	_, err = d.client.client.CreateDatabase(ctx, database, nil)
+	_, err = client.CreateDatabase(ctx, database, nil)
 
 	return err
 }
@@ -38,7 +43,12 @@ func (d *DB) DropDB(ctx context.Context, database string) error {
 	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "dropDB", Database: database})
 	defer done()
 
-	db, err := d.client.client.GetDatabase(ctx, database, &arangodb.GetDatabaseOptions{})
+	client, err := d.client.arangoClient()
+	if err != nil {
+		return err
+	}
+
+	db, err := client.GetDatabase(ctx, database, &arangodb.GetDatabaseOptions{})
 	if err != nil {
 		return err
 	}
@@ -59,7 +69,7 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 		Collection: collection, Filter: isEdge})
 	defer done()
 
-	db, err := d.client.client.GetDatabase(ctx, database, nil)
+	db, err := d.client.database(ctx, database)
 	if err != nil {
 		return err
 	}
@@ -102,7 +112,7 @@ func (d *DB) DropCollection(ctx context.Context, database, collectionName string
 }
 
 func (d *DB) getCollection(ctx context.Context, dbName, collectionName string) (arangodb.Collection, error) {
-	db, err := d.client.client.GetDatabase(ctx, dbName, nil)
+	db, err := d.client.database(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
