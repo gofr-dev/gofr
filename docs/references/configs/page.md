@@ -200,6 +200,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  GOFR_RBAC_ROUTE_CHECK
+-  What the startup check does when the RBAC config and the registered routes disagree — see [Startup Route Check](/docs/advanced-guide/rbac#startup-route-check). `warn` logs each mismatch as an error and keeps starting, `fail` logs them and stops startup with exit status 1, `off` skips the check. Any other value is logged as an error and treated as `warn`.
+-  warn
+
+---
+
 -  LOG_DISABLE_PROBES
 -  Disable log probes for health checks
 -  false

@@ -10,8 +10,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"gofr.dev/pkg/gofr/rbac"
 )
 
 // telemetryFlushTimeout bounds the metrics and traces flush/shutdown performed
@@ -86,7 +84,11 @@ func (a *App) Run() {
 		return
 	}
 
-	a.prepareHTTPServer()
+	if outcome := a.prepareHTTPServer(); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
+		return
+	}
 
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
@@ -291,42 +293,34 @@ func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
 // EnableRBAC, and the built-in ones are added only here, so this is the first point at which a rule
 // that matches no route can be told apart from one whose route is still to come.
 //
-// A mismatch is logged as an error and the app keeps starting: a rule that matches no route
-// protects nothing, and a route that no rule covers is served without role checks.
-func (a *App) prepareHTTPServer() {
+// What a mismatch does is set by GOFR_RBAC_ROUTE_CHECK: logged as an error while the app keeps
+// starting (warn, the default), logged and startup abandoned like a failed OnStart hook (fail), or
+// not looked for at all (off).
+func (a *App) prepareHTTPServer() startupOutcome {
 	if !a.httpRegistered {
-		return
+		return startupOK
 	}
 
 	a.httpServerSetup()
 
 	if a.rbacConfig == nil {
-		return
+		return startupOK
 	}
 
-	err := a.rbacConfig.CheckRoutes(&a.httpServer.router.Router)
-	if err == nil {
-		return
+	mode := a.rbacRouteCheckMode()
+	if mode == rbacRouteCheckOff {
+		return startupOK
 	}
 
-	// CheckRoutes joins a dead-rule error and an uncovered-route error; each is logged on its own line.
-	for _, part := range splitJoined(err) {
-		if errors.Is(part, rbac.ErrUncoveredRoutes) {
-			a.Logger().Errorf("RBAC route check failed: %v. They are served without role checks.", part)
-		} else {
-			a.Logger().Errorf("RBAC route check failed: %v. These rules protect nothing.", part)
-		}
-	}
-}
-
-// splitJoined returns the errors joined by errors.Join, or err itself when it is not a join.
-func splitJoined(err error) []error {
-	var joined interface{ Unwrap() []error }
-	if errors.As(err, &joined) {
-		return joined.Unwrap()
+	if !a.rbacConfig.ReportRouteMismatches(a.rbacRoutes) || mode != rbacRouteCheckFail {
+		return startupOK
 	}
 
-	return []error{err}
+	a.Logger().Errorf("Stopping startup: the RBAC route check failed and %s=%s.", rbacRouteCheckKey, rbacRouteCheckFail)
+
+	a.shutdownAfterFailedStartup()
+
+	return startupFailed
 }
 
 // shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned

@@ -84,6 +84,10 @@ type App struct {
 	// complete route table. See prepareHTTPServer.
 	rbacConfig *rbac.Config
 
+	// rbacRoutes is the route table as the RBAC route check reads it, "METHOD /template" per entry.
+	// httpServerSetup fills it from the walk it already makes, and only when rbacConfig is set.
+	rbacRoutes []string
+
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
 	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
 	exit func(int)
@@ -257,6 +261,8 @@ func (a *App) httpServerSetup() {
 
 	var registeredMethods []string
 
+	routes := newRBACRouteCollector(a.rbacConfig != nil)
+
 	_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
 		met, _ := route.GetMethods()
 		for _, method := range met {
@@ -265,8 +271,12 @@ func (a *App) httpServerSetup() {
 			}
 		}
 
+		routes.add(route, met)
+
 		return nil
 	})
+
+	a.rbacRoutes = routes.labels
 
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
 }
