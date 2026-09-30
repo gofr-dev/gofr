@@ -20,6 +20,9 @@ const (
 	connTypeDirect      = "direct"
 	connTypeSession     = "session"
 	connTypeTransaction = "transaction"
+
+	// supabaseDirectHostPrefix is the first label of a Supabase direct-connection host.
+	supabaseDirectHostPrefix = "db"
 )
 
 // SupabaseConfig extends DBConfig to include Supabase-specific configuration.
@@ -139,7 +142,7 @@ func extractProjectRefFromConnStr(connStr string) string {
 	hostSegments := strings.Split(hostPart, ".")
 
 	// Looking for the segment between "db." and ".supabase.co"
-	if len(hostSegments) >= 3 && hostSegments[0] == "db" && strings.Contains(hostPart, "supabase.co") {
+	if len(hostSegments) >= 3 && hostSegments[0] == supabaseDirectHostPrefix && strings.Contains(hostPart, "supabase.co") {
 		return hostSegments[1]
 	}
 
