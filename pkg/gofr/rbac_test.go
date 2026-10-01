@@ -44,13 +44,17 @@ func writeRBACConfig(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func TestEnableRBAC(t *testing.T) {
-	tests := []struct {
-		desc       string
-		setup      func(t *testing.T) []string // returns the EnableRBAC arguments
-		wantErr    string
-		wantStatus int
-	}{
+type enableRBACTestCase struct {
+	desc       string
+	setup      func(t *testing.T) []string // returns the EnableRBAC arguments
+	wantErr    string
+	wantStatus int
+}
+
+// enableRBACTestCases lists the EnableRBAC scenarios: the valid ones install the middleware
+// (401 on "/"), the failing ones leave authorization disabled (200 on "/").
+func enableRBACTestCases() []enableRBACTestCase {
+	return []enableRBACTestCase{
 		{
 			desc: "valid JSON config",
 			setup: func(t *testing.T) []string {
@@ -127,8 +131,10 @@ func TestEnableRBAC(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 	}
+}
 
-	for i, tc := range tests {
+func TestEnableRBAC(t *testing.T) {
+	for i, tc := range enableRBACTestCases() {
 		t.Run(tc.desc, func(t *testing.T) {
 			args := tc.setup(t)
 

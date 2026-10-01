@@ -30,7 +30,7 @@ func TestMiddleware_NilConfig(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 	wrapped.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -56,7 +56,7 @@ func TestMiddleware_PublicEndpoint(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", http.NoBody)
 	wrapped.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -82,7 +82,7 @@ func TestMiddleware_NoEndpointMatch(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/posts", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/posts", http.NoBody)
 	wrapped.ServeHTTP(w, req)
 
 	// Routes not in RBAC config are handled by normal route matching
@@ -114,7 +114,7 @@ func TestMiddleware_RoleNotFound(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 	wrapped.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -144,7 +144,7 @@ func TestMiddleware_ValidRoleAndPermission(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 	req.Header.Set("X-User-Role", "admin")
 	wrapped.ServeHTTP(w, req)
 
@@ -175,7 +175,7 @@ func TestMiddleware_InvalidPermission(t *testing.T) {
 
 	wrapped := middlewareFunc(handler)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 	req.Header.Set("X-User-Role", "viewer")
 	wrapped.ServeHTTP(w, req)
 
@@ -197,7 +197,7 @@ func TestExtractRole(t *testing.T) {
 				RoleHeader: "X-User-Role",
 			},
 			request: func() *http.Request {
-				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "admin")
 
 				return req
@@ -212,7 +212,7 @@ func TestExtractRole(t *testing.T) {
 				JWTClaimPath: "role",
 			},
 			request: func() *http.Request {
-				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "viewer")
 
 				claims := jwt.MapClaims{"role": "admin"}
@@ -228,7 +228,7 @@ func TestExtractRole(t *testing.T) {
 			config: &Config{
 				JWTClaimPath: "role",
 			},
-			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
+			request:      httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
@@ -237,14 +237,14 @@ func TestExtractRole(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 			},
-			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
+			request:      httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
 		{
 			desc:         "returns error when no role extraction configured",
 			config:       &Config{},
-			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
+			request:      httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
@@ -333,7 +333,7 @@ func TestExtractRoleFromJWT(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 
 			if tc.claims != nil {
 				ctx := context.WithValue(req.Context(), middleware.JWTClaim, tc.claims)
@@ -791,7 +791,7 @@ func TestLogAuditEvent(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 			logAuditEvent(tc.logger, req, "admin", "/api", tc.allowed)
 
 			if tc.logger != nil {
@@ -850,7 +850,7 @@ func TestHandleAuthError(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 
 			handleAuthError(w, req, tc.config, "admin", "/api", tc.err)
 
@@ -919,7 +919,7 @@ func TestMiddleware_WithTracing(t *testing.T) {
 
 		wrapped := middlewareFunc(handler)
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 		req.Header.Set("X-User-Role", "admin")
 
 		// Setup role permissions
@@ -958,7 +958,7 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 
 		wrapped := middlewareFunc(handler)
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 		req.Header.Set("X-User-Role", "admin")
 
 		// Setup role permissions
@@ -1008,7 +1008,7 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 
 		wrapped := middlewareFunc(handler)
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 		req.Header.Set("X-User-Role", "viewer") // Role without permission
 
 		// Setup role permissions
