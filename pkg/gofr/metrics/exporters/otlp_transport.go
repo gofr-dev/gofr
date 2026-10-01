@@ -12,6 +12,13 @@ import (
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 )
 
+// otlpMetricsSignalPath is the OTLP/HTTP metrics signal path otlpmetrichttp
+// appended by default before otel v1.45; buildOTLPExporter re-appends it for a
+// path-less scheme-bearing endpoint so the bump does not silently reroute exports.
+// It lives here, not in consts.go, because only the OTLP transports use it and
+// they are compiled out under gofr_nootlp.
+const otlpMetricsSignalPath = "/v1/metrics"
+
 // The OTLP wire transports, split out of otlp.go so that -tags gofr_nootlp can
 // leave them out. Everything else about the exporter -- registration, config
 // validation, temporality, the periodic reader -- stays shared, so the tag

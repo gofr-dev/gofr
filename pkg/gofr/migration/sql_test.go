@@ -332,7 +332,7 @@ func TestRollbackNoTransaction(t *testing.T) {
 
 	migrator := sqlMigrator{}
 
-	migrator.rollback(mockContainer, transactionData{})
+	migrator.rollback(mockContainer, &transactionData{})
 }
 
 func TestApply(t *testing.T) {
@@ -607,9 +607,9 @@ func TestSQLMigrator_CommitMigration(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
 		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -636,9 +636,9 @@ func TestSQLMigrator_CommitMigration_Postgres(t *testing.T) {
 		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -666,7 +666,7 @@ func TestSQLMigrator_CommitMigration_ExecError(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
 		WillReturnError(testErr)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.Equal(t, testErr, err)
 }
 
@@ -696,7 +696,7 @@ func TestSQLMigrator_CommitMigration_CommitError(t *testing.T) {
 
 	mocks.SQL.ExpectCommit().WillReturnError(testErr)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.Equal(t, testErr, err)
 }
 
@@ -720,13 +720,13 @@ func TestSQLMigrator_RollbackSuccess(t *testing.T) {
 	}
 
 	mocks.SQL.ExpectRollback()
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 
 	// Fatalf is expected on rollback
 	mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
 
 	assert.NotPanics(t, func() {
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 }
 
@@ -812,9 +812,9 @@ func TestSQLMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	}
 
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -839,9 +839,9 @@ func TestSQLMigrator_CommitMigration_SkipInsert_StillCommitsTx(t *testing.T) {
 	// Should NOT expect INSERT.
 	// Should expect Commit — transaction must be closed even if empty.
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	require.NoError(t, err)
 
 	err = mocks.SQL.ExpectationsWereMet()
@@ -911,7 +911,7 @@ func TestSQLMigrator_CommitMigration_PostgresExecError(t *testing.T) {
 	mocks.SQL.ExpectExec(insertGoFrMigrationRowPostgres).
 		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnError(errSQLExec)
 
-	err = m.commitMigration(mockContainer, data)
+	err = m.commitMigration(mockContainer, &data)
 
 	assert.Equal(t, errSQLExec, err)
 }

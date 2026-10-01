@@ -217,7 +217,7 @@ func setupDialer(conf *Config) (*kafka.Dialer, error) {
 		dialer.SASLMechanism = mechanism
 	}
 
-	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
+	if conf.SecurityProtocol == protocolSSL || conf.SecurityProtocol == protocolSASLSSL {
 		tlsConfig, err := createTLSConfig(&conf.TLS)
 		if err != nil {
 			return nil, err

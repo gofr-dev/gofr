@@ -98,7 +98,7 @@ func Test_extractAuthHeader(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set(headerXAPIKey, tc.header)
 			response, err := provider.ExtractAuthHeader(req)
 			assert.Equal(t, tc.response, response)

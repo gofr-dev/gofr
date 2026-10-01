@@ -79,7 +79,7 @@ func TestGraphQL_Query(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ hello }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 	})
 
 	reqBody := `{"query": "mutation { createUser(name: \"test\") { id name } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -176,7 +176,7 @@ func TestGraphQL_Playground(t *testing.T) {
 			// Internal call to setup router as App.Run would do
 			app.httpServerSetup()
 
-			req := httptest.NewRequest(http.MethodGet, "/.well-known/graphql/ui", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/graphql/ui", http.NoBody)
 			resp := httptest.NewRecorder()
 
 			app.httpServer.router.ServeHTTP(resp, req)
@@ -217,7 +217,7 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ user(id: 1, score: 9.5, isAdmin: true, tags: [\"a\", \"b\"]) { id score isAdmin tags } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -271,7 +271,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ fail }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -345,7 +345,7 @@ func TestGraphQL_Enums(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ user(role: ADMIN) { id role } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -380,7 +380,7 @@ func TestGraphQL_OperationName(t *testing.T) {
 
 	// Document with multiple named operations
 	reqBody := `{"query": "query QueryA { a } query QueryB { b }", "operationName": "QueryB"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -420,7 +420,7 @@ func TestGraphQL_Variables(t *testing.T) {
 	})
 
 	reqBody := `{"query": "query GetUser($id: Int) { user(id: $id) { id } }", "variables": {"id": 123}}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
@@ -451,7 +451,7 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "ok", nil })
 
 	reqBody := `{"query": "{ malformed "}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
