@@ -19,6 +19,9 @@ const (
 	statusDown     = "DOWN"
 	statusUp       = "UP"
 	defaultTimeout = 5 * time.Second
+
+	// refreshTrue makes Elasticsearch refresh the affected shards before the request returns.
+	refreshTrue = "true"
 )
 
 var (
@@ -242,7 +245,7 @@ func (c *Client) Bulk(ctx context.Context, operations []map[string]any) (map[str
 
 	req := esapi.BulkRequest{
 		Body:    &buf,
-		Refresh: "true",
+		Refresh: refreshTrue,
 	}
 
 	res, err := req.Do(tracedCtx, c.client)
