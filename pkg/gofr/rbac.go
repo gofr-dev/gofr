@@ -3,7 +3,9 @@ package gofr
 import (
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/rbac"
@@ -71,5 +73,85 @@ func (a *App) enableRBAC(configPath ...string) error {
 	middlewareFunc := rbac.Middleware(config)
 	a.UseMiddleware(middlewareFunc)
 
+	a.rbacConfig = config
+
 	return nil
+}
+
+// rbacRouteCheckKey selects what the startup route check does on a mismatch. See rbacRouteCheckMode.
+const rbacRouteCheckKey = "GOFR_RBAC_ROUTE_CHECK"
+
+// Values of rbacRouteCheckKey.
+const (
+	rbacRouteCheckWarn = "warn"
+	rbacRouteCheckFail = "fail"
+	rbacRouteCheckOff  = "off"
+)
+
+// rbacRouteCheckMode reads rbacRouteCheckKey. A value it does not know is logged and read as
+// rbacRouteCheckWarn: failing closed on a typo in a diagnostic setting would stop an app that has
+// nothing wrong with it, and switching the check off would hide the mismatches it was set to show.
+func (a *App) rbacRouteCheckMode() string {
+	mode := strings.ToLower(strings.TrimSpace(a.Config.GetOrDefault(rbacRouteCheckKey, rbacRouteCheckWarn)))
+
+	switch mode {
+	case rbacRouteCheckWarn, rbacRouteCheckFail, rbacRouteCheckOff:
+		return mode
+	default:
+		a.Logger().Errorf("invalid %s=%q: use %q, %q or %q. Using %q.", rbacRouteCheckKey, mode,
+			rbacRouteCheckWarn, rbacRouteCheckFail, rbacRouteCheckOff, rbacRouteCheckWarn)
+
+		return rbacRouteCheckWarn
+	}
+}
+
+// rbacRouteCollector builds the route list the RBAC route check reads, from the router walk
+// httpServerSetup already makes. A disabled collector adds nothing.
+type rbacRouteCollector struct {
+	enabled bool
+	seen    map[string]bool
+	labels  []string
+}
+
+func newRBACRouteCollector(enabled bool) *rbacRouteCollector {
+	return &rbacRouteCollector{enabled: enabled, seen: make(map[string]bool)}
+}
+
+// add records route as one "METHOD /template" entry per method, "*" for a route with no method
+// matcher. A prefix route gets a trailing catch-all segment, so that it stands for every path under
+// the prefix. GoFr's PathPrefix("/") catch-all is left out: it answers 404 for every path no other
+// route serves, and would otherwise make every rule look live.
+func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
+	if !c.enabled {
+		return
+	}
+
+	tmpl, err := route.GetPathTemplate()
+	if err != nil {
+		return
+	}
+
+	// mux anchors a Path regexp with "$" and leaves a PathPrefix one open.
+	pathRegexp, _ := route.GetPathRegexp()
+	if !strings.HasSuffix(pathRegexp, "$") {
+		if _, isCatchAll := route.GetHandler().(handler); isCatchAll && tmpl == "/" {
+			return
+		}
+
+		tmpl = strings.TrimSuffix(tmpl, "/") + "/{path:.*}"
+	}
+
+	if len(methods) == 0 {
+		methods = []string{"*"}
+	}
+
+	for _, method := range methods {
+		label := strings.ToUpper(method) + " " + tmpl
+		if c.seen[label] {
+			continue
+		}
+
+		c.seen[label] = true
+		c.labels = append(c.labels, label)
+	}
 }

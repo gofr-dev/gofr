@@ -302,6 +302,85 @@ request, so it is NOT enforced - any route it was meant to govern is currently u
 
 Treat that line as an open route, not a warning about a typo.
 
+### Startup Route Check
+
+The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
+When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
+them and logs each kind of mismatch below as an **error**. By default the app keeps starting, so
+read the startup logs: each line names a route that is not protected the way the config intends.
+[`GOFR_RBAC_ROUTE_CHECK`](#choosing-what-a-mismatch-does) can make a mismatch stop startup instead.
+
+Paths are compared exactly as written, the same way requests are matched: `/api/users/` and
+`/api/users` are different paths, and so are `files` and `/files`.
+
+**A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
+`/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
+is **not protected**. A rule counts as dead when no request could be matched by both the rule and
+a registered route. A rule whose method the route does not register (`DELETE` on a route that only
+has `GET`) is dead too. A dead rule marked `"public": true` cannot leave a route unprotected, so it
+is reported only as a warning.
+
+```
+RBAC route check failed: rules match no registered route: DELETE /api/user/{id}. These rules
+protect nothing; fix each rule's path or methods, or remove it.
+```
+
+**An uncovered route** is a registered route, for a given method, that no rule matches, so it would
+be served without role checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). To
+keep a route open on purpose, such as `/login` or a webhook, give it a rule with `"public": true`.
+GoFr's own `/.well-known/*` routes and `/favicon.ico` are exempt. Other routes GoFr registers for
+you do need a rule: the `./static` directory (served at `/static` and everything under `/static/`
+when it exists) and `/graphql` when GraphQL is enabled. A catch-all needs the `/` in front of it:
+a rule for `/admin/{rest:.*}` matches `/admin/users` but not `/admin`, so the route `/admin` needs
+a rule of its own.
+
+```
+RBAC route check failed: routes covered by no rule: GET /api/posts, POST /api/users. They are
+served without role checks; add a rule for each, with "public": true for a route meant to be open.
+```
+
+**A partly covered route** is one that rules match for some of its requests but not for all of
+them. The requests no rule matches are served without role checks. Common causes:
+
+- a constraint narrower than the route: a rule for `/api/users/{id:[0-9]+}` does not govern
+  `/api/users/abc`, which the route `/api/users/{id}` serves;
+- a method list narrower than the route: a static directory answers every method, so a rule for
+  `["GET"]` leaves `HEAD /static/app.js` unchecked. Use `["*"]` for static files.
+
+```
+RBAC route check failed: routes only partly covered: * /static/{path:.*} (by GET /static/{path:.*}).
+Requests these rules do not match are served without role checks; add a rule that matches each
+route in full.
+```
+
+A rule set that opens the static directory and a login route:
+
+```json
+{"path": "/login", "methods": ["POST"], "public": true},
+{"path": "/static", "methods": ["*"], "public": true},
+{"path": "/static/{path:.*}", "methods": ["*"], "public": true}
+```
+
+The dead-rule check is lenient on purpose: two path variables with different constraints —
+`{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, so a rule like
+that is not reported as dead. The coverage check is strict: a rule covers a route only when it
+matches every request the route serves, so the same pair is reported as partly covered.
+
+The check sees the route table, not the middleware in front of it: a request answered before
+routing (a CORS preflight, for example) never reaches RBAC either way.
+
+#### Choosing what a mismatch does
+
+Set `GOFR_RBAC_ROUTE_CHECK` in your config:
+
+| Value | Behavior |
+|---|---|
+| `warn` (default) | Log each mismatch as an error and keep starting. |
+| `fail` | Log each mismatch, release what startup opened, and exit with status 1. A dead public rule is only a warning and does not stop startup. |
+| `off` | Skip the check. For apps that leave routes without a rule on purpose and rely on [Unmatched Routes Behavior](#unmatched-routes-behavior). |
+
+Any other value is logged as an error and treated as `warn`.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
@@ -618,10 +697,11 @@ In this configuration:
 - `GET /api/posts` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
 - `GET /health` → **Not in RBAC config** → Allowed to proceed (will work if route exists)
 
-This design allows you to:
-- Gradually add RBAC protection to specific endpoints
-- Keep some routes unprotected (not in RBAC config)
-- Let the router handle 404s for non-existent routes
+At startup, the app in this example logs an error for `POST /api/users` and `GET /api/posts`:
+they are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
+Give every registered route a rule, and a route meant to be open one with `"public": true`.
+The runtime behavior above still applies to a request no rule matches, for example one to a route
+the check reported as only partly covered, or to any route when `GOFR_RBAC_ROUTE_CHECK=off`.
 
 ## Security and Privacy
 
@@ -630,7 +710,9 @@ This design allows you to:
 RBAC middleware implements industry-standard security practices to protect sensitive data:
 
 **Traces (OpenTelemetry):**
-- ✅ HTTP method and route patterns included
+- ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
+  `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
+  When the two disagree, the rule is broader or narrower than the route.
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)
