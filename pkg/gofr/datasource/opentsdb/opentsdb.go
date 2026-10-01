@@ -201,7 +201,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	datapoints, ok := datas.([]DataPoint)
 	if !ok {
-		return fmt.Errorf("%w: Must be []DataPoint", errInvalidResponseType)
+		return fmt.Errorf("%w: Must be []DataPoint", errInvalidParam)
 	}
 
 	err := validateDataPoint(datapoints)
