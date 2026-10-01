@@ -3,6 +3,10 @@ package arangodb
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
@@ -357,4 +361,136 @@ func TestClient_Query_InvalidResultType(t *testing.T) {
 	err := test.Client.Query(test.Ctx, dbName, query, bindVars, &result)
 	require.Error(t, err)
 	require.Equal(t, errInvalidResultType, err)
+}
+
+// errReadCursor is a query cursor whose reads always fail.
+type errReadCursor struct {
+	*MockQueryCursor
+}
+
+func (errReadCursor) ReadDocument(context.Context, any) (arangodb.DocumentMeta, error) {
+	return arangodb.DocumentMeta{}, errDocumentNotFound
+}
+
+func TestClient_Query_Errors(t *testing.T) {
+	const query = "FOR doc IN collection RETURN doc"
+
+	tests := []struct {
+		desc       string
+		options    []map[string]any
+		setupMocks func(m *arangoMocks)
+		expErr     string
+	}{
+		{
+			desc: "database lookup fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(nil, errDBNotFound)
+			},
+			expErr: errDBNotFound.Error(),
+		},
+		{
+			desc:    "options cannot be marshaled",
+			options: []map[string]any{{"batchSize": func() {}}},
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+			},
+			expErr: "unsupported type",
+		},
+		{
+			desc:    "options do not match query options",
+			options: []map[string]any{{"batchSize": "fifty"}},
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+			},
+			expErr: "cannot unmarshal",
+		},
+		{
+			desc: "query fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Query(gomock.Any(), query, gomock.Any()).Return(nil, errStatusDown)
+			},
+			expErr: errStatusDown.Error(),
+		},
+		{
+			desc: "reading a document fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Query(gomock.Any(), query, gomock.Any()).
+					Return(errReadCursor{NewMockQueryCursor(nil, nil)}, nil)
+			},
+			expErr: errDocumentNotFound.Error(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, m := newArangoTestClient(t)
+			tc.setupMocks(m)
+
+			var result []map[string]any
+
+			err := client.Query(t.Context(), "testDB", query, nil, &result, tc.options...)
+
+			require.ErrorContains(t, err, tc.expErr)
+			require.Empty(t, result)
+		})
+	}
+}
+
+func TestClient_Connect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"server":"arango","version":"3.11.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	srvURL, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+
+	port, err := strconv.Atoi(srvURL.Port())
+	require.NoError(t, err)
+
+	tests := []struct {
+		desc        string
+		config      Config
+		setupMocks  func(l *MockLogger, m *MockMetrics)
+		expEndpoint string
+	}{
+		{
+			desc:   "invalid config",
+			config: Config{Host: "localhost"},
+			setupMocks: func(l *MockLogger, _ *MockMetrics) {
+				l.EXPECT().Errorf("config validation error: %v", gomock.Any())
+			},
+		},
+		{
+			desc:   "connects and registers metrics",
+			config: Config{Host: srvURL.Hostname(), Port: port, User: "root", Password: "root"},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				l.EXPECT().Debugf("connecting to ArangoDB at %s", "http://"+srvURL.Host)
+				m.EXPECT().NewHistogram("app_arango_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Logf("Connected to ArangoDB successfully at %s", "http://"+srvURL.Host)
+			},
+			expEndpoint: "http://" + srvURL.Host,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			tc.setupMocks(mockLogger, mockMetrics)
+
+			client := New(tc.config)
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+
+			client.Connect()
+
+			require.Equal(t, tc.expEndpoint, client.endpoint)
+		})
+	}
 }

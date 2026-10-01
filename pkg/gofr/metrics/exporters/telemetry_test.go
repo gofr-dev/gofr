@@ -85,3 +85,46 @@ func testSendTelemetryData(appName, appVersion, endpoint string) {
 
 	sendToEndpoint(&data, endpoint)
 }
+
+func TestSendToEndpoint(t *testing.T) {
+	var received []TelemetryData
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var data TelemetryData
+
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&data))
+
+		received = append(received, data)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	closedServer := httptest.NewServer(http.NotFoundHandler())
+	closedURL := closedServer.URL
+	closedServer.Close()
+
+	data := TelemetryData{EventID: "event-1", Source: "gofr-framework", ServiceName: "app"}
+
+	tests := []struct {
+		desc        string
+		endpoint    string
+		expReceived []TelemetryData
+	}{
+		{desc: "payload delivered", endpoint: server.URL, expReceived: []TelemetryData{data}},
+		{desc: "malformed endpoint is ignored", endpoint: "://bad-endpoint", expReceived: nil},
+		{desc: "unreachable endpoint is ignored", endpoint: closedURL, expReceived: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			received = nil
+
+			sendToEndpoint(&data, tc.endpoint)
+
+			assert.Equal(t, tc.expReceived, received)
+		})
+	}
+}

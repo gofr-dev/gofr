@@ -33,9 +33,12 @@ func (d *DB) CreateDB(ctx context.Context, database string) error {
 	return err
 }
 
+// opDropDB is the operation name recorded for DropDB.
+const opDropDB = "dropDB"
+
 // DropDB deletes a database from ArangoDB.
 func (d *DB) DropDB(ctx context.Context, database string) error {
-	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "dropDB", Database: database})
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: opDropDB, Database: database})
 	defer done()
 
 	db, err := d.client.client.GetDatabase(ctx, database, &arangodb.GetDatabaseOptions{})

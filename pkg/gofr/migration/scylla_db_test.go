@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -165,7 +166,7 @@ func TestScyllaCommitMigration(t *testing.T) {
 			Exec(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(tc.err)
 
-		err := migratorWithScylla.commitMigration(mockContainer, td)
+		err := migratorWithScylla.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v] %s failed", i, tc.desc)
 	}
@@ -196,7 +197,7 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 
 	data := transactionData{MigrationNumber: 123}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data).Times(1)
+	mockMigrator.EXPECT().rollback(mockContainer, &data).Times(1)
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -204,7 +205,7 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 		}
 	}()
 
-	s.rollback(mockContainer, data)
+	s.rollback(mockContainer, &data)
 }
 
 func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
@@ -224,8 +225,60 @@ func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
+}
+
+func TestScyllaGetLastMigration_BaseMigrator(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		baseResp   int64
+		baseErr    error
+		expVersion int64
+		expErr     error
+	}{
+		{desc: "base version greater than scylla", baseResp: 7, expVersion: 7},
+		{desc: "base migrator error", baseErr: errScyllaConn, expVersion: -1, expErr: errScyllaConn},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+
+			m := scyllaMigrator{ScyllaDB: mocks.ScyllaDB, migrator: mockMigrator}
+
+			mocks.ScyllaDB.EXPECT().Query(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(dest any, _ string, _ ...any) error {
+					*(dest.(*[]migrationRow)) = []migrationRow{{Version: 2}}
+
+					return nil
+				})
+			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
+
+			got, err := m.getLastMigration(mockContainer)
+
+			assert.Equal(t, tc.expVersion, got)
+			assert.Equal(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestScyllaMigrator_LockUnlockName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := scyllaMigrator{migrator: mockMigrator}
+
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(errScyllaConn)
+	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(errScyllaConn)
+
+	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), errScyllaConn)
+	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), errScyllaConn)
+	assert.Equal(t, "ScyllaDB", m.name())
 }

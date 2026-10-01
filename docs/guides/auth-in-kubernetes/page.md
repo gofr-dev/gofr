@@ -16,11 +16,11 @@ GoFr supports Basic Auth, API key auth, and OAuth 2.0 JWT validation against a J
 
 Three authentication categories are exposed on the App, all verified in `pkg/gofr/auth.go` — Basic auth, API-key auth, and OAuth/JWT — each with a static-credentials variant and a custom-validator variant:
 
-- `EnableBasicAuth(credentials...)` — pairs of username/password.
+- `EnableBasicAuth(credentials...)` — pairs of username/password; returns an error (and installs nothing) on zero or an odd number of arguments.
 - `EnableBasicAuthWithValidator(fn)` — custom validator with access to the container.
 - `EnableAPIKeyAuth(keys...)` — `X-Api-Key` header check.
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.
-- `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh.
+- `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh; returns an error (and installs nothing) on an invalid JWKS URL.
 
 A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Both endpoints are deliberately minimal, so the exemption does not expose anything sensitive.
 
@@ -33,10 +33,12 @@ For full code examples, see [Authentication](/docs/advanced-guide/authentication
 ### Public IdP (Auth0, Okta, Google, Azure AD)
 
 ```go
-app.EnableOAuth("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
+if err := app.EnableOAuth("https://your-tenant.auth0.com/.well-known/jwks.json", 3600,
     jwt.WithAudience("https://api.example.com"),
     jwt.WithIssuer("https://your-tenant.auth0.com/"),
-    jwt.WithExpirationRequired())
+    jwt.WithExpirationRequired()); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
 ```
 
 Egress from your cluster must be allowed to reach the IdP. If you have a strict NetworkPolicy, allowlist the IdP CIDR or use a forward proxy.
@@ -46,7 +48,9 @@ Egress from your cluster must be allowed to reach the IdP. If you have a strict 
 If your IdP runs in the same cluster, point at its in-cluster Service DNS:
 
 ```go
-app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600)
+if err := app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/prod/protocol/openid-connect/certs", 3600); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
 ```
 
 The JWKS fetch is cheap, and the `refreshInterval` controls how stale your key cache can be. A typical value is 600–3600 seconds. After key rotation by the IdP, requests with old tokens fail until the cache refreshes.

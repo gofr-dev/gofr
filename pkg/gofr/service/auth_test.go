@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/oauth2"
 
@@ -171,4 +172,57 @@ func callHTTPServiceWithoutHeaders(ctx context.Context, service HTTP, method str
 	default:
 		return nil, AuthErr{Message: "unknown method"}
 	}
+}
+
+var errAuthFailed = errors.New("auth failed")
+
+func TestAuthProvider_AuthError(t *testing.T) {
+	provider := &authProvider{
+		auth: func(context.Context, map[string]string) (map[string]string, error) {
+			return nil, errAuthFailed
+		},
+		HTTP: &mockHTTP{},
+	}
+
+	testCases := []struct {
+		desc    string
+		method  string
+		headers map[string]string
+		expErr  error
+	}{
+		{desc: "GET", method: http.MethodGet, expErr: errAuthFailed},
+		{desc: "POST", method: http.MethodPost, expErr: errAuthFailed},
+		{desc: "PUT", method: http.MethodPut, expErr: errAuthFailed},
+		{desc: "PATCH", method: http.MethodPatch, expErr: errAuthFailed},
+		{desc: "DELETE", method: http.MethodDelete, expErr: errAuthFailed},
+		{desc: "QUERY", method: methodQuery, expErr: errAuthFailed},
+		{desc: "GET with headers", method: http.MethodGet, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+		{desc: "POST with headers", method: http.MethodPost, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+		{desc: "PUT with headers", method: http.MethodPut, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+		{desc: "PATCH with headers", method: http.MethodPatch, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+		{desc: "DELETE with headers", method: http.MethodDelete, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+		{desc: "QUERY with headers", method: methodQuery, headers: map[string]string{"k": "v"}, expErr: errAuthFailed},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			gotResponse, err := callHTTPServiceAndClose(t.Context(), provider, tc.method, tc.headers)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.False(t, gotResponse)
+		})
+	}
+}
+
+// callHTTPServiceAndClose calls the service, closes any returned body and reports whether a response was returned.
+func callHTTPServiceAndClose(ctx context.Context, service HTTP, method string,
+	headers map[string]string) (gotResponse bool, err error) {
+	resp, err := callHTTPService(ctx, service, method, headers)
+	if resp == nil {
+		return false, err
+	}
+
+	_ = resp.Body.Close()
+
+	return true, err
 }

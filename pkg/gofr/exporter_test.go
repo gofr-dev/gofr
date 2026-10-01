@@ -215,6 +215,20 @@ func Test_attributeToStringPair(t *testing.T) {
 			expectedValue:  "stringValue",
 			expectedErrMsg: "",
 		},
+		{
+			name:           "Empty",
+			keyValue:       attribute.KeyValue{Key: "emptyKey"},
+			expectedKey:    "emptyKey",
+			expectedValue:  "invalid",
+			expectedErrMsg: "",
+		},
+		{
+			name:           "ByteSlice falls back to the value's string form",
+			keyValue:       attribute.ByteSlice("bytesKey", []byte("hi")),
+			expectedKey:    "bytesKey",
+			expectedValue:  "aGk=",
+			expectedErrMsg: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -222,4 +236,62 @@ func Test_attributeToStringPair(t *testing.T) {
 		assert.Equal(t, tt.expectedKey, key, "Key mismatch")
 		assert.Equal(t, tt.expectedValue, value, "Value mismatch")
 	}
+}
+
+// Test_attributeToStringPair_StringFallbackTypes pins the value exported for the attribute
+// types that have no JSON encoding of their own and use the value's String form.
+func Test_attributeToStringPair_StringFallbackTypes(t *testing.T) {
+	tests := []struct {
+		name          string
+		keyValue      attribute.KeyValue
+		expectedValue string
+	}{
+		{
+			name:          "Slice",
+			keyValue:      attribute.Slice("sliceKey", attribute.StringValue("a"), attribute.Int64Value(1)),
+			expectedValue: `["a",1]`,
+		},
+		{
+			name:          "Map",
+			keyValue:      attribute.Map("mapKey", attribute.String("k", "v"), attribute.Bool("b", true)),
+			expectedValue: `{"b":true,"k":"v"}`,
+		},
+		{
+			name:          "EmptyStringSlice",
+			keyValue:      attribute.StringSlice("stringKey", nil),
+			expectedValue: `[]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, value := attributeToStringPair(tt.keyValue)
+			assert.Equal(t, string(tt.keyValue.Key), key)
+			assert.Equal(t, tt.expectedValue, value)
+		})
+	}
+}
+
+func Test_ExportSpans_InvalidEndpoint(t *testing.T) {
+	exporter := NewExporter("http://[::1", logging.NewMockLogger(logging.FATAL))
+
+	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
+
+	require.ErrorContains(t, err, "failed to create HTTP request")
+}
+
+func Test_convertSpans_SpanAttributesBecomeTags(t *testing.T) {
+	tp := sdktrace.NewTracerProvider()
+
+	defer func() { _ = tp.Shutdown(t.Context()) }()
+
+	_, span := tp.Tracer("test").Start(t.Context(), "s")
+	span.SetAttributes(attribute.Int("http.status", 200), attribute.String("route", "/users"))
+	span.End()
+
+	got := convertSpans([]sdktrace.ReadOnlySpan{span.(sdktrace.ReadOnlySpan)})
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "200", got[0].Tags["http.status"])
+	assert.Equal(t, "/users", got[0].Tags["route"])
 }

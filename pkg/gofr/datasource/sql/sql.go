@@ -14,8 +14,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
-	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -32,6 +30,14 @@ const (
 	sslModeVerifyFull = "verify-full"
 	tlsCustom         = "tls=custom"
 	localhost         = "localhost"
+
+	// DB_SSL_MODE values that only MySQL understands.
+	sslModePreferred  = "preferred"
+	sslModeSkipVerify = "skip-verify"
+	// loopbackIPv4 is the IPv4 loopback address, served under the name localhost.
+	loopbackIPv4 = "127.0.0.1"
+	// dbStructTag is the struct tag naming the column a field is scanned from.
+	dbStructTag = "db"
 )
 
 var (
@@ -474,11 +480,11 @@ func getMySQLTLSParam(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case sslModeDisable, "false":
 		return "" // No TLS - insecure
-	case "preferred":
+	case sslModePreferred:
 		return "tls=preferred" // Try TLS, fallback to plain
 	case requireSSLMode, "true":
 		return tlsSkipVerify // TLS required but no cert validation
-	case "skip-verify":
+	case sslModeSkipVerify:
 		return tlsSkipVerify // Explicit skip verification
 	case sslModeVerifyCA, sslModeVerifyFull:
 		return tlsCustom // Use custom TLS config with CA verification
@@ -548,7 +554,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 
 func getServerName(hostname string) string {
 	// For localhost/127.0.0.1, use "localhost" explicitly
-	if hostname == "127.0.0.1" || hostname == "::1" {
+	if hostname == loopbackIPv4 || hostname == "::1" {
 		return localhost
 	}
 

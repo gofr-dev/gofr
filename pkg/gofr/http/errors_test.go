@@ -154,3 +154,27 @@ func TestErrorClientClosedRequest(t *testing.T) {
 	assert.Equal(t, StatusClientClosedRequest, err.StatusCode())
 	assert.Equal(t, logging.DEBUG, err.LogLevel())
 }
+
+func TestErrors_LogLevel(t *testing.T) {
+	tests := []struct {
+		desc     string
+		err      logging.LogLevelResponder
+		expLevel logging.Level
+	}{
+		{desc: "entity not found", err: ErrorEntityNotFound{}, expLevel: logging.INFO},
+		{desc: "entity already exists", err: ErrorEntityAlreadyExist{}, expLevel: logging.WARN},
+		{desc: "invalid param", err: ErrorInvalidParam{}, expLevel: logging.INFO},
+		{desc: "unsupported media type", err: ErrorUnsupportedMediaType{}, expLevel: logging.INFO},
+		{desc: "missing param", err: ErrorMissingParam{}, expLevel: logging.INFO},
+		{desc: "invalid route", err: ErrorInvalidRoute{}, expLevel: logging.INFO},
+		{desc: "request timeout", err: ErrorRequestTimeout{}, expLevel: logging.INFO},
+		{desc: "panic recovery", err: ErrorPanicRecovery{}, expLevel: logging.ERROR},
+		{desc: "too many requests", err: ErrorTooManyRequests{}, expLevel: logging.WARN},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expLevel, tc.err.LogLevel())
+		})
+	}
+}
