@@ -183,7 +183,7 @@ func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints
 
 func parsePutErrorMsg(resp *PutResponse) error {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("Failed to put %d datapoint(s) into opentsdb \n", resp.Failed))
+	fmt.Fprintf(&buf, "Failed to put %d datapoint(s) into opentsdb \n", resp.Failed)
 
 	if len(resp.Errors) > 0 {
 		for _, putError := range resp.Errors {
@@ -192,7 +192,7 @@ func parsePutErrorMsg(resp *PutResponse) error {
 				return err
 			}
 
-			buf.WriteString(fmt.Sprintf("\t%s\n", str))
+			fmt.Fprintf(&buf, "\t%s\n", str)
 		}
 	}
 
