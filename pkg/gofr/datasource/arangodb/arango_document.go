@@ -80,9 +80,12 @@ func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName st
 	return meta.Key, nil
 }
 
+// opGetDocument is the operation name recorded for GetDocument.
+const opGetDocument = "getDocument"
+
 // GetDocument retrieves a document by its ID from the specified collection.
 func (d *Document) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
-	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "getDocument",
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: opGetDocument,
 		Database: dbName, Collection: collectionName, ID: documentID})
 	defer done()
 

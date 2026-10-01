@@ -293,7 +293,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, tc.target, http.NoBody)
 
 		r.Header.Set("Content-Type", "application/json")
 
@@ -983,7 +983,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 	app.httpServer.router.Handle("/test", handler)
 
 	// Create a test request
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 
