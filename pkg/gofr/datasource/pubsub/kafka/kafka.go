@@ -33,6 +33,9 @@ const (
 	protocolSASLSSL         = "SASL_SSL"
 	messageMultipleBrokers  = "MULTIPLE_BROKERS"
 	brokerStatusUp          = "UP"
+	kafkaBackend            = "KAFKA"
+	healthKeyBroker         = "broker"
+	healthKeyError          = "error"
 )
 
 var errEmptyTopicName = errors.New("topic name cannot be empty")
@@ -165,7 +168,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          hostName,
-		PubSubBackend: "KAFKA",
+		PubSubBackend: kafkaBackend,
 		Time:          end.Microseconds(),
 	})
 
@@ -266,7 +269,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		MessageValue:  string(msg.Value),
 		Topic:         topic,
 		Host:          hostName,
-		PubSubBackend: "KAFKA",
+		PubSubBackend: kafkaBackend,
 		Time:          end.Microseconds(),
 	})
 

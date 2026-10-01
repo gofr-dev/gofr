@@ -124,7 +124,7 @@ func Test_SurrealCommitMigration(t *testing.T) {
 
 		mockSurreal.EXPECT().Query(gomock.Any(), insertSurrealDBGoFrMigrationRow, bindVars).Return([]any{}, tc.err)
 
-		err := migratorWithSurreal.commitMigration(mockContainer, td)
+		err := migratorWithSurreal.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -219,9 +219,9 @@ func Test_SurrealCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
 
@@ -304,12 +304,12 @@ func Test_SurrealMigratorDelegation(t *testing.T) {
 	m := surrealMigrator{migrator: mockMigrator}
 	data := transactionData{MigrationNumber: 4}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 	mockLogger.EXPECT().Fatalf("migration %v failed and rolled back", int64(4))
 	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(context.Canceled)
 	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(context.Canceled)
 
-	m.rollback(mockContainer, data)
+	m.rollback(mockContainer, &data)
 
 	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), context.Canceled)
 	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), context.Canceled)

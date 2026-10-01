@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gcPubSub "cloud.google.com/go/pubsub"
+	gcPubSub "cloud.google.com/go/pubsub" //nolint:staticcheck // the package under test is still on pubsub v1; the v2 migration is a separate change
 	"cloud.google.com/go/pubsub/pstest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
