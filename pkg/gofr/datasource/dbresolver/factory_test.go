@@ -70,19 +70,28 @@ func TestReplicaConfig_Get(t *testing.T) {
 		"DB_NAME": "testdb",
 	})
 
-	replicaCfg := &replicaConfig{
-		base:     mockConfig,
-		host:     "localhost",
-		port:     "3307",
-		user:     "replica_user",
-		password: "replica_pass",
-	}
+	replicaCfg := newReplicaConfig(mockConfig, "localhost", "3307", "replica_user", "replica_pass")
 
 	assert.Equal(t, "localhost", replicaCfg.Get("DB_HOST"))
 	assert.Equal(t, "3307", replicaCfg.Get("DB_PORT"))
 	assert.Equal(t, "replica_user", replicaCfg.Get("DB_USER"))
 	assert.Equal(t, "replica_pass", replicaCfg.Get("DB_PASSWORD"))
 	assert.Equal(t, "testdb", replicaCfg.Get("DB_NAME"))
+}
+
+func TestReplicaConfig_EmptyOverrideDoesNotFallBackToPrimary(t *testing.T) {
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_HOST":     "primary-host",
+		"DB_PORT":     "3306",
+		"DB_USER":     "primary_user",
+		"DB_PASSWORD": "primary_pass",
+	})
+
+	replicaCfg := newReplicaConfig(mockConfig, "", "", "", "")
+
+	for _, key := range []string{"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD"} {
+		assert.Empty(t, replicaCfg.Get(key), key)
+	}
 }
 
 func TestReplicaConfig_GetOrDefault(t *testing.T) {
