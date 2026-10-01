@@ -2,20 +2,12 @@ module gofr.dev/pkg/gofr/traces/exporters/gcp
 
 go 1.26.0
 
-// TODO(#4210): drop this replace once a gofr.dev release contains
-// pkg/gofr/traces/exporters, and pin that version instead. The metrics exporter
-// module went through exactly this: it shipped the same replace in 5e00b8c6d
-// and dropped it in ceb503900 (#3926) once a release carried the core it needs.
-// Until then this module is in-repo only: a replace in a dependency's go.mod is
-// ignored by the consuming main module.
-replace gofr.dev => ../../../../..
-
 require (
 	go.opentelemetry.io/contrib/detectors/gcp v1.46.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0
-	gofr.dev v1.60.1
+	gofr.dev v1.62.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.84.0
 )
