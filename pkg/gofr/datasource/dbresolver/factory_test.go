@@ -342,7 +342,7 @@ func TestCreateHTTPMiddleware(t *testing.T) {
 
 	wrappedHandler := middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/test/path", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test/path", http.NoBody)
 	w := httptest.NewRecorder()
 
 	wrappedHandler.ServeHTTP(w, req)
