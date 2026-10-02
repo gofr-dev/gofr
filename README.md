@@ -109,7 +109,7 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 ## 👍 **Contribute**
 
-Join Us in Making GoFr Better
+**Join Us in Making GoFr Better**
 
 **Share your experience**: If you’ve found GoFr helpful, consider writing a review or tutorial on platforms like **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your personal blog. 
 Your insights could help others get started faster!
