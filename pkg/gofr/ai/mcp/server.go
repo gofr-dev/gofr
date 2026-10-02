@@ -20,9 +20,10 @@ var errToolPanicked = errors.New("tool execution failed")
 // Server serves an ai.Tools set as MCP tools over an HTTP JSON-RPC endpoint. It implements
 // http.Handler and is safe for concurrent use.
 type Server struct {
-	tools ai.Tools
-	info  serverInfo
-	hook  Hook
+	tools  ai.Tools
+	info   serverInfo
+	hook   Hook
+	logger Logger
 }
 
 // NewServer builds an MCP server over the given tools.
@@ -34,9 +35,17 @@ func NewServer(tools ai.Tools, opts ...Option) *Server {
 	}
 
 	return &Server{
-		tools: tools,
-		info:  serverInfo{Name: o.name, Version: o.version},
-		hook:  o.hook,
+		tools:  tools,
+		info:   serverInfo{Name: o.name, Version: o.version},
+		hook:   o.hook,
+		logger: o.logger,
+	}
+}
+
+// logf reports a response failure when a logger is configured.
+func (s *Server) logf(format string, args ...any) {
+	if s.logger != nil {
+		s.logger.Errorf(format, args...)
 	}
 }
 
@@ -51,20 +60,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBytes))
 	if err != nil {
-		writeError(w, nil, codeParse, "request body too large or unreadable")
+		s.writeError(w, nil, codeParse, "request body too large or unreadable")
 
 		return
 	}
 
 	var req rpcRequest
 	if jerrr := json.Unmarshal(body, &req); jerrr != nil {
-		writeError(w, nil, codeParse, "parse error")
+		s.writeError(w, nil, codeParse, "parse error")
 
 		return
 	}
 
 	if req.JSONRPC != jsonRPCVersion {
-		writeError(w, req.ID, codeInvalidRequest, "invalid request")
+		s.writeError(w, req.ID, codeInvalidRequest, "invalid request")
 
 		return
 	}
@@ -77,12 +86,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, rpcErr := s.dispatch(WithHeaders(r.Context(), r.Header), &req)
 	if rpcErr != nil {
-		writeError(w, req.ID, rpcErr.Code, rpcErr.Message)
+		s.writeError(w, req.ID, rpcErr.Code, rpcErr.Message)
 
 		return
 	}
 
-	writeResult(w, req.ID, result)
+	s.writeResult(w, req.ID, result)
 }
 
 func (s *Server) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcError) {

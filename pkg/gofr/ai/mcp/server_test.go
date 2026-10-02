@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +20,35 @@ import (
 var (
 	errDBUnavailable = errors.New("db unavailable")
 	errAccessDenied  = errors.New("access denied")
+	errClientGone    = errors.New("client went away")
 )
+
+// fakeLogger records every formatted Errorf message.
+type fakeLogger struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *fakeLogger) Errorf(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.msgs = append(l.msgs, fmt.Sprintf(format, args...))
+}
+
+func (l *fakeLogger) all() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return append([]string(nil), l.msgs...)
+}
+
+// failingWriter delegates headers and status to the embedded recorder but fails every body write.
+type failingWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (*failingWriter) Write([]byte) (int, error) { return 0, errClientGone }
 
 type fakeTools struct {
 	specs   []ai.ToolSpec
@@ -373,4 +402,83 @@ func TestServer_ConcurrentCalls(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestServer_EncodeFailureReturnsInternalError(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     func(l *fakeLogger) []Option
+		wantLogs []string
+	}{
+		{
+			name:     "with logger the encode failure is logged",
+			opts:     func(l *fakeLogger) []Option { return []Option{WithLogger(l)} },
+			wantLogs: []string{"failed to encode MCP response: json: error calling MarshalJSON"},
+		},
+		{
+			name:     "without logger the fallback is still sent",
+			opts:     func(*fakeLogger) []Option { return nil },
+			wantLogs: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fl := &fakeLogger{}
+			bad := ai.ToolSpec{Name: "bad", InputSchema: json.RawMessage("{not json")}
+			s := NewServer(&fakeTools{specs: []ai.ToolSpec{bad}}, tc.opts(fl)...)
+
+			rec := post(t, s, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+			assert.NotContains(t, rec.Body.String(), "invalid character", "encode detail must not leak to the client")
+
+			resp := decode(t, rec)
+			require.NotNil(t, resp.Error)
+			assert.Equal(t, codeInternal, resp.Error.Code)
+			assert.Equal(t, msgInternal, resp.Error.Message)
+			assert.Equal(t, "3", string(resp.ID))
+			assert.Nil(t, resp.Result)
+
+			logs := fl.all()
+			require.Len(t, logs, len(tc.wantLogs))
+
+			for i, want := range tc.wantLogs {
+				assert.Contains(t, logs[i], want)
+			}
+		})
+	}
+}
+
+func TestServer_WriteFailureIsLogged(t *testing.T) {
+	fl := &fakeLogger{}
+	s := NewServer(&fakeTools{}, WithLogger(fl))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp",
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	fw := &failingWriter{ResponseRecorder: httptest.NewRecorder()}
+
+	s.ServeHTTP(fw, req)
+
+	logs := fl.all()
+	require.Len(t, logs, 1)
+	assert.Contains(t, logs[0], "failed to write MCP response")
+	assert.Contains(t, logs[0], errClientGone.Error())
+}
+
+func TestWriteJSON_UnencodableIDFallsBackTo500(t *testing.T) {
+	fl := &fakeLogger{}
+	s := NewServer(&fakeTools{}, WithLogger(fl))
+	rec := httptest.NewRecorder()
+
+	s.writeJSON(rec, rpcResponse{JSONRPC: jsonRPCVersion, ID: json.RawMessage("{bad"), Result: struct{}{}})
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Empty(t, rec.Body.String())
+
+	logs := fl.all()
+	require.Len(t, logs, 2)
+	assert.Contains(t, logs[0], "failed to encode MCP response")
+	assert.Contains(t, logs[1], "failed to encode MCP internal-error response")
 }

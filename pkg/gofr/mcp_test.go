@@ -3,11 +3,14 @@ package gofr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +23,16 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+// errMCPClientGone is returned by mcpFailingWriter to simulate a dropped MCP client.
+var errMCPClientGone = errors.New("client went away")
+
+// mcpFailingWriter delegates headers and status to the embedded recorder but fails every body write.
+type mcpFailingWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (*mcpFailingWriter) Write([]byte) (int, error) { return 0, errMCPClientGone }
 
 func testRouterTools(t *testing.T, exclude ...string) (*App, *routerTools) {
 	t.Helper()
@@ -495,6 +508,26 @@ func TestMCPServer_Run_WithoutBindRefusesToServe(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "was not bound")
+}
+
+// EnableMCP wires the container logger into the MCP server, so a failed response write is logged.
+func TestEnableMCP_LogsMCPResponseWriteFailure(t *testing.T) {
+	testutil.NewServerConfigs(t) // provides a free HTTP port; MCP_PORT defaults to 8200
+
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+		app.EnableMCP()
+
+		require.NotNil(t, app.mcpServer)
+
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp",
+			strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+		app.mcpServer.handler.ServeHTTP(&mcpFailingWriter{ResponseRecorder: httptest.NewRecorder()}, req)
+	})
+
+	assert.Contains(t, logs, "failed to write MCP response")
+	assert.Contains(t, logs, errMCPClientGone.Error())
 }
 
 func schemaFor(specs []ai.ToolSpec, name string) string {
