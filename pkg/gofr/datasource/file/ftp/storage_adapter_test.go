@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,10 +42,11 @@ func setupTestFTPServer(t *testing.T) (server *ftpserver.Server, tmpDir string, 
 	}
 
 	opts := &ftpserver.ServerOpts{
-		Factory:  factory,
-		Port:     0,
-		Hostname: "127.0.0.1",
-		Auth:     &ftpserver.SimpleAuth{Name: "test", Password: "test"},
+		Factory:      factory,
+		Port:         0,
+		Hostname:     "127.0.0.1",
+		PassivePorts: "30000-39999",
+		Auth:         &ftpserver.SimpleAuth{Name: "test", Password: "test"},
 	}
 
 	server = ftpserver.NewServer(opts)
@@ -1036,22 +1039,6 @@ func TestStorageAdapter_ClosedConnection(t *testing.T) {
 		expMsg string
 	}{
 		{
-			desc: "NewReader",
-			call: func(s *storageAdapter) error {
-				_, err := s.NewReader(t.Context(), "file.txt")
-				return err
-			},
-			expMsg: `failed to create reader for "file.txt"`,
-		},
-		{
-			desc: "NewRangeReader",
-			call: func(s *storageAdapter) error {
-				_, err := s.NewRangeReader(t.Context(), "file.txt", 1, 2)
-				return err
-			},
-			expMsg: `failed to create reader for "file.txt" at offset 1`,
-		},
-		{
 			desc:   "DeleteObject",
 			call:   func(s *storageAdapter) error { return s.DeleteObject(t.Context(), "file.txt") },
 			expMsg: `failed to delete object "file.txt"`,
@@ -1229,4 +1216,284 @@ func TestStorageAdapter_PublishConn_KeepsExisting(t *testing.T) {
 
 	assert.Same(t, first, a.conn)
 	require.Error(t, second.NoOp(), "redundant connection should be closed")
+}
+
+func TestStorageAdapter_ReaderDialFails(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, tmpDir, "file.txt", []byte("data"))
+
+	tests := []struct {
+		desc   string
+		call   func(s *storageAdapter) error
+		expMsg string
+	}{
+		{
+			desc: "NewReader",
+			call: func(s *storageAdapter) error {
+				_, err := s.NewReader(t.Context(), "file.txt")
+				return err
+			},
+			expMsg: `failed to create reader for "file.txt": FTP login failed`,
+		},
+		{
+			desc: "NewRangeReader",
+			call: func(s *storageAdapter) error {
+				_, err := s.NewRangeReader(t.Context(), "file.txt", 1, 2)
+				return err
+			},
+			expMsg: `failed to create reader for "file.txt" at offset 1: FTP login failed`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+			require.NoError(t, adapter.Connect(t.Context()))
+
+			// Readers dial their own connection, so make that login fail.
+			adapter.cfg.Password = "wrong"
+
+			err := tc.call(adapter)
+
+			require.ErrorContains(t, err, tc.expMsg)
+		})
+	}
+}
+
+// finishWithin fails the test if fn does not return within d. A desynced FTP connection
+// blocks forever, so tests of overlapping operations must not rely on the go test timeout.
+func finishWithin(t *testing.T, d time.Duration, fn func()) {
+	t.Helper()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		fn()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(d):
+		t.Fatalf("operation did not finish within %v", d)
+	}
+}
+
+func TestStorageAdapter_OperationsWhileReaderOpen(t *testing.T) {
+	tests := []struct {
+		desc  string
+		check func(t *testing.T, a *storageAdapter)
+	}{
+		{desc: "StatObject", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			info, err := a.StatObject(t.Context(), "b.txt")
+			require.NoError(t, err)
+			assert.Equal(t, int64(8), info.Size)
+		}},
+		{desc: "ListObjects", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			objects, err := a.ListObjects(t.Context(), "")
+			require.NoError(t, err)
+			assert.ElementsMatch(t, []string{"a.txt", "b.txt"}, objects)
+		}},
+		{desc: "ListDir", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			objects, _, err := a.ListDir(t.Context(), "")
+			require.NoError(t, err)
+			assert.Len(t, objects, 2)
+		}},
+		{desc: "NewReader", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			r, err := a.NewReader(t.Context(), "b.txt")
+			require.NoError(t, err)
+
+			data, err := io.ReadAll(r)
+			require.NoError(t, err)
+			require.NoError(t, r.Close())
+			assert.Equal(t, "BBBBBBBB", string(data))
+		}},
+		{desc: "NewRangeReader", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			r, err := a.NewRangeReader(t.Context(), "b.txt", 2, 3)
+			require.NoError(t, err)
+
+			data, err := io.ReadAll(r)
+			require.NoError(t, err)
+			assert.Equal(t, "BBB", string(data))
+
+			_ = r.Close()
+		}},
+		{desc: "CopyObject", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			require.NoError(t, a.CopyObject(t.Context(), "b.txt", "c.txt"))
+		}},
+		{desc: "DeleteObject", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			require.NoError(t, a.DeleteObject(t.Context(), "b.txt"))
+		}},
+		{desc: "NewWriter", check: func(t *testing.T, a *storageAdapter) {
+			t.Helper()
+
+			w := a.NewWriter(t.Context(), "d.txt")
+			_, err := w.Write([]byte("DD"))
+			require.NoError(t, err)
+			require.NoError(t, w.Close())
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, dir, cleanup := setupTestFTPServer(t)
+			defer cleanup()
+
+			createTestFile(t, dir, "a.txt", []byte("AAAA"))
+			createTestFile(t, dir, "b.txt", []byte("BBBBBBBB"))
+
+			a := &storageAdapter{cfg: getTestConfig(server.Port)}
+			require.NoError(t, a.Connect(t.Context()))
+
+			finishWithin(t, 5*time.Second, func() {
+				reader, err := a.NewReader(t.Context(), "a.txt")
+				require.NoError(t, err)
+
+				tc.check(t, a)
+
+				data, err := io.ReadAll(reader)
+				require.NoError(t, err)
+				require.NoError(t, reader.Close())
+				assert.Equal(t, "AAAA", string(data))
+
+				_, err = a.StatObject(t.Context(), "a.txt")
+				require.NoError(t, err, "shared connection must still work")
+			})
+		})
+	}
+}
+
+func TestStorageAdapter_UnclosedReaderDoesNotBlock(t *testing.T) {
+	server, dir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, dir, "a.txt", []byte("AAAA"))
+
+	a := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, a.Connect(t.Context()))
+
+	finishWithin(t, 5*time.Second, func() {
+		leaked, err := a.NewReader(t.Context(), "a.txt")
+		require.NoError(t, err)
+
+		t.Cleanup(func() { _ = leaked.Close() })
+
+		for range 5 {
+			_, err := a.StatObject(t.Context(), "a.txt")
+			require.NoError(t, err)
+		}
+	})
+}
+
+func TestConnReader_CloseTwice(t *testing.T) {
+	server, dir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, dir, "a.txt", []byte("AAAA"))
+
+	a := &storageAdapter{cfg: getTestConfig(server.Port)}
+	require.NoError(t, a.Connect(t.Context()))
+
+	r, err := a.NewReader(t.Context(), "a.txt")
+	require.NoError(t, err)
+
+	_, err = io.ReadAll(r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+	require.NoError(t, r.Close(), "second Close must do nothing")
+
+	cr, ok := r.(*connReader)
+	require.True(t, ok)
+
+	_, err = cr.resp.Read(make([]byte, 1))
+	require.ErrorIs(t, err, net.ErrClosed, "data connection must be closed")
+	require.Error(t, cr.conn.NoOp(), "dedicated control connection must be closed")
+}
+
+func TestStorageAdapter_ConcurrentSharedConnOperations(t *testing.T) {
+	tests := []struct {
+		desc string
+		op   func(ctx context.Context, a *storageAdapter, i int) error
+	}{
+		{desc: "StatObject", op: func(ctx context.Context, a *storageAdapter, _ int) error {
+			_, err := a.StatObject(ctx, "a.txt")
+			return err
+		}},
+		{desc: "ListObjects", op: func(ctx context.Context, a *storageAdapter, _ int) error {
+			_, err := a.ListObjects(ctx, "")
+			return err
+		}},
+		{desc: "ListDir", op: func(ctx context.Context, a *storageAdapter, _ int) error {
+			_, _, err := a.ListDir(ctx, "")
+			return err
+		}},
+		{desc: "CopyObject", op: func(ctx context.Context, a *storageAdapter, i int) error {
+			return a.CopyObject(ctx, "a.txt", fmt.Sprintf("copy%02d.txt", i))
+		}},
+		{desc: "DeleteObject", op: func(ctx context.Context, a *storageAdapter, i int) error {
+			return a.DeleteObject(ctx, fmt.Sprintf("del%02d.txt", i))
+		}},
+		{desc: "NewWriter", op: func(ctx context.Context, a *storageAdapter, i int) error {
+			w := a.NewWriter(ctx, fmt.Sprintf("w%02d.txt", i))
+			_, err := w.Write([]byte("data"))
+
+			return errors.Join(err, w.Close())
+		}},
+	}
+
+	const workers = 10
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, dir, cleanup := setupTestFTPServer(t)
+			defer cleanup()
+
+			createTestFile(t, dir, "a.txt", []byte("AAAA"))
+
+			for i := range workers {
+				createTestFile(t, dir, fmt.Sprintf("del%02d.txt", i), []byte("x"))
+			}
+
+			a := &storageAdapter{cfg: getTestConfig(server.Port)}
+			require.NoError(t, a.Connect(t.Context()))
+
+			opErrs := make([]error, workers)
+			statErrs := make([]error, workers)
+
+			finishWithin(t, 10*time.Second, func() {
+				var wg sync.WaitGroup
+
+				for i := range workers {
+					wg.Go(func() { opErrs[i] = tc.op(t.Context(), a, i) })
+					wg.Go(func() {
+						_, statErrs[i] = a.StatObject(t.Context(), "a.txt")
+					})
+				}
+
+				wg.Wait()
+			})
+
+			for i := range workers {
+				require.NoError(t, opErrs[i], "%s #%d", tc.desc, i)
+				require.NoError(t, statErrs[i], "StatObject #%d", i)
+			}
+		})
+	}
 }
