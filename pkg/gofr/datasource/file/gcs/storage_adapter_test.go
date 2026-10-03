@@ -483,7 +483,9 @@ func TestStorageAdapter_NewRangeReader_Success(t *testing.T) {
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, totalSize))
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(len(body)), 10))
 			w.WriteHeader(http.StatusPartialContent)
-			_, _ = w.Write(body)
+			// Fake GCS server: body is fixed bytes ("partial" + "x" padding) sent as application/octet-stream;
+			// only its length comes from the Range header, so there is no markup to inject.
+			_, _ = w.Write(body) //nolint:gosec // G705: test fake server writes fixed non-HTML bytes
 
 			return
 		}
@@ -797,7 +799,7 @@ func TestParseServiceAccountCredentials_InvalidJSON(t *testing.T) {
 }
 
 func TestParseServiceAccountCredentials_EmptyPrivateKey(t *testing.T) {
-	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":""}` //nolint:gosec // G101: test credentials
+	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":""}`
 
 	_, _, err := parseServiceAccountCredentials(credJSON)
 
@@ -805,7 +807,7 @@ func TestParseServiceAccountCredentials_EmptyPrivateKey(t *testing.T) {
 }
 
 func TestParseServiceAccountCredentials_InvalidPEM(t *testing.T) {
-	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":"not-a-pem-block"}` //nolint:gosec // G101: test data
+	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":"not-a-pem-block"}`
 
 	_, _, err := parseServiceAccountCredentials(credJSON)
 

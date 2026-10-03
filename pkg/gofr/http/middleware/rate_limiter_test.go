@@ -66,14 +66,14 @@ func TestRateLimiter_GlobalLimit(t *testing.T) {
 
 	// First 2 requests should succeed (burst)
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code, "Request %d should succeed", i+1)
 	}
 
 	// 3rd request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Request should be rate limited")
@@ -96,7 +96,7 @@ func TestRateLimiter_PerIPLimit(t *testing.T) {
 
 	// IP1: First 2 requests should succeed
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -104,14 +104,14 @@ func TestRateLimiter_PerIPLimit(t *testing.T) {
 	}
 
 	// IP1: 3rd request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
 
 	// IP2: Should still be able to make requests (different limiter)
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.2:54321"
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -135,7 +135,7 @@ func TestRateLimiter_SkipHealthEndpoints(t *testing.T) {
 
 	for _, path := range healthPaths {
 		for i := 0; i < 5; i++ {
-			req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code, "Health endpoint %s should not be rate limited", path)
@@ -203,7 +203,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 			req.RemoteAddr = "192.168.1.1:12345"
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
@@ -248,14 +248,14 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 
 	// Use up burst
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 	}
 
 	// Next request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
@@ -264,14 +264,14 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 	time.Sleep(220 * time.Millisecond)
 
 	// Should succeed now
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestGetIP_XForwardedFor(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Forwarded-For", "203.0.113.1, 198.51.100.1")
 	req.RemoteAddr = "192.168.1.1:12345"
 
@@ -284,7 +284,7 @@ func TestGetIP_XForwardedFor(t *testing.T) {
 }
 
 func TestGetIP_XRealIP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Real-IP", "203.0.113.5")
 	req.RemoteAddr = "192.168.1.1:12345"
 
@@ -297,7 +297,7 @@ func TestGetIP_XRealIP(t *testing.T) {
 }
 
 func TestGetIP_RemoteAddr(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.1:12345"
 
 	ip := getIP(req, false)
@@ -305,7 +305,7 @@ func TestGetIP_RemoteAddr(t *testing.T) {
 }
 
 func TestGetIP_Priority(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 	req.Header.Set("X-Real-IP", "203.0.113.2")
 	req.RemoteAddr = "192.168.1.1:12345"
@@ -327,13 +327,13 @@ func TestRateLimiter_RetryAfterHeader(t *testing.T) {
 	}))
 
 	// First request should succeed
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	// Second request should be rate limited and include Retry-After header
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
@@ -493,7 +493,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 
 	// Send 2 requests from same X-Forwarded-For IP
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"               // Proxy IP
 		req.Header.Set("X-Forwarded-For", "203.0.113.1") // Client IP
 
@@ -503,7 +503,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 	}
 
 	// 3rd request from same X-Forwarded-For IP should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 
@@ -512,7 +512,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on X-Forwarded-For IP")
 
 	// Different X-Forwarded-For IP should have separate limit
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"               // Same proxy
 	req.Header.Set("X-Forwarded-For", "203.0.113.2") // Different client IP
 
@@ -536,7 +536,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 
 	// Send 2 requests with same RemoteAddr but different X-Forwarded-For
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1)) // Different spoofed IPs
 
@@ -545,7 +545,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	}
 	// 3rd request should be rate limited based on RemoteAddr, ignoring X-Forwarded-For
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Different spoofed IP
 
@@ -556,7 +556,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 
 // TestGetIP_EmptyFallback tests that empty IP should fallback to "unknown".
 func TestGetIP_EmptyFallback(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	// Set RemoteAddr to empty (malformed)
 	req.RemoteAddr = ""
 
@@ -583,7 +583,7 @@ func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 
 	// Send requests with empty RemoteAddr - should be grouped under "unknown"
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = ""
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -591,7 +591,7 @@ func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 	}
 
 	// 3rd request with empty RemoteAddr should be rate limited under "unknown" key
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = ""
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)

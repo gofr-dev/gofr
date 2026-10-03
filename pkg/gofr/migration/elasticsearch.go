@@ -22,6 +22,11 @@ type elasticsearchMigrator struct {
 const (
 	// elasticsearchMigrationIndex is the index used to track migrations.
 	elasticsearchMigrationIndex = "gofr_migrations"
+
+	// elasticsearchSourceField is the key of a hit's stored document.
+	elasticsearchSourceField = "_source"
+	// elasticsearchMappingType is the key naming a field's type in an index mapping.
+	elasticsearchMappingType = "type"
 )
 
 // getLastElasticsearchMigrationQuery fetches the most recent migration version.
@@ -29,9 +34,9 @@ func getLastElasticsearchMigrationQuery() map[string]any {
 	return map[string]any{
 		"size": 1,
 		"sort": []map[string]any{
-			{"version": map[string]any{"order": "desc"}},
+			{migrationFieldVersion: map[string]any{"order": "desc"}},
 		},
-		"_source": []string{"version"},
+		elasticsearchSourceField: []string{migrationFieldVersion},
 	}
 }
 
@@ -64,17 +69,17 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 			},
 			"mappings": map[string]any{
 				"properties": map[string]any{
-					"version": map[string]any{
-						"type": "long",
+					migrationFieldVersion: map[string]any{
+						elasticsearchMappingType: "long",
 					},
-					"method": map[string]any{
-						"type": "keyword",
+					migrationFieldMethod: map[string]any{
+						elasticsearchMappingType: "keyword",
 					},
-					"start_time": map[string]any{
-						"type": "date",
+					migrationFieldStartTime: map[string]any{
+						elasticsearchMappingType: "date",
 					},
-					"duration": map[string]any{
-						"type": "long",
+					migrationFieldDuration: map[string]any{
+						elasticsearchMappingType: "long",
 					},
 				},
 			},
@@ -128,12 +133,12 @@ func extractLastMigrationVersion(result map[string]any) int64 {
 		return 0
 	}
 
-	source, ok := firstHit["_source"].(map[string]any)
+	source, ok := firstHit[elasticsearchSourceField].(map[string]any)
 	if !ok {
 		return 0
 	}
 
-	version, ok := source["version"].(float64)
+	version, ok := source[migrationFieldVersion].(float64)
 	if !ok {
 		return 0
 	}
@@ -147,13 +152,13 @@ func (em elasticsearchMigrator) beginTransaction(c *container.Container) transac
 }
 
 // commitMigration records the migration in the tracking index.
-func (em elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (em elasticsearchMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsElasticsearch] {
 		migrationDoc := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime.Format(time.RFC3339),
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime.Format(time.RFC3339),
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		// Use the migration number as the document ID for idempotency
@@ -171,7 +176,7 @@ func (em elasticsearchMigrator) commitMigration(c *container.Container, data tra
 }
 
 // rollback is a no-op for Elasticsearch migrations.
-func (em elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
+func (em elasticsearchMigrator) rollback(c *container.Container, data *transactionData) {
 	em.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }

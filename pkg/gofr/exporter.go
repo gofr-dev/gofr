@@ -19,6 +19,9 @@ import (
 // errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
 var errUnexpectedStatusCode = errors.New("unexpected response status code")
 
+// emptyAttributeValue is the value exported for an attribute that carries no data.
+const emptyAttributeValue = "invalid"
+
 // Exporter is responsible for exporting spans to a remote endpoint.
 type Exporter struct {
 	endpoint string         // The endpoint to which spans will be exported.
@@ -73,7 +76,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 		return fmt.Errorf("failed to create HTTP request, error: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentTypeJSON)
 
 	client := &http.Client{}
 
@@ -140,18 +143,10 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 
 func attributeToStringPair(kv attribute.KeyValue) (key, value string) {
 	switch kv.Value.Type() {
-	// For slice attributes, serialize as JSON list string.
-	case attribute.BOOLSLICE:
-		data, _ := json.Marshal(kv.Value.AsBoolSlice())
-		return string(kv.Key), string(data)
-	case attribute.INT64SLICE:
-		data, _ := json.Marshal(kv.Value.AsInt64Slice())
-		return string(kv.Key), string(data)
-	case attribute.FLOAT64SLICE:
-		data, _ := json.Marshal(kv.Value.AsFloat64Slice())
-		return string(kv.Key), string(data)
-	case attribute.STRINGSLICE:
-		data, _ := json.Marshal(kv.Value.AsStringSlice())
+	// For slice attributes, serialize as JSON list string. AsInterface returns the
+	// typed slice ([]bool, []int64, []float64 or []string) for these four types.
+	case attribute.BOOLSLICE, attribute.INT64SLICE, attribute.FLOAT64SLICE, attribute.STRINGSLICE:
+		data, _ := json.Marshal(kv.Value.AsInterface())
 		return string(kv.Key), string(data)
 	case attribute.BOOL:
 		return string(kv.Key), strconv.FormatBool(kv.Value.AsBool())
@@ -161,8 +156,11 @@ func attributeToStringPair(kv attribute.KeyValue) (key, value string) {
 		return string(kv.Key), strconv.FormatFloat(kv.Value.AsFloat64(), 'f', -1, 64)
 	case attribute.STRING:
 		return string(kv.Key), kv.Value.AsString()
+	case attribute.BYTESLICE, attribute.SLICE, attribute.MAP:
+		// No JSON form of our own; use the value's own string encoding.
+		return string(kv.Key), kv.Value.String()
 	case attribute.EMPTY:
-		return string(kv.Key), "invalid"
+		return string(kv.Key), emptyAttributeValue
 	default:
 		return string(kv.Key), kv.Value.String()
 	}
