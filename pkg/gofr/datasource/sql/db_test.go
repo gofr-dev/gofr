@@ -312,7 +312,7 @@ func TestDB_SelectSkipsUnexportedAndIgnoredFields(t *testing.T) {
 	setupMetrics(t, db, gomock.Any())
 
 	type user struct {
-		id     int
+		id     int //nolint:unused // unexported on purpose: matches the "id" column but must be skipped
 		Name   string
 		Secret string `db:"-"`
 	}
