@@ -45,6 +45,14 @@ var (
 // extractionFailuresMetric counts requests whose role or permissions could not be read.
 const extractionFailuresMetric = "rbac_role_extraction_failures"
 
+// Modes reported in the startup line, naming where authorization reads from.
+const (
+	modePermissions = "permissions"
+	modeRoles       = "roles"
+	modeHeader      = "header"
+	modeNone        = "none"
+)
+
 // RoleDefinition defines a role with its permissions and inheritance.
 // Pure config-based: only role->permission mapping is supported.
 type RoleDefinition struct {
@@ -211,13 +219,13 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 func (c *Config) mode() (mode, source string) {
 	switch {
 	case c.PermissionsClaimPath != "":
-		return "permissions", c.PermissionsClaimPath
+		return modePermissions, c.PermissionsClaimPath
 	case c.JWTClaimPath != "":
-		return "roles", c.JWTClaimPath
+		return modeRoles, c.JWTClaimPath
 	case c.RoleHeader != "":
-		return "header", c.RoleHeader
+		return modeHeader, c.RoleHeader
 	default:
-		return "none", ""
+		return modeNone, ""
 	}
 }
 
