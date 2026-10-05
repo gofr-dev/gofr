@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -278,7 +279,12 @@ func (a *App) catchAll() http.Handler {
 
 		// OPTIONS is listed because the CORS middleware answers it for every path before any route
 		// handler runs, so the resource does support it; RFC 9110 §10.2.1 has Allow list exactly that.
-		w.Header().Set("Allow", strings.Join(append(methods, http.MethodOptions), ", "))
+		// A route registered for OPTIONS on the router itself has already put it in the list.
+		if !slices.Contains(methods, http.MethodOptions) {
+			methods = append(methods, http.MethodOptions)
+		}
+
+		w.Header().Set("Allow", strings.Join(methods, ", "))
 		methodNotAllowed.ServeHTTP(w, r)
 	})
 }

@@ -551,6 +551,11 @@ func (rou *Router) UseMiddleware(mws ...Middleware) {
 // served directory itself may still be reached through a symlink (current -> releases/42); only
 // links below it are resolved by the root.
 //
+// A root opens the served directory, and each directory on the way to a file, for reading, where
+// os.Open on the joined path only had to search them. A directory the process can traverse but not
+// list (mode 0711 owned by someone else) therefore no longer serves the files beneath it: the
+// request answers 403, and a served directory in that state is not registered at all.
+//
 // The root is opened per request, not once at registration. An os.Root holds the directory it was
 // opened on, so a root held for the life of the app would keep serving the old release after
 // current -> releases/42 is repointed at releases/43, and a directory replaced in place would never

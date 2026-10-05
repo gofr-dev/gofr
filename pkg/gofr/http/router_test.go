@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -861,8 +862,13 @@ func Test_isRestrictedFile(t *testing.T) {
 
 // Test_StaticFileServing_LexicalEscape drives the handler directly, below the router's path.Clean,
 // so a ".." reaches it unmodified. The sibling directory shares the served directory's prefix,
-// which is the case the old string comparison needed its trailing separator for. The root refuses
-// both, and they answer as a missing file would.
+// which is the case the old string comparison needed its trailing separator for.
+//
+// What answers these is rootRelativeName, not the root: it cleans the path against "/" before the
+// root sees it, so each ".." is spent inside the served directory and the request names a file
+// that is not there. The root's own refusal of a path that leaves it is what
+// Test_StaticFileServing_Symlinks covers, and the errEscapes check below is what keeps that
+// refusal a 404.
 func Test_StaticFileServing_LexicalEscape(t *testing.T) {
 	baseDir := t.TempDir()
 	publicDir := filepath.Join(baseDir, "public")
@@ -1247,4 +1253,33 @@ func Benchmark_Router_AllowedMethods_Miss(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = r.AllowedMethods(req)
 	}
+}
+
+// Test_StaticFileServing_UnlistableDirectory pins what containment costs. A root opens every
+// directory on the way to a file for reading, so one the process can traverse but not list answers
+// 403 for the files beneath it, where a plain open of the joined path would have served them.
+func Test_StaticFileServing_UnlistableDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("directory mode bits do not restrict this process")
+	}
+
+	publicDir := t.TempDir()
+	lockedDir := filepath.Join(publicDir, "locked")
+
+	require.NoError(t, os.MkdirAll(lockedDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lockedDir, "file.txt"), []byte("content"), 0o600))
+	require.NoError(t, os.Chmod(lockedDir, 0o311))
+
+	t.Cleanup(func() { _ = os.Chmod(lockedDir, 0o755) })
+
+	r := NewRouter()
+	r.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", publicDir)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/locked/file.txt", http.NoBody)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.NotContains(t, w.Body.String(), "content")
 }

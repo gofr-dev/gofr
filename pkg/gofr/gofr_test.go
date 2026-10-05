@@ -2208,6 +2208,27 @@ func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
 	}
 }
 
+// Test_HTTPMethodNotAllowed_OptionsListedOnce covers a path that lists OPTIONS itself. App has no
+// OPTIONS verb, so registering on the router is the one way that happens, and the catch-all must
+// not add a second one.
+func Test_HTTPMethodNotAllowed_OptionsListedOnce(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+	app.GET("/preflighted", func(*Context) (any, error) { return "ok", nil })
+	app.httpServer.router.Add(http.MethodOptions, "/preflighted", http.NotFoundHandler())
+
+	app.httpServerSetup()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/preflighted", http.NoBody)
+	w := httptest.NewRecorder()
+
+	app.httpServer.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	assert.Equal(t, "GET, OPTIONS", w.Header().Get("Allow"))
+}
+
 // Test_HTTPMethodNotAllowed_And_NotFound covers #3853 through the app's real router, middleware
 // chain included. A wrong method on a registered path is a 405 naming the methods the path takes;
 // an unregistered path stays a 404.
@@ -2237,7 +2258,7 @@ func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
 			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
-			"GET on multi-method route returns 405 with sorted Allow header", http.MethodGet, "/multi",
+			"GET on multi-method route returns 405 with the methods sorted and OPTIONS last", http.MethodGet, "/multi",
 			http.StatusMethodNotAllowed, "POST, PUT, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
