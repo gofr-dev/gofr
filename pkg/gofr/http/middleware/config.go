@@ -95,11 +95,9 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 	return middlewareConfigs
 }
 
-// corsHeaderValue returns the value to send as the response header for the given
-// CORS configuration key, and whether to send it at all. A browser discards a
-// malformed CORS header, so a value it cannot read is dropped and reported rather
-// than sent — left in place it is invisible in the logs and looks present in the
-// response. Keys without a defined value syntax are emitted unchanged.
+// corsHeaderValue returns the header value to send for a CORS configuration key, and
+// whether to send it. A value a browser cannot read is dropped and reported; keys
+// without a defined value syntax pass through unchanged.
 func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
 	var expected string
 
@@ -109,7 +107,7 @@ func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
 			return maxAge, true
 		}
 
-		expected = "a non-negative number of seconds"
+		expected = "a whole number of seconds"
 	case keyAccessControlAllowCredentials:
 		// The Fetch standard matches this header against the literal "true", so the other
 		// spellings strconv.ParseBool accepts (1, t, TRUE) are discarded by the browser.
@@ -135,12 +133,10 @@ func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
 	return "", false
 }
 
-// canonicalMaxAge rewrites an integer Access-Control-Max-Age value to the canonical
-// decimal form the Fetch standard defines. A negative value becomes 0, which browsers
-// already treat identically: do not cache the preflight. "0600" and "+600" become 600;
-// browsers disagree on "+600" (Firefox reads it as 0), so this sends the duration that
-// was configured. Dropping any of them would fall back to the browser's default instead.
-// A value that is not an integer at all is not rewritten, and reports false.
+// canonicalMaxAge rewrites an integer Access-Control-Max-Age to the canonical decimal
+// form the Fetch standard defines: a negative value becomes 0, which also disables
+// preflight caching, and "0600" or "+600" become 600. It reports false for a value
+// that is not an integer.
 func canonicalMaxAge(val string, logger configLogger) (string, bool) {
 	seconds, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {

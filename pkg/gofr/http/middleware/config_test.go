@@ -67,9 +67,8 @@ func TestGetConfigs_ValidCORSValueIsKept(t *testing.T) {
 	}
 }
 
-// Browsers read these max-age spellings as a definite duration, so dropping them would
-// replace the configured behavior with the 5 second default. They are rewritten to the
-// canonical form, which every browser reads the same way, and the rewrite is reported.
+// An integer max-age in a non-canonical spelling is rewritten rather than dropped, so
+// the configured duration survives, and the rewrite is reported.
 func TestGetConfigs_NonCanonicalMaxAgeIsNormalized(t *testing.T) {
 	tests := []struct {
 		name     string
