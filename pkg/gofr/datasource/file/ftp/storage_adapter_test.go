@@ -1,14 +1,17 @@
 package ftp
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/textproto"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -22,11 +25,12 @@ import (
 )
 
 var (
-	errTest550      = errors.New("550 file not found")
-	errTest551      = errors.New("551 File not available")
-	errTestNotFound = errors.New("requested file not found")
+	errTest550      = &textproto.Error{Code: ftp.StatusFileUnavailable, Msg: "file not found"}
+	errTest551      = &textproto.Error{Code: ftp.StatusPageTypeUnknown, Msg: "File not available"}
+	errTestNotFound = &textproto.Error{Code: ftp.StatusFileActionIgnored, Msg: "requested file not found"}
 	errTestTimeout  = errors.New("connection timeout")
 	errTestGeneric  = errors.New("test error")
+	errTestDial550  = errors.New(`failed to dial FTP server "127.0.0.1:5501": connection refused`)
 )
 
 // Test helpers
@@ -42,10 +46,14 @@ func setupTestFTPServer(t *testing.T) (server *ftpserver.Server, tmpDir string, 
 	}
 
 	opts := &ftpserver.ServerOpts{
-		Factory:      factory,
-		Port:         0,
-		Hostname:     "127.0.0.1",
-		PassivePorts: "30000-39999",
+		Factory:  factory,
+		Port:     0,
+		Hostname: "127.0.0.1",
+		// Empty, so the OS picks a free port for each data connection. A fixed range can collide
+		// with a port another process holds on 127.0.0.1 (an ssh or kubectl forward). goftp binds
+		// the passive listener on the wildcard address, which macOS allows next to such a
+		// listener, so the client's data dial reaches the other process and RETR never gets data.
+		PassivePorts: "",
 		Auth:         &ftpserver.SimpleAuth{Name: "test", Password: "test"},
 	}
 
@@ -305,7 +313,8 @@ func TestFTPWriter_Write_Success(t *testing.T) {
 }
 
 func TestFTPWriter_Write_AfterClose(t *testing.T) {
-	writer := &ftpWriter{buffer: &bytes.Buffer{}, closed: true}
+	writer := &ftpWriter{buffer: &bytes.Buffer{}}
+	writer.closed.Store(true)
 
 	n, err := writer.Write([]byte("test"))
 
@@ -314,7 +323,8 @@ func TestFTPWriter_Write_AfterClose(t *testing.T) {
 }
 
 func TestFTPWriter_Close_AlreadyClosed(t *testing.T) {
-	writer := &ftpWriter{buffer: &bytes.Buffer{}, closed: true}
+	writer := &ftpWriter{buffer: &bytes.Buffer{}}
+	writer.closed.Store(true)
 
 	err := writer.Close()
 
@@ -812,8 +822,28 @@ func TestIsFTPNotFoundError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "wrapped_550_reply",
+			err:      fmt.Errorf("retr: %w", errTest550),
+			expected: true,
+		},
+		{
 			name:     "other_error",
 			err:      errTestTimeout,
+			expected: false,
+		},
+		{
+			name:     "550_in_text_but_not_a_reply",
+			err:      errTestDial550,
+			expected: false,
+		},
+		{
+			name:     "network_error_with_550_in_local_port",
+			err:      &net.OpError{Op: "write", Net: "tcp", Err: net.ErrClosed, Addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 55088}},
+			expected: false,
+		},
+		{
+			name:     "login_rejected_reply",
+			err:      &textproto.Error{Code: ftp.StatusNotLoggedIn, Msg: "Login incorrect."},
 			expected: false,
 		},
 		{
@@ -1262,17 +1292,161 @@ func TestStorageAdapter_ReaderDialFails(t *testing.T) {
 	}
 }
 
-// finishWithin fails the test if fn does not return within d. A desynced FTP connection
-// blocks forever, so tests of overlapping operations must not rely on the go test timeout.
-func finishWithin(t *testing.T, d time.Duration, fn func()) {
+// startFakeFTPServer serves FTP control connections that greet the client and answer each
+// command with the reply listed for its verb (502 otherwise), so a test can make a login or a
+// RETR fail with a reply of its choosing.
+func startFakeFTPServer(t *testing.T, replies map[string]string) int {
 	t.Helper()
 
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+
+			go serveFakeFTP(conn, replies)
+		}
+	}()
+
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+
+	return addr.Port
+}
+
+func serveFakeFTP(conn net.Conn, replies map[string]string) {
+	defer conn.Close()
+
+	_, _ = io.WriteString(conn, "220 ready\r\n")
+
+	lines := bufio.NewScanner(conn)
+	for lines.Scan() {
+		verb, _, _ := strings.Cut(lines.Text(), " ")
+		if verb == "QUIT" {
+			_, _ = io.WriteString(conn, "221 bye\r\n")
+
+			return
+		}
+
+		reply, ok := replies[verb]
+		if !ok {
+			reply = "502 not implemented"
+		}
+
+		_, _ = io.WriteString(conn, reply+"\r\n")
+	}
+}
+
+// A reader's own connection failing to log in says nothing about the object, so it must be
+// reported as a reader failure, never as errObjectNotFound, whatever the user name or the
+// server's reply text contains. The same holds for a RETR that fails for another reason.
+func TestStorageAdapter_ReaderFailureIsNotObjectNotFound(t *testing.T) {
+	server, tmpDir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, tmpDir, "file.txt", []byte("data"))
+
+	failures := []struct {
+		desc      string
+		configure func(t *testing.T, cfg *Config)
+		expMsg    string
+	}{
+		{desc: "user name contains 550", configure: func(_ *testing.T, cfg *Config) {
+			cfg.User = "user550"
+			cfg.Password = "wrong"
+		}, expMsg: `FTP login failed for user "user550"`},
+		{desc: "login rejected with a not-found reply", configure: func(t *testing.T, cfg *Config) {
+			t.Helper()
+
+			cfg.Port = startFakeFTPServer(t, map[string]string{"USER": "331 password required", "PASS": "530 User not found"})
+		}, expMsg: "User not found"},
+		{desc: "RETR fails for another reason", configure: func(t *testing.T, cfg *Config) {
+			t.Helper()
+
+			cfg.Port = startFakeFTPServer(t, map[string]string{
+				"USER": "331 password required", "PASS": "230 logged in", "TYPE": "200 ok",
+				"EPSV": "425 Can't open data connection", "PASV": "425 Can't open data connection",
+			})
+		}, expMsg: "Can't open data connection"},
+	}
+
+	readers := []struct {
+		desc string
+		open func(ctx context.Context, s *storageAdapter) error
+	}{
+		{desc: "NewReader", open: func(ctx context.Context, s *storageAdapter) error {
+			_, err := s.NewReader(ctx, "file.txt")
+			return err
+		}},
+		{desc: "NewRangeReader", open: func(ctx context.Context, s *storageAdapter) error {
+			_, err := s.NewRangeReader(ctx, "file.txt", 1, 2)
+			return err
+		}},
+	}
+
+	for _, f := range failures {
+		for _, r := range readers {
+			t.Run(f.desc+"/"+r.desc, func(t *testing.T) {
+				adapter := &storageAdapter{cfg: getTestConfig(server.Port)}
+				require.NoError(t, adapter.Connect(t.Context()))
+
+				// Only the reader's dedicated connection sees the changed config.
+				f.configure(t, adapter.cfg)
+
+				err := r.open(t.Context(), adapter)
+
+				require.ErrorIs(t, err, errFailedToCreateReader)
+				require.NotErrorIs(t, err, errObjectNotFound)
+				require.ErrorContains(t, err, f.expMsg)
+			})
+		}
+	}
+}
+
+// goroutineT collects the assertions made on finishWithin's helper goroutine. testing only allows
+// FailNow on the test goroutine, so FailNow here ends just the helper goroutine and finishWithin
+// reports the collected failures on the test goroutine.
+type goroutineT struct {
+	mu   sync.Mutex
+	errs []string
+}
+
+func (g *goroutineT) Errorf(format string, args ...any) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.errs = append(g.errs, fmt.Sprintf(format, args...))
+}
+
+func (*goroutineT) FailNow() { runtime.Goexit() }
+
+// failureReporter is the part of *testing.T that finishWithin reports through.
+type failureReporter interface {
+	Helper()
+	Error(args ...any)
+	Fatalf(format string, args ...any)
+}
+
+// finishWithin fails the test if fn does not return within d. A desynced FTP connection
+// blocks forever, so tests of overlapping operations must not rely on the go test timeout.
+// fn runs on its own goroutine, so it asserts through the require.TestingT it is given and
+// never through the test's *testing.T.
+func finishWithin(t failureReporter, d time.Duration, fn func(gt require.TestingT)) {
+	t.Helper()
+
+	gt := &goroutineT{}
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
 
-		fn()
+		fn(gt)
 	}()
 
 	select {
@@ -1280,74 +1454,106 @@ func finishWithin(t *testing.T, d time.Duration, fn func()) {
 	case <-time.After(d):
 		t.Fatalf("operation did not finish within %v", d)
 	}
+
+	gt.mu.Lock()
+	defer gt.mu.Unlock()
+
+	for _, msg := range gt.errs {
+		t.Error(msg)
+	}
+}
+
+// recordingReporter records what finishWithin reports, so its own behavior can be tested.
+type recordingReporter struct {
+	errs   []string
+	fatals []string
+}
+
+func (*recordingReporter) Helper() {}
+
+func (r *recordingReporter) Error(args ...any) { r.errs = append(r.errs, fmt.Sprint(args...)) }
+
+func (r *recordingReporter) Fatalf(format string, args ...any) {
+	r.fatals = append(r.fatals, fmt.Sprintf(format, args...))
+}
+
+func TestFinishWithin(t *testing.T) {
+	t.Run("reports failures from the helper goroutine", func(t *testing.T) {
+		rec := &recordingReporter{}
+
+		finishWithin(rec, time.Second, func(gt require.TestingT) {
+			assert.Fail(gt, "first failure")
+			require.Fail(gt, "second failure")
+			assert.Fail(gt, "never reached: require stops the helper goroutine")
+		})
+
+		require.Len(t, rec.errs, 2)
+		assert.Contains(t, rec.errs[0], "first failure")
+		assert.Contains(t, rec.errs[1], "second failure")
+		assert.Empty(t, rec.fatals)
+	})
+
+	t.Run("fails when fn does not return in time", func(t *testing.T) {
+		rec := &recordingReporter{}
+		release := make(chan struct{})
+
+		finishWithin(rec, 50*time.Millisecond, func(require.TestingT) { <-release })
+		close(release)
+
+		assert.Equal(t, []string{"operation did not finish within 50ms"}, rec.fatals)
+	})
 }
 
 func TestStorageAdapter_OperationsWhileReaderOpen(t *testing.T) {
 	tests := []struct {
 		desc  string
-		check func(t *testing.T, a *storageAdapter)
+		check func(ctx context.Context, gt require.TestingT, a *storageAdapter)
 	}{
-		{desc: "StatObject", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			info, err := a.StatObject(t.Context(), "b.txt")
-			require.NoError(t, err)
-			assert.Equal(t, int64(8), info.Size)
+		{desc: "StatObject", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			info, err := a.StatObject(ctx, "b.txt")
+			require.NoError(gt, err)
+			assert.Equal(gt, int64(8), info.Size)
 		}},
-		{desc: "ListObjects", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			objects, err := a.ListObjects(t.Context(), "")
-			require.NoError(t, err)
-			assert.ElementsMatch(t, []string{"a.txt", "b.txt"}, objects)
+		{desc: "ListObjects", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			objects, err := a.ListObjects(ctx, "")
+			require.NoError(gt, err)
+			assert.ElementsMatch(gt, []string{"a.txt", "b.txt"}, objects)
 		}},
-		{desc: "ListDir", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			objects, _, err := a.ListDir(t.Context(), "")
-			require.NoError(t, err)
-			assert.Len(t, objects, 2)
+		{desc: "ListDir", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			objects, _, err := a.ListDir(ctx, "")
+			require.NoError(gt, err)
+			assert.Len(gt, objects, 2)
 		}},
-		{desc: "NewReader", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			r, err := a.NewReader(t.Context(), "b.txt")
-			require.NoError(t, err)
+		{desc: "NewReader", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			r, err := a.NewReader(ctx, "b.txt")
+			require.NoError(gt, err)
 
 			data, err := io.ReadAll(r)
-			require.NoError(t, err)
-			require.NoError(t, r.Close())
-			assert.Equal(t, "BBBBBBBB", string(data))
+			require.NoError(gt, err)
+			require.NoError(gt, r.Close())
+			assert.Equal(gt, "BBBBBBBB", string(data))
 		}},
-		{desc: "NewRangeReader", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			r, err := a.NewRangeReader(t.Context(), "b.txt", 2, 3)
-			require.NoError(t, err)
+		{desc: "NewRangeReader", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			r, err := a.NewRangeReader(ctx, "b.txt", 2, 3)
+			require.NoError(gt, err)
 
 			data, err := io.ReadAll(r)
-			require.NoError(t, err)
-			assert.Equal(t, "BBB", string(data))
+			require.NoError(gt, err)
+			assert.Equal(gt, "BBB", string(data))
 
 			_ = r.Close()
 		}},
-		{desc: "CopyObject", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			require.NoError(t, a.CopyObject(t.Context(), "b.txt", "c.txt"))
+		{desc: "CopyObject", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			require.NoError(gt, a.CopyObject(ctx, "b.txt", "c.txt"))
 		}},
-		{desc: "DeleteObject", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			require.NoError(t, a.DeleteObject(t.Context(), "b.txt"))
+		{desc: "DeleteObject", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			require.NoError(gt, a.DeleteObject(ctx, "b.txt"))
 		}},
-		{desc: "NewWriter", check: func(t *testing.T, a *storageAdapter) {
-			t.Helper()
-
-			w := a.NewWriter(t.Context(), "d.txt")
+		{desc: "NewWriter", check: func(ctx context.Context, gt require.TestingT, a *storageAdapter) {
+			w := a.NewWriter(ctx, "d.txt")
 			_, err := w.Write([]byte("DD"))
-			require.NoError(t, err)
-			require.NoError(t, w.Close())
+			require.NoError(gt, err)
+			require.NoError(gt, w.Close())
 		}},
 	}
 
@@ -1362,19 +1568,22 @@ func TestStorageAdapter_OperationsWhileReaderOpen(t *testing.T) {
 			a := &storageAdapter{cfg: getTestConfig(server.Port)}
 			require.NoError(t, a.Connect(t.Context()))
 
-			finishWithin(t, 5*time.Second, func() {
+			finishWithin(t, 5*time.Second, func(gt require.TestingT) {
 				reader, err := a.NewReader(t.Context(), "a.txt")
-				require.NoError(t, err)
+				require.NoError(gt, err)
 
-				tc.check(t, a)
+				// A failed check ends this goroutine early; the reader must still be closed.
+				defer func() { _ = reader.Close() }()
+
+				tc.check(t.Context(), gt, a)
 
 				data, err := io.ReadAll(reader)
-				require.NoError(t, err)
-				require.NoError(t, reader.Close())
-				assert.Equal(t, "AAAA", string(data))
+				require.NoError(gt, err)
+				require.NoError(gt, reader.Close())
+				assert.Equal(gt, "AAAA", string(data))
 
 				_, err = a.StatObject(t.Context(), "a.txt")
-				require.NoError(t, err, "shared connection must still work")
+				require.NoError(gt, err, "shared connection must still work")
 			})
 		})
 	}
@@ -1389,15 +1598,15 @@ func TestStorageAdapter_UnclosedReaderDoesNotBlock(t *testing.T) {
 	a := &storageAdapter{cfg: getTestConfig(server.Port)}
 	require.NoError(t, a.Connect(t.Context()))
 
-	finishWithin(t, 5*time.Second, func() {
+	finishWithin(t, 5*time.Second, func(gt require.TestingT) {
 		leaked, err := a.NewReader(t.Context(), "a.txt")
-		require.NoError(t, err)
+		require.NoError(gt, err)
 
 		t.Cleanup(func() { _ = leaked.Close() })
 
 		for range 5 {
 			_, err := a.StatObject(t.Context(), "a.txt")
-			require.NoError(t, err)
+			require.NoError(gt, err)
 		}
 	})
 }
@@ -1477,7 +1686,7 @@ func TestStorageAdapter_ConcurrentSharedConnOperations(t *testing.T) {
 			opErrs := make([]error, workers)
 			statErrs := make([]error, workers)
 
-			finishWithin(t, 10*time.Second, func() {
+			finishWithin(t, 10*time.Second, func(require.TestingT) {
 				var wg sync.WaitGroup
 
 				for i := range workers {

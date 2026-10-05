@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/textproto"
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jlaffaye/ftp"
@@ -149,11 +151,11 @@ func (s *storageAdapter) NewReader(_ context.Context, name string) (io.ReadClose
 	}
 
 	reader, err := s.openReader(name, 0)
-	if err != nil {
-		if isFTPNotFoundError(err) {
-			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
-		}
+	if errors.Is(err, errObjectNotFound) {
+		return nil, err
+	}
 
+	if err != nil {
 		return nil, fmt.Errorf("%w for %q: %w", errFailedToCreateReader, name, err)
 	}
 
@@ -164,6 +166,10 @@ func (s *storageAdapter) NewReader(_ context.Context, name string) (io.ReadClose
 // can stay open until the caller closes the reader without blocking the shared connection.
 // The dedicated connection is closed together with the reader. The caller checks that the
 // adapter is connected first.
+//
+// Only a failed RETR is reported as errObjectNotFound. A failure to dial or log in on the
+// dedicated connection is returned as is: it says nothing about the object, and its text
+// (host, port, user) must never be mistaken for a "not found" reply.
 func (s *storageAdapter) openReader(name string, offset uint64) (*connReader, error) {
 	conn, err := s.dial()
 	if err != nil {
@@ -173,6 +179,10 @@ func (s *storageAdapter) openReader(name string, offset uint64) (*connReader, er
 	resp, err := conn.RetrFrom(s.buildPath(name), offset)
 	if err != nil {
 		_ = conn.Quit()
+
+		if isFTPNotFoundError(err) {
+			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
+		}
 
 		return nil, err
 	}
@@ -184,7 +194,7 @@ func (s *storageAdapter) openReader(name string, offset uint64) (*connReader, er
 type connReader struct {
 	resp   *ftp.Response
 	conn   *ftp.ServerConn
-	closed bool
+	closed atomic.Bool
 }
 
 func (r *connReader) Read(p []byte) (int, error) {
@@ -193,11 +203,9 @@ func (r *connReader) Read(p []byte) (int, error) {
 
 // Close ends the transfer and closes the connection. Later calls do nothing.
 func (r *connReader) Close() error {
-	if r.closed {
+	if !r.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-
-	r.closed = true
 
 	return errors.Join(r.resp.Close(), r.conn.Quit())
 }
@@ -217,11 +225,11 @@ func (s *storageAdapter) NewRangeReader(_ context.Context, name string, offset, 
 	}
 
 	reader, err := s.openReader(name, uint64(offset))
-	if err != nil {
-		if isFTPNotFoundError(err) {
-			return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
-		}
+	if errors.Is(err, errObjectNotFound) {
+		return nil, err
+	}
 
+	if err != nil {
 		return nil, fmt.Errorf("%w for %q at offset %d: %w", errFailedToCreateReader, name, offset, err)
 	}
 
@@ -269,11 +277,11 @@ type ftpWriter struct {
 	cmdMu      *sync.Mutex // the adapter's cmdMu, held while Close uploads on conn
 	objectPath string
 	buffer     *bytes.Buffer
-	closed     bool
+	closed     atomic.Bool
 }
 
 func (fw *ftpWriter) Write(p []byte) (int, error) {
-	if fw.closed {
+	if fw.closed.Load() {
 		return 0, errWriterAlreadyClosed
 	}
 
@@ -281,11 +289,9 @@ func (fw *ftpWriter) Write(p []byte) (int, error) {
 }
 
 func (fw *ftpWriter) Close() error {
-	if fw.closed {
+	if !fw.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-
-	fw.closed = true
 
 	fw.cmdMu.Lock()
 	defer fw.cmdMu.Unlock()
@@ -561,19 +567,20 @@ func (s *storageAdapter) buildPath(name string) string {
 	return path.Join(s.cfg.RemoteDir, name)
 }
 
-// isFTPNotFoundError checks if the error indicates a "not found" condition.
+// isFTPNotFoundError reports whether err is the server's reply that the object doesn't exist:
+// a 550 or 551 reply, or a reply whose text says so. Only server replies count. jlaffaye/ftp
+// returns them as *textproto.Error, so a local network or dial error never matches, whatever
+// address, port or user name appears in its text.
 func isFTPNotFoundError(err error) bool {
-	if err == nil {
+	var reply *textproto.Error
+	if !errors.As(err, &reply) {
 		return false
 	}
 
-	errStr := err.Error()
-
-	// Common FTP "not found" error patterns
-	return strings.Contains(errStr, "550") || // File not found
-		strings.Contains(errStr, "551") || // File not available
-		strings.Contains(errStr, "No such file") ||
-		strings.Contains(errStr, "not found")
+	return reply.Code == ftp.StatusFileUnavailable ||
+		reply.Code == ftp.StatusPageTypeUnknown ||
+		strings.Contains(reply.Msg, "No such file") ||
+		strings.Contains(reply.Msg, "not found")
 }
 
 // Content types returned by getContentType.

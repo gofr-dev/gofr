@@ -379,26 +379,26 @@ func TestFileSystem_OpenFileDoesNotBlockOtherOperations(t *testing.T) {
 	fs.Connect()
 	require.True(t, fs.IsConnected())
 
-	finishWithin(t, 5*time.Second, func() {
+	finishWithin(t, 5*time.Second, func(gt require.TestingT) {
 		f, err := fs.Open("a.txt")
-		require.NoError(t, err)
+		require.NoError(gt, err)
 
 		info, err := fs.Stat("b.txt")
-		require.NoError(t, err)
-		assert.Equal(t, int64(8), info.Size())
+		require.NoError(gt, err)
+		assert.Equal(gt, int64(8), info.Size())
 
 		buf := make([]byte, 3)
 		n, err := f.ReadAt(buf, 4)
-		require.NoError(t, err)
-		assert.Equal(t, "456", string(buf[:n]))
+		require.NoError(gt, err)
+		assert.Equal(gt, "456", string(buf[:n]))
 
 		data, err := io.ReadAll(f)
-		require.NoError(t, err)
-		assert.Equal(t, "0123456789", string(data))
-		require.NoError(t, f.Close())
+		require.NoError(gt, err)
+		assert.Equal(gt, "0123456789", string(data))
+		require.NoError(gt, f.Close())
 
 		_, err = fs.Stat("b.txt")
-		require.NoError(t, err)
+		require.NoError(gt, err)
 	})
 }
 
@@ -439,7 +439,7 @@ func TestFileSystem_ConcurrentOperations(t *testing.T) {
 
 	results := make([]result, workers)
 
-	finishWithin(t, 20*time.Second, func() {
+	finishWithin(t, 20*time.Second, func(require.TestingT) {
 		var wg sync.WaitGroup
 
 		for i := range workers {
