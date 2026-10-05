@@ -44,6 +44,9 @@ const (
 	defaultRetryDuration     = 5 * time.Second
 	defaultQueryTimeout      = 30 * time.Second
 	defaultQueryMaxMessages  = int32(10)
+
+	// backendName identifies SQS in health details and query logs.
+	backendName = "SQS"
 )
 
 // Client represents an SQS client that implements the pubsub.Client interface.
@@ -263,7 +266,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          c.cfg.Region,
-		PubSubBackend: "SQS",
+		PubSubBackend: backendName,
 		Time:          time.Since(start).Microseconds(),
 	})
 
@@ -355,7 +358,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		MessageValue:  string(msg.Value),
 		Topic:         topic,
 		Host:          c.cfg.Region,
-		PubSubBackend: "SQS",
+		PubSubBackend: backendName,
 		Time:          duration.Microseconds(),
 	})
 

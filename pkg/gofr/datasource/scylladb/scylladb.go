@@ -144,7 +144,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 	defer c.sendOperationStats(&QueryLog{Operation: "ExecCASWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		c.logger.Errorf("we did not get a pointer. data is not settable.")
 
 		return false, errDestinationIsNotPointer
@@ -177,19 +177,31 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 // QueryWithCtx takes context ,destination,statement,values and returns error.
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case
-func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) (err error) {
 	span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		c.logger.Debug("we did not get a pointer. data is not settable.")
 		return errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
 	iter := c.scylla.session.Query(stmt, values...).Iter()
+
+	// gocql only reports a failed query through Close, Scan/NumRows just look
+	// like an empty result set. Close on every path and keep the first error.
+	defer func() {
+		if closeErr := iter.Close(); closeErr != nil {
+			c.logger.Errorf("scylladb query failed: %v", closeErr)
+
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}()
 
 	switch rv.Kind() {
 	case reflect.Slice:
@@ -233,17 +245,32 @@ func (c *Client) NewBatch(name string, batchType int) error {
 
 // NewBatchWithCtx uses context ,batch name,and batch type, and returns error.
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
-	switch batchType {
-	case LoggedBatch, UnLoggedBatch, CounterBatch:
-		if len(c.scylla.batches) == 0 {
-			c.scylla.batches = make(map[string]batch)
-		}
-
-		c.scylla.batches[name] = c.scylla.session.newBatch(gocql.BatchType(batchType))
-
-		return nil
-	default:
+	gocqlBatchType, ok := toGocqlBatchType(batchType)
+	if !ok {
 		return errUnsupportedBatchType
+	}
+
+	if len(c.scylla.batches) == 0 {
+		c.scylla.batches = make(map[string]batch)
+	}
+
+	c.scylla.batches[name] = c.scylla.session.newBatch(gocqlBatchType)
+
+	return nil
+}
+
+// toGocqlBatchType maps one of the package's batch type constants to its gocql.BatchType,
+// reporting false for any other value.
+func toGocqlBatchType(batchType int) (gocql.BatchType, bool) {
+	switch batchType {
+	case LoggedBatch:
+		return gocql.LoggedBatch, true
+	case UnLoggedBatch:
+		return gocql.UnloggedBatch, true
+	case CounterBatch:
+		return gocql.CounterBatch, true
+	default:
+		return 0, false
 	}
 }
 

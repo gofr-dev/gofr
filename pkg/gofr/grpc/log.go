@@ -27,6 +27,11 @@ const (
 	clientStreamSuffix        = " [CLIENT-STREAM]"
 	serverStreamSuffix        = " [SERVER-STREAM]"
 	bidirectionalSuffix       = " [BI-DIRECTION_STREAM]"
+
+	// Stream types recorded in the log of a streaming RPC.
+	streamTypeBidirectional = "BIDIRECTIONAL"
+	streamTypeClient        = "CLIENT_STREAM"
+	streamTypeServer        = "SERVER_STREAM"
 )
 
 type Logger interface {
@@ -124,13 +129,13 @@ func getStreamTypeAndMethod(info *grpc.StreamServerInfo) (streamType, methodName
 
 	switch {
 	case info.IsClientStream && info.IsServerStream:
-		streamType = "BIDIRECTIONAL"
+		streamType = streamTypeBidirectional
 		methodName += bidirectionalSuffix
 	case info.IsClientStream:
-		streamType = "CLIENT_STREAM"
+		streamType = streamTypeClient
 		methodName += clientStreamSuffix
 	case info.IsServerStream:
-		streamType = "SERVER_STREAM"
+		streamType = streamTypeServer
 		methodName += serverStreamSuffix
 	}
 
