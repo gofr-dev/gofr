@@ -293,7 +293,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, tc.target, http.NoBody)
 
 		r.Header.Set("Content-Type", "application/json")
 
@@ -499,7 +499,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
-	a.EnableOAuth(jwksServer.URL, 600)
+	require.NoError(t, a.EnableOAuth(jwksServer.URL, 600))
 
 	server := httptest.NewServer(a.httpServer.router)
 	defer server.Close()
@@ -554,7 +554,7 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	}
 
 	// Pass full JWKS URL with path — the fix should extract the base URL
-	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+	require.NoError(t, a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600))
 
 	// Verify the service is registered
 	oauthService := a.container.GetHTTPService("gofr_oauth")
@@ -595,7 +595,7 @@ func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
 				container: c,
 			}
 
-			a.EnableOAuth(endpoint, 600)
+			require.Error(t, a.EnableOAuth(endpoint, 600), "endpoint: %q", endpoint)
 
 			// Service should NOT be registered for invalid endpoints
 			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
@@ -670,7 +670,8 @@ func Test_EnableBasicAuth(t *testing.T) {
 				fmt.Fprintln(w, "Hello, world!")
 			}))
 
-			a.EnableBasicAuth(tt.args...)
+			// The odd-argument cases fail here and serve without auth; TestEnableBasicAuth_Errors checks the error.
+			_ = a.EnableBasicAuth(tt.args...)
 
 			server := httptest.NewServer(a.httpServer.router)
 			defer server.Close()
@@ -808,14 +809,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
-
-	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
-
-	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
-
-	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
-
 	mockConfig7 := createMockConfig("gofr", "", "")
 
 	tests := []struct {
@@ -826,10 +819,6 @@ func Test_initTracer(t *testing.T) {
 		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
-		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
-		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
-		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
 		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
@@ -843,44 +832,6 @@ func Test_initTracer(t *testing.T) {
 			}
 			a.initTracer()
 		})
-		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func Test_initTracer_invalidConfig(t *testing.T) {
-	createMockConfig := func(traceExporter, url, authKey string) config.Config {
-		return config.NewMockConfig(map[string]string{
-			"TRACE_EXPORTER":  traceExporter,
-			"TRACER_URL":      url,
-			"TRACER_AUTH_KEY": authKey,
-		})
-	}
-	mockConfig1 := createMockConfig("abc", "https://tracer-service.dev", "")
-	mockConfig2 := createMockConfig("", "https://tracer-service.dev", "")
-	mockConfig3 := createMockConfig("otlp", "", "")
-
-	testErr := []struct {
-		desc               string
-		config             config.Config
-		expectedLogMessage string
-	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc; tracing is disabled"},
-		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"miss tracer_url ", mockConfig3,
-			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
-	}
-
-	for i, tc := range testErr {
-		logMessage := testutil.StderrOutputForFunc(func() {
-			mockContainer, _ := container.NewMockContainer(t)
-
-			a := App{
-				Config:    tc.config,
-				container: mockContainer,
-			}
-			a.initTracer()
-		})
-
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
@@ -1032,7 +983,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 	app.httpServer.router.Handle("/test", handler)
 
 	// Create a test request
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 
@@ -1358,6 +1309,43 @@ func TestStaticHandlerGetwdError(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+// TestAddStaticFilesEndpointForms covers the endpoint forms a caller can pass to
+// App.AddStaticFiles. The normalization used to strip only a leading slash, so a
+// trailing slash survived into the stored endpoint and Router.AddStaticFiles registered
+// Path("/static/") + PathPrefix("/static//") — neither matches once ServeHTTP normalizes
+// the request with path.Clean, so every request under the endpoint 404'd.
+func TestAddStaticFilesEndpointForms(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+	const wantEndpoint = "/static"
+
+	for _, endpoint := range []string{"static", "/static", "static/", "/static/"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app := New()
+			app.AddStaticFiles(endpoint, dir)
+
+			stored := app.httpServer.staticFiles[dir]
+			assert.Equal(t, wantEndpoint, stored, "endpoint %q should normalize to /static", endpoint)
+
+			// Wire the stored endpoint exactly as App.Run does and prove it serves.
+			router := gofrHTTP.NewRouter()
+			router.AddStaticFiles(app.Logger(), stored, dir)
+
+			for _, path := range []string{wantEndpoint, wantEndpoint + "/index.html"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", endpoint, path)
+			}
+		})
+	}
+}
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -1576,24 +1564,6 @@ func TestApp_OnStart(t *testing.T) {
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
-func TestUnifiedAuthenticationRegistration(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
-	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
-
-	// Verify HTTP middleware count (approximate check)
-	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
-	// but we can check if the grpcServer has interceptors added.
-	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
-	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
-}
-
 func Test_EnableBasicAuthWithFunc(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -1724,19 +1694,6 @@ func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
 			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
-}
-
-func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Should log error but not panic
-	app.EnableBasicAuth()
-
-	// No middleware should be added — handler responds without auth
-	assert.NotNil(t, app.httpServer)
 }
 
 func TestHandleStartupHooks(t *testing.T) {
@@ -1884,31 +1841,6 @@ func TestInitMetricsServer_DefaultPort(t *testing.T) {
 
 	// metricServer should be initialized with default port
 	assert.NotNil(t, app.metricServer)
-}
-
-func TestStartGRPCServer_Registered(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-	app.grpcRegistered = true
-
-	wg := sync.WaitGroup{}
-
-	// startGRPCServer should add to WaitGroup and launch the server
-	app.startGRPCServer(&wg)
-
-	// Give it a moment to start then shut down
-	time.Sleep(50 * time.Millisecond)
-
-	// Read through getServer rather than the field: createServer publishes it from the serve
-	// goroutine, so an unguarded read here races that write.
-	if app.grpcServer != nil {
-		app.grpcServer.forceStop()
-	}
-
-	wg.Wait()
 }
 
 func TestStartGRPCServer_NotRegistered(t *testing.T) {

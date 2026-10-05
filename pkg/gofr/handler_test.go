@@ -57,7 +57,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, "/", http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, "/", http.NoBody)
 		c := &container.Container{
 			Logger: logging.NewLogger(logging.FATAL),
 		}
@@ -76,7 +76,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{requestTimeout: 100 * time.Millisecond}
 
@@ -95,7 +95,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 
 func TestHandler_ServeHTTP_Panic(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{}
 
@@ -151,7 +151,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, "/", http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, "/", http.NoBody)
 		c := &container.Container{
 			Logger: logging.NewLogger(logging.FATAL),
 		}
@@ -640,7 +640,7 @@ func TestApp_httpServerSetup_logsReadiness(t *testing.T) {
 
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(r.Context())
@@ -710,7 +710,7 @@ func TestHandler_ServeHTTP_InlinePath_HandlerError(t *testing.T) {
 
 func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	// Create context with 50ms timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Millisecond)

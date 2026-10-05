@@ -27,6 +27,9 @@ var (
 
 const defaultTimeout = 5 * time.Second
 
+// opGet is the operation name recorded for Get.
+const opGet = "Get"
+
 // Client represents a Couchbase client that interacts with a Couchbase cluster.
 type Client struct {
 	cluster clusterProvider
@@ -493,7 +496,7 @@ func (c *Client) addTrace(ctx context.Context, method, statement string) (contex
 
 	// Add statement/key information based on the operation
 	if statement != "" {
-		if method == "Get" || method == "Insert" || method == "Upsert" || method == "Remove" {
+		if method == opGet || method == "Insert" || method == "Upsert" || method == "Remove" {
 			attrs = append(attrs, attribute.String("db.couchbase.document_key", statement))
 		} else {
 			attrs = append(attrs, attribute.String("db.statement", statement))
@@ -525,7 +528,7 @@ func (c *Collection) Get(ctx context.Context, key string, result any) error {
 		return errBucketNotInitialized
 	}
 
-	tracerCtx, span := c.client.addTrace(ctx, "Get", key)
+	tracerCtx, span := c.client.addTrace(ctx, opGet, key)
 	startTime := time.Now()
 
 	res, err := c.collection.Get(key, &gocb.GetOptions{Context: tracerCtx})
@@ -533,7 +536,7 @@ func (c *Collection) Get(ctx context.Context, key string, result any) error {
 	// Finish span with error status
 	c.client.finishSpan(span, err)
 
-	defer c.client.sendOperationStats(&QueryLog{Query: "Get", Key: key}, startTime, "Get")
+	defer c.client.sendOperationStats(&QueryLog{Query: opGet, Key: key}, startTime, opGet)
 
 	if err != nil {
 		c.client.logger.Errorf("failed to get document with key %s: %v", key, err)

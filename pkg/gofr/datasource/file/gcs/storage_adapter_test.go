@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -482,7 +483,9 @@ func TestStorageAdapter_NewRangeReader_Success(t *testing.T) {
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, totalSize))
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(len(body)), 10))
 			w.WriteHeader(http.StatusPartialContent)
-			_, _ = w.Write(body)
+			// Fake GCS server: body is fixed bytes ("partial" + "x" padding) sent as application/octet-stream;
+			// only its length comes from the Range header, so there is no markup to inject.
+			_, _ = w.Write(body) //nolint:gosec // G705: test fake server writes fixed non-HTML bytes
 
 			return
 		}
@@ -796,7 +799,7 @@ func TestParseServiceAccountCredentials_InvalidJSON(t *testing.T) {
 }
 
 func TestParseServiceAccountCredentials_EmptyPrivateKey(t *testing.T) {
-	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":""}` //nolint:gosec // G101: test credentials
+	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":""}`
 
 	_, _, err := parseServiceAccountCredentials(credJSON)
 
@@ -804,7 +807,7 @@ func TestParseServiceAccountCredentials_EmptyPrivateKey(t *testing.T) {
 }
 
 func TestParseServiceAccountCredentials_InvalidPEM(t *testing.T) {
-	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":"not-a-pem-block"}` //nolint:gosec // G101: test data
+	credJSON := `{"client_email":"sa@project.iam.gserviceaccount.com","private_key":"not-a-pem-block"}`
 
 	_, _, err := parseServiceAccountCredentials(credJSON)
 
@@ -1381,4 +1384,105 @@ func TestStorageAdapter_DeleteObject_Errors(t *testing.T) {
 			require.ErrorIs(t, err, tt.expErr)
 		})
 	}
+}
+
+func TestStorageAdapter_NotConnected(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(a *storageAdapter) error
+	}{
+		{name: "NewReader", call: func(a *storageAdapter) error {
+			_, err := a.NewReader(t.Context(), "a.txt")
+			return err
+		}},
+		{name: "NewRangeReader", call: func(a *storageAdapter) error {
+			_, err := a.NewRangeReader(t.Context(), "a.txt", 0, 1)
+			return err
+		}},
+		{name: "NewWriter", call: func(a *storageAdapter) error {
+			_, err := a.NewWriter(t.Context(), "a.txt").Write([]byte("x"))
+			return err
+		}},
+		{name: "NewWriterWithOptions", call: func(a *storageAdapter) error {
+			_, err := a.NewWriterWithOptions(t.Context(), "a.txt", nil).Write([]byte("x"))
+			return err
+		}},
+		{name: "StatObject", call: func(a *storageAdapter) error {
+			_, err := a.StatObject(t.Context(), "a.txt")
+			return err
+		}},
+		{name: "DeleteObject", call: func(a *storageAdapter) error { return a.DeleteObject(t.Context(), "a.txt") }},
+		{name: "CopyObject", call: func(a *storageAdapter) error { return a.CopyObject(t.Context(), "a.txt", "b.txt") }},
+		{name: "ListObjects", call: func(a *storageAdapter) error {
+			_, err := a.ListObjects(t.Context(), "")
+			return err
+		}},
+		{name: "ListDir", call: func(a *storageAdapter) error {
+			_, _, err := a.ListDir(t.Context(), "")
+			return err
+		}},
+		{name: "Health", call: func(a *storageAdapter) error { return a.Health(t.Context()) }},
+		{name: "SignedURL", call: func(a *storageAdapter) error {
+			_, err := a.SignedURL(t.Context(), "a.txt", time.Minute, nil)
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &storageAdapter{cfg: &Config{BucketName: "bkt"}}
+
+			require.ErrorIs(t, tt.call(a), errGCSClientNotInitialized)
+		})
+	}
+}
+
+func TestStorageAdapter_ConnectConcurrentWithOperations(t *testing.T) {
+	tests := []struct {
+		name string
+		op   func(a *storageAdapter)
+	}{
+		{name: "Health", op: func(a *storageAdapter) { _ = a.Health(t.Context()) }},
+		{name: "SignedURL", op: func(a *storageAdapter) { _, _ = a.SignedURL(t.Context(), "a.txt", time.Minute, nil) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"name":"bkt"}`)
+			}))
+			defer srv.Close()
+
+			a := &storageAdapter{cfg: &Config{EndPoint: srv.URL, BucketName: "bkt"}}
+
+			var wg sync.WaitGroup
+
+			wg.Go(func() { assert.NoError(t, a.Connect(t.Context())) })
+			wg.Go(func() {
+				for range 50 {
+					tt.op(a)
+				}
+			})
+			wg.Wait()
+
+			require.NoError(t, a.Health(t.Context()))
+		})
+	}
+}
+
+func TestStorageAdapter_PublishConnection_KeepsExisting(t *testing.T) {
+	first, err := storage.NewClient(t.Context(), option.WithEndpoint("http://127.0.0.1:1"), option.WithoutAuthentication())
+	require.NoError(t, err)
+
+	second, err := storage.NewClient(t.Context(), option.WithEndpoint("http://127.0.0.1:1"), option.WithoutAuthentication())
+	require.NoError(t, err)
+
+	a := &storageAdapter{client: first, bucket: first.Bucket("bkt")}
+
+	a.publishConnection(second, second.Bucket("bkt"), "sa@example.com", []byte("key"))
+
+	assert.Same(t, first, a.client)
+	assert.Empty(t, a.saEmail)
+	assert.Empty(t, a.saPrivateKey)
 }

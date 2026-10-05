@@ -547,6 +547,12 @@ type staticFileConfig struct {
 }
 
 func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
+	// The route patterns below are built from endpoint verbatim, and ServeHTTP normalizes
+	// incoming paths with path.Clean — so an endpoint carrying a leading or trailing slash
+	// registers a pattern no request can ever match. Normalize here, where the patterns are
+	// built, so a direct caller cannot register a dead route either.
+	endpoint = "/" + strings.Trim(endpoint, "/")
+
 	absDir, err := filepath.Abs(dirName)
 	if err != nil {
 		logger.Errorf("error in registering '%v' static endpoint, cannot resolve directory %v: %v", endpoint, dirName, err)

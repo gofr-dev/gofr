@@ -18,6 +18,8 @@ const (
 	defaultTelemetryEndpoint = "https://gofr.dev/telemetry/v1/metrics"
 	defaultAppName           = "gofr-app"
 	requestTimeout           = 10 * time.Second
+	// telemetrySource identifies the framework as the sender of a telemetry event.
+	telemetrySource = "gofr-framework"
 )
 
 // TelemetryData represents the JSON telemetry payload.
@@ -58,7 +60,7 @@ func sendTelemetryData(appName, appVersion string) {
 	data := TelemetryData{
 		Timestamp:        now.Format(time.RFC3339),
 		EventID:          uuid.New().String(),
-		Source:           "gofr-framework",
+		Source:           telemetrySource,
 		ServiceName:      appName,
 		ServiceVersion:   appVersion,
 		RawDataSize:      0,
