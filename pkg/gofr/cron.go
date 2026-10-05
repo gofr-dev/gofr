@@ -22,6 +22,8 @@ const (
 	dayOfWeek               = 6
 	scheduleParts           = 5
 	schedulePartsWithSecond = 6
+	// cronHostName is the HostName reported by the request a cron job runs with.
+	cronHostName = "gofr"
 )
 
 type CronFunc func(ctx *Context)
@@ -282,7 +284,7 @@ func (noopRequest) PathParam(string) string {
 }
 
 func (noopRequest) HostName() string {
-	return "gofr"
+	return cronHostName
 }
 
 func (noopRequest) Bind(any) error {

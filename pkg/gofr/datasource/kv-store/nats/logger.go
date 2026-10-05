@@ -25,19 +25,27 @@ type Log struct {
 	Value    string `json:"value,omitempty"`
 }
 
+// Operation types recorded in Log.Type.
+const (
+	opGet         = "GET"
+	opSet         = "SET"
+	opDelete      = "DELETE"
+	opHealthCheck = "HEALTH CHECK"
+)
+
 func (l *Log) PrettyPrint(writer io.Writer) {
 	var description string
 
 	switch l.Type {
-	case "GET":
+	case opGet:
 		description = fmt.Sprintf("Fetching record from bucket '%s' with ID '%s'", l.Value, l.Key)
-	case "SET":
+	case opSet:
 		if len(l.Key) == uuidLength {
 			description = fmt.Sprintf("Creating new record in bucket '%s' with ID '%s'", l.Value, l.Key)
 		} else {
 			description = fmt.Sprintf("Updating record with ID '%s' in bucket '%s'", l.Key, l.Value)
 		}
-	case "DELETE":
+	case opDelete:
 		description = fmt.Sprintf("Deleting record from bucket '%s' with ID '%s'", l.Value, l.Key)
 	}
 

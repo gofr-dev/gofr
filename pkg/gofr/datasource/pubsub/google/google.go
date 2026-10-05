@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	gcPubSub "cloud.google.com/go/pubsub"
+	gcPubSub "cloud.google.com/go/pubsub" //nolint:staticcheck // pubsub v1 is deprecated in favor of v2; the migration is a separate change
 	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -28,9 +28,26 @@ const (
 	messageBufferSize    = 100
 )
 
+// Subscriber pull flow-control defaults, mirroring the SDK's DefaultReceiveSettings.
+const (
+	DefaultMaxOutstandingMessages = 1000
+	DefaultMaxOutstandingBytes    = 1_000_000_000 // 1 GB
+	DefaultNumGoroutines          = 10
+)
+
 type Config struct {
 	ProjectID        string
 	SubscriptionName string
+
+	// Optional pull flow control, applied per subscribed topic (each topic gets its own
+	// Receive flow controller). Zero uses the corresponding Default* (which mirrors the SDK).
+	// A negative value is passed through to the SDK: for MaxOutstandingMessages and
+	// MaxOutstandingBytes it means no limit, whereas NumGoroutines below 1 falls back to 10.
+	// NumGoroutines is the number of StreamingPull streams, not handler concurrency, and does not
+	// raise throughput under GoFr's one-message-at-a-time delivery per topic.
+	MaxOutstandingMessages int
+	MaxOutstandingBytes    int
+	NumGoroutines          int
 }
 
 type googleClient struct {
@@ -279,7 +296,8 @@ func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]
 
 	timeout, limit := parseQueryArgs(args...)
 
-	// Get topic and subscription
+	// Query is a one-shot, bounded read via getQuerySubscription, so the subscriber's
+	// ReceiveSettings (Config flow control) deliberately do not apply here.
 	topic, err := g.getTopic(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topic: %w", err)
@@ -367,7 +385,24 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		}
 	}
 
+	g.applyReceiveSettings(subscription)
+
 	return subscription, nil
+}
+
+// applyReceiveSettings sets pull flow control, using defaults for zero-valued fields.
+func (g *googleClient) applyReceiveSettings(subscription *gcPubSub.Subscription) {
+	subscription.ReceiveSettings.MaxOutstandingMessages = orDefault(g.MaxOutstandingMessages, DefaultMaxOutstandingMessages)
+	subscription.ReceiveSettings.MaxOutstandingBytes = orDefault(g.MaxOutstandingBytes, DefaultMaxOutstandingBytes)
+	subscription.ReceiveSettings.NumGoroutines = orDefault(g.NumGoroutines, DefaultNumGoroutines)
+}
+
+func orDefault(val, fallback int) int {
+	if val == 0 {
+		return fallback
+	}
+
+	return val
 }
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
