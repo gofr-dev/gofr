@@ -135,11 +135,11 @@ func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
 	return "", false
 }
 
-// canonicalMaxAge rewrites an Access-Control-Max-Age value to the canonical decimal
-// form the Fetch standard defines, preserving what browsers already make of it.
-// Browsers read "+600" and "0600" as 600 seconds, and a negative value as "do not
-// cache the preflight" — which is what 0 means — so dropping any of them would
-// quietly replace the configured behavior with the browser's 5 second default.
+// canonicalMaxAge rewrites an integer Access-Control-Max-Age value to the canonical
+// decimal form the Fetch standard defines. A negative value becomes 0, which browsers
+// already treat identically: do not cache the preflight. "0600" and "+600" become 600;
+// browsers disagree on "+600" (Firefox reads it as 0), so this sends the duration that
+// was configured. Dropping any of them would fall back to the browser's default instead.
 // A value that is not an integer at all is not rewritten, and reports false.
 func canonicalMaxAge(val string, logger configLogger) (string, bool) {
 	seconds, err := strconv.ParseInt(val, 10, 64)
