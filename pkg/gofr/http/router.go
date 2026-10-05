@@ -58,6 +58,10 @@ type Router struct {
 	// route registered after the first request would not be reflected in the
 	// trie index — a deliberate trade for a lock-free steady state, matching
 	// GoFr's static-routing model. buildIdx guards that one-time build.
+	//
+	// AllowedMethods reads the same index in either mode, so with the mux matcher
+	// it is built on the first request no route matched rather than the first
+	// request. Matching itself stays mux's linear scan there.
 	idx      *routeIndex
 	buildIdx sync.Once
 	// mws mirrors the middleware chain registered via Use, so the trie matcher
@@ -182,15 +186,9 @@ func normalizePath(r *http.Request) {
 // Anything the trie does not match is handed to mux's own ServeHTTP rather than
 // resolved here — see the comment on that call for why.
 func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
-	rou.buildIdx.Do(func() {
-		idx := newRouteIndex()
-		idx.build(&rou.Router)
-		rou.idx = idx
-	})
-
 	var match mux.RouteMatch
 
-	if rou.idx.match(r, &match) && match.Handler != nil {
+	if rou.index().match(r, &match) && match.Handler != nil {
 		rou.serveMatched(w, r, &match)
 
 		return
@@ -221,6 +219,18 @@ func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
 	// Inside a GoFr app this is unreachable: the PathPrefix("/") catch-all matches
 	// every path and method, so the trie always has a candidate that matches.
 	rou.Router.ServeHTTP(w, r)
+}
+
+// index returns the route index, building it on first use from the routes registered so far. See
+// the idx field for why a one-time build is sound.
+func (rou *Router) index() *routeIndex {
+	rou.buildIdx.Do(func() {
+		idx := newRouteIndex()
+		idx.build(&rou.Router)
+		rou.idx = idx
+	})
+
+	return rou.idx
 }
 
 // serveMatched runs a handler the trie matched, after restoring the request state that mux's own
@@ -464,31 +474,45 @@ func (rou *Router) markOwned(route *mux.Route) {
 // the request's own method. Routes that match any method — the catch-all and static endpoints —
 // declare none and are skipped, so an unregistered path yields nil.
 //
-// It walks every route, so it is meant for the cold path that has already failed to match. Each
-// route is matched once, against the request as it arrived: gorilla/mux reports a request that
+// It does not walk every route. It is called for a request mux has already scanned every route to
+// reject, and a second scan would double what an unknown path costs — a cost any client can incur
+// at will. The route index narrows the request path to the routes registered under it, in time that
+// depends on the path and not on how many routes exist, and only those are matched. A route the
+// index cannot place by path (a prefix, a multi-segment pattern) is always a candidate.
+//
+// The narrowing cannot be replaced by reading the mismatch mux recorded during its own scan: mux
+// clears ErrMethodMismatch as soon as any matcher of a later route succeeds (gorilla/mux v1.8.1
+// route.go, the else arm of the matcher loop), so by the time the catch-all runs it is gone.
+//
+// Each candidate is matched once, against the request as it arrived: mux reports a request that
 // satisfies every matcher except the method as ErrMethodMismatch (route.go, after the matcher
 // loop), which is exactly "this path is registered, for other methods".
+//
+// The index is built once, so a route registered after the first unmatched request is not listed.
+// Such a route is still served — matching does not go through here with the mux matcher — and a
+// wrong method on it answers 404, as it did before this method existed.
 func (rou *Router) AllowedMethods(r *http.Request) []string {
 	var (
 		allowed []string
 		match   mux.RouteMatch
+		buf     [12]*routeEntry
 	)
 
-	_ = rou.Router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+	for _, e := range rou.index().candidates(r, buf[:0]) {
 		// Reset per route: Match clears a mismatch recorded by an earlier route as soon as one of
 		// this route's matchers succeeds, so a carried-over one would misreport. One variable reset,
 		// rather than one declared per route, because it escapes to the heap through Match.
 		match = mux.RouteMatch{}
 
-		if !route.Match(r, &match) && !errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
-			return nil
+		if !e.route.Match(r, &match) && !errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
+			continue
 		}
 
 		// Only now: GetMethods copies the route's method list on every call, and on a 404 no route
-		// gets this far.
-		methods, err := route.GetMethods()
+		// registered for a method gets this far.
+		methods, err := e.route.GetMethods()
 		if err != nil {
-			return nil
+			continue
 		}
 
 		for _, m := range methods {
@@ -496,9 +520,7 @@ func (rou *Router) AllowedMethods(r *http.Request) []string {
 				allowed = append(allowed, m)
 			}
 		}
-
-		return nil
-	})
+	}
 
 	sort.Strings(allowed)
 

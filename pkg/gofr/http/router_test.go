@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1186,4 +1188,63 @@ func Test_StaticFileServing_FollowsRedeploy(t *testing.T) {
 
 	code, _ = get()
 	assert.Equal(t, http.StatusNotFound, code)
+}
+
+// countedRoutes registers n GET routes directly on mux, each counting how often it is asked to
+// match. The counter is the route's first matcher, so it sees every Match call on that route.
+func countedRoutes(r *Router, n int) *atomic.Int64 {
+	var calls atomic.Int64
+
+	for i := range n {
+		r.Router.NewRoute().MatcherFunc(func(*http.Request, *mux.RouteMatch) bool {
+			calls.Add(1)
+
+			return true
+		}).Methods(http.MethodGet).Path(fmt.Sprintf("/route-%d", i)).Handler(noopHandler())
+	}
+
+	return &calls
+}
+
+// Test_Router_AllowedMethods_DoesNotScanEveryRoute pins what keeps a 404 from costing two full
+// scans: mux has already walked every route to reject the request, and AllowedMethods must not
+// walk them again. It may only match the routes registered under the request's path.
+func Test_Router_AllowedMethods_DoesNotScanEveryRoute(t *testing.T) {
+	const routes = 500
+
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(RouterEnvVar, matcher)
+
+			r := NewRouter()
+			calls := countedRoutes(r, routes)
+
+			unknown := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nope", http.NoBody)
+			assert.Nil(t, r.AllowedMethods(unknown))
+			assert.Zero(t, calls.Load(), "an unregistered path must not match any route")
+
+			wrongMethod := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/route-7", http.NoBody)
+			assert.Equal(t, []string{http.MethodGet}, r.AllowedMethods(wrongMethod))
+			assert.EqualValues(t, 1, calls.Load(), "only the route registered at the path is matched")
+		})
+	}
+}
+
+// Benchmark_Router_AllowedMethods_Miss measures the lookup an unregistered path pays on top of
+// mux's own scan, at a route count where a second scan would show.
+func Benchmark_Router_AllowedMethods_Miss(b *testing.B) {
+	r := NewRouter()
+
+	for i := range 1000 {
+		r.Add(http.MethodGet, fmt.Sprintf("/route-%d/{id}", i), noopHandler())
+	}
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/nope", http.NoBody)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = r.AllowedMethods(req)
+	}
 }
