@@ -516,6 +516,57 @@ func Test_UpdateCommands(t *testing.T) {
 	})
 }
 
+// On a write error the driver still returns an UpdateResult for UpdateMany (processWriteError
+// maps it to rrMany), but returns none for the single-document UpdateOne/UpdateByID. The count
+// must survive the first case, and the missing result must not panic the second.
+func TestClient_UpdateCountWithWriteError(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+	logger := NewMockLogger(ctrl)
+
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	partialFailure := bson.D{
+		{Key: "ok", Value: 1}, {Key: "n", Value: 3}, {Key: "nModified", Value: 2},
+		{Key: "writeErrors", Value: bson.A{bson.D{
+			{Key: "index", Value: 2}, {Key: "code", Value: 11000}, {Key: "errmsg", Value: "duplicate key"},
+		}}},
+	}
+
+	tests := []struct {
+		desc     string
+		call     func(ctx context.Context, c *Client) (int64, error)
+		expCount int64
+	}{
+		{desc: "UpdateMany keeps the modified count", expCount: 2,
+			call: func(ctx context.Context, c *Client) (int64, error) {
+				return c.UpdateMany(ctx, "col", bson.M{}, bson.M{"$set": bson.M{"a": 1}})
+			}},
+		{desc: "UpdateByID gets no result from the driver", expCount: 0,
+			call: func(ctx context.Context, c *Client) (int64, error) {
+				return c.UpdateByID(ctx, "col", 1, bson.M{"$set": bson.M{"a": 1}})
+			}},
+	}
+
+	for _, tc := range tests {
+		mt.Run(tc.desc, func(mt *mtest.T) {
+			cl := &Client{Database: mt.DB, metrics: metrics, logger: logger, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
+			mt.AddMockResponses(partialFailure)
+
+			count, err := tc.call(mt.Context(), cl)
+
+			var writeErr mongo.WriteException
+
+			require.ErrorAs(mt, err, &writeErr)
+			assert.Equal(mt, tc.expCount, count)
+		})
+	}
+}
+
 func Test_CountDocuments(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 

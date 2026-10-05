@@ -314,6 +314,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 }
 
 // UpdateByID updates a document in the specified collection by its ID.
+// On a write error the driver returns no result for a single-document update, so the count is 0.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update any) (int64, error) {
 	ctx, done := c.instrumentQuery(ctx, collection, "updateByID", nil, id, update)
 	defer done()
@@ -324,11 +325,11 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update a
 	}
 
 	res, err := db.Collection(collection).UpdateByID(ctx, id, update)
-	if err != nil {
+	if res == nil {
 		return 0, err
 	}
 
-	return res.ModifiedCount, nil
+	return res.ModifiedCount, err
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
@@ -347,6 +348,8 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 }
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
+// When some of the updates fail with a write error, the driver still reports how many documents
+// were modified; that count is returned together with the error.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update any) (int64, error) {
 	ctx, done := c.instrumentQuery(ctx, collection, "updateMany", filter, nil, update)
 	defer done()
@@ -357,11 +360,11 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 	}
 
 	res, err := db.Collection(collection).UpdateMany(ctx, filter, update)
-	if err != nil {
+	if res == nil {
 		return 0, err
 	}
 
-	return res.ModifiedCount, nil
+	return res.ModifiedCount, err
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
