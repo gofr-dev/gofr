@@ -8,6 +8,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 func TestLoadPermissions_ValidConfigs(t *testing.T) {
@@ -648,6 +651,87 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestLoadPermissions_ClaimModes(t *testing.T) {
+	const endpoints = `"endpoints": [{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]`
+
+	testCases := []struct {
+		desc      string
+		file      string
+		content   string
+		wantErr   error
+		perms     string
+		audience  []string
+		startLine string
+	}{
+		{
+			desc: "permissions mode from json", file: "rbac.json",
+			content:  `{"permissionsClaimPath": "scope", "audience": ["orders-api"], ` + endpoints + `}`,
+			perms:    "scope",
+			audience: []string{"orders-api"}, startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api]",
+		},
+		{
+			desc: "permissions mode from yaml", file: "rbac.yaml",
+			content: "permissionsClaimPath: scope\naudience: [orders-api, billing-api]\nendpoints:\n" +
+				"  - path: /orders\n    methods: [GET]\n    requiredPermissions: [orders:read]\n",
+			perms: "scope", audience: []string{"orders-api", "billing-api"},
+			startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api billing-api]",
+		},
+		{
+			desc: "roles mode", file: "rbac.json",
+			content:   `{"jwtClaimPath": "roles", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=roles, claim=roles, audience=[]",
+		},
+		{
+			desc: "header mode", file: "rbac.json",
+			content:   `{"roleHeader": "X-User-Role", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=header, claim=X-User-Role, audience=[]",
+		},
+		{
+			desc: "both claim paths are rejected", file: "rbac.json",
+			content: `{"jwtClaimPath": "roles", "permissionsClaimPath": "scope", "audience": ["x"], ` + endpoints + `}`,
+			wantErr: errBothClaimPaths,
+		},
+		{
+			desc: "permissions mode without audience is rejected", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`,
+			wantErr: errAudienceRequired,
+		},
+		{
+			desc: "audience without a JWT claim path is rejected", file: "rbac.json",
+			content: `{"roleHeader": "X-User-Role", "audience": ["x"], ` + endpoints + `}`,
+			wantErr: errAudienceWithoutJWT,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), tc.file)
+			require.NoError(t, os.WriteFile(path, []byte(tc.content), 0600))
+
+			ctrl := gomock.NewController(t)
+			metrics := container.NewMockMetrics(ctrl)
+			logger := &mockLogger{}
+
+			if tc.wantErr == nil {
+				metrics.EXPECT().NewCounter("rbac_role_extraction_failures", gomock.Any())
+			}
+
+			config, err := LoadPermissions(path, logger, metrics, nil)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+				return
+			}
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.perms, config.PermissionsClaimPath, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.audience, config.Audience, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, logger.infoLogs, tc.startLine, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }

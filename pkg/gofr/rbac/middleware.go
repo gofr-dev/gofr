@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/otel/attribute"
@@ -30,13 +32,22 @@ type AuditLog struct {
 	Method        string `json:"method,omitempty"`
 	Route         string `json:"route,omitempty"`
 	Status        string `json:"status,omitempty"`
-	Role          string `json:"role,omitempty"`
+	// Role is the role (or, in permissions mode, the permission) that granted access. On a denial
+	// it is the role only when a single role was held; with a role array or permissions claim it is
+	// empty and HeldCount says how many were held instead.
+	Role      string `json:"role,omitempty"`
+	HeldCount int    `json:"held_count,omitempty"`
 }
 
 // PrettyPrint formats the RBAC audit log for terminal output, matching HTTP log format.
 func (ral *AuditLog) PrettyPrint(writer io.Writer) {
+	held := ral.Role
+	if held == "" && ral.HeldCount > 0 {
+		held = fmt.Sprintf("%d held", ral.HeldCount)
+	}
+
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s %-6s %10s %s %s [%s]\u001B[0m\n",
-		ral.CorrelationID, ral.Status, "", "RBAC", ral.Route, ral.Role)
+		ral.CorrelationID, ral.Status, "", "RBAC", ral.Route, held)
 }
 
 var (
@@ -75,6 +86,12 @@ var (
 
 	// errAuthorizationError is returned as a generic error message for unknown errors in traces.
 	errAuthorizationError = errors.New("authorization error")
+
+	// errAudienceMismatch is returned when the token's aud shares no value with the configured audience.
+	errAudienceMismatch = fmt.Errorf("%w: token audience not accepted", ErrRoleNotFound)
+
+	// errMissingExpiry is returned when a permissions-mode token carries no exp claim.
+	errMissingExpiry = fmt.Errorf("%w: token has no expiry", ErrRoleNotFound)
 )
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
@@ -82,6 +99,8 @@ var (
 //
 //nolint:gocognit,gocyclo // Middleware complexity is acceptable due to multiple authorization paths
 func Middleware(config *Config) func(handler http.Handler) http.Handler {
+	var claimsWarning sync.Once
+
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If config is nil, allow all requests (fail open)
@@ -126,14 +145,11 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				return
 			}
 
-			// Extract role using header-based or JWT-based extraction
-			role, err := extractRole(r, config)
+			// Extract what the request holds, using header-based or JWT-based extraction
+			h, err := extractHeld(r, config)
 			if err != nil {
-				if config.Metrics != nil {
-					config.Metrics.IncrementCounter(r.Context(), "rbac_role_extraction_failures")
-				}
-
-				handleAuthError(w, r, config, "", routeLabel, err)
+				reportExtractionFailure(r, config, err, &claimsWarning)
+				handleAuthError(w, r, config, "", routeLabel, 0, err)
 
 				return
 			}
@@ -142,9 +158,14 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// Only include authorization status (safe boolean) - set below after authorization check
 
 			// Check authorization using unified endpoint-based authorization
-			authorized, _ := checkEndpointAuthorization(role, endpoint, config)
+			authorized, granted := checkEndpointAuthorization(h, endpoint, config)
 			if !authorized {
-				handleAuthError(w, r, config, role, routeLabel, ErrAccessDenied)
+				// A single role is reported as before; several are reported only as a count.
+				if h.multi() {
+					handleAuthError(w, r, config, "", routeLabel, h.count(), ErrAccessDenied)
+				} else {
+					handleAuthError(w, r, config, h.str, routeLabel, 0, ErrAccessDenied)
+				}
 
 				return
 			}
@@ -154,18 +175,41 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			}
 
 			if config.Logger != nil {
-				logAuditEvent(config.Logger, r, role, routeLabel, true)
+				logAuditEvent(config.Logger, r, granted, routeLabel, 0, true)
 			}
 
-			// Store role in context and continue
-			ctx := context.WithValue(r.Context(), userRole, role)
+			// Store the granting role in context and continue
+			ctx := context.WithValue(r.Context(), userRole, granted)
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
+// reportExtractionFailure counts a request whose role or permissions could not be read, and warns
+// about the two causes an operator can fix: a claim of an unreadable type (named by its path, never
+// its value), and RBAC running without the OAuth middleware in front of it (warned once).
+func reportExtractionFailure(r *http.Request, config *Config, err error, claimsWarning *sync.Once) {
+	if config.Metrics != nil {
+		config.Metrics.IncrementCounter(r.Context(), extractionFailuresMetric)
+	}
+
+	if config.Logger == nil {
+		return
+	}
+
+	switch {
+	case errors.Is(err, errUnreadableClaim):
+		_, path := config.mode()
+		config.Logger.Warnf("RBAC: claim %q is not a string or an array of strings; request denied", path)
+	case errors.Is(err, errJWTClaimsNotFound):
+		claimsWarning.Do(func() {
+			config.Logger.Warnf("RBAC: no JWT claims in the request; call EnableOAuth before EnableRBAC")
+		})
+	}
+}
+
 // handleAuthError handles authorization errors with custom error handler or default response.
-func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, err error) {
+func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, heldCount int, err error) {
 	// Record error in span if tracing is enabled
 	// Sanitize error message to prevent information leakage
 	if config.Tracer != nil {
@@ -178,7 +222,7 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 	// Log audit event (always enabled when Logger is available)
 	// Audit logging is automatically performed using GoFr's logger
 	if config.Logger != nil {
-		logAuditEvent(config.Logger, r, role, route, false)
+		logAuditEvent(config.Logger, r, role, route, heldCount, false)
 	}
 
 	// Use custom error handler if provided
@@ -196,67 +240,87 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 	http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
 }
 
-// extractRole extracts the user's role from the request.
-// Supports header-based extraction (via RoleHeader) or JWT-based extraction (via JWTClaimPath).
-// Precedence: JWT takes precedence over header (JWT is more secure).
+// extractHeld extracts what the request holds for authorization.
+// Supports permissions-mode extraction (via PermissionsClaimPath), role extraction from JWT claims
+// (via JWTClaimPath), or header-based role extraction (via RoleHeader), in that order of precedence.
+// When a JWT claim path is set the header is never consulted, even if JWT extraction fails.
 // No default role is supported - role must be explicitly provided.
-func extractRole(r *http.Request, config *Config) (string, error) {
-	// Try JWT-based extraction first (takes precedence - more secure)
-	if config.JWTClaimPath != "" {
-		role, err := extractRoleFromJWT(r, config.JWTClaimPath)
-		if err == nil && role != "" {
-			return role, nil
-		}
-		// If JWT extraction fails but JWTClaimPath is set, don't fall back to header
-		// This ensures JWT is the only method when configured
-		return "", ErrRoleNotFound
-	}
-
-	// Try header-based extraction (only if JWT is not configured)
-	if config.RoleHeader != "" {
-		role := r.Header.Get(config.RoleHeader)
-		if role != "" {
-			return role, nil
+func extractHeld(r *http.Request, config *Config) (held, error) {
+	switch {
+	case config.PermissionsClaimPath != "":
+		return extractHeldFromJWT(r, config, config.PermissionsClaimPath, true)
+	case config.JWTClaimPath != "":
+		return extractHeldFromJWT(r, config, config.JWTClaimPath, false)
+	case config.RoleHeader != "":
+		if role := r.Header.Get(config.RoleHeader); role != "" {
+			return held{str: role}, nil
 		}
 	}
 
 	// No role found - no default role supported
-	return "", ErrRoleNotFound
+	return held{}, ErrRoleNotFound
 }
 
-// extractRoleFromJWT extracts the role from JWT claims in the request context.
-// It uses the JWTClaimPath from config to navigate the claim structure.
-func extractRoleFromJWT(r *http.Request, claimPath string) (string, error) {
+// extractHeldFromJWT reads the claim at claimPath from the JWT claims in the request context, after
+// checking the token's audience (when configured) and, in permissions mode, that it expires.
+func extractHeldFromJWT(r *http.Request, config *Config, claimPath string, permissionsMode bool) (held, error) {
 	// Get JWT claims from context (set by OAuth middleware)
 	claims, ok := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok || claims == nil {
-		return "", fmt.Errorf("%w", errJWTClaimsNotFound)
+		return held{}, fmt.Errorf("%w: %w", ErrRoleNotFound, errJWTClaimsNotFound)
 	}
 
-	// Extract role using the configured claim path
-	role, err := extractClaimValue(claims, claimPath)
+	if len(config.Audience) > 0 && !audienceAccepted(claims["aud"], config.Audience) {
+		return held{}, errAudienceMismatch
+	}
+
+	// The OAuth middleware rejects an exp in the past but accepts a token with none; a scope token
+	// that never expires is a standing credential, so permissions mode refuses it.
+	if permissionsMode && claims["exp"] == nil {
+		return held{}, errMissingExpiry
+	}
+
+	value, err := extractClaimValue(claims, claimPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to extract role from JWT: %w", err)
+		// Do not fall back to the header: JWT is the only method when configured
+		return held{}, ErrRoleNotFound
 	}
 
-	// Convert to string
-	roleStr, ok := role.(string)
-	if !ok {
-		// Try to convert if it's not a string
-		return fmt.Sprintf("%v", role), nil
-	}
-
-	return roleStr, nil
+	return heldFromClaim(value, permissionsMode)
 }
 
-// extractClaimValue extracts a value from JWT claims using a dot-notation or array notation path.
+// audienceAccepted reports whether the token's aud claim (a string or an array) shares a value with
+// accepted.
+func audienceAccepted(aud any, accepted []string) bool {
+	switch v := aud.(type) {
+	case string:
+		return slices.Contains(accepted, v)
+	case []any:
+		for _, entry := range v {
+			if s, ok := entry.(string); ok && slices.Contains(accepted, s) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// extractClaimValue extracts a value from JWT claims. The whole path is first tried as one top-level
+// key, so namespaced claim names that contain dots work; otherwise it is read as a dot-notation or
+// array notation path.
 // Examples:
 //   - "role" -> claims["role"]
+//   - "https://example.com/roles" -> claims["https://example.com/roles"]
 //   - "roles[0]" -> claims["roles"].([]any)[0]
 //   - "permissions.role" -> claims["permissions"].(map[string]any)["role"]
 func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	if path == "" {
 		return nil, fmt.Errorf("%w", errEmptyClaimPath)
+	}
+
+	if value, ok := claims[path]; ok {
+		return value, nil
 	}
 
 	// Handle array notation: "roles[0]"
@@ -361,7 +425,7 @@ func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
 // Users don't need to configure this - it uses the provided logger automatically.
-func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, allowed bool) {
+func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, heldCount int, allowed bool) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}
@@ -384,6 +448,7 @@ func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string
 		Route:         route,
 		Status:        status,
 		Role:          role,
+		HeldCount:     heldCount,
 	}
 
 	// Use structured logging at debug level (logger will handle JSON encoding or PrettyPrint)

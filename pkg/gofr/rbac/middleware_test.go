@@ -2,16 +2,20 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
@@ -180,7 +184,7 @@ func TestMiddleware_InvalidPermission(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "Forbidden: Access denied")
 }
 
-func TestExtractRole(t *testing.T) {
+func TestExtractHeld(t *testing.T) {
 	testCases := []struct {
 		desc         string
 		config       *Config
@@ -249,7 +253,8 @@ func TestExtractRole(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			role, err := extractRole(tc.request, tc.config)
+			h, err := extractHeld(tc.request, tc.config)
+			role := h.str
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -264,7 +269,7 @@ func TestExtractRole(t *testing.T) {
 	}
 }
 
-func TestExtractRoleFromJWT(t *testing.T) {
+func TestExtractHeld_JWTClaimPath(t *testing.T) {
 	testCases := []struct {
 		desc         string
 		claimPath    string
@@ -318,13 +323,13 @@ func TestExtractRoleFromJWT(t *testing.T) {
 			expectError:  true,
 		},
 		{
-			desc:      "converts non-string role to string",
+			desc:      "rejects a non-string role instead of formatting it",
 			claimPath: "role",
 			claims: jwt.MapClaims{
 				"role": 123,
 			},
-			expectedRole: "123",
-			expectError:  false,
+			expectedRole: "",
+			expectError:  true,
 		},
 	}
 
@@ -337,7 +342,8 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				req = req.WithContext(ctx)
 			}
 
-			role, err := extractRoleFromJWT(req, tc.claimPath)
+			h, err := extractHeld(req, &Config{JWTClaimPath: tc.claimPath})
+			role := h.str
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -789,7 +795,7 @@ func TestLogAuditEvent(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
-			logAuditEvent(tc.logger, req, "admin", "/api", tc.allowed)
+			logAuditEvent(tc.logger, req, "admin", "/api", 0, tc.allowed)
 
 			if tc.logger != nil {
 				mockLog := tc.logger.(*mockLogger)
@@ -849,7 +855,7 @@ func TestHandleAuthError(t *testing.T) {
 			w := httptest.NewRecorder()
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 
-			handleAuthError(w, req, tc.config, "admin", "/api", tc.err)
+			handleAuthError(w, req, tc.config, "admin", "/api", 0, tc.err)
 
 			assert.Equal(t, tc.expectedStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Contains(t, w.Body.String(), tc.expectedBody, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -863,6 +869,7 @@ type mockLogger struct {
 	infoLogs  []string // Capture actual log messages
 	logs      []string
 	infoArgs  []any // Capture structured log arguments (used for both Info and Debug)
+	warnLogs  []string
 }
 
 func (m *mockLogger) Debug(args ...any) {
@@ -891,7 +898,10 @@ func (m *mockLogger) Errorf(format string, args ...any) {
 
 func (m *mockLogger) Warn(_ ...any) { m.logs = append(m.logs, "WARN") }
 
-func (m *mockLogger) Warnf(_ string, _ ...any) { m.logs = append(m.logs, "WARNF") }
+func (m *mockLogger) Warnf(format string, args ...any) {
+	m.logs = append(m.logs, "WARNF")
+	m.warnLogs = append(m.warnLogs, fmt.Sprintf(format, args...))
+}
 
 func TestMiddleware_WithTracing(t *testing.T) {
 	t.Run("starts tracing when tracer is available", func(t *testing.T) {
@@ -916,9 +926,8 @@ func TestMiddleware_WithTracing(t *testing.T) {
 		req.Header.Set("X-User-Role", "admin")
 
 		// Setup role permissions
-		config.rolePermissionsMap = map[string][]string{
-			"admin": {"admin:read"},
-		}
+		config.Roles = []RoleDefinition{{Name: "admin", Permissions: []string{"admin:read"}}}
+		require.NoError(t, config.processUnifiedConfig())
 
 		wrapped.ServeHTTP(w, req)
 
@@ -955,9 +964,8 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 		req.Header.Set("X-User-Role", "admin")
 
 		// Setup role permissions
-		config.rolePermissionsMap = map[string][]string{
-			"admin": {"admin:read"},
-		}
+		config.Roles = []RoleDefinition{{Name: "admin", Permissions: []string{"admin:read"}}}
+		require.NoError(t, config.processUnifiedConfig())
 
 		wrapped.ServeHTTP(w, req)
 
@@ -1005,9 +1013,8 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 		req.Header.Set("X-User-Role", "viewer") // Role without permission
 
 		// Setup role permissions
-		config.rolePermissionsMap = map[string][]string{
-			"viewer": {"viewer:read"}, // Different permission
-		}
+		config.Roles = []RoleDefinition{{Name: "viewer", Permissions: []string{"viewer:read"}}}
+		require.NoError(t, config.processUnifiedConfig())
 
 		wrapped.ServeHTTP(w, req)
 
@@ -1059,4 +1066,260 @@ func TestSanitizeErrorForTrace(t *testing.T) {
 		assert.Equal(t, "authorization error", sanitized.Error(), "wrapped unknown errors should be sanitized")
 		assert.NotContains(t, sanitized.Error(), "secret key", "sensitive information should be removed")
 	})
+}
+
+type claimModeTestCase struct {
+	desc        string
+	config      Config
+	claims      jwt.MapClaims // nil: no claims in the request context
+	wantStatus  int
+	wantFailure bool   // rbac_role_extraction_failures incremented
+	wantRole    string // AuditLog.Role and ErrorHandler role
+	wantCount   int    // AuditLog.HeldCount
+	wantWarn    string
+}
+
+func claimModeTestCases() []claimModeTestCase {
+	roles := []RoleDefinition{
+		{Name: "admin", Permissions: []string{"orders:write"}},
+		{Name: "viewer", Permissions: []string{"orders:read"}},
+	}
+	endpoints := []EndpointMapping{{Path: "/orders", Methods: []string{"GET"}, RequiredPermissions: []string{"orders:write"}}}
+	exp := float64(4102444800) // 2100-01-01
+
+	return []claimModeTestCase{
+		{
+			desc:   "roles mode: array grants through any role, log names only the granting role",
+			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": []any{"viewer", "admin"}}, wantStatus: http.StatusOK, wantRole: "admin",
+		},
+		{
+			desc:   "roles mode: array deny logs a count, never names",
+			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": []any{"viewer", "ghost"}}, wantStatus: http.StatusForbidden, wantCount: 2,
+		},
+		{
+			desc:   "roles mode: roles[0] stays a single role, named on deny as before",
+			config: Config{JWTClaimPath: "roles[0]", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": []any{"viewer", "admin"}}, wantStatus: http.StatusForbidden,
+			wantRole: "viewer",
+		},
+		{
+			desc:   "roles mode: a whole-path top-level key wins over the dot walk",
+			config: Config{JWTClaimPath: "https://example.com/roles", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"https://example.com/roles": []any{"admin"}}, wantStatus: http.StatusOK, wantRole: "admin",
+		},
+		{
+			desc:   "roles mode: missing claim is 401",
+			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"sub": "u1"}, wantStatus: http.StatusUnauthorized, wantFailure: true,
+		},
+		{
+			desc:       "roles mode: no claims in context is 401 and warns about call order",
+			config:     Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
+			wantStatus: http.StatusUnauthorized, wantFailure: true, wantWarn: "call EnableOAuth before EnableRBAC",
+		},
+		{
+			desc:   "roles mode: a number claim is 403 and warns with the path only",
+			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": 12345.0}, wantStatus: http.StatusForbidden, wantFailure: true,
+			wantWarn: `"roles"`,
+		},
+		{
+			desc:   "roles mode: audience is checked when set",
+			config: Config{JWTClaimPath: "roles", Audience: []string{"orders-api"}, Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": []any{"admin"}, "aud": "other-api"}, wantStatus: http.StatusUnauthorized,
+			wantFailure: true,
+		},
+		{
+			desc:       "permissions mode: scope string grants",
+			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "aud": "orders-api", "exp": exp},
+			wantStatus: http.StatusOK, wantRole: "orders:write",
+		},
+		{
+			desc:       "permissions mode: audience array sharing one value grants",
+			config:     Config{PermissionsClaimPath: "permissions", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"permissions": []any{"orders:write"}, "aud": []any{"web", "orders-api"}, "exp": exp},
+			wantStatus: http.StatusOK, wantRole: "orders:write",
+		},
+		{
+			desc:       "permissions mode: scope without the permission is 403 with a count",
+			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read profile", "aud": "orders-api", "exp": exp},
+			wantStatus: http.StatusForbidden, wantCount: 2,
+		},
+		{
+			desc:       "permissions mode: audience mismatch is 401",
+			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:write", "aud": []any{"billing-api"}, "exp": exp},
+			wantStatus: http.StatusUnauthorized, wantFailure: true,
+		},
+		{
+			desc:       "permissions mode: missing aud is 401",
+			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:write", "exp": exp},
+			wantStatus: http.StatusUnauthorized, wantFailure: true,
+		},
+		{
+			desc:       "permissions mode: missing exp is 401",
+			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:write", "aud": "orders-api"},
+			wantStatus: http.StatusUnauthorized, wantFailure: true,
+		},
+	}
+}
+
+// serveClaimMode runs one request through the middleware and returns the response, the logger and
+// the role the ErrorHandler received.
+func serveClaimMode(t *testing.T, tc *claimModeTestCase) (w *httptest.ResponseRecorder, logger *mockLogger, handlerRole string) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	metrics := container.NewMockMetrics(ctrl)
+
+	if tc.wantFailure {
+		metrics.EXPECT().IncrementCounter(gomock.Any(), "rbac_role_extraction_failures")
+	}
+
+	logger = &mockLogger{}
+	cfg := tc.config
+	cfg.Logger, cfg.Metrics = logger, metrics
+
+	handlerRole = "<not called>"
+	cfg.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, role, _ string, err error) {
+		handlerRole = role
+
+		status := http.StatusForbidden
+		if errors.Is(err, ErrRoleNotFound) {
+			status = http.StatusUnauthorized
+		}
+
+		w.WriteHeader(status)
+	}
+
+	require.NoError(t, cfg.processUnifiedConfig())
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/orders", http.NoBody)
+	if tc.claims != nil {
+		req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, tc.claims))
+	}
+
+	w = httptest.NewRecorder()
+	Middleware(&cfg)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(w, req)
+
+	return w, logger, handlerRole
+}
+
+func TestMiddleware_ClaimModes(t *testing.T) {
+	for i, tc := range claimModeTestCases() {
+		t.Run(tc.desc, func(t *testing.T) {
+			w, logger, handlerRole := serveClaimMode(t, &tc)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			require.Len(t, logger.infoArgs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+			auditLog, ok := logger.infoArgs[0].(*AuditLog)
+			require.True(t, ok, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantRole, auditLog.Role, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantCount, auditLog.HeldCount, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			if tc.wantStatus != http.StatusOK {
+				assert.Equal(t, tc.wantRole, handlerRole, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			if tc.wantWarn == "" {
+				assert.Empty(t, logger.warnLogs, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.Len(t, logger.warnLogs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logger.warnLogs[0], tc.wantWarn, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			for _, line := range logger.warnLogs {
+				assert.NotContains(t, line, "12345", "TEST[%d], claim value leaked into a log.\n%s", i, tc.desc)
+			}
+		})
+	}
+}
+
+func TestMiddleware_MissingClaimsWarnsOnce(t *testing.T) {
+	logger := &mockLogger{}
+	cfg := &Config{
+		JWTClaimPath: "role",
+		Roles:        []RoleDefinition{{Name: "admin", Permissions: []string{"a:b"}}},
+		Endpoints:    []EndpointMapping{{Path: "/x", Methods: []string{"GET"}, RequiredPermissions: []string{"a:b"}}},
+		Logger:       logger,
+	}
+	require.NoError(t, cfg.processUnifiedConfig())
+
+	wrapped := Middleware(cfg)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	for range 3 {
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody))
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	}
+
+	require.Len(t, logger.warnLogs, 1)
+	assert.Contains(t, logger.warnLogs[0], "call EnableOAuth before EnableRBAC")
+}
+
+func BenchmarkMiddleware(b *testing.B) {
+	roleDefs := make([]RoleDefinition, 0, 10)
+	roleNames := make([]any, 0, 10)
+	scope := make([]string, 0, 10)
+
+	for i := range 10 {
+		name := fmt.Sprintf("role%d", i)
+		roleDefs = append(roleDefs, RoleDefinition{Name: name, Permissions: []string{fmt.Sprintf("res%d:read", i)}})
+		roleNames = append(roleNames, name)
+		scope = append(scope, fmt.Sprintf("res%d:read", i))
+	}
+
+	endpoints := []EndpointMapping{{Path: "/r", Methods: []string{"GET"}, RequiredPermissions: []string{"res9:read"}}}
+	exp := float64(4102444800)
+
+	benchmarks := []struct {
+		name   string
+		config *Config
+		claims jwt.MapClaims
+	}{
+		{
+			name:   "header mode, one role (baseline)",
+			config: &Config{RoleHeader: "X-User-Role", Roles: roleDefs, Endpoints: endpoints},
+		},
+		{
+			name:   "roles mode, 10 roles",
+			config: &Config{JWTClaimPath: "roles", Roles: roleDefs, Endpoints: endpoints},
+			claims: jwt.MapClaims{"roles": roleNames},
+		},
+		{
+			name:   "permissions mode, 10-entry scope",
+			config: &Config{PermissionsClaimPath: "scope", Audience: []string{"api"}, Endpoints: endpoints},
+			claims: jwt.MapClaims{"scope": strings.Join(scope, " "), "aud": "api", "exp": exp},
+		},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if err := bm.config.processUnifiedConfig(); err != nil {
+				b.Fatal(err)
+			}
+
+			wrapped := Middleware(bm.config)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+			req := httptest.NewRequestWithContext(context.WithValue(b.Context(), middleware.JWTClaim, bm.claims),
+				http.MethodGet, "/r", http.NoBody)
+			req.Header.Set("X-User-Role", "role9")
+
+			w := httptest.NewRecorder()
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				wrapped.ServeHTTP(w, req)
+			}
+		})
+	}
 }
