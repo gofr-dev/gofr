@@ -272,16 +272,29 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 
 	defer rows.Close()
 
+	elemType := rv.Type().Elem()
+
 	for rows.Next() {
-		val := reflect.New(rv.Type().Elem())
-
-		if rv.Type().Elem().Kind() == reflect.Struct {
+		switch {
+		case elemType.Kind() == reflect.Struct:
+			val := reflect.New(elemType)
 			d.rowsToStruct(rows, val)
-		} else {
-			_ = rows.Scan(val.Interface())
-		}
+			rv = reflect.Append(rv, val.Elem())
 
-		rv = reflect.Append(rv, val.Elem())
+		case elemType.Kind() == reflect.Pointer && elemType.Elem().Kind() == reflect.Struct:
+			// For []*T, allocate a new T per row and append the pointer to it.
+			val := reflect.New(elemType.Elem())
+			d.rowsToStruct(rows, val)
+			rv = reflect.Append(rv, val)
+
+		default:
+			val := reflect.New(elemType)
+			if err := rows.Scan(val.Interface()); err != nil {
+				d.logger.Errorf("error scanning row: %v", err)
+			}
+
+			rv = reflect.Append(rv, val.Elem())
+		}
 	}
 
 	if rows.Err() != nil {
@@ -313,7 +326,7 @@ func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv refl
 	}
 }
 
-func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
+func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
@@ -327,6 +340,11 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 
 		f := v.Type().Field(i)
 		tag := f.Tag.Get(dbStructTag)
+
+		// Unexported fields cannot be scanned into, and `db:"-"` opts a field out.
+		if !f.IsExported() || tag == "-" {
+			continue
+		}
 
 		if tag != "" {
 			name = tag
@@ -350,7 +368,9 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		}
 	}
 
-	_ = rows.Scan(fields...)
+	if err := rows.Scan(fields...); err != nil {
+		d.logger.Errorf("error scanning row: %v", err)
+	}
 
 	if vo.CanSet() {
 		vo.Set(v)
