@@ -16,6 +16,7 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/version"
 )
 
 var errBuilderFailed = errors.New("builder failed")
@@ -412,6 +413,164 @@ func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.
 			serviceName, ok := res.Set().Value("service.name")
 			require.True(t, ok)
 			assert.Equal(t, tc.expServiceName, serviceName.AsString())
+		})
+	}
+}
+
+// Test_buildResource pins how service.name is resolved: the environment wins over
+// APP_NAME, and framework_version is not reachable from the environment at all.
+//
+// Keep these rows identical to traces/exporters.Test_buildResource. The two
+// packages resolve the name independently, and they must agree -- otherwise a
+// service reports one name to its trace backend and another to its metric
+// backend, breaking the join between them.
+func Test_buildResource(t *testing.T) {
+	tests := []struct {
+		name      string
+		cfg       Config
+		env       map[string]string
+		wantAttrs map[string]string
+		wantLog   string
+	}{
+		{
+			name:      "OTEL_SERVICE_NAME wins over APP_NAME",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "from-env"},
+			wantAttrs: map[string]string{"service.name": "from-env"},
+			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+		},
+		{
+			name: "service.name in OTEL_RESOURCE_ATTRIBUTES wins, its siblings survive",
+			cfg:  Config{AppName: "app"},
+			env: map[string]string{
+				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-env,deployment.environment=prod",
+			},
+			wantAttrs: map[string]string{"service.name": "from-env", "deployment.environment": "prod"},
+			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+		},
+		{
+			name: "OTEL_SERVICE_NAME outranks OTEL_RESOURCE_ATTRIBUTES",
+			cfg:  Config{AppName: "app"},
+			env: map[string]string{
+				"OTEL_SERVICE_NAME":        "from-var",
+				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-attrs",
+			},
+			wantAttrs: map[string]string{"service.name": "from-var"},
+			wantLog:   `service.name="from-var" from the environment overrides APP_NAME ("app")`,
+		},
+		{
+			name:      "no log when the environment agrees with APP_NAME",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "app"},
+			wantAttrs: map[string]string{"service.name": "app"},
+		},
+		// OTEL_RESOURCE_ATTRIBUTES="service.name=" parses to a valid attribute with
+		// an empty value, so an unguarded "env wins" ships a nameless service.
+		{
+			name:      "empty service.name falls back to APP_NAME",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.name="},
+			wantAttrs: map[string]string{"service.name": "app"},
+		},
+		{
+			name:      "framework_version is not overridable from the environment",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "framework_version=hacked"},
+			wantAttrs: map[string]string{"framework_version": version.Framework},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			var res *resource.Resource
+
+			// Infof goes to stdout: the framework logger reserves stderr for ERROR
+			// and above.
+			out := testutil.StdoutOutputForFunc(func() {
+				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.INFO))
+			})
+
+			assertServiceNameLog(t, out, tt.wantLog)
+			assertResourceAttrs(t, res, tt.wantAttrs)
+		})
+	}
+}
+
+func assertServiceNameLog(t *testing.T, out, wantLog string) {
+	t.Helper()
+
+	if wantLog != "" && !strings.Contains(out, wantLog) {
+		t.Errorf("expected log to mention %q, got: %q", wantLog, out)
+	}
+
+	if wantLog == "" && strings.Contains(out, "overrides APP_NAME") {
+		t.Errorf("unexpected service.name override log: %q", out)
+	}
+}
+
+func assertResourceAttrs(t *testing.T, res *resource.Resource, wantAttrs map[string]string) {
+	t.Helper()
+
+	got := map[string]string{}
+	for _, kv := range res.Attributes() {
+		got[string(kv.Key)] = kv.Value.AsString()
+	}
+
+	for k, v := range wantAttrs {
+		if got[k] != v {
+			t.Errorf("resource attribute %q = %q, want %q", k, got[k], v)
+		}
+	}
+
+	if _, ok := got["framework_version"]; !ok {
+		t.Error("expected framework_version on the resource")
+	}
+}
+
+// Build is exported, so a caller outside the framework can reach it without a
+// logger -- Prometheus, deprecated but still public, is one such caller. noopLogger
+// is documented as the fallback for exactly that caller; this pins that it is
+// actually substituted rather than dereferenced.
+func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
+	Register("nil-logger-test", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
+		return metricSdk.NewManualReader(), nil
+	})
+
+	tests := []struct {
+		name     string
+		exporter string
+		env      map[string]string
+	}{
+		{name: "prometheus only", exporter: ""},
+		{name: "unknown exporter falls back to prometheus", exporter: "no-such-exporter"},
+		{name: "push exporter builds", exporter: "nil-logger-test"},
+		// The service.name override logs, so the nil path must survive a call that
+		// actually reaches the logger rather than only ones that skip it.
+		{
+			name:     "environment overrides service.name",
+			exporter: "",
+			env:      map[string]string{"OTEL_SERVICE_NAME": "from-env"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			cfg := Config{AppName: "app", AppVersion: "v1", Exporter: tt.exporter}
+
+			shutdown, meter := Build(t.Context(), &cfg, nil)
+			if shutdown == nil || meter == nil {
+				t.Fatal("Build must never return a nil ShutdownFunc or Meter")
+			}
+
+			_ = shutdown(t.Context())
 		})
 	}
 }

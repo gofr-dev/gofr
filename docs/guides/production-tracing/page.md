@@ -217,7 +217,7 @@ The downstream `payments` service — also a GoFr app pointed at the same export
 ## Production tips
 
 - **One exporter, many services:** point all your services at the same collector. Querying a trace that hops services is the whole point.
-- **Resource attributes:** GoFr sets `service.name` from `APP_NAME` (default `gofr-app`). Set `APP_NAME` per-deployment so traces are attributable.
+- **Resource attributes:** GoFr sets `service.name` from `APP_NAME` (default `gofr-app`). Set `APP_NAME` per-deployment so traces are attributable. The standard `OTEL_SERVICE_NAME` — and a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES` — overrides `APP_NAME` for both traces and metrics, which is what to reach for when the name is injected by your platform rather than baked into the deployment.
 - **Don't sample on the client when you can sample on the collector** — once dropped at the source, a trace is gone forever.
 - **Watch the exporter error log:** GoFr installs a custom OTel error handler (`otelErrorHandler`) that logs exporter failures via the standard logger. If you see these in volume, your collector is unreachable or overwhelmed.
 - **Trace IDs in logs:** include the trace ID in your logs to jump from a noisy log line to its trace. GoFr's structured logger and trace context share `*gofr.Context`, so you can read `span.SpanContext().TraceID()` and log it.
