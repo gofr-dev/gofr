@@ -173,7 +173,7 @@ func (oracleMigrator) parseStringValue(value any) int64 {
 }
 
 // Commit the migration and insert a record into the migration table.
-func (om oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (om oracleMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.OracleTx == nil {
 		c.Error("invalid Oracle transaction")
 		return errInvalidOracleTransaction
@@ -182,7 +182,7 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 	if data.UsedDatasources[dsOracle] {
 		// Insert migration record using the transaction.
 		err := data.OracleTx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
-			data.MigrationNumber, "UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+			data.MigrationNumber, migrationMethodUP, data.StartTime, time.Since(data.StartTime).Milliseconds())
 		if err != nil {
 			c.Errorf("failed to insert migration record: %v", err)
 
@@ -202,7 +202,7 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 }
 
 // Rollback the migration transaction.
-func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
+func (om oracleMigrator) rollback(c *container.Container, data *transactionData) {
 	if data.OracleTx != nil {
 		if err := data.OracleTx.Rollback(); err != nil {
 			c.Fatalf("unable to rollback Oracle transaction: %v", err)
