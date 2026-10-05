@@ -48,6 +48,8 @@ func main() {
 }
 ```
 
+> Each file opened for reading uses its own FTP connection for as long as it stays open, next to the one connection GoFr keeps for listing, stat, delete and writes. The FTP account therefore needs to allow one session more than the number of files your app has open at the same time. On a server that limits a user (or an IP address) to a single session, opening a file fails with a connection or login error, for example vsftpd's `421 There are too many connections from your internet address`. Raise the limit (`max_per_ip` / `max_clients` in vsftpd) or use an account without one.
+
 ### SFTP file-store
 
 ```go
