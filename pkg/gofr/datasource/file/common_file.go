@@ -36,6 +36,9 @@ const (
 	DefaultDirMode os.FileMode = 0755
 )
 
+// dirContentType is the content type that marks an object-store entry as a directory.
+const dirContentType = "application/x-directory"
+
 // CommonFile implements FileInfo for all providers, eliminating redundant metadata getters.
 // Providers instantiate this struct when returning file metadata.
 type CommonFile struct {
@@ -321,7 +324,7 @@ func (f *CommonFile) ModTime() time.Time {
 // IsDir returns true if the object is a directory.
 // Checks both explicit isDir flag and content type for compatibility.
 func (f *CommonFile) IsDir() bool {
-	return f.isDir || f.contentType == "application/x-directory"
+	return f.isDir || f.contentType == dirContentType
 }
 
 // Mode returns the file mode bits.

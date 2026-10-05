@@ -58,7 +58,7 @@ func TestContext_AddTrace(t *testing.T) {
 	tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
 
 	// Creating a dummy request with trace
-	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
 	originalCtx, span := tr.Start(req.Context(), "start")
 
 	traceID := span.SpanContext().TraceID().String()
@@ -283,7 +283,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	ctx := context.WithValue(req.Context(), middleware.Username, "validUser")
 	*req = *req.Clone(ctx)
@@ -303,7 +303,7 @@ func TestGetAuthInfo_BasicAuth(t *testing.T) {
 }
 
 func TestGetAuthInfo_ApiKey(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	ctx := context.WithValue(req.Context(), middleware.APIKey, "9221e451-451f-4cd6-a23d-2b2d3adea9cf")
 
@@ -330,7 +330,7 @@ func TestGetAuthInfo_JWTClaims(t *testing.T) {
 		"admin": true,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	ctx := context.WithValue(req.Context(), middleware.JWTClaim, claims)
 

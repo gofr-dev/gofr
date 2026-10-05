@@ -23,6 +23,16 @@ func newStreamManager(js jetstream.JetStream, logger pubsub.Logger) *StreamManag
 	}
 }
 
+// Values accepted in StreamConfig.Storage and StreamConfig.Retention.
+const (
+	storageFile   = "file"
+	storageMemory = "memory"
+
+	retentionLimits    = "limits"
+	retentionInterest  = "interest"
+	retentionWorkQueue = "workqueue"
+)
+
 // CreateStream creates a new jStream stream.
 func (sm *StreamManager) CreateStream(ctx context.Context, cfg *StreamConfig) error {
 	jsCfg := jetstream.StreamConfig{
@@ -33,20 +43,20 @@ func (sm *StreamManager) CreateStream(ctx context.Context, cfg *StreamConfig) er
 	}
 
 	if cfg.Storage != "" {
-		if cfg.Storage == "file" {
+		if cfg.Storage == storageFile {
 			jsCfg.Storage = jetstream.FileStorage
-		} else if cfg.Storage == "memory" {
+		} else if cfg.Storage == storageMemory {
 			jsCfg.Storage = jetstream.MemoryStorage
 		}
 	}
 
 	if cfg.Retention != "" {
 		switch cfg.Retention {
-		case "limits":
+		case retentionLimits:
 			jsCfg.Retention = jetstream.LimitsPolicy
-		case "interest":
+		case retentionInterest:
 			jsCfg.Retention = jetstream.InterestPolicy
-		case "workqueue":
+		case retentionWorkQueue:
 			jsCfg.Retention = jetstream.WorkQueuePolicy
 		}
 	}

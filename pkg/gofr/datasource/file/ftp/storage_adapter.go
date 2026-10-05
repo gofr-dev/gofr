@@ -576,6 +576,14 @@ func isFTPNotFoundError(err error) bool {
 		strings.Contains(errStr, "not found")
 }
 
+// Content types returned by getContentType.
+const (
+	contentTypeText        = "text/plain; charset=utf-8"
+	contentTypeHTML        = "text/html"
+	contentTypeJPEG        = "image/jpeg"
+	contentTypeOctetStream = "application/octet-stream"
+)
+
 // getContentType determines content type based on file extension or type.
 func getContentType(entry *ftp.Entry) string {
 	if entry.Type == ftp.EntryTypeFolder {
@@ -587,14 +595,14 @@ func getContentType(entry *ftp.Entry) string {
 	contentTypes := map[string]string{
 		".json": "application/json",
 		".xml":  "application/xml",
-		".txt":  "text/plain; charset=utf-8",
+		".txt":  contentTypeText,
 		".csv":  "text/csv",
-		".html": "text/html",
-		".htm":  "text/html",
+		".html": contentTypeHTML,
+		".htm":  contentTypeHTML,
 		".pdf":  "application/pdf",
 		".zip":  "application/zip",
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
+		".jpg":  contentTypeJPEG,
+		".jpeg": contentTypeJPEG,
 		".png":  "image/png",
 		".gif":  "image/gif",
 	}
@@ -603,7 +611,7 @@ func getContentType(entry *ftp.Entry) string {
 		return contentType
 	}
 
-	return "application/octet-stream"
+	return contentTypeOctetStream
 }
 
 func safeUint64ToInt64(u uint64) int64 {
