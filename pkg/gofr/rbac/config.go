@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
@@ -40,6 +41,10 @@ var (
 
 	// errAudienceWithoutJWT is returned when audience is set but no JWT claim path is.
 	errAudienceWithoutJWT = errors.New("audience requires jwtClaimPath or permissionsClaimPath")
+
+	// errEmptyAudience is returned when an audience entry is empty, which would accept a token whose
+	// aud is "".
+	errEmptyAudience = errors.New("audience entries must not be empty")
 )
 
 // extractionFailuresMetric counts requests whose role or permissions could not be read.
@@ -208,11 +213,21 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	}
 
 	if logger != nil {
-		mode, source := config.mode()
-		logger.Infof("RBAC enabled: mode=%s, claim=%s, audience=%v", mode, source, config.Audience)
+		config.logStartup(logger)
 	}
 
 	return &config, nil
+}
+
+// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+func (c *Config) logStartup(logger datasource.Logger) {
+	mode, source := c.mode()
+	logger.Infof("RBAC enabled: mode=%s, claim=%s, audience=%v", mode, source, c.Audience)
+
+	if mode == modePermissions && len(c.Roles) > 0 {
+		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
+			"permissions are read from the token, not from roles")
+	}
 }
 
 // mode reports which source authorization reads from, and the claim path or header that names it.
@@ -260,6 +275,8 @@ func (c *Config) validateClaimModes() error {
 		return errAudienceRequired
 	case len(c.Audience) > 0 && c.JWTClaimPath == "" && c.PermissionsClaimPath == "":
 		return errAudienceWithoutJWT
+	case slices.ContainsFunc(c.Audience, func(a string) bool { return strings.TrimSpace(a) == "" }):
+		return errEmptyAudience
 	}
 
 	return nil

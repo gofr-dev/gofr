@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// errUnreadableClaim is returned when the role or permissions claim is neither a string nor an
-// array. It is a denial (403), not a missing credential (401): the token was verified and carries
-// the claim, RBAC just cannot read it.
+// errUnreadableClaim is returned when the role or permissions claim has a type RBAC cannot read: an
+// object, or in permissions mode a number or boolean. It is a denial (403), not a missing credential
+// (401): the token was verified and carries the claim, RBAC just cannot read it.
 var errUnreadableClaim = fmt.Errorf("%w: claim is not a string or an array of strings", ErrAccessDenied)
 
 // held is what a request holds for authorization: role names, or - in permissions mode - the
@@ -22,10 +22,14 @@ type held struct {
 
 // heldFromClaim interprets a claim value. split selects permissions mode, where a string is a
 // space-separated list; in roles mode a string is one role name and is never split.
+//
+// A claim that holds nothing - "" or null in permissions mode, null in roles mode - is not an error:
+// the token is valid and simply grants nothing, so the request is denied with a 403 (RFC 6750 §3.1).
+// An empty role string stays a missing role (401), as it always was.
 func heldFromClaim(value any, split bool) (held, error) {
 	switch v := value.(type) {
 	case string:
-		if v == "" {
+		if v == "" && !split {
 			return held{}, ErrRoleNotFound
 		}
 
@@ -33,9 +37,16 @@ func heldFromClaim(value any, split bool) (held, error) {
 	case []any:
 		return held{list: v, perms: split}, nil
 	case nil:
-		return held{}, ErrRoleNotFound
-	default:
+		return held{perms: split}, nil
+	case map[string]any:
 		return held{}, errUnreadableClaim
+	default:
+		if split {
+			return held{}, errUnreadableClaim
+		}
+
+		// A number or boolean role has always been read as its text (123 is role "123").
+		return held{str: fmt.Sprint(v)}, nil
 	}
 }
 
@@ -57,7 +68,7 @@ func (h held) grant(required []string, roles map[string]map[string]struct{}) (st
 // grantFromString checks a string claim: one role name, or a space-separated list of permissions.
 func (h held) grantFromString(required []string, roles map[string]map[string]struct{}) (string, bool) {
 	if !h.perms {
-		if roleGrants(roles[h.str], required) {
+		if h.str != "" && roleGrants(roles[h.str], required) {
 			return h.str, true
 		}
 
@@ -101,6 +112,10 @@ func (h held) grantFromList(required []string, roles map[string]map[string]struc
 func (h held) count() int {
 	if h.list == nil {
 		if !h.perms {
+			if h.str == "" {
+				return 0
+			}
+
 			return 1
 		}
 

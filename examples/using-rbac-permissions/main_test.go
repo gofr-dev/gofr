@@ -18,7 +18,10 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-const keyID = "test-key"
+const (
+	keyID  = "test-key"
+	issuer = "https://auth.example.com/"
+)
 
 // newJWKSServer serves the public half of key as a JWKS, the way an identity provider does.
 func newJWKSServer(t *testing.T, key *rsa.PrivateKey) *httptest.Server {
@@ -46,6 +49,7 @@ func TestRBACPermissions(t *testing.T) {
 
 	jwksServer := newJWKSServer(t, key)
 	t.Setenv("JWKS_URL", jwksServer.URL+"/.well-known/jwks.json")
+	t.Setenv("TOKEN_ISSUER", issuer)
 
 	serverConfigs := testutil.NewServerConfigs(t)
 
@@ -78,7 +82,7 @@ func TestRBACPermissions(t *testing.T) {
 		return resp.StatusCode
 	}
 
-	readScope := jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "exp": exp}
+	readScope := jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "exp": exp, "iss": issuer}
 
 	// The OAuth middleware fetches the signing keys in the background; wait until it has them.
 	require.Eventually(t, func() bool { return call(http.MethodGet, readScope) == http.StatusOK },
@@ -93,19 +97,34 @@ func TestRBACPermissions(t *testing.T) {
 		{desc: "scope holds the permission", method: http.MethodGet, claims: readScope, wantStatus: http.StatusOK},
 		{
 			desc: "one of several scopes grants", method: http.MethodPost,
-			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "aud": "orders-api", "exp": exp},
+			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "aud": "orders-api", "exp": exp, "iss": issuer},
 			wantStatus: http.StatusCreated,
 		},
 		{desc: "scope lacks the permission", method: http.MethodPost, claims: readScope, wantStatus: http.StatusForbidden},
 		{
 			desc: "token minted for another API", method: http.MethodGet,
-			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "billing-api", "exp": exp},
+			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "billing-api", "exp": exp, "iss": issuer},
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			desc: "token without an expiry", method: http.MethodGet,
-			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "orders-api"},
+			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "iss": issuer},
 			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			desc: "token from another issuer", method: http.MethodGet,
+			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "exp": exp, "iss": "https://evil-idp/"},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			desc: "token without an issuer", method: http.MethodGet,
+			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "exp": exp},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			desc: "token without a scope holds nothing", method: http.MethodGet,
+			claims:     jwt.MapClaims{"aud": "orders-api", "exp": exp, "iss": issuer},
+			wantStatus: http.StatusForbidden,
 		},
 	}
 

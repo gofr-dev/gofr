@@ -25,6 +25,9 @@ const userRole authMethod = 4
 
 const unknownRouteLabel = "<unmatched>"
 
+// wellKnownPrefix is the path prefix the OAuth middleware passes through without verifying a token.
+const wellKnownPrefix = "/.well-known"
+
 // AuditLog represents a structured log entry for RBAC authorization decisions.
 // It follows the same pattern as HTTP RequestLog for consistency.
 type AuditLog struct {
@@ -32,16 +35,22 @@ type AuditLog struct {
 	Method        string `json:"method,omitempty"`
 	Route         string `json:"route,omitempty"`
 	Status        string `json:"status,omitempty"`
-	// Role is the role (or, in permissions mode, the permission) that granted access. On a denial
-	// it is the role only when a single role was held; with a role array or permissions claim it is
-	// empty and HeldCount says how many were held instead.
-	Role      string `json:"role,omitempty"`
-	HeldCount int    `json:"held_count,omitempty"`
+	// Role is the role that granted access. On a denial it is the role only when a single role was
+	// held; with a role array or permissions claim it is empty and HeldCount says how many were held
+	// instead.
+	Role string `json:"role,omitempty"`
+	// Permission is, in permissions mode, the permission that granted access.
+	Permission string `json:"permission,omitempty"`
+	HeldCount  int    `json:"held_count,omitempty"`
 }
 
 // PrettyPrint formats the RBAC audit log for terminal output, matching HTTP log format.
 func (ral *AuditLog) PrettyPrint(writer io.Writer) {
 	held := ral.Role
+	if held == "" {
+		held = ral.Permission
+	}
+
 	if held == "" && ral.HeldCount > 0 {
 		held = fmt.Sprintf("%d held", ral.HeldCount)
 	}
@@ -87,11 +96,13 @@ var (
 	// errAuthorizationError is returned as a generic error message for unknown errors in traces.
 	errAuthorizationError = errors.New("authorization error")
 
-	// errAudienceMismatch is returned when the token's aud shares no value with the configured audience.
-	errAudienceMismatch = fmt.Errorf("%w: token audience not accepted", ErrRoleNotFound)
+	// ErrAudienceMismatch is returned when the token's aud shares no value with the configured
+	// audience. It wraps ErrRoleNotFound, so it is a 401.
+	ErrAudienceMismatch = fmt.Errorf("%w: token audience not accepted", ErrRoleNotFound)
 
-	// errMissingExpiry is returned when a permissions-mode token carries no exp claim.
-	errMissingExpiry = fmt.Errorf("%w: token has no expiry", ErrRoleNotFound)
+	// ErrMissingExpiry is returned when a permissions-mode token carries no exp claim. It wraps
+	// ErrRoleNotFound, so it is a 401.
+	ErrMissingExpiry = fmt.Errorf("%w: token has no expiry", ErrRoleNotFound)
 )
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
@@ -175,7 +186,12 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			}
 
 			if config.Logger != nil {
-				logAuditEvent(config.Logger, r, granted, routeLabel, 0, true)
+				entry := &AuditLog{Route: routeLabel, Role: granted}
+				if h.perms {
+					entry.Role, entry.Permission = "", granted
+				}
+
+				logAuditEvent(config.Logger, r, entry, true)
 			}
 
 			// Store the granting role in context and continue
@@ -185,12 +201,13 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 	}
 }
 
-// reportExtractionFailure counts a request whose role or permissions could not be read, and warns
-// about the two causes an operator can fix: a claim of an unreadable type (named by its path, never
-// its value), and RBAC running without the OAuth middleware in front of it (warned once).
+// reportExtractionFailure counts a request whose role or permissions could not be read, labeled by
+// cause, and warns about the two causes an operator can fix: a claim of an unreadable type (named by
+// its path, never its value), and RBAC running without the OAuth middleware in front of it (warned
+// once).
 func reportExtractionFailure(r *http.Request, config *Config, err error, claimsWarning *sync.Once) {
 	if config.Metrics != nil {
-		config.Metrics.IncrementCounter(r.Context(), extractionFailuresMetric)
+		config.Metrics.IncrementCounter(r.Context(), extractionFailuresMetric, "reason", extractionFailureReason(err))
 	}
 
 	if config.Logger == nil {
@@ -201,11 +218,43 @@ func reportExtractionFailure(r *http.Request, config *Config, err error, claimsW
 	case errors.Is(err, errUnreadableClaim):
 		_, path := config.mode()
 		config.Logger.Warnf("RBAC: claim %q is not a string or an array of strings; request denied", path)
-	case errors.Is(err, errJWTClaimsNotFound):
+	case errors.Is(err, errJWTClaimsNotFound) && !isWellKnown(r.URL.Path):
+		// The OAuth middleware never verifies /.well-known/*, so no claims there is not a call-order
+		// problem.
 		claimsWarning.Do(func() {
 			config.Logger.Warnf("RBAC: no JWT claims in the request; call EnableOAuth before EnableRBAC")
 		})
 	}
+}
+
+// Values of the reason label on the extraction failures metric.
+const (
+	reasonAudienceMismatch = "audience_mismatch"
+	reasonMissingExpiry    = "missing_expiry"
+	reasonNoJWTClaims      = "no_jwt_claims"
+	reasonUnreadableClaim  = "unreadable_claim"
+	reasonMissingRole      = "missing_role"
+)
+
+// extractionFailureReason names the cause of an extraction failure for the metric's reason label.
+func extractionFailureReason(err error) string {
+	switch {
+	case errors.Is(err, ErrAudienceMismatch):
+		return reasonAudienceMismatch
+	case errors.Is(err, ErrMissingExpiry):
+		return reasonMissingExpiry
+	case errors.Is(err, errJWTClaimsNotFound):
+		return reasonNoJWTClaims
+	case errors.Is(err, errUnreadableClaim):
+		return reasonUnreadableClaim
+	default:
+		return reasonMissingRole
+	}
+}
+
+// isWellKnown reports whether path is under /.well-known, which the OAuth middleware does not verify.
+func isWellKnown(path string) bool {
+	return path == wellKnownPrefix || strings.HasPrefix(path, wellKnownPrefix+"/")
 }
 
 // handleAuthError handles authorization errors with custom error handler or default response.
@@ -222,7 +271,7 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 	// Log audit event (always enabled when Logger is available)
 	// Audit logging is automatically performed using GoFr's logger
 	if config.Logger != nil {
-		logAuditEvent(config.Logger, r, role, route, heldCount, false)
+		logAuditEvent(config.Logger, r, &AuditLog{Route: route, Role: role, HeldCount: heldCount}, false)
 	}
 
 	// Use custom error handler if provided
@@ -231,13 +280,18 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 		return
 	}
 
-	// Default error handling
-	if errors.Is(err, ErrRoleNotFound) {
+	// Default error handling. A 401 means the token itself is not acceptable; a 403 means it is, but
+	// holds nothing that grants access (RFC 6750 §3.1).
+	switch {
+	case errors.Is(err, ErrAudienceMismatch):
+		http.Error(w, "Unauthorized: Token audience not accepted", http.StatusUnauthorized)
+	case errors.Is(err, ErrMissingExpiry):
+		http.Error(w, "Unauthorized: Token has no expiry", http.StatusUnauthorized)
+	case errors.Is(err, ErrRoleNotFound):
 		http.Error(w, "Unauthorized: Missing or invalid role", http.StatusUnauthorized)
-		return
+	default:
+		http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
 	}
-
-	http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
 }
 
 // extractHeld extracts what the request holds for authorization.
@@ -271,17 +325,22 @@ func extractHeldFromJWT(r *http.Request, config *Config, claimPath string, permi
 	}
 
 	if len(config.Audience) > 0 && !audienceAccepted(claims["aud"], config.Audience) {
-		return held{}, errAudienceMismatch
+		return held{}, ErrAudienceMismatch
 	}
 
 	// The OAuth middleware rejects an exp in the past but accepts a token with none; a scope token
 	// that never expires is a standing credential, so permissions mode refuses it.
 	if permissionsMode && claims["exp"] == nil {
-		return held{}, errMissingExpiry
+		return held{}, ErrMissingExpiry
 	}
 
 	value, err := extractClaimValue(claims, claimPath)
 	if err != nil {
+		// A verified token without a permissions claim holds no permissions: a 403, not a 401.
+		if permissionsMode {
+			return held{perms: true}, nil
+		}
+
 		// Do not fall back to the header: JWT is the only method when configured
 		return held{}, ErrRoleNotFound
 	}
@@ -425,34 +484,27 @@ func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
 // Users don't need to configure this - it uses the provided logger automatically.
-func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, heldCount int, allowed bool) {
+// entry carries the route and what was held; the correlation ID, method and status are filled in here.
+func logAuditEvent(logger datasource.Logger, r *http.Request, entry *AuditLog, allowed bool) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}
 
-	status := "REJ"
+	entry.Status = "REJ"
 	if allowed {
-		status = "ACC"
+		entry.Status = "ACC"
 	}
 
 	// Extract correlation ID from trace context
-	correlationID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-	if correlationID == "" || correlationID == "00000000000000000000000000000000" {
-		correlationID = "<no-trace>"
+	entry.CorrelationID = trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+	if entry.CorrelationID == "" || entry.CorrelationID == "00000000000000000000000000000000" {
+		entry.CorrelationID = "<no-trace>"
 	}
 
-	// Create structured audit log entry
-	auditLog := &AuditLog{
-		CorrelationID: correlationID,
-		Method:        r.Method,
-		Route:         route,
-		Status:        status,
-		Role:          role,
-		HeldCount:     heldCount,
-	}
+	entry.Method = r.Method
 
 	// Use structured logging at debug level (logger will handle JSON encoding or PrettyPrint)
-	logger.Debug(auditLog)
+	logger.Debug(entry)
 }
 
 // sanitizeErrorForTrace sanitizes error messages for traces to prevent information leakage.

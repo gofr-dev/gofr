@@ -12,6 +12,8 @@ func TestHeldFromClaim(t *testing.T) {
 		"admin":     {"users:write": {}},
 		"viewer":    {"users:read": {}},
 		"Org Admin": {"org:manage": {}},
+		"123":       {"users:read": {}},
+		"":          {"users:read": {}},
 	}
 
 	testCases := []struct {
@@ -59,10 +61,21 @@ func TestHeldFromClaim(t *testing.T) {
 		},
 		{desc: "permission match is exact", value: "Orders:Read", split: true, required: []string{"orders:read"}, heldCount: 1, multi: true},
 		{desc: "empty string is a missing role", value: "", wantErr: ErrRoleNotFound},
-		{desc: "null claim is a missing role", value: nil, wantErr: ErrRoleNotFound},
-		{desc: "number is unreadable", value: 42.0, wantErr: errUnreadableClaim},
-		{desc: "boolean is unreadable", value: true, split: true, wantErr: errUnreadableClaim},
-		{desc: "object is unreadable", value: map[string]any{"a": "b"}, wantErr: errUnreadableClaim},
+		{
+			desc: "null role claim holds no role, not even one named empty", value: nil,
+			required: []string{"users:read"}, heldCount: 0,
+		},
+		{
+			desc: "number role is read as its text, as before multi-value claims", value: 123.0,
+			required: []string{"users:read"}, allowed: true, granted: "123", heldCount: 1,
+		},
+		{desc: "boolean role is read as its text", value: true, required: []string{"users:read"}, heldCount: 1},
+		{desc: "empty scope holds nothing", value: "", split: true, required: []string{"orders:read"}, multi: true},
+		{desc: "null scope holds nothing", value: nil, split: true, required: []string{"orders:read"}, multi: true},
+		{desc: "number scope is unreadable", value: 42.0, split: true, wantErr: errUnreadableClaim},
+		{desc: "boolean scope is unreadable", value: true, split: true, wantErr: errUnreadableClaim},
+		{desc: "object role is unreadable", value: map[string]any{"a": "b"}, wantErr: errUnreadableClaim},
+		{desc: "object scope is unreadable", value: map[string]any{"a": "b"}, split: true, wantErr: errUnreadableClaim},
 	}
 
 	for i, tc := range testCases {

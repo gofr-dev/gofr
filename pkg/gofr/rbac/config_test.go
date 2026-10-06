@@ -666,6 +666,7 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 		perms     string
 		audience  []string
 		startLine string
+		warn      string
 	}{
 		{
 			desc: "permissions mode from json", file: "rbac.json",
@@ -705,6 +706,19 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 			content: `{"roleHeader": "X-User-Role", "audience": ["x"], ` + endpoints + `}`,
 			wantErr: errAudienceWithoutJWT,
 		},
+		{
+			desc: "an empty audience entry is rejected", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", "audience": ["orders-api", ""], ` + endpoints + `}`,
+			wantErr: errEmptyAudience,
+		},
+		{
+			desc: "permissions mode with a roles section warns that the roles are not consulted", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", "audience": ["orders-api"], ` +
+				`"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			perms: "scope", audience: []string{"orders-api"},
+			startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api]",
+			warn:      "roles section is ignored",
+		},
 	}
 
 	for i, tc := range testCases {
@@ -732,6 +746,13 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 			assert.Equal(t, tc.perms, config.PermissionsClaimPath, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.audience, config.Audience, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Contains(t, logger.infoLogs, tc.startLine, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			if tc.warn == "" {
+				assert.Empty(t, logger.warnLogs, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.Len(t, logger.warnLogs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logger.warnLogs[0], tc.warn, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }

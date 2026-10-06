@@ -152,7 +152,8 @@ Exactly one mode is active:
 
 - both `jwtClaimPath` and `permissionsClaimPath` are set;
 - `permissionsClaimPath` is set without `audience`;
-- `audience` is set but neither JWT claim path is.
+- `audience` is set but neither JWT claim path is;
+- an `audience` entry is empty.
 
 At startup RBAC logs one line naming the mode it runs in, for example:
 
@@ -175,6 +176,8 @@ and is allowed if **any** of those roles has a required permission:
 | `"roles": ["viewer", "unknown"]` | `viewer` (names not in `roles[]` grant nothing) |
 | `"roles": ["", 42, "viewer"]` | `viewer` (empty and non-string entries are ignored) |
 | `"role": "Org Admin"` with `jwtClaimPath: "role"` | one role named `Org Admin` (a role string is never split) |
+| `"role": 123` or `"role": true` | one role named `123` or `true` (a number or boolean is read as its text) |
+| `"role": null` | no role (the request is denied with a 403) |
 | `"roles": [...]` with `jwtClaimPath: "roles[0]"` | the first element only |
 
 ### Permissions Mode (scope claim)
@@ -202,6 +205,7 @@ by exact string match:
 | `"scope": "orders:read orders:write"` | `orders:read` and `orders:write` (a string is split on spaces) |
 | `"permissions": ["orders:read", "orders:write"]` | each entry as is (entries are not split) |
 | `"permissions": ["", true, "orders:read"]` | `orders:read` (empty and non-string entries are ignored) |
+| `"scope": ""`, `"scope": null`, `"scope": []` or no `scope` claim | nothing (the request is denied with a 403) |
 
 Because the token itself is the grant here, permissions mode also checks two claims:
 
@@ -210,15 +214,47 @@ Because the token itself is the grant here, permissions mode also checks two cla
 - **`exp`**: the token must carry an expiry. A token without `exp` gets a **401**. (The OAuth
   middleware already rejects tokens whose `exp` is in the past.)
 
+Like every RBAC check, `aud` and `exp` are checked only on routes that have a rule in `endpoints`.
+A route with no rule is passed straight through (see [Unmatched Routes Behavior](#unmatched-routes-behavior)),
+so a token minted for another API still reaches it.
+
+RBAC does not check who issued the token. Permissions mode trusts what the token says, so pass the
+expected issuer to `EnableOAuth`; a token from any other issuer, or with no `iss`, then gets a 401:
+
+```go
+app.EnableOAuth(app.Config.Get("JWKS_URL"), 10, jwt.WithIssuer(app.Config.Get("TOKEN_ISSUER")))
+```
+
+Permissions mode is only as strict as your identity provider. If the provider grants a client any
+scope it asks for, every user holds every permission. Check how your provider decides which scopes
+a token gets — some need per-user RBAC or an access policy turned on before scopes are restricted.
+
 ### Rule Summary for JWT Modes
 
 | Case | Result |
 |---|---|
-| The claim is missing, or no JWT claims are in the request (OAuth not enabled) | 401 |
-| The claim is a number, boolean or object | 403, plus a WARN log naming the claim path (never its value) and a `rbac_role_extraction_failures` count |
-| The token's `aud` shares no value with `audience` | 401 |
-| Permissions mode, token has no `exp` | 401 |
+| No JWT claims are in the request (OAuth not enabled) | 401 |
+| Roles mode, the claim is missing or `""` | 401 |
+| Roles mode, the claim is `null` | 403 |
+| Roles mode, the claim is a number or boolean | read as a role name, e.g. `123` → role `123` |
+| Permissions mode, the claim is missing, `null`, `""` or `[]` | 403 |
+| The claim is an object, or (permissions mode) a number or boolean | 403, plus a WARN log naming the claim path (never its value) |
+| The token's `aud` shares no value with `audience` | 401, `Unauthorized: Token audience not accepted` |
+| Permissions mode, token has no `exp` | 401, `Unauthorized: Token has no expiry` |
 | No role or permission held grants a required permission | 403 |
+
+These follow [RFC 6750 §3.1](https://www.rfc-editor.org/rfc/rfc6750#section-3.1): a 401 means the
+token itself is not acceptable, and a 403 means the token is fine but holds nothing that grants
+access. A custom `ErrorHandler` can tell the 401 causes apart with `errors.Is(err,
+rbac.ErrAudienceMismatch)` and `errors.Is(err, rbac.ErrMissingExpiry)`; both also match
+`rbac.ErrRoleNotFound`.
+
+### Config Checks at Startup for JWT Modes
+
+- An `audience` entry that is empty is rejected — `[""]` would otherwise accept tokens whose `aud`
+  is `""`.
+- With `permissionsClaimPath` set, a `roles` section is never consulted; RBAC logs a WARN at startup
+  if one is present, so a section left over from roles mode is not mistaken for one that applies.
 
 ### Roles and Permissions
 
@@ -661,12 +697,15 @@ Or use role inheritance to avoid duplication:
 - Ensure OAuth middleware is enabled before RBAC (a WARN `call EnableOAuth before EnableRBAC`
   on the first request means it is not)
 - Verify JWT claim path is correct
-- A WARN naming the claim path means the claim has a type RBAC cannot read (a number, boolean or
-  object); it must be a string or an array of strings
+- A WARN naming the claim path means the claim has a type RBAC cannot read (an object, or in
+  permissions mode a number or boolean); it must be a string or an array of strings
+- A rule on a `/.well-known/*` path always gets a 401: the OAuth middleware does not verify tokens
+  there, so the request carries no claims
 
 **Every permissions-mode request gets a 401**
 - Check that the token's `aud` contains one of the values in `audience`
 - Check that the token has an `exp` claim
+- If `EnableOAuth` is given `jwt.WithIssuer`, check that the token's `iss` matches it
 
 **Config file not found**
 - Ensure config file exists at the specified path — relative paths resolve against the process's
@@ -748,14 +787,17 @@ RBAC middleware implements industry-standard security practices to protect sensi
 **Metrics:**
 - ✅ Authorization decision counts included
 - ✅ Status (allowed/denied) included
-- ✅ `rbac_role_extraction_failures` counts requests whose role or permissions could not be read
+- ✅ `rbac_role_extraction_failures` counts requests whose role or permissions could not be read,
+  with a `reason` label: `audience_mismatch` (a token for another API, or a wrong `audience`),
+  `no_jwt_claims` (RBAC is not behind OAuth), `missing_expiry`, `missing_role` (no role claim or
+  header) or `unreadable_claim` (an IdP or client problem)
 - ❌ Roles excluded (avoid high cardinality and PII concerns)
 
 **Logs:**
 - ✅ Roles included (required for compliance: SOC 2, PCI-DSS, NIST)
 - ✅ HTTP method, route, status, and reason included
 - ✅ With a role array or permissions mode, an allowed request logs only the one role or
-  permission that granted access, and a denied request logs only how many were held
+  permission that granted access (in permissions mode it is logged as `permission`, not `role`), and a denied request logs only how many were held
   (`held_count`), never their names. The `role` passed to a custom `ErrorHandler` on such a
   denial is empty. A single role (header, `"role"` or `"roles[0]"`) is logged as before.
 - ❌ Claim values are never logged; an unreadable claim is reported by its path only
