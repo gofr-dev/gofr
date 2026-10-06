@@ -264,9 +264,16 @@ Ops tooling that needs the full per-dependency map can scrape `GET /health` on `
 }
 ```
 
-Like the public endpoint, it answers `200` regardless of the aggregate `status` — read the
-`status` field itself to act on degradation. Setting `METRICS_PORT=0` disables the metrics
-server entirely, this endpoint with it.
+It always answers `200`, whatever the aggregate `status` — read the `status` field itself to act
+on degradation. Readiness checks registered with `AddReadinessCheck` do not apply here: they gate
+the public endpoint only, so this one is a report, not a probe target. Setting `METRICS_PORT=0`
+disables the metrics server entirely, this endpoint with it.
+
+Each request runs the health check of every configured datasource and service, so it costs a round
+trip per dependency — unlike `/metrics` next to it, which only reads counters. Concurrent requests
+share one round of checks; set `HEALTH_CACHE_TTL` (for example `5s`) to serve a recent result
+instead of re-checking on every scrape, and `HEALTH_CHECK_TIMEOUT` to bound a round against a
+backend that does not answer. Both are unset by default.
 
 > **Note:** "private" here means *not exposed through ingress*, identical to `/debug/pprof`'s
 > current guarantee — the metrics server binds all interfaces, so the boundary is network
