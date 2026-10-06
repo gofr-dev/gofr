@@ -48,6 +48,12 @@ func ContextLoggerFor(ctx context.Context, base Logger) ContextLogger {
 	return ContextLogger{base: base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
 }
 
+// IsInitialized reports whether the ContextLogger has a base logger to write to.
+// A zero-value ContextLogger, such as the one in a hand-built gofr.Context, does not.
+func (l *ContextLogger) IsInitialized() bool {
+	return l.base != nil
+}
+
 // withTraceInfo appends the trace ID from the context (if available).
 // This allows trace IDs to be extracted later during formatting or filtering.
 // The marker map is precomputed once per ContextLogger, so this only pays for

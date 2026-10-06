@@ -380,3 +380,13 @@ func BenchmarkContextLogger_Discarded(b *testing.B) {
 		l.Debug("this entry is below the configured level")
 	}
 }
+
+func TestContextLogger_IsInitialized(t *testing.T) {
+	var zero ContextLogger
+
+	assert.False(t, zero.IsInitialized(), "zero-value ContextLogger has no base logger")
+	assert.True(t, NewContextLogger(t.Context(), &mockLogger{}).IsInitialized())
+
+	built := ContextLoggerFor(t.Context(), &mockLogger{})
+	assert.True(t, built.IsInitialized())
+}
