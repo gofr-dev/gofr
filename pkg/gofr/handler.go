@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -246,6 +248,45 @@ func faviconHandler(*Context) (any, error) {
 
 func catchAllHandler(*Context) (any, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
+}
+
+func methodNotAllowedHandler(*Context) (any, error) {
+	return nil, gofrHTTP.ErrorMethodNotAllowed{}
+}
+
+// catchAll answers every request no registered route matched: 405 when the path is registered for
+// other methods, 404 when it is not registered at all.
+//
+// It is installed as a real PathPrefix("/") route rather than as mux's NotFoundHandler and
+// MethodNotAllowedHandler because mux applies the middleware chain only to a matched route
+// (gorilla/mux mux.go, guarded by MatchErr == nil). Served from those two fields, a 404 or 405
+// skips Tracer, Logging, Metrics and CORS — the CORS preflight to a GET-only path is answered 405
+// with no CORS headers, and every unknown path disappears from logs and metrics. As a route it
+// always matches, mux clears the method mismatch left by the routes before it (route.go, the else
+// arm of the matcher loop), and the whole chain runs.
+func (a *App) catchAll() http.Handler {
+	router := a.httpServer.router
+	notFound := handler{function: catchAllHandler, container: a.container}
+	methodNotAllowed := handler{function: methodNotAllowedHandler, container: a.container}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := router.AllowedMethods(r)
+		if len(methods) == 0 {
+			notFound.ServeHTTP(w, r)
+
+			return
+		}
+
+		// OPTIONS is listed because the CORS middleware answers it for every path before any route
+		// handler runs, so the resource does support it; RFC 9110 §10.2.1 has Allow list exactly that.
+		// A route registered for OPTIONS on the router itself has already put it in the list.
+		if !slices.Contains(methods, http.MethodOptions) {
+			methods = append(methods, http.MethodOptions)
+		}
+
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		methodNotAllowed.ServeHTTP(w, r)
+	})
 }
 
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
