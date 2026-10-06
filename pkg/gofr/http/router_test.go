@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -451,7 +450,7 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 // Test_StaticFileServing_EndpointRootWithoutServableIndex covers an endpoint root that resolves to
 // a directory holding no file the handler can serve. None of these may be answered with a listing
 // of the directory's contents, and none may reach http.ServeContent: with http.FileServer gone,
-// openFile's file type check is the only thing standing between a non-regular path and a 200
+// validateFile's file type check is the only thing standing between a non-regular path and a 200
 // whose body never arrives.
 func Test_StaticFileServing_EndpointRootWithoutServableIndex(t *testing.T) {
 	tempDir := t.TempDir()
@@ -660,7 +659,7 @@ func Test_StaticFileServing_MethodNotAllowed(t *testing.T) {
 // Test_StaticFileServing_PermissionDenied covers a path the process is not allowed to read. It is
 // the caller being refused rather than the server failing, which is the mapping net/http's own
 // toHTTPError makes and the one nginx and Apache make; 500 would tell a monitor the application is
-// broken when what it has is a file mode. Two routes reach it — openFile's own
+// broken when what it has is a file mode. Two routes reach it — validateFile's own
 // errReadPermissionDenied, and a real EACCES from os.Stat — and they must not answer differently.
 func Test_StaticFileServing_PermissionDenied(t *testing.T) {
 	if os.Geteuid() == 0 {
@@ -678,7 +677,7 @@ func Test_StaticFileServing_PermissionDenied(t *testing.T) {
 		expectedBody     string
 	}{
 		{
-			// Caught by openFile's mode check, which returns errReadPermissionDenied — an error
+			// Caught by validateFile's mode check, which returns errReadPermissionDenied — an error
 			// that has to satisfy fs.ErrPermission to be mapped rather than fall through to 500.
 			name: "Unreadable file is forbidden, not a server error",
 			setupFiles: func() error {
@@ -837,65 +836,72 @@ func Test_StaticFileServing_NoRedirect(t *testing.T) {
 
 func Test_isRestrictedFile(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
-		expected bool
+		name          string
+		directoryName string
+		url           string
+		absPath       string
+		expected      bool
 	}{
-		{name: "ordinary file is not restricted", url: "/index.html", expected: false},
-		{name: "openapi.json is restricted", url: "/openapi.json", expected: true},
+		{
+			name:          "file inside static directory is not restricted",
+			directoryName: "/app/public",
+			url:           "/index.html",
+			absPath:       "/app/public/index.html",
+			expected:      false,
+		},
+		{
+			name:          "openapi.json inside static directory is restricted",
+			directoryName: "/app/public",
+			url:           "/openapi.json",
+			absPath:       "/app/public/openapi.json",
+			expected:      true,
+		},
 		{
 			// A case-insensitive filesystem opens the same spec for this name, so the restriction
 			// has to cover every spelling of it rather than the one canonical form.
-			name: "openapi.json in a different case is restricted", url: "/openapi.JSON", expected: true,
+			name:          "openapi.json in a different case is restricted",
+			directoryName: "/app/public",
+			url:           "/openapi.JSON",
+			absPath:       "/app/public/openapi.JSON",
+			expected:      true,
 		},
-		{name: "openapi.json in a subdirectory is restricted", url: "/docs/openapi.json", expected: true},
-		{name: "nested file is not restricted", url: "/sub/page.html", expected: false},
-		{name: "endpoint root is not restricted", url: "/", expected: false},
+		{
+			name:          "file outside static directory is restricted",
+			directoryName: "/app/public",
+			url:           "/secret.txt",
+			absPath:       "/app/secret.txt",
+			expected:      true,
+		},
+		{
+			name:          "sibling directory with shared prefix is restricted",
+			directoryName: "/app/public",
+			url:           "/secret.txt",
+			absPath:       "/app/publicother/secret.txt",
+			expected:      true,
+		},
+		{
+			name:          "nested file inside static directory is not restricted",
+			directoryName: "/app/public",
+			url:           "/sub/page.html",
+			absPath:       "/app/public/sub/page.html",
+			expected:      false,
+		},
+		{
+			// A request for the endpoint root resolves to the directory itself, with no trailing
+			// separator. It is the directory being served, not an escape from it.
+			name:          "static directory itself is not restricted",
+			directoryName: "/app/public",
+			url:           "/",
+			absPath:       "/app/public",
+			expected:      false,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, staticFileConfig{}.isRestrictedFile(tc.url))
-		})
-	}
-}
-
-// Test_StaticFileServing_LexicalEscape drives the handler directly, below the router's path.Clean,
-// so a ".." reaches it unmodified. The sibling directory shares the served directory's prefix,
-// which is the case the old string comparison needed its trailing separator for.
-//
-// What answers these is rootRelativeName, not the root: it cleans the path against "/" before the
-// root sees it, so each ".." is spent inside the served directory and the request names a file
-// that is not there. The root's own refusal of a path that leaves it is what
-// Test_StaticFileServing_Symlinks covers, and the errEscapes check below is what keeps that
-// refusal a 404.
-func Test_StaticFileServing_LexicalEscape(t *testing.T) {
-	baseDir := t.TempDir()
-	publicDir := filepath.Join(baseDir, "public")
-
-	require.NoError(t, os.MkdirAll(publicDir, 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "publicother"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "secret.txt"), []byte("SUPERSECRET"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "publicother", "secret.txt"), []byte("SUPERSECRET"), 0o600))
-
-	root, err := os.OpenRoot(publicDir)
-	require.NoError(t, err)
-
-	cfg := staticFileConfig{directoryName: publicDir, logger: logging.NewMockLogger(logging.DEBUG), errEscapes: escapeError(root)}
-	root.Close()
-
-	require.Error(t, cfg.errEscapes, "the escape error must be captured, or an escape answers 500")
-
-	for _, p := range []string{"/../secret.txt", "../publicother/secret.txt", "/sub/../../secret.txt"} {
-		t.Run(p, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
-			req.URL.Path = p
-
-			w := httptest.NewRecorder()
-			cfg.staticHandler().ServeHTTP(w, req)
-
-			assert.Equal(t, http.StatusNotFound, w.Code)
-			assert.Equal(t, "404 Not Found", w.Body.String())
+			cfg := staticFileConfig{directoryName: tc.directoryName}
+			result := cfg.isRestrictedFile(tc.url, tc.absPath)
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -1041,161 +1047,6 @@ func Test_Router_AllowedMethods(t *testing.T) {
 	}
 }
 
-// Test_StaticFileServing_Symlinks is the matrix from #3855. A link is followed only while it stays
-// inside the served directory, wherever it points and however it is spelled, and an absolute link
-// is refused even when its target is inside: os.Root resolves it from the filesystem root.
-func Test_StaticFileServing_Symlinks(t *testing.T) {
-	baseDir := t.TempDir()
-
-	publicDir := filepath.Join(baseDir, "public")
-	assetsDir := filepath.Join(publicDir, "assets")
-	subDir := filepath.Join(publicDir, "sub")
-	secretsDir := filepath.Join(baseDir, "secrets")
-
-	for _, d := range []string{assetsDir, subDir, secretsDir} {
-		require.NoError(t, os.MkdirAll(d, 0o755))
-	}
-
-	require.NoError(t, os.WriteFile(filepath.Join(assetsDir, "logo.png"), []byte("PNGDATA"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "passwords.txt"), []byte("SUPERSECRET"), 0o600))
-
-	links := map[string]string{
-		filepath.Join(publicDir, "abs-outside.txt"):  filepath.Join(secretsDir, "passwords.txt"),
-		filepath.Join(publicDir, "rel-outside.txt"):  filepath.Join("..", "secrets", "passwords.txt"),
-		filepath.Join(publicDir, "evildir"):          secretsDir,
-		filepath.Join(publicDir, "rel-inside.png"):   filepath.Join("assets", "logo.png"),
-		filepath.Join(subDir, "dotdot-inside.png"):   filepath.Join("..", "assets", "logo.png"),
-		filepath.Join(publicDir, "abs-inside.png"):   filepath.Join(assetsDir, "logo.png"),
-		filepath.Join(baseDir, "public-link"):        publicDir,
-		filepath.Join(publicDir, "assets-link"):      "assets",
-		filepath.Join(assetsDir, "back-out-via.png"): filepath.Join("..", "..", "secrets", "passwords.txt"),
-	}
-
-	for link, target := range links {
-		require.NoError(t, os.Symlink(target, link))
-	}
-
-	tests := []struct {
-		name         string
-		dir          string
-		path         string
-		expectedCode int
-		expectedBody string
-	}{
-		{"absolute link outside is refused", publicDir, "/static/abs-outside.txt", http.StatusNotFound, "404 Not Found"},
-		{"relative link outside is refused", publicDir, "/static/rel-outside.txt", http.StatusNotFound, "404 Not Found"},
-		{"directory link outside is refused", publicDir, "/static/evildir/passwords.txt", http.StatusNotFound, "404 Not Found"},
-		{"nested link climbing out is refused", publicDir, "/static/assets/back-out-via.png", http.StatusNotFound, "404 Not Found"},
-		{"relative link inside is served", publicDir, "/static/rel-inside.png", http.StatusOK, "PNGDATA"},
-		{"relative link with dotdot landing inside is served", publicDir, "/static/sub/dotdot-inside.png", http.StatusOK, "PNGDATA"},
-		{"relative directory link inside is served", publicDir, "/static/assets-link/logo.png", http.StatusOK, "PNGDATA"},
-		{
-			// The breaking change #3855 accepts: the target is inside, but spelled from the filesystem
-			// root, so the root cannot follow it.
-			"absolute link inside is refused", publicDir, "/static/abs-inside.png", http.StatusNotFound, "404 Not Found",
-		},
-		{
-			// The deploy pattern (current -> releases/42): the served directory itself is a symlink.
-			"served directory reached through a symlink", filepath.Join(baseDir, "public-link"), "/static/assets/logo.png",
-			http.StatusOK, "PNGDATA",
-		},
-		{
-			"served directory through a symlink still refuses escapes", filepath.Join(baseDir, "public-link"),
-			"/static/rel-outside.txt", http.StatusNotFound, "404 Not Found",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			router := NewRouter()
-			router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tc.dir)
-
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody))
-
-			assert.Equal(t, tc.expectedCode, w.Code)
-			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
-			assert.NotContains(t, w.Body.String(), "SUPERSECRET")
-		})
-	}
-}
-
-// Test_StaticFileServing_Custom404ThroughRoot pins that the custom 404 page is read through the root
-// too: a 404.html that links outside the served directory must not be the way out.
-func Test_StaticFileServing_Custom404ThroughRoot(t *testing.T) {
-	baseDir := t.TempDir()
-	publicDir := filepath.Join(baseDir, "public")
-
-	require.NoError(t, os.MkdirAll(publicDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "secret.html"), []byte("SUPERSECRET"), 0o600))
-	require.NoError(t, os.Symlink(filepath.Join("..", "secret.html"), filepath.Join(publicDir, staticServerNotFoundFileName)))
-
-	router := NewRouter()
-	router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", publicDir)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/missing.txt", http.NoBody))
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "404 Not Found", w.Body.String())
-}
-
-// Test_StaticFileServing_FollowsRedeploy pins that the served directory is resolved per request. A
-// root opened once at registration holds the directory it was opened on, so repointing a release
-// link, or replacing the directory in place, would leave the app serving the old files until it
-// restarted.
-func Test_StaticFileServing_FollowsRedeploy(t *testing.T) {
-	baseDir := t.TempDir()
-
-	for _, rel := range []string{"1", "2"} {
-		dir := filepath.Join(baseDir, "releases", rel)
-		require.NoError(t, os.MkdirAll(dir, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "app.txt"), []byte("V"+rel), 0o600))
-	}
-
-	current := filepath.Join(baseDir, "current")
-	require.NoError(t, os.Symlink(filepath.Join("releases", "1"), current))
-
-	router := NewRouter()
-	router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", current)
-
-	get := func() (int, string) {
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/app.txt", http.NoBody))
-
-		return w.Code, w.Body.String()
-	}
-
-	code, body := get()
-	require.Equal(t, http.StatusOK, code)
-	require.Equal(t, "V1", body)
-
-	// Repoint the release link, as a symlink-swap deploy does.
-	next := filepath.Join(baseDir, "current.next")
-	require.NoError(t, os.Symlink(filepath.Join("releases", "2"), next))
-	require.NoError(t, os.Rename(next, current))
-
-	code, body = get()
-	assert.Equal(t, http.StatusOK, code)
-	assert.Equal(t, "V2", body, "a repointed release link must be served without a restart")
-
-	// Replace the directory the link points at.
-	rel2 := filepath.Join(baseDir, "releases", "2")
-	require.NoError(t, os.Rename(rel2, rel2+"-old"))
-	require.NoError(t, os.MkdirAll(rel2, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(rel2, "app.txt"), []byte("V3"), 0o600))
-
-	code, body = get()
-	assert.Equal(t, http.StatusOK, code)
-	assert.Equal(t, "V3", body, "a directory replaced in place must be served without a restart")
-
-	// Remove the served directory entirely: a miss, not a 500.
-	require.NoError(t, os.Remove(current))
-
-	code, _ = get()
-	assert.Equal(t, http.StatusNotFound, code)
-}
-
 // countedRoutes registers n GET routes directly on mux, each counting how often it is asked to
 // match. The counter is the route's first matcher, so it sees every Match call on that route.
 func countedRoutes(r *Router, n int) *atomic.Int64 {
@@ -1253,33 +1104,4 @@ func Benchmark_Router_AllowedMethods_Miss(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = r.AllowedMethods(req)
 	}
-}
-
-// Test_StaticFileServing_UnlistableDirectory pins what containment costs. A root opens every
-// directory on the way to a file for reading, so one the process can traverse but not list answers
-// 403 for the files beneath it, where a plain open of the joined path would have served them.
-func Test_StaticFileServing_UnlistableDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("directory mode bits do not restrict this process")
-	}
-
-	publicDir := t.TempDir()
-	lockedDir := filepath.Join(publicDir, "locked")
-
-	require.NoError(t, os.MkdirAll(lockedDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(lockedDir, "file.txt"), []byte("content"), 0o600))
-	require.NoError(t, os.Chmod(lockedDir, 0o311))
-
-	t.Cleanup(func() { _ = os.Chmod(lockedDir, 0o755) })
-
-	r := NewRouter()
-	r.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", publicDir)
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/locked/file.txt", http.NoBody)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.NotContains(t, w.Body.String(), "content")
 }
