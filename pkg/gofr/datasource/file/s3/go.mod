@@ -29,6 +29,7 @@ require (
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	google.golang.org/api v0.299.0 // indirect
 )
