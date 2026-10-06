@@ -3,7 +3,7 @@ package google
 import (
 	"context"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub" //nolint:staticcheck // pubsub v1 is deprecated in favor of v2; the migration is a separate change
 )
 
 type Client interface {

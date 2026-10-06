@@ -330,6 +330,32 @@ func Test_ReadDir(t *testing.T) {
 				}, nil)
 			},
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runReadDirTest(t, fs, tt.dirPath, tt.expectedResults, tt.setupMock)
+		})
+	}
+}
+
+func Test_ReadDir_OneLevelListing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	tests := []struct {
+		name            string
+		dirPath         string
+		expectedResults []result
+		setupMock       func()
+	}{
 		{
 			name:    "Returns only one-level entries using common prefixes",
 			dirPath: "abc",
@@ -403,7 +429,7 @@ func runReadDirTest(t *testing.T, fs *FileSystem, dirPath string, expectedResult
 	res, err := fs.ReadDir(dirPath)
 	require.NoError(t, err, "Error reading directory")
 
-	results := make([]result, 0)
+	results := make([]result, 0, len(res))
 
 	for _, entry := range res {
 		results = append(results, result{entry.Name(), entry.Size(), entry.IsDir()})

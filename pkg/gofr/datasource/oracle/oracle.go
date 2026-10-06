@@ -126,7 +126,7 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 func (c *Client) Select(ctx context.Context, dest any, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "select", query)
 
-	if reflect.TypeOf(dest).Kind() != reflect.Ptr || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
+	if reflect.TypeOf(dest).Kind() != reflect.Pointer || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
 		return errInvalidDestType
 	}
 
@@ -226,7 +226,7 @@ func scanRows(rows *sql.Rows) ([]map[string]any, error) {
 func (t *oracleTx) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
 	start := time.Now()
 
-	if reflect.TypeOf(dest).Kind() != reflect.Ptr || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
+	if reflect.TypeOf(dest).Kind() != reflect.Pointer || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
 		return errInvalidDestType
 	}
 

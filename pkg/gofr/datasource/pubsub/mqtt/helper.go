@@ -47,9 +47,9 @@ func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pu
 		message.Topic = msg.Topic()
 		message.Value = msg.Payload()
 		message.MetaData = map[string]string{
-			"qos":       string(msg.Qos()),
-			"retained":  strconv.FormatBool(msg.Retained()),
-			"messageID": strconv.Itoa(int(msg.MessageID())),
+			metaDataQoS:       string(msg.Qos()),
+			metaDataRetained:  strconv.FormatBool(msg.Retained()),
+			metaDataMessageID: strconv.Itoa(int(msg.MessageID())),
 		}
 
 		select {
@@ -146,9 +146,9 @@ func (*MQTT) createMqttHandler(msgs chan *pubsub.Message) mqtt.MessageHandler {
 		messg.Topic = msg.Topic()
 		messg.Value = msg.Payload()
 		messg.MetaData = map[string]string{
-			"qos":       string(msg.Qos()),
-			"retained":  strconv.FormatBool(msg.Retained()),
-			"messageID": strconv.Itoa(int(msg.MessageID())),
+			metaDataQoS:       string(msg.Qos()),
+			metaDataRetained:  strconv.FormatBool(msg.Retained()),
+			metaDataMessageID: strconv.Itoa(int(msg.MessageID())),
 		}
 
 		messg.Committer = &message{msg: msg}
@@ -164,9 +164,9 @@ func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.M
 			Topic: msg.Topic(),
 			Value: msg.Payload(),
 			MetaData: map[string]string{
-				"qos":       string(msg.Qos()),
-				"retained":  strconv.FormatBool(msg.Retained()),
-				"messageID": strconv.Itoa(int(msg.MessageID())),
+				metaDataQoS:       string(msg.Qos()),
+				metaDataRetained:  strconv.FormatBool(msg.Retained()),
+				metaDataMessageID: strconv.Itoa(int(msg.MessageID())),
 			},
 		}
 
