@@ -247,6 +247,13 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			setup:   func(a *App) { a.AddStaticFiles("/", t.TempDir()) },
 			wantLog: []string{routeCheckFailed, "* /{path:.*}"},
 		},
+		{
+			desc:    "an application route under /.well-known is checked, GoFr's own are not",
+			config:  rbacGuardingPing,
+			setup:   func(a *App) { a.GET("/.well-known/custom", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "GET /.well-known/custom"},
+			notLog:  []string{"/.well-known/health", "/.well-known/alive", "favicon.ico"},
+		},
 	}
 
 	for i, tc := range tests {
@@ -257,22 +264,7 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 				t.Setenv("GOFR_RBAC_ROUTE_CHECK", tc.mode)
 			}
 
-			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
-
-			var outcome startupOutcome
-
-			stderr := testutil.StderrOutputForFunc(func() {
-				a := New()
-				a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
-
-				if tc.setup != nil {
-					tc.setup(a)
-				}
-
-				require.NoError(t, a.EnableRBAC(path))
-
-				outcome = a.prepareHTTPServer()
-			})
+			outcome, stderr := runPrepareHTTPServer(t, tc.config, tc.setup)
 
 			assert.Equal(t, tc.wantOutcome, outcome, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -285,6 +277,29 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runPrepareHTTPServer builds an app serving GET /ping with the RBAC config content, applies setup
+// when it is set, and runs prepareHTTPServer, returning its outcome and what it wrote to stderr.
+func runPrepareHTTPServer(t *testing.T, config string, setup func(*App)) (outcome startupOutcome, stderr string) {
+	t.Helper()
+
+	path := writeRBACConfig(t, t.TempDir(), "rbac.json", config)
+
+	stderr = testutil.StderrOutputForFunc(func() {
+		a := New()
+		a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+
+		if setup != nil {
+			setup(a)
+		}
+
+		require.NoError(t, a.EnableRBAC(path))
+
+		outcome = a.prepareHTTPServer()
+	})
+
+	return outcome, stderr
 }
 
 // TestRun_RBACRouteCheckFailExitsNonZero checks that GOFR_RBAC_ROUTE_CHECK=fail reaches the
@@ -308,4 +323,48 @@ func TestRun_RBACRouteCheckFailExitsNonZero(t *testing.T) {
 	})
 
 	assert.Equal(t, []int{exitCodeStartupFailed}, codes)
+}
+
+// TestRun_RBACRouteCheckFailStopsBeforeServers checks that a failed route check is the last thing a
+// refused start does: the MCP port is not looked at, and no HTTP server is announced.
+func TestRun_RBACRouteCheckFailStopsBeforeServers(t *testing.T) {
+	tests := []struct {
+		desc      string
+		enableMCP bool // with an MCP_PORT that cannot be served, which fails startup if looked at
+	}{
+		{desc: "no HTTP server is announced"},
+		{desc: "the MCP port is not looked at", enableMCP: true},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+			t.Setenv("GOFR_RBAC_ROUTE_CHECK", "fail")
+			t.Setenv("MCP_PORT", "70000")
+
+			path := writeRBACConfig(t, t.TempDir(), "rbac.json", rbacLeavingPingUncovered)
+
+			var stderr string
+
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(func() {
+					a := New()
+					a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+
+					if tc.enableMCP {
+						a.EnableMCP()
+					}
+
+					require.NoError(t, a.EnableRBAC(path))
+					a.exit = func(int) {}
+
+					a.Run()
+				})
+			})
+
+			assert.Contains(t, stderr, routeCheckFailed, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.NotContains(t, stderr, "MCP server cannot start", "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.NotContains(t, stdout, "Registered HTTP server on port", "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
 }

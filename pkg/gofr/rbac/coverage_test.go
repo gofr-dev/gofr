@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// coverageRoutes is a route table shaped like the one GoFr hands the check: one entry per method
-// and path, the built-in well-known routes, and a static directory served at /static.
+// coverageRoutes is an application route table shaped like the one GoFr hands the check: one entry
+// per method and path, and a static directory served at /static.
 func coverageRoutes() []string {
 	return []string{
 		"GET /api/users",
@@ -18,11 +18,17 @@ func coverageRoutes() []string {
 		"GET /api/users/{id}",
 		"DELETE /api/users/{id}",
 		"GET /api/posts",
-		"GET /.well-known/health",
-		"GET /.well-known/alive",
-		"GET " + faviconPath,
 		"* /static",
 		"* /static/{path:.*}",
+	}
+}
+
+// coverageBuiltInRoutes is the part of the route table GoFr registers itself.
+func coverageBuiltInRoutes() []string {
+	return []string{
+		"GET /.well-known/health",
+		"GET /.well-known/alive",
+		"GET /favicon.ico",
 	}
 }
 
@@ -53,6 +59,7 @@ const (
 type routeMismatchCase struct {
 	desc          string
 	endpoints     []EndpointMapping
+	extraRoutes   []string // application routes added to coverageRoutes for this case
 	wantDead      []string // entries expected on the dead-rule line
 	wantUncovered []string // entries expected on the uncovered-route line
 	wantPartial   []string // entries expected on the partly-covered line
@@ -127,6 +134,13 @@ func routeMismatchCases() []routeMismatchCase {
 				guard("/static/{path:.*}", http.MethodGet, http.MethodHead)),
 			wantPartial: []string{"* /static/{path:.*} (by GET /static/{path:.*} and HEAD /static/{path:.*})"},
 		},
+	}
+}
+
+// builtInAndPublicCases are the cases of TestConfig_ReportRouteMismatches about built-in routes,
+// public rules, and more than one kind of mismatch at once.
+func builtInAndPublicCases() []routeMismatchCase {
+	return []routeMismatchCase{
 		{
 			desc: "a rule for a built-in route is live",
 			endpoints: append(coveringRules(),
@@ -152,7 +166,13 @@ func routeMismatchCases() []routeMismatchCase {
 				guard("/static/{path:.*}", "*"),
 			},
 			wantUncovered: []string{"GET /api/posts", "POST /api/users"},
-			notLogged:     []string{"/.well-known", faviconPath, "GET /api/users,", "/api/users/{id}"},
+			notLogged:     []string{"/.well-known", "/favicon.ico", "GET /api/users,", "/api/users/{id}"},
+		},
+		{
+			desc:          "an application route under /.well-known is checked",
+			endpoints:     coveringRules(),
+			extraRoutes:   []string{"GET /.well-known/custom"},
+			wantUncovered: []string{"GET /.well-known/custom"},
 		},
 		{
 			desc:          "dead rules and uncovered routes are both reported",
@@ -164,13 +184,13 @@ func routeMismatchCases() []routeMismatchCase {
 }
 
 func TestConfig_ReportRouteMismatches(t *testing.T) {
-	for i, tc := range routeMismatchCases() {
+	for i, tc := range append(routeMismatchCases(), builtInAndPublicCases()...) {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := &mockLogger{}
 			config := newTestConfig(t, tc.endpoints, nil)
 			config.Logger = logger
 
-			got := config.ReportRouteMismatches(coverageRoutes())
+			got := config.ReportRouteMismatches(append(coverageRoutes(), tc.extraRoutes...), coverageBuiltInRoutes())
 
 			wantMismatch := len(tc.wantDead)+len(tc.wantUncovered)+len(tc.wantPartial) > 0
 			assert.Equal(t, wantMismatch, got, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -197,7 +217,7 @@ func TestConfig_ReportRouteMismatches(t *testing.T) {
 func TestConfig_ReportRouteMismatches_NilLogger(t *testing.T) {
 	config := newTestConfig(t, coveringRules()[1:], nil)
 
-	assert.True(t, config.ReportRouteMismatches(coverageRoutes()))
+	assert.True(t, config.ReportRouteMismatches(coverageRoutes(), coverageBuiltInRoutes()))
 }
 
 // assertLogLine checks that exactly one line carries marker and lists every entry of want when want
@@ -258,6 +278,10 @@ func Test_routeEntry_overlaps(t *testing.T) {
 		{"root against a path", "GET /", "GET /api", false},
 		{"constraint containing a slash spans segments", "GET /files/{path:[a-z/]+}", "GET /files/a/b/c", true},
 		{"uncompilable constraint is assumed to overlap", "GET /api/{id:[}", "GET /api/users", true},
+		{"space in a constraint is part of it", "GET /orders/{id: [0-9]+}", "GET /orders/42", false},
+		{"two variables in one segment admit the literal", "GET /items/{a}-{b}", "GET /items/x-y", true},
+		{"two variables in one segment reject the literal", "GET /items/{a}-{b}", "GET /items/abc", false},
+		{"route constraint matching a slash spans segments", "GET /files/a/b", "GET /files/{p:[^.]+}", true},
 		{"empty rule matches nothing", "GET ", "GET /api", false},
 		{"different methods", "GET /api/users", "POST /api/users", false},
 		{"wildcard rule method", "* /api/users", "POST /api/users", true},
@@ -304,6 +328,14 @@ func Test_routeEntry_covers(t *testing.T) {
 		{"uncompilable constraint covers nothing", "GET /api/{id:[}", "GET /api/users", false},
 		{"slash constraint covers a matching literal tail", "GET /files/{path:[a-z/]+}", "GET /files/a/b", true},
 		{"slash constraint does not cover a variable", "GET /files/{path:[a-z/]+}", "GET /files/{name}", false},
+		{"catch-all covers only as the rule's last segment", "GET /api/{rest:.*}/admin", "GET /api/users", false},
+		{"two variables in one segment are not one free variable", "GET /items/{a}-{b}", "GET /items/{id}", false},
+		{"two variables in one segment cover the same segment", "GET /items/{a}-{b}", "GET /items/{x}-{y}", true},
+		{"two variables in one segment cover a literal they match", "GET /items/{a}-{b}", "GET /items/x-y", true},
+		{"free variable covers two variables in one segment", "GET /items/{id}", "GET /items/{a}-{b}", true},
+		{"free variable does not cover a constraint matching a slash", "GET /files/{x}", "GET /files/{p:[^.]+}", false},
+		{"constraint matching a slash covers a literal tail", "GET /files/{p:[^.]+}", "GET /files/a/b", true},
+		{"space in a constraint is part of it", "GET /orders/{id: [0-9]+}", "GET /orders/{id:[0-9]+}", false},
 		{"same method", "GET /api/users", "GET /api/users", true},
 		{"different method", "GET /api/users", "POST /api/users", false},
 		{"wildcard rule covers any method", "* /api/users", "DELETE /api/users", true},
@@ -340,7 +372,7 @@ func BenchmarkConfig_ReportRouteMismatches(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				if config.ReportRouteMismatches(routes) {
+				if config.ReportRouteMismatches(routes, nil) {
 					b.Fatal("every route is covered, so no mismatch is expected")
 				}
 			}

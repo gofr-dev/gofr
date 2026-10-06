@@ -2,6 +2,8 @@ package rbac
 
 import (
 	"regexp"
+	"regexp/syntax"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -10,13 +12,19 @@ import (
 // without a method matcher, such as a static-file prefix.
 const anyMethod = "*"
 
-// faviconPath is the built-in favicon route GoFr registers itself.
-const faviconPath = "/favicon.ico"
+// freeVariablePattern is what mux matches a "{name}" variable against in a path.
+const freeVariablePattern = "[^/]+"
 
-// ReportRouteMismatches compares the config against routes, the complete route table, and logs
-// every mismatch it finds. Each route is "METHOD /template" in mux syntax, with "*" for a route
-// registered without a method matcher; a prefix route is passed with a trailing catch-all segment,
-// as "/static/{path:.*}". It reports whether any mismatch was logged as an error.
+// invalidPattern stands for the pattern of a segment mux would refuse. It does not compile, so the
+// segment covers nothing.
+const invalidPattern = "["
+
+// ReportRouteMismatches compares the config against the complete route table and logs every
+// mismatch it finds. routes are the routes the application registered and builtInRoutes the ones
+// GoFr registered itself, which need no rule but keep a rule written for them live. Each route is
+// "METHOD /template" in mux syntax, with "*" for a route registered without a method matcher; a
+// prefix route is passed with a trailing catch-all segment, as "/static/{path:.*}". It reports
+// whether any mismatch was logged as an error.
 //
 // It logs one line for each kind of mismatch, listing its entries as "METHOD path":
 //
@@ -26,23 +34,17 @@ const faviconPath = "/favicon.ico"
 //   - an uncovered route is matched by no rule, so it is served without role checks.
 //   - a partly covered route is matched by rules for some of its requests but not all of them.
 //
-// GoFr's own /.well-known/* routes and /favicon.ico need no rule.
-//
 // Paths are compared as written, the way requests are matched: "/api/users/" and "/api/users" are
 // different paths. The dead-rule check is lenient - a rule is live if some request could match it
 // and a route - so that a live rule is never reported as dead. The coverage check is strict: a
-// rule covers a route only when it matches every request the route serves.
-func (c *Config) ReportRouteMismatches(routes []string) bool {
+// rule covers a route only when the check can show that it matches every request the route
+// serves, and a route it cannot show that for is reported as partly covered.
+func (c *Config) ReportRouteMismatches(routes, builtInRoutes []string) bool {
 	rc := newRouteChecker()
 
 	rules := make([]routeEntry, len(c.rules))
 	for i := range c.rules {
 		rules[i] = rc.newEntry(c.rules[i].method, c.rules[i].pattern)
-	}
-
-	parsed := make([]routeEntry, len(routes))
-	for j, route := range routes {
-		parsed[j] = rc.parseEntry(route)
 	}
 
 	var (
@@ -51,18 +53,19 @@ func (c *Config) ReportRouteMismatches(routes []string) bool {
 		deadGuards, deadOpen []string
 	)
 
-	for j := range parsed {
-		if isBuiltInRoute(parsed[j].rawPath) {
-			markLiveRules(rules, &parsed[j], live)
+	for _, route := range builtInRoutes {
+		entry := rc.parseEntry(route)
+		markLiveRules(rules, &entry, live)
+	}
 
-			continue
-		}
+	for _, route := range routes {
+		entry := rc.parseEntry(route)
 
-		switch covering := classifyRoute(rules, &parsed[j], live); {
+		switch covering := classifyRoute(rules, &entry, live); {
 		case covering == nil:
-			uncovered = append(uncovered, parsed[j].label)
+			uncovered = append(uncovered, entry.label)
 		case len(covering) > 0:
-			partial = append(partial, parsed[j].label+" (by "+strings.Join(sortedUnique(covering), " and ")+")")
+			partial = append(partial, entry.label+" (by "+strings.Join(sortedUnique(covering), " and ")+")")
 		}
 	}
 
@@ -163,20 +166,23 @@ func sortedUnique(entries []string) []string {
 	return out
 }
 
-// isBuiltInRoute reports whether a template belongs to a route GoFr registers itself, which is left
-// out of the coverage report because the application did not write it.
-func isBuiltInRoute(template string) bool {
-	return strings.HasPrefix(template, "/.well-known/") || template == faviconPath
-}
-
 // routeChecker holds what one check shares across its comparisons: each distinct constraint is
 // compiled once, however many rules and routes carry it.
 type routeChecker struct {
-	constraints map[string]*regexp.Regexp
+	constraints map[string]compiledConstraint
+}
+
+// compiledConstraint is what one check knows about a constraint.
+type compiledConstraint struct {
+	// re is the constraint anchored to a whole segment, or nil when it does not compile.
+	re *regexp.Regexp
+
+	// spans is set when the constraint can match a "/". See admitsSlash.
+	spans bool
 }
 
 func newRouteChecker() *routeChecker {
-	return &routeChecker{constraints: make(map[string]*regexp.Regexp)}
+	return &routeChecker{constraints: make(map[string]compiledConstraint)}
 }
 
 // routeEntry is a rule or a route, split into segments once for every comparison it takes part in.
@@ -184,13 +190,10 @@ type routeEntry struct {
 	// method is the upper-cased method, or anyMethod.
 	method string
 
-	// rawPath is the path as written.
-	rawPath string
-
 	// label is how the entry is reported: "METHOD path".
 	label string
 
-	// segments is rawPath split on "/", empty segments kept. Nil for an empty path, which matches
+	// segments is the path split on "/", empty segments kept. Nil for an empty path, which matches
 	// nothing.
 	segments []pathSegment
 }
@@ -200,13 +203,17 @@ type pathSegment struct {
 	// text is the segment as written.
 	text string
 
-	// variable is set for a "{name}" or "{name:constraint}" segment.
+	// variable is set for a segment holding any "{...}" variable.
 	variable bool
 
-	// catchAll is set for a variable that can span several segments. See isCatchAllVariable.
+	// catchAll is set for a variable that can span several segments: one whose pattern can match a
+	// "/", as mux applies a variable's pattern to the whole path rather than to one segment.
 	catchAll bool
 
-	// constraint is the variable's constraint as written, trimmed; empty for a free variable.
+	// constraint is what the segment matches. For a segment that is exactly one variable, it is the
+	// variable's constraint as written - mux does not trim it - and empty for a free variable. For
+	// any other segment holding variables, such as "{a}-{b}", it is the regexp mux builds for the
+	// segment.
 	constraint string
 
 	// re is constraint compiled and anchored, or nil for a free variable or one that does not
@@ -225,7 +232,7 @@ func (rc *routeChecker) parseEntry(s string) routeEntry {
 }
 
 func (rc *routeChecker) newEntry(method, path string) routeEntry {
-	entry := routeEntry{method: method, rawPath: path, label: method + " " + path}
+	entry := routeEntry{method: method, label: method + " " + path}
 
 	if path == "" {
 		return entry
@@ -244,45 +251,154 @@ func (rc *routeChecker) newEntry(method, path string) routeEntry {
 func (rc *routeChecker) newSegment(text string) pathSegment {
 	seg := pathSegment{text: text}
 
-	if !isVariableSegment(text) {
+	if !strings.Contains(text, "{") {
 		return seg
 	}
 
 	seg.variable = true
-	seg.catchAll = isCatchAllVariable(text)
+	seg.constraint = segmentPattern(text)
 
-	inner := text[1 : len(text)-1]
-
-	idx := strings.Index(inner, ":")
-	if idx < 0 {
-		return seg
+	if seg.constraint != "" {
+		compiled := rc.compile(seg.constraint)
+		seg.re, seg.catchAll = compiled.re, compiled.re != nil && compiled.spans
 	}
-
-	seg.constraint = strings.TrimSpace(inner[idx+1:])
-	seg.re = rc.compile(seg.constraint)
 
 	return seg
 }
 
-// compile returns constraint anchored to a whole segment, as mux applies it, or nil when it does
-// not compile.
-func (rc *routeChecker) compile(constraint string) *regexp.Regexp {
-	if re, ok := rc.constraints[constraint]; ok {
-		return re
+// segmentPattern returns what a segment holding variables matches, the way mux reads its template:
+// the constraint as written for a segment that is exactly one "{name:constraint}", empty for one
+// "{name}", and otherwise the segment's literal text and each variable's pattern - "[^/]+" for a
+// free one - joined into one regexp. A segment mux would refuse, with unbalanced braces or an
+// empty name or pattern, gets invalidPattern, which does not compile and so covers nothing.
+func segmentPattern(text string) string {
+	groups := braceGroups(text)
+	if groups == nil {
+		return invalidPattern
 	}
 
-	re, err := regexp.Compile("^(?:" + constraint + ")$")
-	if err != nil {
-		re = nil
+	var (
+		pattern strings.Builder
+		end     int
+	)
+
+	for _, group := range groups {
+		name, constraint, hasConstraint := strings.Cut(text[group[0]+1:group[1]], ":")
+		if name == "" || hasConstraint && constraint == "" {
+			return invalidPattern
+		}
+
+		if len(groups) == 1 && group[0] == 0 && group[1] == len(text)-1 {
+			return constraint
+		}
+
+		if !hasConstraint {
+			constraint = freeVariablePattern
+		}
+
+		pattern.WriteString(regexp.QuoteMeta(text[end:group[0]]) + "(?:" + constraint + ")")
+		end = group[1] + 1
 	}
 
-	rc.constraints[constraint] = re
+	pattern.WriteString(regexp.QuoteMeta(text[end:]))
 
-	return re
+	return pattern.String()
 }
 
-func isVariableSegment(segment string) bool {
-	return strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}")
+// braceGroups returns the index of the opening and closing brace of each outermost "{...}" in text,
+// or nil when its braces do not balance. Braces nest, as in "{id:[0-9]{3}}".
+func braceGroups(text string) [][2]int {
+	var (
+		groups       [][2]int
+		depth, start int
+	)
+
+	for i, r := range text {
+		switch r {
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+
+			depth++
+		case '}':
+			depth--
+
+			switch {
+			case depth < 0:
+				return nil
+			case depth == 0:
+				groups = append(groups, [2]int{start, i})
+			}
+		}
+	}
+
+	if depth != 0 {
+		return nil
+	}
+
+	return groups
+}
+
+// admitsSlash reports whether the regexp pattern can match a string containing "/". It looks only
+// at which characters the pattern names, so it can answer "yes" for a pattern that never actually
+// produces one; that only makes the check stricter.
+func admitsSlash(pattern string) bool {
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return false
+	}
+
+	return regexpAdmits(re, '/')
+}
+
+// regexpAdmits reports whether re names r anywhere: as a literal, in a character class, or through
+// a wildcard.
+func regexpAdmits(re *syntax.Regexp, r rune) bool {
+	if re.Op == syntax.OpAnyChar || re.Op == syntax.OpAnyCharNotNL {
+		return true
+	}
+
+	if re.Op == syntax.OpLiteral {
+		return slices.Contains(re.Rune, r)
+	}
+
+	if re.Op == syntax.OpCharClass {
+		// Rune holds the class as inclusive [lo, hi] pairs.
+		for i := 0; i+1 < len(re.Rune); i += 2 {
+			if re.Rune[i] <= r && r <= re.Rune[i+1] {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	for _, sub := range re.Sub {
+		if regexpAdmits(sub, r) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// compile returns constraint anchored to a whole segment, as mux applies it, and whether it can
+// match a "/".
+func (rc *routeChecker) compile(constraint string) compiledConstraint {
+	if compiled, ok := rc.constraints[constraint]; ok {
+		return compiled
+	}
+
+	var compiled compiledConstraint
+
+	if re, err := regexp.Compile("^(?:" + constraint + ")$"); err == nil {
+		compiled = compiledConstraint{re: re, spans: admitsSlash(constraint)}
+	}
+
+	rc.constraints[constraint] = compiled
+
+	return compiled
 }
 
 // overlaps reports whether some request could be served by route and governed by the rule e.
@@ -364,8 +480,10 @@ func segmentsCover(a, b []pathSegment) bool {
 			return len(a) == len(b)
 		}
 
+		// A catch-all covers only as the rule's last segment: the rule's segments after it must match
+		// too, and how much of the path the catch-all leaves them is not modeled.
 		if a[i].catchAll {
-			return a[i].coversTail(b[i:])
+			return i == len(a)-1 && a[i].coversTail(b[i:])
 		}
 
 		if !a[i].covers(&b[i]) {
@@ -385,7 +503,7 @@ func (s *pathSegment) covers(other *pathSegment) bool {
 		return false
 	case s.constraint == "":
 		// A free variable matches any non-empty segment, so it covers a constraint that cannot
-		// match an empty one.
+		// match an empty one. One that can match a "/" is a catch-all, turned away above.
 		return other.constraint == "" || other.re != nil && !other.re.MatchString("")
 	default:
 		return s.re != nil && s.constraint == other.constraint

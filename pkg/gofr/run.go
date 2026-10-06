@@ -69,22 +69,26 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Both steps have already released what startup opened by the time they report anything but
+	// Each step has already released what startup opened by the time it reports anything but
 	// startupOK. What is left is deciding what the abandonment means to the process, which happens
 	// in one place rather than inside each step. See finishAbandonedStartup.
+	//
+	// The RBAC route check in prepareHTTPServer runs after the OnStart hooks, because a hook can
+	// still register a route, and before the MCP port is claimed, so a refused start has one thing
+	// fewer to release.
 	if outcome := a.handleStartupHooks(ctx); outcome != startupOK {
 		a.finishAbandonedStartup(outcome)
 
 		return
 	}
 
-	if outcome := a.bindMCPServer(ctx); outcome != startupOK {
+	if outcome := a.prepareHTTPServer(); outcome != startupOK {
 		a.finishAbandonedStartup(outcome)
 
 		return
 	}
 
-	if outcome := a.prepareHTTPServer(); outcome != startupOK {
+	if outcome := a.bindMCPServer(ctx); outcome != startupOK {
 		a.finishAbandonedStartup(outcome)
 
 		return
@@ -312,7 +316,7 @@ func (a *App) prepareHTTPServer() startupOutcome {
 		return startupOK
 	}
 
-	if !a.rbacConfig.ReportRouteMismatches(a.rbacRoutes) || mode != rbacRouteCheckFail {
+	if !a.rbacConfig.ReportRouteMismatches(a.rbacRoutes, a.rbacBuiltInRoutes) || mode != rbacRouteCheckFail {
 		return startupOK
 	}
 
@@ -384,6 +388,10 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	if a.httpRegistered {
 		wg.Add(1)
+
+		if a.container.Logger != nil {
+			a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
+		}
 
 		go func(s *httpServer) {
 			defer wg.Done()

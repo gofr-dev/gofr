@@ -328,8 +328,10 @@ protect nothing; fix each rule's path or methods, or remove it.
 **An uncovered route** is a registered route, for a given method, that no rule matches, so it would
 be served without role checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). To
 keep a route open on purpose, such as `/login` or a webhook, give it a rule with `"public": true`.
-GoFr's own `/.well-known/*` routes and `/favicon.ico` are exempt. Other routes GoFr registers for
-you do need a rule: the `./static` directory (served at `/static` and everything under `/static/`
+The routes GoFr adds itself — health, alive, `/favicon.ico`, and the OpenAPI, Swagger and GraphQL
+Playground pages under `/.well-known/` — are exempt. A route your application registers under
+`/.well-known/` is not, and needs a rule like any other. Other routes GoFr registers for you do
+need a rule: the `./static` directory (served at `/static` and everything under `/static/`
 when it exists) and `/graphql` when GraphQL is enabled. A catch-all needs the `/` in front of it:
 a rule for `/admin/{rest:.*}` matches `/admin/users` but not `/admin`, so the route `/admin` needs
 a rule of its own.
@@ -363,8 +365,20 @@ A rule set that opens the static directory and a login route:
 
 The dead-rule check is lenient on purpose: two path variables with different constraints —
 `{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, so a rule like
-that is not reported as dead. The coverage check is strict: a rule covers a route only when it
-matches every request the route serves, so the same pair is reported as partly covered.
+that is not reported as dead. The coverage check is strict: a rule covers a route only when the
+check can show that it matches every request the route serves, so the same pair is reported as
+partly covered. A rule the check cannot read in full is reported as partly covering its route
+rather than trusted, which includes:
+
+- a catch-all followed by more segments, such as `/api/{rest:.*}/admin`: it covers nothing, as the
+  check does not work out what the catch-all leaves for the segments after it;
+- a constraint that can match `/`, such as `{p:[^.]+}`: like `{path:.*}`, it can span several
+  segments, so a single-segment `{x}` does not cover it;
+- a segment holding more than one variable, such as `{a}-{b}`: it is read as the pattern mux builds
+  from it, not as one free variable.
+
+Constraints are compared as written, the way mux reads them: `{id: [0-9]+}`, with a space, only
+matches IDs that start with a space, so it neither matches nor covers `{id:[0-9]+}`.
 
 The check sees the route table, not the middleware in front of it: a request answered before
 routing (a CORS preflight, for example) never reaches RBAC either way.
@@ -380,6 +394,10 @@ Set `GOFR_RBAC_ROUTE_CHECK` in your config:
 | `off` | Skip the check. For apps that leave routes without a rule on purpose and rely on [Unmatched Routes Behavior](#unmatched-routes-behavior). |
 
 Any other value is logged as an error and treated as `warn`.
+
+The check runs after the [`OnStart` hooks](/docs/advanced-guide/startup-hooks), because a hook can
+still register a route, and before the MCP port is claimed or any server starts. With `fail`, the
+datasources are already connected and the hooks have run by the time a mismatch stops startup.
 
 ## JWT-Based RBAC
 
