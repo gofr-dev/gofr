@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redismock/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -228,7 +230,7 @@ func expectRateLimitEval(mock redismock.ClientMock) *redismock.ExpectedCmd {
 		}
 
 		return nil
-	}).ExpectEval(tokenBucketScript, []string{"gofr:ratelimit:svc"}, 2, float64(5), int64(10), int64(0))
+	}).ExpectEval(tokenBucketScript, []string{"gofr:ratelimit:svc"}, 2, float64(5), int64(10*time.Second), int64(0))
 }
 
 func TestRedisRateLimiterStore_CleanupIsNoOp(t *testing.T) {
@@ -240,4 +242,117 @@ func TestRedisRateLimiterStore_CleanupIsNoOp(t *testing.T) {
 
 	// Cleanup relies on the EXPIRE in the Lua script, so it must not issue any Redis command.
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+type redisBucketStep struct {
+	at         time.Duration // offset from the pinned base time
+	expAllowed bool
+	expRetry   time.Duration
+}
+
+// TestRedisRateLimiterStore_AllowAt runs the token bucket script against miniredis with pinned
+// timestamps, so unlike TestRedisRateLimiterStore_Allow above it exercises the Lua script itself.
+func TestRedisRateLimiterStore_AllowAt(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		cfg   RateLimiterConfig
+		seed  map[string]string // hash fields pre-set on the key (old-format data)
+		steps []redisBucketStep
+	}{
+		{
+			desc: "30 per minute refills every 2s while polled every 500ms",
+			cfg:  RateLimiterConfig{Requests: 30, Window: time.Minute, Burst: 1},
+			steps: []redisBucketStep{
+				{0, true, 0}, {500 * time.Millisecond, false, 1500 * time.Millisecond},
+				{time.Second, false, time.Second}, {1500 * time.Millisecond, false, 500 * time.Millisecond},
+				{2 * time.Second, true, 0}, {2500 * time.Millisecond, false, 1500 * time.Millisecond},
+			},
+		},
+		{
+			desc: "5 per second polled every 100ms",
+			cfg:  RateLimiterConfig{Requests: 5, Window: time.Second, Burst: 1},
+			steps: []redisBucketStep{
+				{0, true, 0}, {100 * time.Millisecond, false, 100 * time.Millisecond},
+				{200 * time.Millisecond, true, 0}, {300 * time.Millisecond, false, 100 * time.Millisecond},
+				{400 * time.Millisecond, true, 0},
+			},
+		},
+		{
+			desc: "sub-second window 5 per 500ms",
+			cfg:  RateLimiterConfig{Requests: 5, Window: 500 * time.Millisecond, Burst: 5},
+			steps: []redisBucketStep{
+				{0, true, 0}, {0, true, 0}, {0, true, 0}, {0, true, 0}, {0, true, 0},
+				{0, false, 100 * time.Millisecond}, {100 * time.Millisecond, true, 0},
+			},
+		},
+		{
+			desc: "non-integer window 3 per 1500ms",
+			cfg:  RateLimiterConfig{Requests: 3, Window: 1500 * time.Millisecond, Burst: 1},
+			steps: []redisBucketStep{
+				{0, true, 0}, {400 * time.Millisecond, false, 100 * time.Millisecond}, {500 * time.Millisecond, true, 0},
+			},
+		},
+		{
+			desc: "partial refill is kept across consumes",
+			cfg:  RateLimiterConfig{Requests: 1, Window: time.Second, Burst: 2},
+			steps: []redisBucketStep{
+				{0, true, 0}, {600 * time.Millisecond, true, 0}, {1200 * time.Millisecond, true, 0},
+				{1300 * time.Millisecond, false, 700 * time.Millisecond},
+			},
+		},
+		{
+			desc: "refill after long idle is capped at burst",
+			cfg:  RateLimiterConfig{Requests: 10, Window: time.Second, Burst: 3},
+			steps: []redisBucketStep{
+				{0, true, 0}, {time.Hour, true, 0}, {time.Hour, true, 0}, {time.Hour, true, 0},
+				{time.Hour, false, 100 * time.Millisecond},
+			},
+		},
+		{
+			desc: "lagging clock does not re-credit elapsed time",
+			cfg:  RateLimiterConfig{Requests: 1, Window: time.Second, Burst: 1},
+			steps: []redisBucketStep{
+				{0, true, 0}, {2 * time.Second, true, 0}, {time.Second, false, time.Second},
+				{2500 * time.Millisecond, false, 500 * time.Millisecond},
+			},
+		},
+		{
+			desc:  "key written by the previous script version",
+			cfg:   RateLimiterConfig{Requests: 1, Window: time.Second, Burst: 5},
+			seed:  map[string]string{"tokens": "0", "last_refill": "1.767225600000000000e+18"},
+			steps: []redisBucketStep{{500 * time.Millisecond, false, 500 * time.Millisecond}, {time.Second, true, 0}},
+		},
+	}
+
+	base := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano()
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			runRedisBucketSteps(t, base, tc.cfg, tc.seed, tc.steps)
+		})
+	}
+}
+
+func runRedisBucketSteps(t *testing.T, base int64, cfg RateLimiterConfig, seed map[string]string, steps []redisBucketStep) {
+	t.Helper()
+
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	store := NewRedisRateLimiterStore(&gofrRedis.Redis{Client: client})
+
+	for field, val := range seed {
+		mr.HSet("gofr:ratelimit:svc", field, val)
+	}
+
+	for i, s := range steps {
+		allowed, retry, err := store.allowAt(t.Context(), "svc", cfg, base+int64(s.at))
+		require.NoError(t, err)
+		assert.Equal(t, s.expAllowed, allowed, "step %d", i)
+		assert.Equal(t, s.expRetry, retry, "step %d", i)
+	}
+
+	assert.Equal(t, 10*time.Minute, mr.TTL("gofr:ratelimit:svc"))
 }
