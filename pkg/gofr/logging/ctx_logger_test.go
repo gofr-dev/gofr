@@ -381,12 +381,23 @@ func BenchmarkContextLogger_Discarded(b *testing.B) {
 	}
 }
 
-func TestContextLogger_IsInitialized(t *testing.T) {
-	var zero ContextLogger
-
-	assert.False(t, zero.IsInitialized(), "zero-value ContextLogger has no base logger")
-	assert.True(t, NewContextLogger(t.Context(), &mockLogger{}).IsInitialized())
-
+func TestIsInitialized(t *testing.T) {
 	built := ContextLoggerFor(t.Context(), &mockLogger{})
-	assert.True(t, built.IsInitialized())
+
+	tests := []struct {
+		desc string
+		l    *ContextLogger
+		want bool
+	}{
+		{desc: "nil ContextLogger", l: nil, want: false},
+		{desc: "zero-value ContextLogger has no base logger", l: &ContextLogger{}, want: false},
+		{desc: "NewContextLogger", l: NewContextLogger(t.Context(), &mockLogger{}), want: true},
+		{desc: "ContextLoggerFor", l: &built, want: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.want, IsInitialized(tc.l))
+		})
+	}
 }

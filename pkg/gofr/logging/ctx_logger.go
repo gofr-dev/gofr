@@ -48,10 +48,13 @@ func ContextLoggerFor(ctx context.Context, base Logger) ContextLogger {
 	return ContextLogger{base: base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
 }
 
-// IsInitialized reports whether the ContextLogger has a base logger to write to.
-// A zero-value ContextLogger, such as the one in a hand-built gofr.Context, does not.
-func (l *ContextLogger) IsInitialized() bool {
-	return l.base != nil
+// IsInitialized reports whether l has a base logger to write to. A nil or zero-value
+// ContextLogger, such as the one in a hand-built gofr.Context, does not.
+//
+// It is a function rather than a method so that it is not promoted onto gofr.Context,
+// which embeds ContextLogger.
+func IsInitialized(l *ContextLogger) bool {
+	return l != nil && l.base != nil
 }
 
 // withTraceInfo appends the trace ID from the context (if available).
