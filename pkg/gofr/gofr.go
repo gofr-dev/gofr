@@ -22,6 +22,7 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
+	"gofr.dev/pkg/gofr/rbac"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/traces/exporters"
 )
@@ -78,6 +79,15 @@ type App struct {
 	// in the application's own setup, where there is nothing to abort yet; Run reports it at the
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
+
+	// rbacConfig is the RBAC config installed by EnableRBAC, kept so Run can check it against the
+	// complete route table. See prepareHTTPServer.
+	rbacConfig *rbac.Config
+
+	// rbacRoutes is the route table as the RBAC route check reads it, "METHOD /template" per entry,
+	// and rbacBuiltInRoutes the part of it GoFr registered itself. httpServerSetup fills both from
+	// the walk it already makes, and only when rbacConfig is set.
+	rbacRoutes, rbacBuiltInRoutes []string
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
 	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
@@ -220,7 +230,11 @@ func (a *App) httpServerSetup() {
 		}
 	}
 
+	routes := newRBACRouteCollector(a.rbacConfig != nil)
+
 	// Register default routes - these are only added when HTTP server is actually starting
+	routes.startBuiltIns(&a.httpServer.router.Router)
+
 	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
 	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
@@ -233,6 +247,8 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
+	routes.endBuiltIns(&a.httpServer.router.Router)
+
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
 	}
@@ -240,10 +256,6 @@ func (a *App) httpServerSetup() {
 	a.setupGraphQL()
 
 	a.logReadiness()
-
-	if a.container.Logger != nil {
-		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
-	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
 		function:  catchAllHandler,
@@ -260,8 +272,12 @@ func (a *App) httpServerSetup() {
 			}
 		}
 
+		routes.add(route, met)
+
 		return nil
 	})
+
+	a.rbacRoutes, a.rbacBuiltInRoutes = routes.labels, routes.builtInLabels
 
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
 }
