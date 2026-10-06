@@ -301,6 +301,87 @@ func TestDB_SelectMultiRowIntoSliceOfPointers(t *testing.T) {
 	}, users)
 }
 
+
+func TestDB_SelectScannerAndTimeDestinations(t *testing.T) {
+	// time.Time and sql.Scanner types are structs that scan a single column
+	// themselves; they must not go through rowsToStruct (which would yield zeros).
+	t1 := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+
+	t.Run("[]*time.Time", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+		mock.ExpectQuery("select created_at").
+			WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(t1).AddRow(t2))
+		setupMetrics(t, db, gomock.Any())
+
+		var times []*time.Time
+		db.Select(t.Context(), &times, "select created_at")
+		require.Len(t, times, 2)
+		assert.Equal(t, t1, *times[0])
+		assert.Equal(t, t2, *times[1])
+	})
+
+	t.Run("[]time.Time", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+		mock.ExpectQuery("select created_at").
+			WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(t1).AddRow(t2))
+		setupMetrics(t, db, gomock.Any())
+
+		var times []time.Time
+		db.Select(t.Context(), &times, "select created_at")
+		assert.Equal(t, []time.Time{t1, t2}, times)
+	})
+
+	t.Run("[]*sql.NullString", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+		mock.ExpectQuery("select name").
+			WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("alice").AddRow(nil))
+		setupMetrics(t, db, gomock.Any())
+
+		var names []*sql.NullString
+		db.Select(t.Context(), &names, "select name")
+		require.Len(t, names, 2)
+		require.NotNil(t, names[0])
+		assert.Equal(t, sql.NullString{String: "alice", Valid: true}, *names[0])
+		// NULL scanned into *sql.NullString via rows.Scan(**sql.NullString) yields nil pointer.
+		if names[1] != nil {
+			assert.Equal(t, sql.NullString{}, *names[1])
+		}
+	})
+
+	t.Run("[]sql.NullString", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+		mock.ExpectQuery("select name").
+			WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("alice").AddRow(nil))
+		setupMetrics(t, db, gomock.Any())
+
+		var names []sql.NullString
+		db.Select(t.Context(), &names, "select name")
+		assert.Equal(t, []sql.NullString{
+			{String: "alice", Valid: true},
+			{},
+		}, names)
+	})
+
+	t.Run("[]*int64 still works", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+		mock.ExpectQuery("select id").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(7)).AddRow(int64(8)))
+		setupMetrics(t, db, gomock.Any())
+
+		var ids []*int64
+		db.Select(t.Context(), &ids, "select id")
+		require.Len(t, ids, 2)
+		assert.Equal(t, int64(7), *ids[0])
+		assert.Equal(t, int64(8), *ids[1])
+	})
+}
+
 func TestDB_SelectSkipsUnexportedAndIgnoredFields(t *testing.T) {
 	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()

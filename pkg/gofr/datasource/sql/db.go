@@ -263,6 +263,15 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 	}
 }
 
+
+// isRowStruct reports whether Select maps a row's columns onto t's fields. Struct types that scan a
+// single column themselves, time.Time and sql.Scanner implementations such as sql.NullString, are
+// scanned directly instead.
+func isRowStruct(t reflect.Type) bool {
+	return t.Kind() == reflect.Struct && t != reflect.TypeFor[time.Time]() &&
+		!reflect.PointerTo(t).Implements(reflect.TypeFor[sql.Scanner]())
+}
+
 func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv reflect.Value) {
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -276,12 +285,12 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 
 	for rows.Next() {
 		switch {
-		case elemType.Kind() == reflect.Struct:
+		case isRowStruct(elemType):
 			val := reflect.New(elemType)
 			d.rowsToStruct(rows, val)
 			rv = reflect.Append(rv, val.Elem())
 
-		case elemType.Kind() == reflect.Pointer && elemType.Elem().Kind() == reflect.Struct:
+		case elemType.Kind() == reflect.Pointer && isRowStruct(elemType.Elem()):
 			// For []*T, allocate a new T per row and append the pointer to it.
 			val := reflect.New(elemType.Elem())
 			d.rowsToStruct(rows, val)
