@@ -1,5 +1,5 @@
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1 h1:zvXfGJCWvywnCA814d8ZiVyt+fm9nnTE8xSb99zRyfo=
-github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1/go.mod h1:iptorS+VYKFL2N6PnebpS91dubG35eAOEERnT4PJbQU=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.2 h1:utpeoEeZjd+A8J41zvoLsOOrqXHhX1Kx/X/tCW9dEYQ=
+github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.2/go.mod h1:iptorS+VYKFL2N6PnebpS91dubG35eAOEERnT4PJbQU=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0 h1:CU4+EJeJi3TKYWEcYuSdWsjzw0nVsK/H0MSQOiPcymU=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0/go.mod h1:q0+UTSRvShwUCrR/s5HtyInYphN7Wvxb7snFM3u+SLA=
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 h1:fhqpLE3UEXi9lPaBRpQ6XuRW0nU7hgg4zlmZZa+a9q4=
@@ -10,8 +10,10 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v1.3.
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/eventhub/armeventhub v1.3.0/go.mod h1:TSH7DcFItwAufy0Lz+Ft2cyopExCpxbOxI5SkH4dRNo=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1 h1:/Zt+cDPnpC3OVDm/JKLOs7M2DKmLRIIp3XIx9pHHiig=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.8.1/go.mod h1:Ng3urmn6dYe8gnbCMoHHVl5APYz2txho3koEkV2o2HA=
-github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.1 h1:gkBLVmB3Z/HnGP/Jo4o12/RDpi0agnKav6sCKsX5Vu0=
-github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.1/go.mod h1:e3/1P5K+jIUi9JevDRklq/tFeTvbBb75bNAjU4xd31w=
+github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.2 h1:tQJdgQjbKKffEiMOKJmcQPkY01eFHRqWIZVefqP44nI=
+github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.2/go.mod h1:kTkpJchXAdO7LGkKZP97a+Ou8TgaF4NT6MHwOIy5uSQ=
+github.com/Azure/azure-sdk-for-go/sdk/storage/internal v0.1.0 h1:X/bTwe0qpvmvPPutc+LWo7T4cKMqDP9JHP4k+Co9ZB4=
+github.com/Azure/azure-sdk-for-go/sdk/storage/internal v0.1.0/go.mod h1:+kX7ahyFelQ42F3RScM2CFgHJljp0phc/FieKLYVpFI=
 github.com/Azure/go-amqp v1.4.0 h1:Xj3caqi4comOF/L1Uc5iuBxR/pB6KumejC01YQOqOR4=
 github.com/Azure/go-amqp v1.4.0/go.mod h1:vZAogwdrkbyK3Mla8m/CxSc/aKdnTZ4IbPxl51Y5WZE=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0 h1:Nljr4q1GRA/5vCrMONS+g4u4LRHNgOXVSh3O43J2CnI=
