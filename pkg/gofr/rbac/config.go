@@ -286,6 +286,25 @@ func (c *Config) buildRolePermissionsMap() {
 		permissions := c.getEffectivePermissions(roleDef.Name)
 		c.rolePermissionsMap[roleDef.Name] = permissions
 	}
+
+	c.logUnknownInheritedRoles()
+}
+
+// logUnknownInheritedRoles logs each inheritsFrom name that matches no defined role. Such a role still
+// loads with its own permissions, so without this log a misspelled parent silently grants less.
+func (c *Config) logUnknownInheritedRoles() {
+	if c.Logger == nil {
+		return
+	}
+
+	for _, roleDef := range c.Roles {
+		for _, inheritedName := range roleDef.InheritsFrom {
+			if _, ok := c.rolePermissionsMap[inheritedName]; !ok {
+				c.Logger.Errorf("RBAC: role %q inherits from unknown role %q; no permissions are inherited from it",
+					roleDef.Name, inheritedName)
+			}
+		}
+	}
 }
 
 // buildEndpointPermissionMap builds the endpoint permission map and the ordered rule list
