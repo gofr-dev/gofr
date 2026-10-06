@@ -48,6 +48,15 @@ func ContextLoggerFor(ctx context.Context, base Logger) ContextLogger {
 	return ContextLogger{base: base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
 }
 
+// ContextLoggerWithSpan returns a copy of l that attaches the trace ID of the span in ctx instead of
+// the one l was built with. The base logger is kept, so a zero-value ContextLogger stays zero.
+//
+// It is a function rather than a method so that it is not promoted onto gofr.Context, which embeds
+// ContextLogger.
+func ContextLoggerWithSpan(ctx context.Context, l *ContextLogger) ContextLogger {
+	return ContextLogger{base: l.base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
+}
+
 // withTraceInfo appends the trace ID from the context (if available).
 // This allows trace IDs to be extracted later during formatting or filtering.
 // The marker map is precomputed once per ContextLogger, so this only pays for

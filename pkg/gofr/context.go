@@ -68,9 +68,23 @@ func (c *Context) Trace(name string) trace.Span {
 	// getting incomplete redis spans when viewing the trace using correlationID. If we remove assigning the ctx to GoFr
 	// context then spans are coming correct but then parent-child span relationship is being hindered.
 
-	c.Context = ctx
+	c.setContext(ctx)
 
 	return span
+}
+
+// setContext replaces c.Context. When ctx belongs to a different trace than the current context, the
+// logger is rebound so log lines carry the trace ID that GetCorrelationID reports. Within the same
+// trace, such as a child span started by Trace in an HTTP handler, only c.Context is written: the
+// request path does no extra work, and a goroutine that logs while another calls Trace stays race-free.
+func (c *Context) setContext(ctx context.Context) {
+	prev := trace.SpanContextFromContext(c.Context).TraceID()
+
+	c.Context = ctx
+
+	if trace.SpanContextFromContext(ctx).TraceID() != prev {
+		c.ContextLogger = logging.ContextLoggerWithSpan(ctx, &c.ContextLogger)
+	}
 }
 
 func (c *Context) Bind(i any) error {

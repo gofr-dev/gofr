@@ -380,3 +380,36 @@ func BenchmarkContextLogger_Discarded(b *testing.B) {
 		l.Debug("this entry is below the configured level")
 	}
 }
+
+func TestContextLoggerWithSpan(t *testing.T) {
+	base := &mockLogger{}
+	tracedCtx, traceID := mockTracedContext()
+
+	t.Run("keeps the base logger and takes the new span", func(t *testing.T) {
+		built := ContextLoggerFor(t.Context(), base)
+		l := ContextLoggerWithSpan(tracedCtx, &built)
+
+		assert.Equal(t, base, l.base)
+
+		l.Info("message")
+
+		require.Len(t, base.logs, 1)
+		args, ok := base.logs[0].Message.([]any)
+		require.True(t, ok)
+		require.Len(t, args, 2)
+		assert.Equal(t, traceIDMarker(traceID), args[1])
+	})
+
+	t.Run("a context without a span drops the trace ID", func(t *testing.T) {
+		built := ContextLoggerFor(tracedCtx, base)
+		l := ContextLoggerWithSpan(t.Context(), &built)
+
+		assert.False(t, l.spanCtx.IsValid())
+	})
+
+	t.Run("a zero-value ContextLogger keeps no base logger", func(t *testing.T) {
+		l := ContextLoggerWithSpan(tracedCtx, &ContextLogger{})
+
+		assert.Nil(t, l.base)
+	})
+}

@@ -173,7 +173,7 @@ func (j *job) run(cntnr *container.Container) {
 	defer span.End()
 
 	c := newContext(nil, &noopRequest{}, cntnr)
-	c.Context = ctx
+	c.setContext(ctx)
 
 	c.Infof("Starting cron job: %s", j.name)
 

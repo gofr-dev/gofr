@@ -923,3 +923,24 @@ func TestNoopRequest(t *testing.T) {
 	require.NoError(t, n.Bind(nil))
 	assert.NotNil(t, n.Context())
 }
+
+// Every log line of a cron job must carry the job's trace ID, the one ctx.GetCorrelationID reports
+// inside the job.
+func TestJob_run_LogsCarryJobTraceID(t *testing.T) {
+	useSDKTracerProvider(t)
+
+	rec := newSpanLogRecorder()
+
+	var correlationID string
+
+	j := &job{name: "trace-job", fn: func(c *Context) {
+		correlationID = c.GetCorrelationID()
+		c.Infof("inside %s", "job")
+	}}
+
+	j.run(&container.Container{Logger: rec})
+
+	require.NotEqual(t, "00000000000000000000000000000000", correlationID, "job must run in a valid span")
+	// Starting, inside, Finished.
+	assert.Equal(t, []int{1, 1, 1}, rec.traceMarkers(correlationID))
+}

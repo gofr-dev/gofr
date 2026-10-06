@@ -552,3 +552,124 @@ func firstMessageBeforeEnd(t *testing.T, conn *gofrWebsocket.Connection, receive
 		return ""
 	}
 }
+
+// spanLogRecorder records the args of Infof and Errorf calls so tests can check which trace ID a
+// log line carries. Every other method goes to a logger that discards everything below FATAL.
+type spanLogRecorder struct {
+	logging.Logger
+
+	mu    sync.Mutex
+	lines [][]any
+}
+
+func newSpanLogRecorder() *spanLogRecorder {
+	return &spanLogRecorder{Logger: logging.NewMockLogger(logging.FATAL)}
+}
+
+func (r *spanLogRecorder) Infof(_ string, args ...any) { r.add(args) }
+
+func (r *spanLogRecorder) Errorf(_ string, args ...any) { r.add(args) }
+
+func (r *spanLogRecorder) add(args []any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lines = append(r.lines, args)
+}
+
+// traceMarkers returns, for each recorded line, how many args render as traceID. The marker type
+// is unexported in the logging package, so it is matched by its value.
+func (r *spanLogRecorder) traceMarkers(traceID string) []int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	counts := make([]int, len(r.lines))
+
+	for i, args := range r.lines {
+		for _, a := range args {
+			if fmt.Sprint(a) == traceID {
+				counts[i]++
+			}
+		}
+	}
+
+	return counts
+}
+
+// useSDKTracerProvider installs a recording tracer provider so spans get valid trace IDs, and
+// restores the previous global provider when the test ends.
+func useSDKTracerProvider(t *testing.T) {
+	t.Helper()
+
+	prev := otel.GetTracerProvider()
+
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	t.Cleanup(func() { otel.SetTracerProvider(prev) })
+}
+
+// A Context built without a span (CMD, cron before its span is attached) must log with the trace
+// ID of a span started through ctx.Trace, the same ID ctx.GetCorrelationID reports.
+func TestContext_Trace_LogsCarryNewTraceID(t *testing.T) {
+	useSDKTracerProvider(t)
+
+	rec := newSpanLogRecorder()
+	ctx := newContext(nil, &noopRequest{}, &container.Container{Logger: rec})
+
+	span := ctx.Trace("work")
+	defer span.End()
+
+	ctx.Infof("after %s", "trace")
+
+	want := span.SpanContext().TraceID().String()
+	assert.Equal(t, want, ctx.GetCorrelationID())
+	assert.Equal(t, []int{1}, rec.traceMarkers(want))
+}
+
+// Within the same trace (a child span in an HTTP handler) the log line keeps the request's trace ID.
+func TestContext_Trace_SameTraceKeepsTraceID(t *testing.T) {
+	useSDKTracerProvider(t)
+
+	rootCtx, root := otel.GetTracerProvider().Tracer("test").Start(t.Context(), "request")
+	defer root.End()
+
+	rec := newSpanLogRecorder()
+	req := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/", http.NoBody)
+	ctx := newHTTPContext(httptest.NewRecorder(), req, &container.Container{Logger: rec})
+
+	child := ctx.Trace("child")
+	defer child.End()
+
+	ctx.Infof("in %s", "child")
+
+	assert.Equal(t, []int{1}, rec.traceMarkers(root.SpanContext().TraceID().String()))
+}
+
+// ctx.Trace within the same trace must not write the logger: a handler goroutine that only logs
+// while another calls ctx.Trace was race-free before, and has to stay that way. Run with -race.
+func TestContext_Trace_SameTraceDoesNotRaceWithLogging(t *testing.T) {
+	useSDKTracerProvider(t)
+
+	rootCtx, root := otel.GetTracerProvider().Tracer("test").Start(t.Context(), "request")
+	defer root.End()
+
+	rec := newSpanLogRecorder()
+	req := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/", http.NoBody)
+	ctx := newHTTPContext(httptest.NewRecorder(), req, &container.Container{Logger: rec})
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for range 200 {
+			ctx.Infof("worker %s", "log")
+		}
+	}()
+
+	for range 50 {
+		ctx.Trace("child").End()
+	}
+
+	<-done
+}
