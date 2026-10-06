@@ -238,7 +238,7 @@ func (c *Context) GetCorrelationID() string {
 // from the Context's own context and Container.Logger, keeping the trace ID instead of panicking.
 // A Context without a Container or Container.Logger has nothing to log to and panics, as ctx.Logger does.
 func (c *Context) logger() *logging.ContextLogger {
-	if logging.IsInitialized(&c.ContextLogger) {
+	if c.ContextLogger != (logging.ContextLogger{}) {
 		return &c.ContextLogger
 	}
 

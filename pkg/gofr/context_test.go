@@ -794,13 +794,6 @@ func TestContext_HandBuiltContextHandlesEveryLoggerMethod(t *testing.T) {
 	}
 }
 
-// The initialization check must not become part of Context's API: an exported method on the
-// embedded ContextLogger would be promoted onto every *Context.
-func TestContext_DoesNotExposeIsInitialized(t *testing.T) {
-	_, ok := reflect.TypeFor[*Context]().MethodByName("IsInitialized")
-	assert.False(t, ok, "IsInitialized must not be promoted onto *gofr.Context")
-}
-
 func BenchmarkContext_Infof(b *testing.B) {
 	tracedCtx, _ := tracedTestContext()
 	req := httptest.NewRequestWithContext(tracedCtx, http.MethodGet, "/", http.NoBody)

@@ -13,8 +13,10 @@ import (
 // trace information is available.
 type ContextLogger struct {
 	base Logger
-	// spanCtx is the request's SpanContext, kept as a value (it allocates
-	// nothing) rather than a formatted trace ID.
+	// traceID is the request's trace ID, zero when the context has no valid span. It is kept as
+	// the raw [16]byte (it allocates nothing) rather than a formatted string, and rather than the
+	// full SpanContext, whose TraceState would make ContextLogger non-comparable: gofr.Context
+	// compares its embedded ContextLogger with the zero value to detect a hand-built Context.
 	//
 	// Formatting the trace ID costs a 32-character string, and wrapping it for
 	// the log args costs another allocation. Both were paid when the logger was
@@ -25,7 +27,7 @@ type ContextLogger struct {
 	// They are now built in withTraceInfo, per log call. A handler logging once
 	// pays exactly what it did before; one logging repeatedly pays per call,
 	// which is the deliberate trade for making the silent path free.
-	spanCtx trace.SpanContext
+	traceID trace.TraceID
 }
 
 // NewContextLogger creates a new ContextLogger that wraps the provided base logger
@@ -45,16 +47,13 @@ func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
 // that need a pointer keep using NewContextLogger; callers that store a value
 // use this and allocate nothing for the wrapper itself.
 func ContextLoggerFor(ctx context.Context, base Logger) ContextLogger {
-	return ContextLogger{base: base, spanCtx: trace.SpanFromContext(ctx).SpanContext()}
-}
+	cl := ContextLogger{base: base}
 
-// IsInitialized reports whether l has a base logger to write to. A nil or zero-value
-// ContextLogger, such as the one in a hand-built gofr.Context, does not.
-//
-// It is a function rather than a method so that it is not promoted onto gofr.Context,
-// which embeds ContextLogger.
-func IsInitialized(l *ContextLogger) bool {
-	return l != nil && l.base != nil
+	if sc := trace.SpanFromContext(ctx).SpanContext(); sc.IsValid() {
+		cl.traceID = sc.TraceID()
+	}
+
+	return cl
 }
 
 // withTraceInfo appends the trace ID from the context (if available).
@@ -62,11 +61,11 @@ func IsInitialized(l *ContextLogger) bool {
 // The marker map is precomputed once per ContextLogger, so this only pays for
 // the slice append, not a fresh map allocation on every call.
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
-	if !l.spanCtx.IsValid() {
+	if !l.traceID.IsValid() {
 		return args
 	}
 
-	return append(args, traceIDMarker(l.spanCtx.TraceID().String()))
+	return append(args, traceIDMarker(l.traceID.String()))
 }
 
 func (l *ContextLogger) logWithTraceID(lf func(args ...any), args ...any) {

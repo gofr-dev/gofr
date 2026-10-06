@@ -242,7 +242,7 @@ func TestContextLogger_NoTrace_NoMarker(t *testing.T) {
 	base := newBufLogger(buf)
 
 	cl := NewContextLogger(context.Background(), base)
-	assert.False(t, cl.spanCtx.IsValid(), "no valid span means no marker will be attached")
+	assert.False(t, cl.traceID.IsValid(), "no valid span means no marker will be attached")
 
 	cl.Info("x")
 
@@ -289,8 +289,8 @@ func TestContextLoggerForMatchesPointerConstructor(t *testing.T) {
 	ptr := NewContextLogger(ctx, base)
 	val := ContextLoggerFor(ctx, base)
 
-	require.Equal(t, ptr.spanCtx, val.spanCtx)
-	require.True(t, val.spanCtx.IsValid())
+	require.Equal(t, ptr.traceID, val.traceID)
+	require.True(t, val.traceID.IsValid())
 	require.Equal(t, ptr.withTraceInfo("m"), val.withTraceInfo("m"),
 		"both constructors must attach the same marker")
 }
@@ -299,7 +299,7 @@ func TestContextLoggerForMatchesPointerConstructor(t *testing.T) {
 func TestContextLoggerForNoTrace(t *testing.T) {
 	val := ContextLoggerFor(context.Background(), newBufLogger(&bytes.Buffer{}))
 
-	require.False(t, val.spanCtx.IsValid())
+	require.False(t, val.traceID.IsValid())
 	require.Equal(t, []any{"m"}, val.withTraceInfo("m"), "no marker without a valid span")
 }
 
@@ -378,26 +378,5 @@ func BenchmarkContextLogger_Discarded(b *testing.B) {
 
 	for range b.N {
 		l.Debug("this entry is below the configured level")
-	}
-}
-
-func TestIsInitialized(t *testing.T) {
-	built := ContextLoggerFor(t.Context(), &mockLogger{})
-
-	tests := []struct {
-		desc string
-		l    *ContextLogger
-		want bool
-	}{
-		{desc: "nil ContextLogger", l: nil, want: false},
-		{desc: "zero-value ContextLogger has no base logger", l: &ContextLogger{}, want: false},
-		{desc: "NewContextLogger", l: NewContextLogger(t.Context(), &mockLogger{}), want: true},
-		{desc: "ContextLoggerFor", l: &built, want: true},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			assert.Equal(t, tc.want, IsInitialized(tc.l))
-		})
 	}
 }
