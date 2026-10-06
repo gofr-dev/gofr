@@ -1,6 +1,8 @@
 package cassandra
 
 import (
+	"context"
+
 	"github.com/gocql/gocql"
 )
 
@@ -25,6 +27,7 @@ type session interface {
 // query defines methods for interacting with a Cassandra query.
 type query interface {
 	exec() error
+	execWithCtx(ctx context.Context) error
 	iter() iterator
 	mapScanCAS(dest map[string]any) (applied bool, err error)
 	scanCAS(dest ...any) (applied bool, err error)

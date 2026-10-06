@@ -23,6 +23,8 @@ var (
 	errUnsupportedFlags = errors.New("unsupported flag combination for OpenFile")
 
 	errProviderNil = errors.New("storage provider is not configured")
+
+	errLocalHealthCheck = errors.New("local filesystem health check failed")
 )
 
 // CommonFileSystem provides shared implementations of FileSystem operations.
