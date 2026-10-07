@@ -120,16 +120,14 @@ func (c *Container) Create(conf config.Config) {
 
 	if c.Logger == nil {
 		levelFetchConfig, err := strconv.Atoi(conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
-		isInvalid := err != nil || levelFetchConfig <= 0
-		if isInvalid {
-			levelFetchConfig = 15
-		}
+		if err != nil || levelFetchConfig <= 0 {
+			c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+				15*time.Second)
 
-		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			time.Duration(levelFetchConfig)*time.Second)
-
-		if isInvalid {
 			c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+		} else {
+			c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+				time.Duration(levelFetchConfig)*time.Second)
 		}
 	}
 

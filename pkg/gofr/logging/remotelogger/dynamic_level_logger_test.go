@@ -701,8 +701,8 @@ func stripJSONTime(s string) string {
 func TestRemoteLogger_UpdateLevel_NonPositiveInterval(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
-		_, _ = w.Write([]byte(body))
+
+		_, _ = w.Write([]byte(`{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`))
 	}))
 	defer mockServer.Close()
 
