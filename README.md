@@ -41,6 +41,8 @@ GoFr is designed to **simplify microservice development**, with a key focus on *
 13. **[Swagger Rendering](https://gofr.dev/docs/advanced-guide/swagger-documentation)**
 14. **[Abstracted File Systems](https://gofr.dev/docs/advanced-guide/handling-file)**
 15. **[Websockets](https://gofr.dev/docs/advanced-guide/websocket)**
+16. **[LLM Integration](https://gofr.dev/docs/advanced-guide/llm)** (`app.AddLLM`, `ctx.LLM()`) with Built-in Tracing, Token Metrics and Streaming
+17. **[MCP Server](https://gofr.dev/docs/advanced-guide/mcp)** (`app.EnableMCP`) to Expose Read-Only Handlers as Tools for AI Agents
 
 ---
 
@@ -94,6 +96,72 @@ Visit [`localhost:8000/greet`](http://localhost:8000/greet) to see the result.
 
 ---
 
+## 🤖 **AI Features**
+
+GoFr treats LLMs and AI agents like any other datasource: one line to set them up, with tracing, metrics, logs and
+health checks wired in automatically.
+
+### Call an LLM from a handler
+
+`app.AddLLM` registers an OpenAI-compatible model (OpenAI, Groq, DeepSeek, Together, Ollama, or any endpoint via
+`BaseURL`). Handlers reach it through `ctx.LLM()`, which also offers `Chat`, `Stream` and `Embed`.
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/ai/llm"
+)
+
+func main() {
+	app := gofr.New()
+
+	// The API key is read from LLM_API_KEY, or GROQ_API_KEY for this provider.
+	app.AddLLM(&llm.Client{Provider: llm.Groq, Model: "llama-3.3-70b-versatile"})
+
+	app.POST("/summarize", func(ctx *gofr.Context) (any, error) {
+		var in struct {
+			Text string `json:"text"`
+		}
+
+		if err := ctx.Bind(&in); err != nil {
+			return nil, err
+		}
+
+		return ctx.LLM().Generate(ctx, "Summarize the following:\n"+in.Text)
+	})
+
+	app.Run()
+}
+```
+
+A model can also be configured without code, through `LLM_PROVIDER`, `LLM_MODEL` and `LLM_API_KEY` in `configs/.env`.
+See the [LLM guide](https://gofr.dev/docs/advanced-guide/llm).
+
+### Expose handlers to AI agents
+
+`app.EnableMCP` serves your read-only handlers (`GET`, `HEAD`, `OPTIONS` and `QUERY`) as
+[Model Context Protocol](https://modelcontextprotocol.io) tools, so MCP clients such as Claude Code or Claude Desktop
+can discover and call them. Write handlers are never exposed. The MCP server listens on loopback at `MCP_PORT`
+(default `8200`; `0` turns the transport off).
+
+```go
+app := gofr.New()
+
+app.EnableMCP()
+
+app.GET("/products/{id}", getProduct)
+
+app.Run()
+```
+
+`ctx.LLM().Tools()` gives a handler the same tools in-process, so you can build your own agent loop. See
+[Building AI Agents](https://gofr.dev/docs/advanced-guide/mcp) and the
+[`using-ai` example](https://github.com/gofr-dev/gofr/tree/development/examples/using-ai).
+
+---
+
 ## 📂 **More Examples**
 
 Explore a variety of ready-to-run examples in the [GoFr examples directory](https://github.com/gofr-dev/gofr/tree/development/examples).
@@ -104,6 +172,8 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 - **[GoDoc](https://pkg.go.dev/gofr.dev)**: Official API documentation.
 - **[GoFr Documentation](https://gofr.dev/docs)**: Comprehensive guides and resources.
+- **AI coding assistants**: point your assistant at [AGENTS.md](https://gofr.dev/AGENTS.md) for GoFr's conventions, and
+  at [llms.txt](https://gofr.dev/llms.txt) for an index of the docs.
 
 ---
 
