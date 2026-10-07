@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
@@ -31,6 +32,30 @@ var (
 
 	// errRegexIndicatorNotSupported is returned when regex indicators are used outside variable constraints.
 	errRegexIndicatorNotSupported = errors.New("regex pattern is not supported, use mux patterns instead")
+
+	// errBothClaimPaths is returned when both jwtClaimPath and permissionsClaimPath are set.
+	errBothClaimPaths = errors.New("jwtClaimPath and permissionsClaimPath cannot both be set")
+
+	// errAudienceRequired is returned when permissionsClaimPath is set without an audience.
+	errAudienceRequired = errors.New("permissionsClaimPath requires audience")
+
+	// errAudienceWithoutJWT is returned when audience is set but no JWT claim path is.
+	errAudienceWithoutJWT = errors.New("audience requires jwtClaimPath or permissionsClaimPath")
+
+	// errEmptyAudience is returned when an audience entry is empty, which would accept a token whose
+	// aud is "".
+	errEmptyAudience = errors.New("audience entries must not be empty")
+)
+
+// extractionFailuresMetric counts requests whose role or permissions could not be read.
+const extractionFailuresMetric = "rbac_role_extraction_failures"
+
+// Modes reported in the startup line, naming where authorization reads from.
+const (
+	modePermissions = "permissions"
+	modeRoles       = "roles"
+	modeHeader      = "header"
+	modeNone        = "none"
 )
 
 // RoleDefinition defines a role with its permissions and inheritance.
@@ -96,9 +121,20 @@ type Config struct {
 	RoleHeader string `json:"roleHeader,omitempty" yaml:"roleHeader,omitempty"`
 
 	// JWTClaimPath specifies the JWT claim path for JWT-based role extraction
-	// Examples: "role", "roles[0]", "permissions.role"
-	// If set, role is extracted from JWT claims in request context
+	// Examples: "role", "roles", "roles[0]", "permissions.role"
+	// If set, role is extracted from JWT claims in request context. A string claim is one role; an
+	// array claim holds every role in it.
 	JWTClaimPath string `json:"jwtClaimPath,omitempty" yaml:"jwtClaimPath,omitempty"`
+
+	// PermissionsClaimPath specifies the JWT claim that holds the permissions themselves.
+	// Example: "scope" for {"scope": "orders:read orders:write"}
+	// If set, Roles are not consulted: a string claim is split on spaces, an array claim is held entry
+	// by entry. Cannot be combined with JWTClaimPath, and requires Audience.
+	PermissionsClaimPath string `json:"permissionsClaimPath,omitempty" yaml:"permissionsClaimPath,omitempty"`
+
+	// Audience lists the accepted values of the token's "aud" claim; the token must carry at least one.
+	// Required with PermissionsClaimPath; checked with JWTClaimPath when set.
+	Audience []string `json:"audience,omitempty" yaml:"audience,omitempty"`
 
 	// ErrorHandler is called when authorization fails
 	// If nil, default error response is sent
@@ -119,10 +155,11 @@ type Config struct {
 
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
-	rolePermissionsMap    map[string][]string         `json:"-" yaml:"-"`
-	endpointPermissionMap map[string][]string         `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
-	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
-	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
+	rolePermissionsMap    map[string][]string            `json:"-" yaml:"-"`
+	rolePermissionSet     map[string]map[string]struct{} `json:"-" yaml:"-"` // Key: role, Value: set of its permissions
+	endpointPermissionMap map[string][]string            `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool                `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	endpointMap           map[string]*EndpointMapping    `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
 
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
@@ -171,11 +208,48 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 		return nil, fmt.Errorf("failed to process unified config: %w", err)
 	}
 
+	if metrics != nil {
+		metrics.NewCounter(extractionFailuresMetric, "Number of requests whose RBAC role or permissions could not be read")
+	}
+
+	if logger != nil {
+		config.logStartup(logger)
+	}
+
 	return &config, nil
+}
+
+// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+func (c *Config) logStartup(logger datasource.Logger) {
+	mode, source := c.mode()
+	logger.Infof("RBAC enabled: mode=%s, claim=%s, audience=%v", mode, source, c.Audience)
+
+	if mode == modePermissions && len(c.Roles) > 0 {
+		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
+			"permissions are read from the token, not from roles")
+	}
+}
+
+// mode reports which source authorization reads from, and the claim path or header that names it.
+func (c *Config) mode() (mode, source string) {
+	switch {
+	case c.PermissionsClaimPath != "":
+		return modePermissions, c.PermissionsClaimPath
+	case c.JWTClaimPath != "":
+		return modeRoles, c.JWTClaimPath
+	case c.RoleHeader != "":
+		return modeHeader, c.RoleHeader
+	default:
+		return modeNone, ""
+	}
 }
 
 // validate validates the RBAC configuration.
 func (c *Config) validate() error {
+	if err := c.validateClaimModes(); err != nil {
+		return err
+	}
+
 	// Validate endpoints: non-public endpoints must have RequiredPermissions
 	// Also validate that paths use mux patterns only (no wildcards or old regex)
 	for i, endpoint := range c.Endpoints {
@@ -187,6 +261,22 @@ func (c *Config) validate() error {
 		if err := c.validateEndpointPath(endpoint.Path, i); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// validateClaimModes rejects claim settings that would otherwise be ambiguous or silently ignored.
+func (c *Config) validateClaimModes() error {
+	switch {
+	case c.JWTClaimPath != "" && c.PermissionsClaimPath != "":
+		return errBothClaimPaths
+	case c.PermissionsClaimPath != "" && len(c.Audience) == 0:
+		return errAudienceRequired
+	case len(c.Audience) > 0 && c.JWTClaimPath == "" && c.PermissionsClaimPath == "":
+		return errAudienceWithoutJWT
+	case slices.ContainsFunc(c.Audience, func(a string) bool { return strings.TrimSpace(a) == "" }):
+		return errEmptyAudience
 	}
 
 	return nil
@@ -273,6 +363,7 @@ func (c *Config) processUnifiedConfig() error {
 // initializeMaps initializes internal maps.
 func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
+	c.rolePermissionSet = make(map[string]map[string]struct{})
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 	c.endpointMap = make(map[string]*EndpointMapping)
@@ -285,6 +376,13 @@ func (c *Config) buildRolePermissionsMap() {
 		// Use getEffectivePermissions() for consistent inheritance handling
 		permissions := c.getEffectivePermissions(roleDef.Name)
 		c.rolePermissionsMap[roleDef.Name] = permissions
+
+		set := make(map[string]struct{}, len(permissions))
+		for _, p := range permissions {
+			set[p] = struct{}{}
+		}
+
+		c.rolePermissionSet[roleDef.Name] = set
 	}
 }
 

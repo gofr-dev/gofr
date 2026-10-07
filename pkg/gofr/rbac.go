@@ -33,7 +33,10 @@ var errNoRBACConfig = errors.New("no RBAC config file found at configs/rbac.json
 //
 // Role extraction is configured in the config file:
 // - Set "roleHeader" for header-based extraction (e.g., "X-User-Role")
-// - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles[0]").
+// - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles", "roles[0]"); an array claim
+// holds every role in it.
+// - Set "permissionsClaimPath" (e.g., "scope") and "audience" to authorize from the permissions in
+// the token itself. JWT-based modes need EnableOAuth to be called first.
 //
 // It returns an error, and installs no middleware, if the config cannot be found, read, parsed or
 // validated. The error is also logged, so an app that ignores it still sees why authorization is
