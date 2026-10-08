@@ -3,7 +3,7 @@ module gofr.dev/examples/using-gcp-traces
 go 1.26.0
 
 require (
-	gofr.dev v1.60.1
+	gofr.dev v1.62.0
 	gofr.dev/pkg/gofr/traces/exporters/gcp v0.0.0
 )
 
