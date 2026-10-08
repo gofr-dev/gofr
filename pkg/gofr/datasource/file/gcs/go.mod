@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.68.0
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.61.0
+	gofr.dev v1.62.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/api v0.299.0
 )
