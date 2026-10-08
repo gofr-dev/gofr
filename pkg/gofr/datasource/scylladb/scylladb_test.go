@@ -504,6 +504,7 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 				client.scylla.batches = nil
 			},
 			expRes: &mockStructSlice,

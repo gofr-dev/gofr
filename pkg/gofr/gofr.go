@@ -316,7 +316,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
+	options = append([]service.Options{service.WithAttributes(map[string]string{serviceNameAttributeKey: serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
@@ -429,6 +429,7 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 //
 // The `middleware` function receives the container and the handler, allowing
 // the middleware to modify the request processing flow.
+//
 // Deprecated: UseMiddlewareWithContainer will be removed in a future release.
 // Please use the [*App.UseMiddleware] method that does not depend on the container.
 func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {

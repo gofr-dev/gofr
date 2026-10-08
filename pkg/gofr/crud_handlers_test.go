@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -32,7 +33,7 @@ var (
 )
 
 func createTestContext(method, path, id string, body []byte, cont *container.Container) *Context {
-	testReq := httptest.NewRequest(method, path+"/"+id, bytes.NewBuffer(body))
+	testReq := httptest.NewRequestWithContext(context.Background(), method, path+"/"+id, bytes.NewBuffer(body))
 	testReq = mux.SetURLVars(testReq, map[string]string{"id": id})
 	testReq.Header.Set("Content-Type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(testReq)
@@ -542,7 +543,15 @@ func Test_UpdateHandler(t *testing.T) {
 
 				assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-				assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				if tc.expectedErr == nil {
+					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+					return
+				}
+
+				// The cases mix a *json.UnmarshalTypeError and an errors.New sentinel, so the check is on the
+				// error's dynamic type (what assert.IsType compared), not on identity.
+				assert.Equal(t, reflect.TypeOf(tc.expectedErr), reflect.TypeOf(err), "TEST[%d], Failed.\n%s", i, tc.desc)
 			})
 		}
 

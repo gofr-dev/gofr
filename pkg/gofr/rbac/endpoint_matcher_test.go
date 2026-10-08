@@ -362,7 +362,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 	}{
 		{
 			desc:    "matches endpoint for request",
-			request: httptest.NewRequest(http.MethodGet, "/api/users", http.NoBody),
+			request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/users", http.NoBody),
 			config: &Config{
 				Endpoints: []EndpointMapping{
 					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
@@ -373,7 +373,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 		},
 		{
 			desc:    "matches public endpoint",
-			request: httptest.NewRequest(http.MethodGet, "/health", http.NoBody),
+			request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", http.NoBody),
 			config: &Config{
 				Endpoints: []EndpointMapping{
 					{Path: "/health", Methods: []string{"GET"}, Public: true},
@@ -384,7 +384,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 		},
 		{
 			desc:    "returns nil for empty endpoints",
-			request: httptest.NewRequest(http.MethodGet, "/api/users", http.NoBody),
+			request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/users", http.NoBody),
 			config: &Config{
 				Endpoints: []EndpointMapping{},
 			},
@@ -393,7 +393,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 		},
 		{
 			desc:    "returns nil for non-matching request",
-			request: httptest.NewRequest(http.MethodPost, "/api/posts", http.NoBody),
+			request: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/posts", http.NoBody),
 			config: &Config{
 				Endpoints: []EndpointMapping{
 					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},

@@ -82,6 +82,7 @@ func TestClient_Upsert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -98,6 +99,7 @@ func TestClient_Upsert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()))
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -114,6 +116,7 @@ func TestClient_Upsert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -131,6 +134,7 @@ func TestClient_Upsert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -223,6 +227,7 @@ func TestClient_Insert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -239,6 +244,7 @@ func TestClient_Insert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -256,6 +262,7 @@ func TestClient_Insert(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
 					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -294,6 +301,7 @@ func TestClient_Get(t *testing.T) {
 				mocks.getResult.EXPECT().Content(gomock.Any()).Return(nil)
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -311,6 +319,7 @@ func TestClient_Get(t *testing.T) {
 				)
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -330,6 +339,7 @@ func TestClient_Get(t *testing.T) {
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -342,8 +352,10 @@ func TestClient_Get(t *testing.T) {
 			result: nil,
 			setup: func(mocks *testMocks) *Client {
 				mocks.logger.EXPECT().Error("bucket not initialized")
+
 				client := &Client{bucket: nil}
 				client.UseLogger(mocks.logger)
+
 				return client
 			},
 			wantErr: errBucketNotInitialized,
@@ -379,6 +391,7 @@ func TestClient_Remove(t *testing.T) {
 				)
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -394,6 +407,7 @@ func TestClient_Remove(t *testing.T) {
 					mocks.logger.EXPECT().Debug(gomock.Any()),
 				)
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -405,6 +419,7 @@ func TestClient_Remove(t *testing.T) {
 			key:  "test-key",
 			setup: func(mocks *testMocks) *Client {
 				mocks.logger.EXPECT().Error("bucket not initialized")
+
 				client := &Client{bucket: nil}
 				client.UseLogger(mocks.logger)
 
@@ -439,6 +454,7 @@ func TestClient_DefaultCollection(t *testing.T) {
 			name: "success: default collection returned",
 			setup: func(mocks *testMocks) *Client {
 				mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection)
+
 				return &Client{
 					bucket:  mocks.bucket,
 					logger:  mocks.logger,
@@ -454,6 +470,7 @@ func TestClient_DefaultCollection(t *testing.T) {
 			name: "error: bucket not initialized",
 			setup: func(mocks *testMocks) *Client {
 				mocks.logger.EXPECT().Error("bucket not initialized")
+
 				return &Client{
 					bucket: nil,
 					logger: mocks.logger,
@@ -491,6 +508,7 @@ func TestClient_Scope(t *testing.T) {
 			scopeName: "test-scope",
 			setup: func(mocks *testMocks) *Client {
 				mocks.bucket.EXPECT().Scope("test-scope").Return(mocks.scope)
+
 				return &Client{
 					bucket:  mocks.bucket,
 					logger:  mocks.logger,
@@ -507,6 +525,7 @@ func TestClient_Scope(t *testing.T) {
 			scopeName: "test-scope",
 			setup: func(mocks *testMocks) *Client {
 				mocks.logger.EXPECT().Error("bucket not initialized")
+
 				return &Client{
 					bucket: nil,
 					logger: mocks.logger,
@@ -664,6 +683,7 @@ func TestClient_Query(t *testing.T) {
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -680,6 +700,7 @@ func TestClient_Query(t *testing.T) {
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -705,6 +726,7 @@ func TestClient_Query(t *testing.T) {
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -1177,6 +1199,7 @@ func TestClient_AnalyticsQuery(t *testing.T) {
 				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -1196,6 +1219,7 @@ func TestClient_AnalyticsQuery(t *testing.T) {
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
@@ -1221,6 +1245,7 @@ func TestClient_AnalyticsQuery(t *testing.T) {
 				mocks.logger.EXPECT().Debug(gomock.Any())
 				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 				return &Client{
 					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
 				}
