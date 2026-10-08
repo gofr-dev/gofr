@@ -232,3 +232,63 @@ func newCMDContext(w Responder, r Request, c *container.Container, out terminal.
 func (c *Context) GetCorrelationID() string {
 	return trace.SpanFromContext(c).SpanContext().TraceID().String()
 }
+
+// logger returns the embedded ContextLogger when GoFr initialized it. A Context built as a struct
+// literal (in tests, or by gofr-cli generated gRPC wrappers) leaves it zero-valued, so one is built
+// from the Context's own context and Container.Logger, keeping the trace ID instead of panicking.
+// A Context without a Container or Container.Logger has nothing to log to and panics, as ctx.Logger does.
+func (c *Context) logger() *logging.ContextLogger {
+	if c.ContextLogger != (logging.ContextLogger{}) {
+		return &c.ContextLogger
+	}
+
+	cl := logging.ContextLoggerFor(c.Context, c.Container.Logger)
+
+	return &cl
+}
+
+// Debug logs at DEBUG level, attaching the request's trace ID when one is present.
+func (c *Context) Debug(args ...any) { c.logger().Debug(args...) }
+
+// Debugf logs a formatted message at DEBUG level, attaching the request's trace ID when one is present.
+func (c *Context) Debugf(format string, args ...any) { c.logger().Debugf(format, args...) }
+
+// Log logs at INFO level, attaching the request's trace ID when one is present.
+func (c *Context) Log(args ...any) { c.logger().Log(args...) }
+
+// Logf logs a formatted message at INFO level, attaching the request's trace ID when one is present.
+func (c *Context) Logf(format string, args ...any) { c.logger().Logf(format, args...) }
+
+// Info logs at INFO level, attaching the request's trace ID when one is present.
+func (c *Context) Info(args ...any) { c.logger().Info(args...) }
+
+// Infof logs a formatted message at INFO level, attaching the request's trace ID when one is present.
+func (c *Context) Infof(format string, args ...any) { c.logger().Infof(format, args...) }
+
+// Notice logs at NOTICE level, attaching the request's trace ID when one is present.
+func (c *Context) Notice(args ...any) { c.logger().Notice(args...) }
+
+// Noticef logs a formatted message at NOTICE level, attaching the request's trace ID when one is present.
+func (c *Context) Noticef(format string, args ...any) { c.logger().Noticef(format, args...) }
+
+// Warn logs at WARN level, attaching the request's trace ID when one is present.
+func (c *Context) Warn(args ...any) { c.logger().Warn(args...) }
+
+// Warnf logs a formatted message at WARN level, attaching the request's trace ID when one is present.
+func (c *Context) Warnf(format string, args ...any) { c.logger().Warnf(format, args...) }
+
+// Error logs at ERROR level, attaching the request's trace ID when one is present.
+func (c *Context) Error(args ...any) { c.logger().Error(args...) }
+
+// Errorf logs a formatted message at ERROR level, attaching the request's trace ID when one is present.
+func (c *Context) Errorf(format string, args ...any) { c.logger().Errorf(format, args...) }
+
+// Fatal logs at FATAL level, attaching the request's trace ID when one is present, and exits the application.
+func (c *Context) Fatal(args ...any) { c.logger().Fatal(args...) }
+
+// Fatalf logs a formatted message at FATAL level, attaching the request's trace ID when one is present,
+// and exits the application.
+func (c *Context) Fatalf(format string, args ...any) { c.logger().Fatalf(format, args...) }
+
+// ChangeLevel changes the level of the underlying logger.
+func (c *Context) ChangeLevel(level logging.Level) { c.logger().ChangeLevel(level) }
