@@ -815,7 +815,9 @@ func TestRun_FailedStartupExitsNonZero(t *testing.T) {
 		app.Run()
 	})
 
-	require.Equal(t, []int{exitCodeStartupFailed}, codes,
+	// A literal, not exitCodeFailure: the test pins the status the process reports, so a change
+	// to the constant's value has to fail here too.
+	require.Equal(t, []int{1}, codes,
 		"a startup that was refused must report failure to the process")
 }
 
