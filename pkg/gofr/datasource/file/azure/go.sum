@@ -66,5 +66,5 @@ golang.org/x/term v0.46.0 h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE=
 golang.org/x/term v0.46.0/go.mod h1:+K02xbkittuwc0Am4abfA3Fc+XRGXkvBXNO88NCXPoc=
 golang.org/x/text v0.42.0 h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=
 golang.org/x/text v0.42.0/go.mod h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E=
-google.golang.org/api v0.299.0 h1:b3K+ydSMd0kh6TQI6bJyApRQfqQX2MfSOaVkpM59mJw=
-google.golang.org/api v0.299.0/go.mod h1:zlR3GVA8b2R5nv5Ij9UWe37StVB3cxDD7DBFi4ZFsHw=
+google.golang.org/api v0.300.0 h1:2rvPV2bqnPuHOaF4gGOBiT1IIc6JVXYyHCkZeqdzjNk=
+google.golang.org/api v0.300.0/go.mod h1:tKfTSDfK+0FlOVl8N30VL5fU5TuaEkJjvdyTIKNwzPg=
