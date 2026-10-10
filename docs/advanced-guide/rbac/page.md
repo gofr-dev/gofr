@@ -148,6 +148,17 @@ error still shows why every route is unprotected.
 
 **Note**: When using `inheritsFrom`, only specify additional permissions - inherited ones are automatically included.
 
+Every name in `inheritsFrom` must match the `name` of a role in `roles`. A name that matches no role,
+such as the typo `"inheritsFrom": ["viewr"]`, does not stop the config from loading: the role keeps
+its own permissions and inherits nothing through that name. GoFr logs one error per unknown name when
+the config loads:
+
+```
+RBAC: role "editor" inherits from unknown role "viewr"; no permissions are inherited from it
+```
+
+Fix the name in the config to restore the inherited permissions.
+
 ### Endpoint Mapping
 
 ```json

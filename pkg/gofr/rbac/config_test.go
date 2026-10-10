@@ -529,6 +529,88 @@ func TestConfig_getEffectivePermissions(t *testing.T) {
 	}
 }
 
+func TestConfig_buildRolePermissionsMap(t *testing.T) {
+	testCases := []struct {
+		desc          string
+		roles         []RoleDefinition
+		expectedPerms map[string][]string
+		expectedLogs  []string
+	}{
+		{
+			desc: "inherits from every known role without logging",
+			roles: []RoleDefinition{
+				{Name: "viewer", Permissions: []string{"users:read"}},
+				{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewer"}},
+			},
+			expectedPerms: map[string][]string{
+				"viewer": {"users:read"},
+				"editor": {"users:write", "users:read"},
+			},
+		},
+		{
+			desc: "keeps own permissions and logs an unknown parent",
+			roles: []RoleDefinition{
+				{Name: "viewer", Permissions: []string{"users:read"}},
+				{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewr"}},
+			},
+			expectedPerms: map[string][]string{
+				"viewer": {"users:read"},
+				"editor": {"users:write"},
+			},
+			expectedLogs: []string{
+				`RBAC: role "editor" inherits from unknown role "viewr"; no permissions are inherited from it`,
+			},
+		},
+		{
+			desc: "logs an unknown parent once when reached through another role",
+			roles: []RoleDefinition{
+				{Name: "viewer", Permissions: []string{"users:read"}, InheritsFrom: []string{"guset"}},
+				{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewer"}},
+			},
+			expectedPerms: map[string][]string{
+				"viewer": {"users:read"},
+				"editor": {"users:write", "users:read"},
+			},
+			expectedLogs: []string{
+				`RBAC: role "viewer" inherits from unknown role "guset"; no permissions are inherited from it`,
+			},
+		},
+		{
+			desc: "logs each unknown parent of a role",
+			roles: []RoleDefinition{
+				{Name: "admin", Permissions: []string{"users:delete"}, InheritsFrom: []string{"editr", "viewr"}},
+			},
+			expectedPerms: map[string][]string{
+				"admin": {"users:delete"},
+			},
+			expectedLogs: []string{
+				`RBAC: role "admin" inherits from unknown role "editr"; no permissions are inherited from it`,
+				`RBAC: role "admin" inherits from unknown role "viewr"; no permissions are inherited from it`,
+			},
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			logger := &mockLogger{}
+			config := &Config{Roles: tc.roles, Logger: logger}
+			config.initializeMaps()
+
+			config.buildRolePermissionsMap()
+
+			assert.Equal(t, tc.expectedPerms, config.rolePermissionsMap, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.expectedLogs, logger.errorLogs, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+
+	t.Run("does not panic without a logger", func(t *testing.T) {
+		config := &Config{Roles: []RoleDefinition{{Name: "editor", InheritsFrom: []string{"viewr"}}}}
+		config.initializeMaps()
+
+		assert.NotPanics(t, config.buildRolePermissionsMap)
+	})
+}
+
 func TestExtractNestedClaim_Additional(t *testing.T) {
 	testCases := []struct {
 		desc        string
