@@ -221,6 +221,88 @@ func TestConnection_ReadMessage(t *testing.T) {
 	assert.Equal(t, testMessage, message)
 }
 
+func TestConnection_ReadFailed(t *testing.T) {
+	tests := []struct {
+		desc     string
+		act      func(t *testing.T, conn *Connection)
+		expected bool
+	}{
+		{
+			desc:     "no read attempted",
+			act:      func(*testing.T, *Connection) {},
+			expected: false,
+		},
+		{
+			desc: "successful read",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+			},
+			expected: false,
+		},
+		{
+			desc: "bind fails to decode a successfully read message",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				var target struct{}
+
+				require.Error(t, conn.Bind(&target))
+			},
+			expected: false,
+		},
+		{
+			desc: "read after the peer closed the connection",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+
+				_, _, err = conn.ReadMessage()
+				require.Error(t, err)
+			},
+			expected: true,
+		},
+		{
+			desc: "bind after the peer closed the connection",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+
+				var message string
+
+				require.Error(t, conn.Bind(&message))
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				_ = wsConn.WriteMessage(websocket.TextMessage, []byte("not json"))
+			})
+			defer server.Close()
+
+			conn, resp := connectToWebSocket(t, server.URL)
+
+			defer conn.Close()
+			defer resp.Body.Close()
+
+			assert.False(t, conn.ReadFailed())
+
+			tc.act(t, conn)
+
+			assert.Equal(t, tc.expected, conn.ReadFailed())
+		})
+	}
+}
+
 // TestConnection_ReadMessage_ErrorHandling tests reading messages with error scenarios.
 func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 	tests := []struct {

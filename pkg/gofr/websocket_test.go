@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -18,6 +19,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
@@ -411,6 +414,275 @@ func TestSerializeMessage_Error(t *testing.T) {
 
 			require.ErrorIs(t, err, tc.expErr)
 			assert.Nil(t, msg)
+		})
+	}
+}
+
+func newWebSocketTestApp(t *testing.T, handler Handler) (app *App, wsURL string) {
+	t.Helper()
+
+	testutil.NewServerConfigs(t)
+
+	app = New()
+	app.httpServer.router.Use(middleware.WSHandlerUpgrade(app.container, app.httpServer.ws))
+	app.WebSocket("/ws", handler)
+
+	server := httptest.NewServer(app.httpServer.router)
+	t.Cleanup(server.Close)
+
+	return app, "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+}
+
+func dialWebSocket(t *testing.T, app *App, wsURL string) *websocket.Conn {
+	t.Helper()
+
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		ws.Close()
+		resp.Body.Close()
+	})
+
+	require.Eventually(t, func() bool {
+		return len(app.httpServer.ws.ListConnections()) == 1
+	}, 3*time.Second, time.Millisecond, "connection was not registered")
+
+	return ws
+}
+
+func requireHandlerLoopEnded(t *testing.T, app *App) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		return len(app.httpServer.ws.ListConnections()) == 0
+	}, 3*time.Second, 10*time.Millisecond, "handler loop did not stop after the connection failed")
+}
+
+func Test_WebSocket_ClientCloseCodesStopHandlerLoop(t *testing.T) {
+	tests := []struct {
+		desc string
+		code int
+	}{
+		{desc: "normal closure", code: websocket.CloseNormalClosure},
+		{desc: "going away", code: websocket.CloseGoingAway},
+		{desc: "no status received", code: websocket.CloseNoStatusReceived},
+		{desc: "policy violation", code: websocket.ClosePolicyViolation},
+		{desc: "internal server error", code: websocket.CloseInternalServerErr},
+		{desc: "application defined", code: 4000},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var calls atomic.Int32
+
+			app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+				calls.Add(1)
+
+				var message string
+
+				if err := ctx.Bind(&message); err != nil {
+					return nil, err
+				}
+
+				return message, nil
+			})
+
+			ws := dialWebSocket(t, app, wsURL)
+
+			// FormatCloseMessage sends an empty close frame for CloseNoStatusReceived, which is what a
+			// browser's plain ws.close() produces.
+			err := ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(tc.code, ""),
+				time.Now().Add(time.Second))
+			require.NoError(t, err)
+
+			requireHandlerLoopEnded(t, app)
+
+			assert.Equal(t, int32(1), calls.Load())
+		})
+	}
+}
+
+func Test_WebSocket_ReadFailureStopsHandlerLoop(t *testing.T) {
+	tests := []struct {
+		desc    string
+		prepare func(conn *gofrWebsocket.Connection)
+		trigger func(t *testing.T, ws *websocket.Conn)
+	}{
+		{
+			desc: "connection dropped without a close frame",
+			trigger: func(t *testing.T, ws *websocket.Conn) {
+				t.Helper()
+
+				require.NoError(t, ws.UnderlyingConn().Close())
+			},
+		},
+		{
+			desc: "read deadline exceeded",
+			prepare: func(conn *gofrWebsocket.Connection) {
+				_ = conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+			},
+			trigger: func(*testing.T, *websocket.Conn) {},
+		},
+		{
+			desc: "read limit exceeded",
+			prepare: func(conn *gofrWebsocket.Connection) {
+				conn.SetReadLimit(4)
+			},
+			trigger: func(t *testing.T, ws *websocket.Conn) {
+				t.Helper()
+
+				require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte("longer than the limit")))
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var calls atomic.Int32
+
+			app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+				calls.Add(1)
+
+				if tc.prepare != nil {
+					tc.prepare(ctx.Request.(*gofrWebsocket.Connection))
+				}
+
+				var message string
+
+				if err := ctx.Bind(&message); err != nil {
+					return nil, err
+				}
+
+				return message, nil
+			})
+
+			tc.trigger(t, dialWebSocket(t, app, wsURL))
+
+			requireHandlerLoopEnded(t, app)
+
+			assert.Equal(t, int32(1), calls.Load())
+		})
+	}
+}
+
+func Test_WebSocket_HandlerIgnoringReadFailureStopsLoop(t *testing.T) {
+	var calls atomic.Int32
+
+	app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+		calls.Add(1)
+
+		_ = ctx.Request.(*gofrWebsocket.Connection).SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+
+		var message string
+
+		_ = ctx.Bind(&message)
+
+		return "done", nil
+	})
+
+	ws := dialWebSocket(t, app, wsURL)
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+	assert.Equal(t, "done", string(message))
+
+	requireHandlerLoopEnded(t, app)
+
+	assert.Equal(t, int32(1), calls.Load())
+}
+
+func Test_WebSocket_WriteFailureStopsHandlerLoop(t *testing.T) {
+	var calls atomic.Int32
+
+	app, wsURL := newWebSocketTestApp(t, func(*Context) (any, error) {
+		calls.Add(1)
+
+		return "ping", nil
+	})
+
+	ws := dialWebSocket(t, app, wsURL)
+
+	require.NoError(t, ws.UnderlyingConn().Close())
+
+	requireHandlerLoopEnded(t, app)
+
+	assert.Positive(t, calls.Load())
+}
+
+func Test_WebSocket_HandlerErrorKeepsConnectionOpen(t *testing.T) {
+	var calls atomic.Int32
+
+	errInvalidPayload := errors.New("invalid payload")
+
+	app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+		calls.Add(1)
+
+		var message string
+
+		if err := ctx.Bind(&message); err != nil {
+			return nil, err
+		}
+
+		if message == "bad" {
+			return nil, errInvalidPayload
+		}
+
+		return message, nil
+	})
+
+	ws := dialWebSocket(t, app, wsURL)
+
+	for _, payload := range []string{"bad", "good"} {
+		require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte(payload)))
+	}
+
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+	var message []byte
+
+	for string(message) != "good" {
+		var err error
+
+		_, message, err = ws.ReadMessage()
+		require.NoError(t, err)
+	}
+
+	assert.GreaterOrEqual(t, calls.Load(), int32(2))
+}
+
+func Test_handleWebSocketError(t *testing.T) {
+	tests := []struct {
+		desc      string
+		err       error
+		wantAbort bool
+	}{
+		{desc: "nil error", err: nil, wantAbort: false},
+		{
+			desc:      "close error with no status",
+			err:       &websocket.CloseError{Code: websocket.CloseNoStatusReceived},
+			wantAbort: true,
+		},
+		{desc: "close error with application code", err: &websocket.CloseError{Code: 4000}, wantAbort: true},
+		{
+			desc:      "wrapped close error",
+			err:       fmt.Errorf("bind: %w", &websocket.CloseError{Code: websocket.CloseInternalServerErr}),
+			wantAbort: true,
+		},
+		{desc: "closed network connection", err: net.ErrClosed, wantAbort: true},
+		{desc: "broken pipe", err: errors.New("write: broken pipe"), wantAbort: true},
+		{desc: "connection reset by peer", err: errors.New("read: connection reset by peer"), wantAbort: true},
+		{desc: "handler error", err: errors.New("invalid payload"), wantAbort: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx := &Context{
+				Context:       t.Context(),
+				ContextLogger: *logging.NewContextLogger(t.Context(), logging.NewMockLogger(logging.FATAL)),
+			}
+
+			assert.Equal(t, tc.wantAbort, handleWebSocketError(ctx, "test", tc.err))
 		})
 	}
 }
