@@ -25,7 +25,12 @@ import (
 	gofrWebsocket "gofr.dev/pkg/gofr/websocket"
 )
 
-var errWebSocketNotReady = errors.New("websocket server not ready")
+var (
+	errWebSocketNotReady = errors.New("websocket server not ready")
+	errInvalidPayload    = errors.New("invalid payload")
+	errBrokenPipe        = errors.New("write: broken pipe")
+	errConnectionReset   = errors.New("read: connection reset by peer")
+)
 
 func Test_WebSocket_Success(t *testing.T) {
 	testutil.NewServerConfigs(t)
@@ -613,8 +618,6 @@ func Test_WebSocket_WriteFailureStopsHandlerLoop(t *testing.T) {
 func Test_WebSocket_HandlerErrorKeepsConnectionOpen(t *testing.T) {
 	var calls atomic.Int32
 
-	errInvalidPayload := errors.New("invalid payload")
-
 	app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
 		calls.Add(1)
 
@@ -670,9 +673,9 @@ func Test_handleWebSocketError(t *testing.T) {
 			wantAbort: true,
 		},
 		{desc: "closed network connection", err: net.ErrClosed, wantAbort: true},
-		{desc: "broken pipe", err: errors.New("write: broken pipe"), wantAbort: true},
-		{desc: "connection reset by peer", err: errors.New("read: connection reset by peer"), wantAbort: true},
-		{desc: "handler error", err: errors.New("invalid payload"), wantAbort: false},
+		{desc: "broken pipe", err: errBrokenPipe, wantAbort: true},
+		{desc: "connection reset by peer", err: errConnectionReset, wantAbort: true},
+		{desc: "handler error", err: errInvalidPayload, wantAbort: false},
 	}
 
 	for _, tc := range tests {
