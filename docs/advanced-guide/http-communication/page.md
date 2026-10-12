@@ -182,6 +182,7 @@ echo -n "your-password" | base64
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
 - **RetryConfig** - This option allows the user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried. Retries stop as soon as the caller's context is canceled or past its deadline -- including a deadline that passes while an attempt is already on the wire -- and the error of the attempt it ended is returned.
+- **RetryPolicy** - A configurable alternative to `RetryConfig`: waits between attempts (backoff with jitter), honors `Retry-After`, retries only methods that are safe to repeat, bounds each attempt, and caps retries with a budget. See [Retry Policy](#retry-policy) below. `RetryConfig` keeps its behavior unchanged.
 - **RateLimiterConfig** -  This option allows the user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
 **Rate Limiter Store: Customization**
@@ -245,6 +246,47 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
 
+### Retry Policy
+
+`RetryConfig` retries immediately, replays every method, and has no limit on load. When an upstream is slow or overloaded, every caller in a fleet then retries at once, which keeps it overloaded. `RetryPolicy` is the option for that case:
+
+```go
+a.AddHTTPService("orders", "https://orders.example.com",
+	// Each option wraps the ones registered before it. Registering the circuit breaker BEFORE the
+	// retry policy puts it inside the retries: every attempt is counted by the breaker, and an open
+	// breaker stops the retries.
+	&service.CircuitBreakerConfig{Threshold: 4, Interval: time.Second},
+
+	&service.RetryPolicy{
+		MaxAttempts:       4, // the first attempt plus up to 3 retries
+		Backoff:           &service.ExponentialBackoff{Base: 100 * time.Millisecond, Max: 2 * time.Second},
+		RespectRetryAfter: true,
+		PerAttemptTimeout: 2 * time.Second,
+		Budget:            &service.RetryBudget{Ratio: 0.2, MinPerSecond: 10},
+	},
+)
+```
+
+| Field | Default (zero value) | Meaning |
+|---|---|---|
+| `MaxAttempts` | `0` or `1`: no retry | Total attempts, including the first. |
+| `Backoff` | `nil`: no wait | The wait before retry `n` (`n` = 1 for the first retry). `ConstantBackoff{Delay}` waits the same each time. `ExponentialBackoff{Base, Max, Multiplier}` waits a random time between 0 and `min(Max, Base × Multiplier^(n-1))` ("full jitter"); `Multiplier` defaults to 2. |
+| `RetryOn` | `StandardRetryable` | Decides whether a result is retried. `StandardRetryable` retries network errors (including timeouts, such as an attempt cut off by `PerAttemptTimeout`), a `RateLimitError`, and the statuses 408, 429, 502, 503 and 504. It never retries 500, 501 or 505. A custom rule can call `StandardRetryable` and add to it. |
+| `RespectRetryAfter` | `false` | Wait for the server's `Retry-After` (seconds or an HTTP date) on a 429 or 503, and for `RetryAfter` of a `RateLimitError` from `RateLimiterConfig`, instead of the backoff. |
+| `MaxRetryAfter` | `30s` | The longest `Retry-After` that is honored; a longer one is cut to this. |
+| `Methods` | `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, `QUERY` | Methods that are always retried. A request with any other method is sent once, unless it carries the idempotency key header. |
+| `IdempotencyKeyHeader` | `Idempotency-Key` | A request carrying this header with a non-empty value is retried whatever its method (for example a `POST`), since the server can use the key to drop the duplicate. |
+| `PerAttemptTimeout` | `0`: none | The longest one attempt may wait for the response headers. An attempt that takes longer is abandoned and retried. Reading the body of a successful response is not limited. |
+| `Budget` | `nil`: unlimited | Caps retries per service to `Ratio` × first attempts plus `MinPerSecond` per second, counted over `TTL` (default 10s). When the budget is spent, the last result is returned without retrying. |
+
+How a call proceeds:
+
+1. A request is retried only if its method is in `Methods` or it carries the idempotency key header. So by default `POST` and `PATCH` are sent once unless they carry `Idempotency-Key`.
+2. Before each retry, the policy waits for `Retry-After` (when `RespectRetryAfter` is set and the server sent one) or for the backoff.
+3. If the wait would end after the caller's context deadline (or, when `PerAttemptTimeout` is set, would leave less than one full attempt before it), or the context ends during the wait, the policy stops and returns the last result, with its body still readable. (While the policy waits, a small body is held in memory so its connection can go back to the pool.)
+4. An open circuit breaker (`ErrCircuitOpen`) and the caller's own canceled or expired context are never retried, even when a custom `RetryOn` returns `true`.
+5. Every retry increments `app_http_retry_count` with a `reason` label (`status_5xx`, `status_429`, `status_408`, `network`, `attempt_timeout`, or `status_other` for any other status a custom `RetryOn` retries), records the wait in `app_http_retry_wait_seconds`, adds an `http.retry` event to the caller's span, and is logged at debug level. A retry refused by the budget increments `app_http_retry_budget_exhausted_total` instead.
+
 ### File-Based Token Authentication
 
 `FileTokenAuthConfig` (in `gofr.dev/pkg/gofr/service`) authenticates outgoing
@@ -301,7 +343,9 @@ that outlives the service using it.
 
 GoFr publishes the following metrics for HTTP service communication:
 
-- `app_http_retry_count`: Total number of retry events. (labels: `service`)
+- `app_http_retry_count`: Total number of retry events. (labels: `service`; with `RetryPolicy` also `reason`)
+- `app_http_retry_wait_seconds`: Time `RetryPolicy` waited before each retry, in seconds (histogram). (labels: `service`)
+- `app_http_retry_budget_exhausted_total`: Retries `RetryPolicy` skipped because the retry budget was spent. (labels: `service`)
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
 - `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
 ## Related production guides
