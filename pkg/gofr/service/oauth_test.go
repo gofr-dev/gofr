@@ -118,7 +118,7 @@ func TestAddAuthorizationHeader_OAuth(t *testing.T) {
 	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
 	headerWithoutAuth := map[string]string{"Content Type": "Value"}
 	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
-	authHeaderExistsError := AuthErr{Message: "value Value already exists for header Authorization"}
+	authHeaderExistsError := AuthErr{Message: "a value already exists for header Authorization"}
 
 	testCases := []struct {
 		tokenURL string
