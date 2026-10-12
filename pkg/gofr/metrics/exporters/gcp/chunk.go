@@ -20,23 +20,24 @@ import (
 // every collection from then on.
 const maxPointsPerRequest = 200
 
-// newReader returns the periodic reader the exporter hands to the SDK, with exp
-// wrapped so no request exceeds maxPointsPerRequest.
+// newReader returns the periodic reader the exporter hands to the SDK. The SDK
+// is told to batch at maxPointsPerRequest, and exp is still wrapped so no request
+// exceeds it even if that batching is off or stops honoring the size upstream.
 func newReader(exp metricSdk.Exporter, interval time.Duration) metricSdk.Reader {
 	return metricSdk.NewPeriodicReader(
 		&chunkingExporter{Exporter: exp, limit: maxPointsPerRequest},
 		metricSdk.WithInterval(interval),
+		metricSdk.WithMaxExportBatchSize(maxPointsPerRequest),
 	)
 }
 
 // chunkingExporter sends each collection as a sequence of requests of at most
 // limit points. Temporality, aggregation, flush and shutdown pass through.
 //
-// The OTel SDK has an equivalent batcher, but only behind the experimental
-// OTEL_GO_X_METRIC_EXPORT_BATCH_SIZE environment variable; this makes the
-// limit a property of the exporter instead of something every deployment has to
-// discover. When both are active the SDK's batches arrive already small enough
-// and pass through unchanged.
+// newReader enables the SDK's own batcher (WithMaxExportBatchSize) at the same
+// limit, so collections arrive already split and pass through unchanged. This
+// exporter stays as the backstop that still holds the cap if that batching is
+// off or an SDK change stops honoring the size.
 type chunkingExporter struct {
 	metricSdk.Exporter
 	limit int

@@ -332,47 +332,33 @@ func Test_chunkingExporter_Export(t *testing.T) {
 }
 
 // Test_newReader drives the real SDK pipeline, so it proves the reader the
-// exporter hands out actually splits what a MeterProvider collects.
+// exporter hands out actually splits what a MeterProvider collects. newReader
+// sets the SDK's own batch size to the cap, so the collection is split there and
+// the exporter passes those batches through unchanged.
 func Test_newReader(t *testing.T) {
-	tests := []struct {
-		name      string
-		sdkBatch  string
-		wantCalls []int
-	}{
-		{"splits at the Telemetry API cap", "", []int{200, 200, 50}},
-		// The SDK's experimental batcher may already have split the collection;
-		// the exporter must then pass the smaller batches through untouched.
-		{"composes with the SDK's own batching", "150", []int{150, 150, 150}},
+	rec := &recordingExporter{t: t}
+	reader := newReader(rec, time.Hour)
+	provider := metricSdk.NewMeterProvider(metricSdk.WithReader(reader))
+
+	counter, err := provider.Meter("test").Int64Counter("requests")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("OTEL_GO_X_METRIC_EXPORT_BATCH_SIZE", tc.sdkBatch)
+	for i := range 450 {
+		counter.Add(context.Background(), 1, metric.WithAttributes(attribute.Int("path", i)))
+	}
 
-			rec := &recordingExporter{t: t}
-			reader := newReader(rec, time.Hour)
-			provider := metricSdk.NewMeterProvider(metricSdk.WithReader(reader))
+	if err := provider.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("ForceFlush: %v", err)
+	}
 
-			counter, err := provider.Meter("test").Int64Counter("requests")
-			if err != nil {
-				t.Fatal(err)
-			}
+	got := rec.snapshot()
 
-			for i := range 450 {
-				counter.Add(context.Background(), 1, metric.WithAttributes(attribute.Int("path", i)))
-			}
+	_ = provider.Shutdown(context.Background())
 
-			if err := provider.ForceFlush(context.Background()); err != nil {
-				t.Fatalf("ForceFlush: %v", err)
-			}
-
-			got := rec.snapshot()
-
-			_ = provider.Shutdown(context.Background())
-
-			if !slices.Equal(got, tc.wantCalls) {
-				t.Errorf("requests = %v, want %v", got, tc.wantCalls)
-			}
-		})
+	want := []int{200, 200, 50}
+	if !slices.Equal(got, want) {
+		t.Errorf("requests = %v, want %v", got, want)
 	}
 }
