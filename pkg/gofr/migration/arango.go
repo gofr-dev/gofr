@@ -112,13 +112,13 @@ func (am arangoMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-func (am arangoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (am arangoMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsArangoDB] {
 		bindVars := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime,
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime,
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		var result []map[string]any
@@ -134,7 +134,7 @@ func (am arangoMigrator) commitMigration(c *container.Container, data transactio
 	return am.migrator.commitMigration(c, data)
 }
 
-func (am arangoMigrator) rollback(c *container.Container, data transactionData) {
+func (am arangoMigrator) rollback(c *container.Container, data *transactionData) {
 	am.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)

@@ -101,7 +101,7 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 		mockClickhouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
-		err := mg.commitMigration(mockContainer, td)
+		err := mg.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -133,9 +133,9 @@ func Test_ClickHouseCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
 
@@ -156,8 +156,8 @@ func Test_ClickHouseCommitMigration_NilUsedDatasources(t *testing.T) {
 		UsedDatasources: nil, // nil — map lookup returns false, so no insert should happen
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }

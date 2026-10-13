@@ -16,6 +16,9 @@ var (
 
 const defaultTimeout = 10 * time.Second
 
+// providerName identifies this storage provider in logs and metrics.
+const providerName = "Azure"
+
 type azureFileSystem struct {
 	*file.CommonFileSystem
 }
@@ -54,7 +57,7 @@ func New(config *Config) (file.FileSystemProvider, error) {
 		CommonFileSystem: &file.CommonFileSystem{
 			Provider:     adapter,
 			Location:     config.ShareName,
-			ProviderName: "Azure", // Set provider name for observability
+			ProviderName: providerName, // Set provider name for observability
 		},
 	}
 

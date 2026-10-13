@@ -38,6 +38,12 @@ type (
 	Operation = api.Operation
 )
 
+// Health check statuses reported by HealthCheck.
+const (
+	healthStatusUp   = "UP"
+	healthStatusDown = "DOWN"
+)
+
 var (
 	errInvalidMutation   = errors.New("invalid mutation type")
 	errInvalidOperation  = errors.New("invalid operation type")
@@ -349,10 +355,10 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	if err != nil || len(healthResponse.Json) == 0 {
 		d.logger.Error("dgraph health check failed: ", err)
-		return "DOWN", errHealthCheckFailed
+		return healthStatusDown, errHealthCheckFailed
 	}
 
-	return "UP", nil
+	return healthStatusUp, nil
 }
 
 func (d *Client) addTrace(ctx context.Context, method string) (context.Context, trace.Span) {
