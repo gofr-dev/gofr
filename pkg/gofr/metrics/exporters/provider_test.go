@@ -185,10 +185,6 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 	}
 }
 
-// Google's OTLP ingest maps points onto prometheus_target and rejects any whose
-// "location" or "instance" label is empty, so the resource has to carry a source
-// for both. instance falls back to host.id, which is detected; location can only
-// come from the operator, via the standard OTel environment variable.
 // unsetServiceNameEnv blanks the variables that can name the service, so a test
 // that sets neither does not pick up whatever the caller's shell exports.
 func unsetServiceNameEnv(t *testing.T) {
@@ -197,6 +193,10 @@ func unsetServiceNameEnv(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "")
 }
 
+// Google's OTLP ingest maps points onto prometheus_target and rejects any whose
+// "location" or "instance" label is empty, so the resource has to carry a source
+// for both. instance falls back to host.id, which is detected; location can only
+// come from the operator, via the standard OTel environment variable.
 func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
 	unsetServiceNameEnv(t)
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
@@ -428,12 +428,14 @@ func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.
 	}
 }
 
-// Test_buildResource pins how service.name is resolved: the environment wins over
-// APP_NAME, and framework_version is not reachable from the environment at all.
+// Test_buildResource pins how service.name is resolved: APP_NAME wins over the
+// environment, the discarded value is logged, and framework_version is not
+// reachable from the environment at all. Reordering the resource.Option slice in
+// buildResource fails it.
 //
 // Keep these rows identical to traces/exporters.Test_buildResource. The two
-// packages resolve the name independently, and they must agree -- otherwise a
-// service reports one name to its trace backend and another to its metric
+// packages build their resources independently, and they must agree -- otherwise
+// a service reports one name to its trace backend and another to its metric
 // backend, breaking the join between them.
 func Test_buildResource(t *testing.T) {
 	unsetServiceNameEnv(t)
@@ -446,43 +448,25 @@ func Test_buildResource(t *testing.T) {
 		wantLog   string
 	}{
 		{
-			name:      "OTEL_SERVICE_NAME wins over APP_NAME",
+			name:      "OTEL_SERVICE_NAME loses to APP_NAME and is reported",
 			cfg:       Config{AppName: "app"},
 			env:       map[string]string{"OTEL_SERVICE_NAME": "from-env"},
-			wantAttrs: map[string]string{"service.name": "from-env"},
-			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+			wantAttrs: map[string]string{"service.name": "app"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
 		},
 		{
-			name: "service.name in OTEL_RESOURCE_ATTRIBUTES wins, its siblings survive",
+			name: "service.name in OTEL_RESOURCE_ATTRIBUTES loses, its siblings do not",
 			cfg:  Config{AppName: "app"},
 			env: map[string]string{
 				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-env,deployment.environment=prod",
 			},
-			wantAttrs: map[string]string{"service.name": "from-env", "deployment.environment": "prod"},
-			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+			wantAttrs: map[string]string{"service.name": "app", "deployment.environment": "prod"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
 		},
 		{
-			name: "OTEL_SERVICE_NAME outranks OTEL_RESOURCE_ATTRIBUTES",
-			cfg:  Config{AppName: "app"},
-			env: map[string]string{
-				"OTEL_SERVICE_NAME":        "from-var",
-				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-attrs",
-			},
-			wantAttrs: map[string]string{"service.name": "from-var"},
-			wantLog:   `service.name="from-var" from the environment overrides APP_NAME ("app")`,
-		},
-		{
-			name:      "no log when the environment agrees with APP_NAME",
+			name:      "no warning when the environment agrees with APP_NAME",
 			cfg:       Config{AppName: "app"},
 			env:       map[string]string{"OTEL_SERVICE_NAME": "app"},
-			wantAttrs: map[string]string{"service.name": "app"},
-		},
-		// OTEL_RESOURCE_ATTRIBUTES="service.name=" parses to a valid attribute with
-		// an empty value, so an unguarded "env wins" ships a nameless service.
-		{
-			name:      "empty service.name falls back to APP_NAME",
-			cfg:       Config{AppName: "app"},
-			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.name="},
 			wantAttrs: map[string]string{"service.name": "app"},
 		},
 		{
@@ -501,27 +485,27 @@ func Test_buildResource(t *testing.T) {
 
 			var res *resource.Resource
 
-			// Infof goes to stdout: the framework logger reserves stderr for ERROR
+			// Warnf goes to stdout: the framework logger reserves stderr for ERROR
 			// and above.
 			out := testutil.StdoutOutputForFunc(func() {
-				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.INFO))
+				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.WARN))
 			})
 
-			assertServiceNameLog(t, out, tt.wantLog)
+			assertServiceNameWarning(t, out, tt.wantLog)
 			assertResourceAttrs(t, res, tt.wantAttrs)
 		})
 	}
 }
 
-func assertServiceNameLog(t *testing.T, out, wantLog string) {
+func assertServiceNameWarning(t *testing.T, out, wantLog string) {
 	t.Helper()
 
 	if wantLog != "" && !strings.Contains(out, wantLog) {
 		t.Errorf("expected log to mention %q, got: %q", wantLog, out)
 	}
 
-	if wantLog == "" && strings.Contains(out, "overrides APP_NAME") {
-		t.Errorf("unexpected service.name override log: %q", out)
+	if wantLog == "" && strings.Contains(out, "from the environment is ignored") {
+		t.Errorf("unexpected service.name warning: %q", out)
 	}
 }
 
@@ -561,10 +545,10 @@ func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
 		{name: "prometheus only", exporter: ""},
 		{name: "unknown exporter falls back to prometheus", exporter: "no-such-exporter"},
 		{name: "push exporter builds", exporter: "nil-logger-test"},
-		// The service.name override logs, so the nil path must survive a call that
-		// actually reaches the logger rather than only ones that skip it.
+		// An ignored service.name is logged, so the nil path must survive a call
+		// that actually reaches the logger rather than only ones that skip it.
 		{
-			name:     "environment overrides service.name",
+			name:     "environment sets service.name",
 			exporter: "",
 			env:      map[string]string{"OTEL_SERVICE_NAME": "from-env"},
 		},

@@ -65,11 +65,6 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	}
 
 	mp := metricSdk.NewMeterProvider(opts...)
-
-	// APP_NAME, not the resolved service.name: this is the instrumentation *scope*
-	// name, which by OTel convention names the library producing the instruments and
-	// surfaces as the otel_scope_name label on every series. Following
-	// OTEL_SERVICE_NAME here would silently rename a label on all metrics.
 	meter := mp.Meter(cfg.AppName, metric.WithInstrumentationVersion(cfg.AppVersion))
 
 	shutdown := func(shutdownCtx context.Context) error {
@@ -83,51 +78,39 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	return shutdown, meter
 }
 
-// resolveServiceName returns the service name the resource will carry. The
-// environment wins: OTEL_SERVICE_NAME, or service.name inside
-// OTEL_RESOURCE_ATTRIBUTES, overrides APP_NAME -- the SDK already ranks those two
-// against each other (OTEL_SERVICE_NAME first), so reading resource.Environment()
-// inherits that precedence rather than reimplementing it. Environment() runs only
-// the fromEnv detector, so it carries no unknown_service: default to mistake for
-// an operator's value.
+// warnIfEnvServiceNameIgnored logs the one attribute OTEL_RESOURCE_ATTRIBUTES and
+// OTEL_SERVICE_NAME cannot set: service.name, which GoFr always takes from APP_NAME.
+// It mirrors traces/exporters.warnIfEnvServiceNameIgnored: an application with
+// tracing switched off never reaches that one, so without this a metrics-only app
+// would drop the operator's value silently.
 //
-// An empty environment value is not an override: OTEL_RESOURCE_ATTRIBUTES=
-// "service.name=" parses to a valid attribute with an empty value, and shipping
-// that would leave the backend with a nameless service.
-//
-// Kept identical to traces/exporters.resolveServiceName -- the two must agree, or
-// a service reports one name to its trace backend and another to its metric
-// backend, breaking the join between them.
-func resolveServiceName(appName string, logger Logger) string {
+// It reads the environment through resource.Environment rather than the raw
+// variables so the warning reflects exactly what resource.WithFromEnv resolved,
+// including the service.name form embedded in OTEL_RESOURCE_ATTRIBUTES.
+func warnIfEnvServiceNameIgnored(appName string, logger Logger) {
 	for _, kv := range resource.Environment().Attributes() {
 		// GoFr pins semconv v1.17.0 while the SDK's fromEnv detector pins a newer
 		// one; ServiceNameKey is the identical attribute.Key("service.name") in
 		// both, so comparing across the two versions is safe.
-		if kv.Key != semconv.ServiceNameKey {
+		if kv.Key != semconv.ServiceNameKey || kv.Value.AsString() == appName {
 			continue
 		}
 
-		name := strings.TrimSpace(kv.Value.AsString())
-		if name == "" {
-			continue
-		}
+		logger.Warnf("metrics: service.name=%q from the environment is ignored; "+
+			"GoFr sets it from APP_NAME (%q). Set APP_NAME to rename the service.",
+			kv.Value.AsString(), appName)
 
-		if name != appName {
-			logger.Infof("metrics: service.name=%q from the environment overrides APP_NAME (%q)",
-				name, appName)
-		}
-
-		return name
+		return
 	}
-
-	return appName
 }
 
 func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(resolveServiceName(cfg.AppName, logger)),
+		semconv.ServiceNameKey.String(cfg.AppName),
 		attribute.String("framework_version", version.Framework),
 	}
+
+	warnIfEnvServiceNameIgnored(cfg.AppName, logger)
 
 	opts := []resource.Option{
 		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend requires but the
@@ -140,10 +123,9 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// particular consumer merges it.
 		//
 		// The order stays WithFromEnv first: resource.New merges each later option
-		// as the winner, so WithAttributes last is what keeps framework_version out
-		// of the environment's reach. service.name is not defended by that order --
-		// it is resolved above, and re-merging the same value here is a no-op when
-		// the environment supplied it.
+		// as the winner, so WithAttributes last is what keeps service.name and
+		// framework_version out of the environment's reach. Test_buildResource pins
+		// both, so a reshuffle of this slice fails.
 		resource.WithFromEnv(),
 		resource.WithAttributes(attrs...),
 	}

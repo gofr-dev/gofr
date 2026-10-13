@@ -70,47 +70,27 @@ going. A secret pasted into `TRACE_EXPORTER` is redacted too, while a plain typo
 ### Resource attributes from the environment
 
 Every exported span carries a resource — the attributes that describe *which* service emitted it.
-GoFr fills it with `service.name` and `framework_version`, and merges in the standard
-`OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the backend
-without a code change:
+GoFr fills it with `service.name` (from `APP_NAME`) and `framework_version`, and merges in the
+standard `OTEL_RESOURCE_ATTRIBUTES` variable, so attributes only the operator knows reach the
+backend without a code change:
 
 ```bash
 OTEL_RESOURCE_ATTRIBUTES="deployment.environment=prod,cloud.region=asia-south1"
 ```
 
-**`service.name` defaults to `APP_NAME`, and the environment overrides it.** Set
-`OTEL_SERVICE_NAME`, or a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES`, and that value
-is what reaches the backend. `OTEL_SERVICE_NAME` outranks the `OTEL_RESOURCE_ATTRIBUTES` form when
-both are set, as the OpenTelemetry specification requires. An override is logged once at startup, so
-a backend showing a name that is not `APP_NAME` is explainable from the logs:
+**`service.name` is the one exception.** GoFr always takes it from `APP_NAME`, so
+`OTEL_SERVICE_NAME` — and a `service.name=` entry inside `OTEL_RESOURCE_ATTRIBUTES` — is
+discarded. Setting either logs a warning naming the value that was dropped:
 
 ```
-traces: service.name="checkout-from-env" from the environment overrides APP_NAME ("checkout")
+traces: service.name="checkout-from-env" from the environment is ignored; GoFr sets it from APP_NAME ("checkout"). Set APP_NAME to rename the service.
 ```
 
-An empty value is not an override: `OTEL_RESOURCE_ATTRIBUTES="service.name="` parses to a valid
-attribute with an empty value, and shipping that would leave your backend with a nameless service,
-so GoFr falls back to `APP_NAME` and stays silent.
-
-Both signals follow the environment together. GoFr's metrics resource resolves `service.name`
-exactly the same way, so a service reports one name to your trace backend and your metric backend
-alike — the join between a service's traces and its metrics holds either way you configure it. The
-metrics side logs its own line (`metrics: …`), because an application with tracing switched off
-never reaches the tracing code at all.
-
-Some platforms set these variables for you. The Kubernetes OpenTelemetry Operator, when it injects
-SDK configuration into a pod, sets `OTEL_SERVICE_NAME` to the workload's name (the Deployment,
-StatefulSet and so on) unless the container already sets it. Azure Container Apps' managed
-OpenTelemetry agent puts the app name in `OTEL_RESOURCE_ATTRIBUTES`. On those platforms the backend
-shows the platform's name for the service unless you set `OTEL_SERVICE_NAME` yourself.
-
-**Upgrading:** releases up to v1.62.0 kept `APP_NAME` and ignored both variables; v1.62.0 logged a
-warning saying so. If your deployment sets `OTEL_SERVICE_NAME` (or `service.name=`) to a value other
-than `APP_NAME`, the backend shows that value after the upgrade. Unset it to keep reporting
-`APP_NAME`.
-
-`framework_version` is not overridable from the environment; GoFr applies it after the environment
-so it always reflects the framework actually running.
+Rename the service with `APP_NAME`. The reason for the exception is consistency across signals:
+GoFr's metrics resource resolves `service.name` from `APP_NAME` the same way, and letting only
+traces follow `OTEL_SERVICE_NAME` would report one service name to your trace backend and a
+different one to your metric backend — breaking the join between a service's traces and its
+metrics exactly where you need it.
 
 ## End-to-end example
 

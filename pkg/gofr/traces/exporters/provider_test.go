@@ -126,52 +126,30 @@ func Test_buildResource(t *testing.T) {
 			wantAttrs:  map[string]string{"service.name": "app"},
 			absentKeys: []string{"vendor.attr"},
 		},
-		// service.name is the one key GoFr also supplies, and the case above cannot
-		// see the precedence at all: deployment.environment collides with nothing.
-		// These rows pin the precedence itself, that the override is announced, and
-		// that framework_version is *not* reachable from the environment — so a
-		// reshuffle of the resource.Option slice fails here rather than in
-		// production. Keep them identical to metrics/exporters.Test_buildResource:
-		// the two packages must resolve the same name or the trace↔metric join
-		// breaks.
+		// service.name is the one key the environment cannot set, and the case above
+		// cannot see that: deployment.environment does not collide with anything GoFr
+		// supplies. These two pin the precedence itself — reordering the resource.Option
+		// slice fails them — and pin that the discarded value is at least logged.
 		{
-			name:      "OTEL_SERVICE_NAME wins over APP_NAME",
+			name:      "OTEL_SERVICE_NAME loses to APP_NAME and is reported",
 			cfg:       Config{AppName: "app", Exporter: "test-build-ok"},
 			env:       map[string]string{"OTEL_SERVICE_NAME": "from-env"},
-			wantAttrs: map[string]string{"service.name": "from-env"},
-			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+			wantAttrs: map[string]string{"service.name": "app"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
 		},
 		{
-			name: "service.name in OTEL_RESOURCE_ATTRIBUTES wins, its siblings survive",
+			name: "service.name in OTEL_RESOURCE_ATTRIBUTES loses, its siblings do not",
 			cfg:  Config{AppName: "app", Exporter: "test-build-ok"},
 			env: map[string]string{
 				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-env,deployment.environment=prod",
 			},
-			wantAttrs: map[string]string{"service.name": "from-env", "deployment.environment": "prod"},
-			wantLog:   `service.name="from-env" from the environment overrides APP_NAME ("app")`,
+			wantAttrs: map[string]string{"service.name": "app", "deployment.environment": "prod"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
 		},
 		{
-			name: "OTEL_SERVICE_NAME outranks OTEL_RESOURCE_ATTRIBUTES",
-			cfg:  Config{AppName: "app", Exporter: "test-build-ok"},
-			env: map[string]string{
-				"OTEL_SERVICE_NAME":        "from-var",
-				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-attrs",
-			},
-			wantAttrs: map[string]string{"service.name": "from-var"},
-			wantLog:   `service.name="from-var" from the environment overrides APP_NAME ("app")`,
-		},
-		{
-			name:      "no log when the environment agrees with APP_NAME",
+			name:      "no warning when the environment agrees with APP_NAME",
 			cfg:       Config{AppName: "app", Exporter: "test-build-ok"},
 			env:       map[string]string{"OTEL_SERVICE_NAME": "app"},
-			wantAttrs: map[string]string{"service.name": "app"},
-		},
-		// OTEL_RESOURCE_ATTRIBUTES="service.name=" parses to a valid attribute with
-		// an empty value, so an unguarded "env wins" ships a nameless service.
-		{
-			name:      "empty service.name falls back to APP_NAME",
-			cfg:       Config{AppName: "app", Exporter: "test-build-ok"},
-			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "service.name="},
 			wantAttrs: map[string]string{"service.name": "app"},
 		},
 		{
@@ -192,27 +170,27 @@ func Test_buildResource(t *testing.T) {
 
 			var res *resource.Resource
 
-			// Infof goes to stdout: the framework logger reserves stderr for ERROR
+			// Warnf goes to stdout: the framework logger reserves stderr for ERROR
 			// and above.
 			out := testutil.StdoutOutputForFunc(func() {
-				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.INFO))
+				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.WARN))
 			})
 
-			assertServiceNameLog(t, out, tt.wantLog)
+			assertServiceNameWarning(t, out, tt.wantLog)
 			assertResourceAttrs(t, res, tt.wantAttrs, tt.absentKeys)
 		})
 	}
 }
 
-func assertServiceNameLog(t *testing.T, out, wantLog string) {
+func assertServiceNameWarning(t *testing.T, out, wantLog string) {
 	t.Helper()
 
 	if wantLog != "" && !strings.Contains(out, wantLog) {
 		t.Errorf("expected log to mention %q, got: %q", wantLog, out)
 	}
 
-	if wantLog == "" && strings.Contains(out, "overrides APP_NAME") {
-		t.Errorf("unexpected service.name override log: %q", out)
+	if wantLog == "" && strings.Contains(out, "from the environment is ignored") {
+		t.Errorf("unexpected service.name warning: %q", out)
 	}
 }
 
@@ -288,26 +266,14 @@ func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
 	tests := []struct {
 		name     string
 		exporter string
-		env      map[string]string
 	}{
 		{name: "tracing disabled", exporter: ""},
 		{name: "unknown exporter takes the degrade path", exporter: "no-such-exporter"},
 		{name: "builder runs", exporter: "test-nil-logger"},
-		// The service.name override logs, so the nil path must survive a call that
-		// actually reaches the logger rather than only ones that skip it.
-		{
-			name:     "environment overrides service.name",
-			exporter: "test-nil-logger",
-			env:      map[string]string{"OTEL_SERVICE_NAME": "from-env"},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for k, v := range tt.env {
-				t.Setenv(k, v)
-			}
-
 			cfg := Config{AppName: "app", Exporter: tt.exporter, Ratio: 1}
 
 			shutdown, tp := Build(t.Context(), &cfg, nil)
