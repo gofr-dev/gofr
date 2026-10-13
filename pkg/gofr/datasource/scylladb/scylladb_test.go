@@ -53,6 +53,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf("we did not get a pointer. data is not settable.").AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
 		mockIter: mockiter, mockLogger: mockLogger}
@@ -121,6 +122,8 @@ func Test_Query(t *testing.T) {
 	mockIntSlice := make([]int, 0)
 	mockStruct := Users{}
 	mockInt := 0
+	mockErrSlice := make([]int, 0)
+	mockErrSliceAfterScan := make([]int, 0)
 
 	client, mockDeps := initTest(t)
 
@@ -138,6 +141,7 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
 			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
 			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockStructSlice, nil},
 		{"success case: int slice", &mockIntSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
@@ -145,6 +149,7 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
 			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
 			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockIntSlice, nil},
 		{"success case: struct", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
@@ -152,6 +157,7 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
 			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
 			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockStruct, nil},
 		{"failure case: dest is not pointer", mockStructSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug("we did not get a pointer. data is not settable.")
@@ -161,7 +167,23 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockInt, errUnexpectedPointer{target: "int"}},
+		{"failure case: query fails before any row is read", &mockErrSlice, func() {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(0).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(errMock).Times(1)
+		}, &mockErrSlice, errMock},
+		{"failure case: query fails after a row is read", &mockErrSliceAfterScan, func() {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(errMock).Times(1)
+		}, &mockErrSliceAfterScan, errMock},
 	}
 
 	for i, tc := range testCases {
@@ -467,6 +489,7 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 				client.scylla.batches = nil
 			},
 			expRes: &mockStructSlice,

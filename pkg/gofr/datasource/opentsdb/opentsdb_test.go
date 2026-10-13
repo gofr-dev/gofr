@@ -279,7 +279,7 @@ func TestPostQuerySuccess(t *testing.T) {
 	}
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueries := make([]SubQuery, 0)
+	subqueries := make([]SubQuery, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",
@@ -324,7 +324,7 @@ func TestPostQueryLastSuccess(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueriesLast := make([]SubQueryLast, 0)
+	subqueriesLast := make([]SubQueryLast, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",
@@ -381,7 +381,7 @@ func TestPostQueryDeleteSuccess(t *testing.T) {
 	}
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueries := make([]SubQuery, 0)
+	subqueries := make([]SubQuery, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",

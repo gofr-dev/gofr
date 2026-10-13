@@ -148,6 +148,7 @@ func Test_Mutate_Success(t *testing.T) {
 	mutation := &api.Mutation{CommitNow: true}
 
 	mockTxn.EXPECT().Mutate(gomock.Any(), mutation).Return(&api.Response{Json: []byte(`{"result": "mutation success"}`)}, nil)
+	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 
@@ -192,6 +193,7 @@ func Test_Mutate_Error(t *testing.T) {
 	mutation := &api.Mutation{CommitNow: true}
 
 	mockTxn.EXPECT().Mutate(gomock.Any(), mutation).Return(nil, errMutationFailed)
+	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph mutation failed: ", errMutationFailed)
