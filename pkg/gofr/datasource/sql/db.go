@@ -27,6 +27,11 @@ type DB struct {
 	metrics    Metrics
 	stopSignal chan struct{}
 	closeOnce  sync.Once
+	// background tracks the retry and metrics goroutines so Close can wait for
+	// them; cancelBackground aborts the retry goroutine's in-flight ping. Both are
+	// set by finalizeConnection; a DB built without it has nothing to wait for.
+	background       sync.WaitGroup
+	cancelBackground context.CancelFunc
 	// cleanup, when non-nil, tears down resources owned by the datasource that
 	// database/sql does not close itself — e.g. the Cloud SQL connector's dialer
 	// and its background credential refresh. It is set by NewSQLFromConnector and
@@ -132,10 +137,20 @@ func (d *DB) Begin() (*Tx, error) {
 	return &Tx{Tx: tx, config: d.config, logger: d.logger, metrics: d.metrics}, nil
 }
 
+// Close stops the background connection-retry and metrics goroutines, waits for
+// them to exit, then closes the pool and runs the datasource cleanup. An in-flight
+// background ping is canceled rather than waited out, so Close does not block on an
+// unreachable host. Once Close returns, GoFr no longer touches the database.
 func (d *DB) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.stopSignal)
+
+		if d.cancelBackground != nil {
+			d.cancelBackground()
+		}
 	})
+
+	d.background.Wait()
 
 	var err error
 
