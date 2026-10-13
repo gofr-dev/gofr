@@ -70,7 +70,7 @@ func parseArgs(args []string) (subCommand string, showHelp bool, firstArg string
 			continue // This takes care of cases where subCommand has multiple spaces in between.
 		}
 
-		if a == "-h" || a == "--help" {
+		if a == helpFlagShort || a == helpFlagLong {
 			showHelp = true
 
 			continue

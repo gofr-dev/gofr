@@ -13,6 +13,13 @@ const (
 	circuitStateHalfOpen circuitBreakerState = 2
 )
 
+// Names reported for each circuit breaker state in the health check details.
+const (
+	circuitStateClosedName   = "CLOSED"
+	circuitStateOpenName     = "OPEN"
+	circuitStateHalfOpenName = "HALF_OPEN"
+)
+
 // Circuit breaker for replica health with atomic operations.
 type circuitBreaker struct {
 	failures    atomic.Int32

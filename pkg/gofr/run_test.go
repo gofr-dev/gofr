@@ -18,6 +18,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/cmd/terminal"
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -190,6 +191,46 @@ func TestShutdownHelperProcess(t *testing.T) {
 	}
 }
 
+// TestShutdownAfterFailedStartup_ReportsABadGracePeriod pins that a malformed SHUTDOWN_GRACE_PERIOD
+// is reported on the abandoned-startup path.
+//
+// An earlier revision skipped the error here, reasoning that Run's normal path already logs it. That
+// path is precisely the one an abandoned startup never reaches, so the misconfiguration was silent
+// in the only situation this function runs in -- and the operator whose grace period is a typo finds
+// out by watching a cleanup take the default instead of theirs, with nothing said.
+//
+// The default is still used: a bad grace period must not stop the cleanup, only be mentioned.
+func TestShutdownAfterFailedStartup_ReportsABadGracePeriod(t *testing.T) {
+	tests := []struct {
+		desc      string
+		period    string
+		wantEntry bool
+	}{
+		{desc: "malformed period is reported", period: "not-a-duration", wantEntry: true},
+		{desc: "valid period says nothing", period: "1s", wantEntry: false},
+		{desc: "unset period says nothing", period: "", wantEntry: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			logs := testutil.StderrOutputForFunc(func() {
+				a := New()
+				a.Config = config.NewMockConfig(map[string]string{"SHUTDOWN_GRACE_PERIOD": tc.period})
+
+				a.shutdownAfterFailedStartup()
+			})
+
+			if tc.wantEntry {
+				assert.Contains(t, logs, "invalid SHUTDOWN_GRACE_PERIOD",
+					"a grace period that does not parse must be reported on this path")
+			} else {
+				assert.NotContains(t, logs, "invalid SHUTDOWN_GRACE_PERIOD",
+					"a usable grace period must not be reported as invalid")
+			}
+		})
+	}
+}
+
 var errTraceFlush = errors.New("trace flush failed")
 
 func TestApp_runCMD_FlushErrorIsLogged(t *testing.T) {
@@ -278,8 +319,9 @@ func TestApp_startMCPServer(t *testing.T) {
 			mcp: func(port int) *mcpServer {
 				return &mcpServer{port: port, handler: http.NotFoundHandler(), stopped: true}
 			},
+			// No "Starting MCP server" line: this PR moves the stopped check ABOVE it, so a server
+			// that was shut down before it started no longer announces a start it never made.
 			setupMocks: func(l *container.MockLogger, port int) {
-				l.EXPECT().Logf("Starting MCP server on port: %d", port)
 				l.EXPECT().Logf("MCP server was shut down before it started on port: %d", port)
 			},
 		},

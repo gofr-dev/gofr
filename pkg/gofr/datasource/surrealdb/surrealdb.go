@@ -36,6 +36,14 @@ const (
 
 	defaultTimeout = 30 * time.Second
 	closeTimeout   = 5 * time.Second
+
+	// Operation names recorded in QueryLog.OperationName.
+	opQuery  = "query"
+	opSelect = "select"
+	opCreate = "create"
+	opUpdate = "update"
+	opInsert = "insert"
+	opDelete = "delete"
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -285,7 +293,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "query",
+		OperationName: opQuery,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Data:          vars,
@@ -496,7 +504,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "select",
+		OperationName: opSelect,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -532,7 +540,7 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "create",
+		OperationName: opCreate,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -573,7 +581,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "update",
+		OperationName: opUpdate,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -610,7 +618,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "insert",
+		OperationName: opInsert,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -647,7 +655,7 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "delete",
+		OperationName: opDelete,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,

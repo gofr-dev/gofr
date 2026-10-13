@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"golang.org/x/sync/singleflight"
 )
 
 // code reference from https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-go-get-started-send
@@ -24,6 +25,7 @@ var (
 	ErrTopicMismatch      = errors.New("topic should be same as Event Hub name")
 	errClientNotConnected = errors.New("eventhub client not connected")
 	errEmptyTopic         = errors.New("topic name cannot be empty")
+	errProbeInFlight      = errors.New("eventhub health probe already in progress")
 )
 
 const (
@@ -31,6 +33,13 @@ const (
 	eventHubPropsTimeout    = 2 * time.Second
 	basicTierMaxPartitions  = 2
 	basicTierReceiveTimeout = 3 * time.Second
+
+	// healthProbeKey names the single in-flight probe. There is only ever one per client, so the
+	// key is constant; it exists only because singleflight is keyed by design.
+	healthProbeKey = "probe"
+
+	// backendName identifies Event Hub in query logs.
+	backendName = "EVHUB"
 )
 
 type Config struct {
@@ -78,6 +87,12 @@ type Client struct {
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
+	// probeGroup caps in-flight health probes at one and shares that probe's result across every
+	// concurrent poller. A probe can outlive its deadline parked in the SDK (see probeWithin), so
+	// without a cap a broker that accepts a connection but never answers would strand a goroutine on
+	// every health poll -- an unbounded leak. singleflight collapses concurrent polls onto the one
+	// parked probe, so a healthy broker still reports up to every caller.
+	probeGroup singleflight.Group
 }
 
 // New Creates the client for Event Hub.
@@ -297,7 +312,7 @@ func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic str
 		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 
@@ -382,7 +397,7 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID,
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 
@@ -468,19 +483,13 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName,
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
-}
-
-// eventHubProps is the result of one probe, carried back off the goroutine that ran it.
-type eventHubProps struct {
-	props azeventhubs.EventHubProperties
-	err   error
 }
 
 func (c *Client) Health() datasource.Health {
@@ -526,21 +535,35 @@ func (c *Client) Health() datasource.Health {
 // promptly, and why the bound looks correct until a broker accepts a request and never answers.
 //
 // Running the call on its own goroutine and selecting here makes the deadline ours. The cost is
-// that an abandoned probe stays parked until the SDK returns; the channel is buffered so it can
-// always finish and exit rather than blocking forever on the send.
+// that an abandoned probe stays parked until the SDK returns.
+//
+// probeGroup (singleflight) caps that cost at a single parked goroutine AND shares its result:
+// concurrent polls collapse onto the one in-flight probe rather than each spawning another, so a
+// broker stuck in this state strands at most one goroutine no matter the poll rate, and a healthy
+// broker still reports up to every concurrent caller. The probe runs on its own background-derived
+// deadline, not any single caller's, so a caller that gives up cannot cancel the probe the others
+// are still waiting on -- ctx here only bounds how long THIS caller waits. A caller whose deadline
+// expires while the probe is still parked reports errProbeInFlight (down): the broker is
+// unresponsive to it, and the shared probe stays capped rather than being piled on.
 func (c *Client) probeWithin(ctx context.Context) (azeventhubs.EventHubProperties, error) {
-	done := make(chan eventHubProps, 1)
+	result := c.probeGroup.DoChan(healthProbeKey, func() (any, error) {
+		// Own deadline, decoupled from any caller: it bounds link acquisition and retry sleeps
+		// (all ctx ever bounded here -- see above) without being canceled when a caller leaves.
+		probeCtx, cancel := context.WithTimeout(context.Background(), eventHubPropsTimeout)
+		defer cancel()
 
-	go func() {
-		props, err := c.consumer.GetEventHubProperties(ctx, nil)
-		done <- eventHubProps{props: props, err: err}
-	}()
+		return c.consumer.GetEventHubProperties(probeCtx, nil)
+	})
 
 	select {
-	case res := <-done:
-		return res.props, res.err
+	case res := <-result:
+		if res.Err != nil {
+			return azeventhubs.EventHubProperties{}, res.Err
+		}
+
+		return res.Val.(azeventhubs.EventHubProperties), nil
 	case <-ctx.Done():
-		return azeventhubs.EventHubProperties{}, ctx.Err()
+		return azeventhubs.EventHubProperties{}, errProbeInFlight
 	}
 }
 
