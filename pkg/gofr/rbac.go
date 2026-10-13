@@ -55,26 +55,9 @@ func (a *App) enableRBAC(configPath ...string) error {
 		}
 	}
 
-	// Get dependencies
-	logger := a.Logger()
-	metrics := a.Metrics()
-	tracer := otel.GetTracerProvider().Tracer("gofr-rbac")
-
-	// Load configuration directly with dependencies. The load logs through a counting logger, so the
-	// summary line below can say that errors were logged instead of reading as a clean success.
-	loadLogger := &errorCountingLogger{Logger: logger}
-
-	config, err := rbac.LoadPermissions(path, loadLogger, metrics, tracer)
+	config, err := a.loadRBACConfig(path)
 	if err != nil {
-		return fmt.Errorf("failed to load RBAC config: %w", err)
-	}
-
-	config.Logger = logger
-
-	if loadLogger.errors > 0 {
-		a.Logger().Errorf("Loaded RBAC config with %d error(s); see the RBAC errors logged above", loadLogger.errors)
-	} else {
-		a.Logger().Infof("Loaded RBAC config successfully")
+		return err
 	}
 
 	// Apply middleware using the config
@@ -82,6 +65,29 @@ func (a *App) enableRBAC(configPath ...string) error {
 	a.UseMiddleware(middlewareFunc)
 
 	return nil
+}
+
+// loadRBACConfig loads the config at path and logs the startup summary. The load logs through a
+// counting logger, so the summary can say that errors were logged instead of reading as a clean
+// success. The returned config logs through the app logger, not the counting wrapper.
+func (a *App) loadRBACConfig(path string) (*rbac.Config, error) {
+	logger := a.Logger()
+	loadLogger := &errorCountingLogger{Logger: logger}
+
+	config, err := rbac.LoadPermissions(path, loadLogger, a.Metrics(), otel.GetTracerProvider().Tracer("gofr-rbac"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load RBAC config: %w", err)
+	}
+
+	config.Logger = logger
+
+	if loadLogger.errors > 0 {
+		logger.Errorf("Loaded RBAC config with %d error(s); see the RBAC errors logged above", loadLogger.errors)
+	} else {
+		logger.Infof("Loaded RBAC config successfully")
+	}
+
+	return config, nil
 }
 
 // errorCountingLogger counts the error lines logged through it while the RBAC config loads.

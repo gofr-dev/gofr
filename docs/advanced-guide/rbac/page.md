@@ -151,7 +151,7 @@ error still shows why every route is unprotected.
 Every name in `inheritsFrom` must match the `name` of a role in `roles`. A name that matches no role,
 such as the typo `"inheritsFrom": ["viewr"]`, does not stop the config from loading: the role keeps
 its own permissions and inherits nothing through that name. When the config loads, GoFr logs one error
-for each role that declares an unknown name, and the startup line reports that the config loaded with
+for each unknown name on each role, and the startup line reports that the config loaded with
 errors:
 
 ```
