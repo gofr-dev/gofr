@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -16,34 +19,69 @@ const (
 	retryBudgetExhaustedMetric = "app_http_retry_budget_exhausted_total"
 )
 
+// RetryConfig retries a failed call right away, up to MaxRetries times: any error, or a status above 500,
+// whatever the method. For backoff, Retry-After, retrying only safe requests, a per-attempt timeout or a
+// retry budget, use RetryPolicy.
 type RetryConfig struct {
+	// MaxRetries is the number of retries after the first attempt. 0 or less makes a single attempt.
 	MaxRetries int
 }
 
+// AddOption wraps h so its calls are retried.
+//
+// RetryConfig runs on the same engine as RetryPolicy, preset to its own rule: every method, no wait, no
+// per-attempt timeout and no budget. It keeps its own metrics, described on retrySettings.legacy.
 func (r *RetryConfig) AddOption(h HTTP) HTTP {
+	return newRetryProvider(h, &retrySettings{
+		legacy:      true,
+		maxAttempts: min(max(r.MaxRetries, 0), math.MaxInt-1) + 1,
+		retryOn:     legacyRetryable,
+	}, noWait)
+}
+
+// legacyRetryable is RetryConfig's rule: any error, or a status above 500.
+func legacyRetryable(resp *http.Response, err error) bool {
+	return err != nil || resp.StatusCode > http.StatusInternalServerError
+}
+
+// noWait is RetryConfig's wait. It never fails, not even for a done context: the next attempt is then
+// made and is the last, which is what the caller has always been handed.
+func noWait(context.Context, time.Duration) error { return nil }
+
+func newRetryProvider(h HTTP, s *retrySettings, wait func(context.Context, time.Duration) error) *retryProvider {
 	rp := &retryProvider{
-		maxRetries: r.MaxRetries,
-		HTTP:       h,
+		HTTP:      h,
+		settings:  s,
+		wait:      wait,
+		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
 	}
 
 	if httpSvc := extractHTTPService(h); httpSvc != nil {
 		rp.metrics = httpSvc.Metrics
 		rp.serviceName = httpSvc.name
+
+		if l, ok := httpSvc.Logger.(debugLogger); ok {
+			rp.logger = l
+		}
 	}
 
 	return rp
 }
 
-// retryProvider retries calls to the wrapped service. A RetryConfig sets maxRetries and leaves policy nil;
-// a RetryPolicy sets policy.
+// retryProvider retries calls to the wrapped service under settings, from a RetryConfig or a RetryPolicy.
 type retryProvider struct {
-	maxRetries  int
-	policy      *retrySettings
+	settings    *retrySettings
 	wait        func(context.Context, time.Duration) error
+	afterFunc   func(time.Duration, func()) stopper
 	metrics     Metrics
 	logger      debugLogger
 	serviceName string
 	HTTP
+}
+
+// stopper is the part of *time.Timer the per-attempt timeout uses.
+type stopper interface {
+	Stop() bool
 }
 
 func (rp *retryProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response,
@@ -130,138 +168,224 @@ func (rp *retryProvider) QueryWithHeaders(ctx context.Context, path string, quer
 	})
 }
 
-// doWithRetry makes the request under the RetryPolicy when there is one, and under RetryConfig otherwise.
-func (rp *retryProvider) doWithRetry(ctx context.Context, method string, headers map[string]string,
-	reqFunc func(context.Context) (*http.Response, error)) (*http.Response, error) {
-	if rp.policy != nil {
-		return rp.doWithPolicy(ctx, method, headers, reqFunc)
-	}
-
-	return rp.doWithRetryConfig(ctx, func() (*http.Response, error) { return reqFunc(ctx) })
-}
-
-// doWithRetryConfig makes the request, then retries network errors and responses above 500 up to maxRetries times.
+// doWithRetry makes the request, then retries it as the settings allow. Whenever it stops early -- the
+// request may not be retried, the budget is spent, or the wait would outlast the caller's context -- it
+// returns the last attempt's result as it is, with the body unread.
 //
 // Retries stop as soon as the caller's context is done. Every further attempt would fail the same way
 // without reaching the network, and would only be logged, recorded as another failed outbound call, and
-// counted by an inner circuit breaker. The result returned is the result the final retry would have
-// returned.
+// counted by an inner circuit breaker.
 //
 // The context is checked on both sides of the attempt, because the two cases are not the same one.
-// Checking only before it -- which is all this did at first -- misses the common case: a deadline that
-// passes while an attempt is already on the wire. That attempt returns the context's error, the loop
-// then reads a context that was live when it was sampled, and a whole extra request goes out.
-func (rp *retryProvider) doWithRetryConfig(ctx context.Context, reqFunc func() (*http.Response, error)) (*http.Response, error) {
-	var (
-		resp *http.Response
-		err  error
-	)
-
-	for i := 0; i <= rp.maxRetries; i++ {
-		// Before: this attempt is the last, but it is still made. Breaking here instead would return the
-		// previous attempt's result, which changes the error the caller sees.
-		ctxDone := ctx.Err() != nil
-
-		resp, err = reqFunc()
-		if err == nil && resp.StatusCode <= 500 {
-			return resp, nil
-		}
-
-		if i > 0 && rp.metrics != nil {
-			rp.metrics.IncrementCounter(context.Background(), retryCountMetric, "service", rp.serviceName)
-		}
-
-		if ctxDone || contextEndedTheAttempt(ctx, err) || i == rp.maxRetries {
-			break
-		}
-
-		// The attempt is being replaced, so nobody reads this response: drain it so its connection goes
-		// back to the pool instead of being abandoned.
-		drainAndCloseResponse(resp)
-	}
-
-	return resp, err
-}
-
-// doWithPolicy makes the request, then retries it as the RetryPolicy allows. Whenever it stops early --
-// the request may not be retried, the budget is spent, or the wait would outlast the caller's context
-// -- it returns the last attempt's result as it is, with the body unread.
-//
-// The caller's context is checked on both sides of each attempt, as in doWithRetryConfig.
-func (rp *retryProvider) doWithPolicy(ctx context.Context, method string, headers map[string]string,
+// Checking only before it misses the common case: a deadline that passes while an attempt is already on
+// the wire. That attempt returns the context's error, the loop then reads a context that was live when
+// it was sampled, and a whole extra request goes out.
+func (rp *retryProvider) doWithRetry(ctx context.Context, method string, headers map[string]string,
 	reqFunc func(context.Context) (*http.Response, error)) (*http.Response, error) {
-	p := rp.policy
-	canRetry := p.canRetry(method, headers)
+	s := rp.settings
+	canRetry := s.canRetry(method, headers)
 
-	if p.budget != nil {
-		p.budget.deposit()
+	if s.budget != nil {
+		s.budget.deposit()
 	}
 
-	for retry := 1; ; retry++ {
+	for attempt := 1; ; attempt++ {
+		// Before: if the context is already done, this attempt is the last, but it is still made.
+		// Returning the previous attempt's result instead would change the error the caller sees.
 		ctxDone := ctx.Err() != nil
 
-		terminal := !canRetry || retry >= p.maxAttempts
+		last := !canRetry || attempt >= s.maxAttempts
 
-		resp, timedOut, err := attemptWithTimeout(ctx, p.attemptTimeout(terminal), reqFunc)
+		a := rp.attempt(ctx, attempt, last, reqFunc)
 
-		if terminal || ctxDone || contextEndedTheAttempt(ctx, err) {
-			return resp, err
+		rp.countLegacyRetry(attempt, a)
+
+		if last || ctxDone || contextEndedTheAttempt(ctx, a.err) || !rp.replace(ctx, attempt, a) {
+			return a.resp, a.err
 		}
-
-		reason, wait, ok := rp.planRetry(ctx, retry, resp, err, timedOut)
-		if !ok {
-			return resp, err
-		}
-
-		// The connection goes back to the pool during the wait; the response stays readable in case no
-		// retry follows.
-		detachBody(resp)
-
-		// The budget is spent, and the retry recorded, only once the wait is over and the retry is made.
-		if rp.wait(ctx, wait) != nil || !rp.budgetAllows(true) {
-			return resp, err
-		}
-
-		rp.recordRetry(ctx, retry, reason, wait)
-
-		// The attempt is being replaced, so nobody reads this response: drain it so its connection goes
-		// back to the pool instead of being abandoned.
-		drainAndCloseResponse(resp)
 	}
 }
 
-// planRetry decides whether retry number retry is made after an attempt that returned resp and err, and
-// if so, the reason to record and the wait before it. A retry is not made if the result is not retryable,
-// the wait would outlast the caller's deadline, or the budget is spent.
-func (rp *retryProvider) planRetry(ctx context.Context, retry int, resp *http.Response, err error,
-	timedOut bool) (reason string, wait time.Duration, ok bool) {
-	p := rp.policy
-
-	reason, ok = p.retryReason(resp, err, timedOut)
+// replace reports whether a retry follows attempt number attempt. If so, it has waited for it, spent the
+// budget, recorded it, and released the attempt's response. If not, the response is left as it was,
+// readable, to be returned.
+func (rp *retryProvider) replace(ctx context.Context, attempt int, a attemptResult) bool {
+	reason, wait, ok := rp.planRetry(ctx, attempt, a)
 	if !ok {
-		return "", 0, false
+		return false
 	}
 
-	// Stop if the caller's deadline leaves no room for the wait, or -- when attempts are bounded -- for
-	// the wait plus one full attempt. A retry sent with a few milliseconds left would only swap the
-	// response in hand for the caller's deadline error.
-	wait = p.waitBefore(retry, resp, err)
-	if deadline, has := ctx.Deadline(); has && time.Until(deadline) < wait+p.perAttemptTimeout {
+	bound := rp.bodyReadBound(a.resp)
+
+	// The connection goes back to the pool during the wait; the response stays readable in case no
+	// retry follows.
+	if wait > 0 {
+		bound(func() { detachBody(a.resp) })
+	}
+
+	// The budget is spent, and the retry recorded, only once the wait is over and the retry is made.
+	if rp.wait(ctx, wait) != nil || !rp.budgetAllows(true, true) {
+		return false
+	}
+
+	rp.recordRetry(ctx, attempt, reason, wait)
+
+	// The attempt is being replaced, so nobody reads this response: drain it so its connection goes
+	// back to the pool instead of being abandoned.
+	bound(func() { drainAndCloseResponse(a.resp) })
+
+	return true
+}
+
+// attemptResult is the outcome of one attempt. timedOut reports that the per-attempt timeout cut it off
+// for a retry; wait is then the wait chosen for that retry.
+type attemptResult struct {
+	resp     *http.Response
+	err      error
+	timedOut bool
+	wait     time.Duration
+}
+
+// attempt makes attempt number attempt, bounded by the per-attempt timeout unless it is the last.
+func (rp *retryProvider) attempt(ctx context.Context, attempt int, last bool,
+	reqFunc func(context.Context) (*http.Response, error)) attemptResult {
+	if last || rp.settings.perAttemptTimeout <= 0 {
+		resp, err := reqFunc(ctx) //nolint:bodyclose // Handed on in the result, to the caller or a drain.
+
+		return attemptResult{resp: resp, err: err}
+	}
+
+	return attemptWithTimeout(ctx, rp.settings.perAttemptTimeout, rp.afterFunc,
+		func() (time.Duration, bool) { return rp.retryAfterTimeout(ctx, attempt) }, reqFunc)
+}
+
+// retryAfterTimeout is asked when the per-attempt timer of attempt number attempt fires. It reports
+// whether a retry could follow right now, and the wait before it. If not, the attempt is left running:
+// cutting it off would only turn the upstream's answer into a timeout.
+//
+// The budget is only checked here, not spent. If another call spends the last of it before this
+// retry does, this call returns the timeout.
+//
+// It runs on the timer's goroutine, where a panic in RetryOn or Backoff could not be recovered and would
+// end the process. A panic counts as "no retry" instead: the attempt runs on, and whatever RetryOn does
+// with its result then happens on the caller's goroutine.
+func (rp *retryProvider) retryAfterTimeout(ctx context.Context, attempt int) (wait time.Duration, retry bool) {
+	defer func() {
+		if recover() != nil {
+			wait, retry = 0, false
+		}
+	}()
+
+	s := rp.settings
+
+	if !s.retryOn(nil, errAttemptTimeout) {
+		return 0, false
+	}
+
+	wait = s.waitBefore(attempt, nil, errAttemptTimeout)
+
+	if !rp.roomForRetry(ctx, wait) || !rp.budgetAllows(false, false) {
+		return 0, false
+	}
+
+	return wait, true
+}
+
+// planRetry decides whether a retry follows attempt number attempt, and if so, the reason to record and
+// the wait before it. A retry is not made if the result is not retryable, the wait would outlast the
+// caller's deadline, or the budget is spent.
+func (rp *retryProvider) planRetry(ctx context.Context, attempt int, a attemptResult) (reason string,
+	wait time.Duration, ok bool) {
+	s := rp.settings
+
+	switch {
+	case a.timedOut:
+		// The timer already decided a retry follows, and chose its wait.
+		reason, wait = retryReasonAttemptTimeout, a.wait
+	case !s.retryable(a.resp, a.err):
 		return "", 0, false
+	default:
+		reason, wait = reasonOf(a.resp, a.err), s.waitBefore(attempt, a.resp, a.err)
+
+		if !rp.roomForRetry(ctx, wait) {
+			return "", 0, false
+		}
 	}
 
 	// Checked before the wait too, so a call does not wait for a retry the budget already refuses.
-	if !rp.budgetAllows(false) {
+	if !rp.budgetAllows(false, true) {
 		return "", 0, false
 	}
 
 	return reason, wait, true
 }
 
-// budgetAllows reports whether the budget allows a retry, and spends it if withdraw is set. A refusal is
-// counted in app_http_retry_budget_exhausted_total.
-func (rp *retryProvider) budgetAllows(withdraw bool) bool {
-	b := rp.policy.budget
+// roomForRetry reports whether the caller's deadline leaves room for wait and, with a per-attempt
+// timeout, one full attempt after it. A retry sent with a few milliseconds left would only swap the
+// response in hand for the caller's deadline error.
+//
+// RetryConfig makes no such check: it retries until the context is done, then makes one last attempt.
+func (rp *retryProvider) roomForRetry(ctx context.Context, wait time.Duration) bool {
+	deadline, ok := ctx.Deadline()
+	if rp.settings.legacy || !ok {
+		return true
+	}
+
+	// Written as a subtraction from what is left, never wait + perAttemptTimeout: that sum can overflow
+	// for a very long wait and wrap negative, which would pass the check.
+	remaining, attemptTimeout := time.Until(deadline), rp.settings.perAttemptTimeout
+
+	return remaining >= attemptTimeout && wait <= remaining-attemptTimeout
+}
+
+// bodyReadBound returns a function that runs a read of resp's body, bounded by the per-attempt timeout:
+// if the read takes longer, the attempt's context is canceled, which aborts it. Without a per-attempt
+// timeout, or for an attempt that has none, the read is not bounded.
+func (rp *retryProvider) bodyReadBound(resp *http.Response) func(read func()) {
+	c, ok := bodyOf(resp).(*cancelOnClose)
+	if !ok || rp.settings.perAttemptTimeout <= 0 {
+		return func(read func()) { read() }
+	}
+
+	return func(read func()) {
+		// The timer cancels only a read still running: one that fires just as the read ends must not
+		// cancel the context of a body that may yet be returned.
+		var (
+			mu   sync.Mutex
+			done bool
+		)
+
+		t := rp.afterFunc(rp.settings.perAttemptTimeout, func() {
+			mu.Lock()
+			defer mu.Unlock()
+
+			if !done {
+				c.cancel(errAttemptTimeout)
+			}
+		})
+
+		read()
+
+		mu.Lock()
+		done = true
+		mu.Unlock()
+
+		t.Stop()
+	}
+}
+
+func bodyOf(resp *http.Response) io.ReadCloser {
+	if resp == nil {
+		return nil
+	}
+
+	return resp.Body
+}
+
+// budgetAllows reports whether the budget allows a retry, and spends it if withdraw is set. If count is
+// set, a refusal is counted in app_http_retry_budget_exhausted_total.
+func (rp *retryProvider) budgetAllows(withdraw, count bool) bool {
+	b := rp.settings.budget
 	if b == nil {
 		return true
 	}
@@ -273,15 +397,28 @@ func (rp *retryProvider) budgetAllows(withdraw bool) bool {
 		allowed = b.allows()
 	}
 
-	if !allowed && rp.metrics != nil {
+	if !allowed && count && rp.metrics != nil {
 		rp.metrics.IncrementCounter(context.Background(), retryBudgetExhaustedMetric, "service", rp.serviceName)
 	}
 
 	return allowed
 }
 
-// recordRetry reports that retry number retry is about to be made, after waiting wait.
+// countLegacyRetry counts attempt number attempt in RetryConfig's metric if it was a retry that failed.
+// The metric has no reason label, and a retry that succeeds is not counted.
+func (rp *retryProvider) countLegacyRetry(attempt int, a attemptResult) {
+	if rp.settings.legacy && attempt > 1 && rp.metrics != nil && legacyRetryable(a.resp, a.err) {
+		rp.metrics.IncrementCounter(context.Background(), retryCountMetric, "service", rp.serviceName)
+	}
+}
+
+// recordRetry reports that retry number retry is about to be made, after waiting wait. RetryConfig
+// reports retries its own way, in doWithRetry.
 func (rp *retryProvider) recordRetry(ctx context.Context, retry int, reason string, wait time.Duration) {
+	if rp.settings.legacy {
+		return
+	}
+
 	if rp.metrics != nil {
 		rp.metrics.IncrementCounter(context.Background(), retryCountMetric, "service", rp.serviceName, "reason", reason)
 		rp.metrics.RecordHistogram(context.Background(), retryWaitMetric, wait.Seconds(), "service", rp.serviceName)

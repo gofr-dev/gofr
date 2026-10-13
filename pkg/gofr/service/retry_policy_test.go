@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -383,7 +384,7 @@ func TestRetryPolicy_PerAttemptTimeout(t *testing.T) {
 	assert.Less(t, time.Since(start), 3*time.Second, "the hung attempt must be abandoned, not waited out")
 }
 
-func TestRetryPolicy_PerAttemptTimeout_LastAttemptError(t *testing.T) {
+func TestRetryPolicy_PerAttemptTimeout_TimeoutError(t *testing.T) {
 	server, _ := scriptedServer(t, func(_ int32, _ http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
@@ -391,18 +392,242 @@ func TestRetryPolicy_PerAttemptTimeout_LastAttemptError(t *testing.T) {
 		}
 	})
 
-	// The timed-out attempt could be retried, so it is bounded; RetryOn then declines the retry.
-	svc, _ := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond,
-		RetryOn: func(*http.Response, error) bool { return false }})
+	// The timed-out attempt is cut off for a retry, but the caller cancels during the wait, so the
+	// timeout is what the caller gets.
+	svc, rec := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond})
 
-	resp, err := svc.Get(t.Context(), "test", nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	rec.onWait = cancel
+
+	resp, err := svc.Get(ctx, "test", nil)
 
 	requireNoResponse(t, resp)
 	require.ErrorIs(t, err, errAttemptTimeout)
-	require.NotErrorIs(t, err, context.Canceled, "the caller's context was never canceled")
+	require.NotErrorIs(t, err, context.Canceled, "the attempt ran out of time; the caller's cancel came later")
 
 	var urlErr *url.Error
 	require.ErrorAs(t, err, &urlErr, "the transport error naming the request must be kept")
+}
+
+// TestRetryPolicy_PerAttemptTimeout_NoRetryPossible covers attempts the per-attempt timer must leave
+// running: when it fires, no retry could follow, so cutting the attempt off would only turn the
+// upstream's answer into a timeout.
+func TestRetryPolicy_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
+	const answerAfter = 250 * time.Millisecond
+
+	never := func(*http.Response, error) bool { return false }
+
+	tests := []struct {
+		desc     string
+		policy   RetryPolicy
+		deadline time.Duration
+	}{
+		{desc: "the deadline leaves no room for another attempt",
+			policy:   RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 150 * time.Millisecond},
+			deadline: 280 * time.Millisecond},
+		{desc: "the budget is spent",
+			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 100 * time.Millisecond, Budget: &RetryBudget{Ratio: 0.1}}},
+		{desc: "RetryOn does not retry a timeout",
+			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 100 * time.Millisecond, RetryOn: never}},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, r *http.Request) {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(answerAfter):
+				}
+
+				_, _ = io.WriteString(w, "done")
+			})
+
+			svc, _ := newPolicyService(t, server.URL, nil, &tc.policy)
+
+			ctx := t.Context()
+
+			if tc.deadline > 0 {
+				var cancel context.CancelFunc
+
+				ctx, cancel = context.WithTimeout(ctx, tc.deadline)
+				defer cancel()
+			}
+
+			resp, err := svc.Get(ctx, "test", nil)
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, "done", readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, int32(1), hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+// TestRetryPolicy_PerAttemptTimeout_PanickingRetryOn covers a RetryOn that panics on the nil response
+// of a timeout. The timer asks it on its own goroutine, where a panic would kill the process; it must
+// count as "no retry" there, so the attempt runs on and the caller's own goroutine sees what follows.
+func TestRetryPolicy_PerAttemptTimeout_PanickingRetryOn(t *testing.T) {
+	server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(200 * time.Millisecond):
+		}
+
+		_, _ = io.WriteString(w, "done")
+	})
+
+	svc, _ := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 50 * time.Millisecond,
+		RetryOn: func(resp *http.Response, _ error) bool { return resp.StatusCode >= http.StatusInternalServerError }})
+
+	resp, err := svc.Get(t.Context(), "test", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", readBody(t, resp))
+	assert.Equal(t, int32(1), hits.Load())
+}
+
+// hugeBackoff asks for the longest wait there is.
+type hugeBackoff struct{}
+
+func (hugeBackoff) Next(int) time.Duration { return time.Duration(math.MaxInt64) }
+
+func TestRetryPolicy_HugeWaitDoesNotOverflowTheDeadlineCheck(t *testing.T) {
+	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable, http.StatusOK)
+	svc, rec := newPolicyService(t, server.URL, nil,
+		&RetryPolicy{MaxAttempts: 3, Backoff: hugeBackoff{}, PerAttemptTimeout: 100 * time.Millisecond})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	resp, err := svc.Get(ctx, "test", nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, "hit 1", readBody(t, resp))
+	assert.Equal(t, int32(1), hits.Load())
+	assert.Empty(t, rec.recorded(), "a wait past the deadline must not be started")
+}
+
+// TestRetryPolicy_PerAttemptTimeout_BoundsBodyRead covers a retryable response whose body stalls: the
+// read made before the retry must give up after PerAttemptTimeout instead of blocking the call.
+func TestRetryPolicy_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
+	tests := []struct {
+		desc    string
+		backoff Backoff
+	}{
+		{desc: "no wait: the discarded response is drained"},
+		{desc: "a wait: the response is detached first", backoff: ConstantBackoff{Delay: time.Millisecond}},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, hits := scriptedServer(t, func(n int32, w http.ResponseWriter, r *http.Request) {
+				if n > 1 {
+					_, _ = io.WriteString(w, "ok")
+					return
+				}
+
+				w.Header().Set("Content-Length", "100")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = io.WriteString(w, "partial")
+				w.(http.Flusher).Flush()
+
+				select {
+				case <-r.Context().Done():
+				case <-time.After(5 * time.Second):
+				}
+			})
+
+			svc, _ := newPolicyService(t, server.URL, nil,
+				&RetryPolicy{MaxAttempts: 3, Backoff: tc.backoff, PerAttemptTimeout: 100 * time.Millisecond})
+
+			start := time.Now()
+
+			resp, err := svc.Get(context.Background(), "test", nil)
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, "ok", readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, int32(2), hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Less(t, time.Since(start), 2*time.Second, "TEST[%d], the stalled body must not block the retry", i)
+		})
+	}
+}
+
+func TestRetryConfig_MaxRetries(t *testing.T) {
+	tests := []struct {
+		desc       string
+		maxRetries int
+		wantHits   int32
+	}{
+		{desc: "negative makes one attempt", maxRetries: -1, wantHits: 1},
+		{desc: "zero makes one attempt", maxRetries: 0, wantHits: 1},
+		{desc: "two retries make three attempts", maxRetries: 2, wantHits: 3},
+		{desc: "math.MaxInt does not overflow", maxRetries: math.MaxInt, wantHits: 4}, // the 4th attempt succeeds
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server, hits := statusSequence(t, nil, http.StatusServiceUnavailable, http.StatusServiceUnavailable,
+				http.StatusServiceUnavailable, http.StatusOK)
+
+			svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil, &RetryConfig{MaxRetries: tc.maxRetries})
+
+			resp, err := svc.Get(t.Context(), "test", nil)
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			require.NotNil(t, resp, "TEST[%d], a call must always return a response or an error", i)
+			assert.Equal(t, fmt.Sprintf("hit %d", tc.wantHits), readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantHits, hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+// TestRetryConfig_Metrics pins RetryConfig's metrics to today's shape: app_http_retry_count{service}
+// after each failed attempt past the first, nothing for a retry that succeeds, and none of
+// RetryPolicy's reason label, wait histogram or debug log.
+func TestRetryConfig_Metrics(t *testing.T) {
+	tests := []struct {
+		desc      string
+		statuses  []int
+		wantCount int
+	}{
+		{desc: "every attempt fails", statuses: []int{503}, wantCount: 2},
+		{desc: "the second retry succeeds", statuses: []int{503, 502, 200}, wantCount: 1},
+		{desc: "the first attempt succeeds", statuses: []int{200}, wantCount: 0},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			metrics := NewMockMetrics(ctrl)
+
+			metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(),
+				gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				gomock.Any(), gomock.Any()).AnyTimes()
+			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", "service", "svc").Times(tc.wantCount)
+
+			server, _ := statusSequence(t, nil, tc.statuses...)
+
+			var resp *http.Response
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), metrics,
+					WithAttributes(map[string]string{"name": "svc"}), &RetryConfig{MaxRetries: 2})
+
+				var err error
+
+				resp, err = svc.Get(t.Context(), "test", nil) //nolint:bodyclose // Closed by readBody below.
+				require.NoError(t, err)
+			})
+
+			_ = readBody(t, resp)
+
+			assert.NotContains(t, logs, "retrying", "TEST[%d], RetryConfig does not log retries", i)
+		})
+	}
 }
 
 func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
@@ -504,9 +729,11 @@ func TestRetryPolicy_CanceledWaitSpendsNoBudget(t *testing.T) {
 func TestAttemptWithTimeout_ReleasesOnPanic(t *testing.T) {
 	var attemptCtx context.Context
 
+	afterFunc := func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) }
+	retry := func() (time.Duration, bool) { return 0, true }
+
 	require.Panics(t, func() {
-		//nolint:bodyclose // reqFunc panics, so no response is ever returned
-		_, _, _ = attemptWithTimeout(t.Context(), time.Hour, func(ctx context.Context) (*http.Response, error) {
+		_ = attemptWithTimeout(t.Context(), time.Hour, afterFunc, retry, func(ctx context.Context) (*http.Response, error) {
 			attemptCtx = ctx
 
 			panic("request failed")
@@ -514,6 +741,81 @@ func TestAttemptWithTimeout_ReleasesOnPanic(t *testing.T) {
 	})
 
 	require.Error(t, attemptCtx.Err(), "a panicking attempt must not leave its context and timer running")
+}
+
+// lateTimer is a timer that has fired but whose callback has not run yet: Stop reports false, and the
+// callback runs a little later, the window in which an attempt's headers can arrive.
+// Like a real timer, it runs the callback once, however often Stop is called.
+type lateTimer struct {
+	f    func()
+	once sync.Once
+}
+
+func (l *lateTimer) Stop() bool {
+	l.once.Do(func() {
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			l.f()
+		}()
+	})
+
+	return false
+}
+
+// TestAttemptWithTimeout_LateTimer covers headers arriving just as the timer fires: the outcome must be
+// the one the timer's callback settles on, not a response whose context is already canceled.
+func TestAttemptWithTimeout_LateTimer(t *testing.T) {
+	tests := []struct {
+		desc         string
+		retry        bool
+		wantTimedOut bool
+	}{
+		{desc: "a retry can follow: the attempt is given up", retry: true, wantTimedOut: true},
+		{desc: "no retry can follow: the response is kept", retry: false},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			afterFunc := func(_ time.Duration, f func()) stopper { return &lateTimer{f: f} }
+			decide := func() (time.Duration, bool) { return 7 * time.Millisecond, tc.retry }
+
+			reqFunc := func(ctx context.Context) (*http.Response, error) {
+				// The body reads only while the attempt's context lives, as a transport's does.
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(&ctxReader{ctx: ctx, r: strings.NewReader("ok")})}, nil
+			}
+
+			for range 20 {
+				a := attemptWithTimeout(t.Context(), time.Hour, afterFunc, decide, reqFunc)
+
+				require.Equal(t, tc.wantTimedOut, a.timedOut, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+				if tc.wantTimedOut {
+					require.Nil(t, a.resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+					require.ErrorIs(t, a.err, errAttemptTimeout, "TEST[%d], Failed.\n%s", i, tc.desc)
+					require.Equal(t, 7*time.Millisecond, a.wait, "TEST[%d], the timer's wait must be handed on", i)
+
+					continue
+				}
+
+				require.NoError(t, a.err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Equal(t, "ok", readBody(t, a.resp), "TEST[%d], the body must still read", i)
+			}
+		})
+	}
+}
+
+// ctxReader fails reads once ctx is done.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	return c.r.Read(p)
 }
 
 func TestDetachBody(t *testing.T) {

@@ -54,9 +54,13 @@ type RetryPolicy struct {
 	// IdempotencyKeyHeader names the header that makes any other request, such as a POST, safe to retry.
 	// Default "Idempotency-Key".
 	IdempotencyKeyHeader string
-	// PerAttemptTimeout bounds how long one attempt waits for the response headers. 0 means no bound.
-	// Reading the body of the returned response is not bounded by it. An attempt that no retry can follow
-	// -- the last one, or any attempt of a request that may not be retried -- is not bounded either.
+	// PerAttemptTimeout bounds how long one attempt waits for the response headers, so a hung attempt is
+	// given up for a retry. 0 means no bound. It never cuts off an attempt no retry would follow: the
+	// last one, any attempt of a request that may not be retried, and an attempt whose timer finds, when
+	// it fires, that RetryOn does not retry a timeout, the budget is spent, or the caller's deadline has
+	// no room for another attempt. Such an attempt runs until the upstream answers or the caller's
+	// context ends. Reading the body of the returned response is not bounded by it; reading a response
+	// before a retry is.
 	PerAttemptTimeout time.Duration
 	// Budget caps the retries made to the service. nil means unlimited.
 	Budget *RetryBudget
@@ -64,22 +68,7 @@ type RetryPolicy struct {
 
 // AddOption wraps h so its calls are retried under the policy.
 func (p *RetryPolicy) AddOption(h HTTP) HTTP {
-	rp := &retryProvider{
-		HTTP:   h,
-		policy: p.resolve(),
-		wait:   waitWithContext,
-	}
-
-	if httpSvc := extractHTTPService(h); httpSvc != nil {
-		rp.metrics = httpSvc.Metrics
-		rp.serviceName = httpSvc.name
-
-		if l, ok := httpSvc.Logger.(debugLogger); ok {
-			rp.logger = l
-		}
-	}
-
-	return rp
+	return newRetryProvider(h, p.resolve(), waitWithContext)
 }
 
 // debugLogger is the part of logging.Logger the retry layer uses. The service Logger only has Log.
@@ -87,14 +76,19 @@ type debugLogger interface {
 	Debugf(format string, args ...any)
 }
 
-// retrySettings is a RetryPolicy with its defaults filled in.
+// retrySettings is a RetryPolicy with its defaults filled in, or RetryConfig's preset.
 type retrySettings struct {
+	// legacy marks RetryConfig's preset. It keeps three of RetryConfig's ways that RetryPolicy does not
+	// share: app_http_retry_count{service} is counted after each failed attempt past the first, with no
+	// reason label, wait histogram, span event or log; ErrCircuitOpen is retried; and a retry is made
+	// whatever the caller's deadline leaves.
+	legacy               bool
 	maxAttempts          int
 	backoff              Backoff
 	retryOn              func(*http.Response, error) bool
 	respectRetryAfter    bool
 	maxRetryAfter        time.Duration
-	methods              map[string]struct{}
+	methods              map[string]struct{} // nil: every method
 	idempotencyKeyHeader string
 	perAttemptTimeout    time.Duration
 	budget               *retryBudget
@@ -140,22 +134,15 @@ func (p *RetryPolicy) resolve() *retrySettings {
 	return s
 }
 
-// attemptTimeout is the bound on an attempt. PerAttemptTimeout keeps room for a retry, so a terminal
-// attempt -- one no retry can follow -- is bounded only by the caller's context: cutting it off would
-// report a timeout for a request the server may still complete.
-func (s *retrySettings) attemptTimeout(terminal bool) time.Duration {
-	if terminal {
-		return 0
-	}
-
-	return s.perAttemptTimeout
-}
-
 // canRetry reports whether a request may be sent more than once: its method is always retried, or it
 // carries a non-empty idempotency key.
 func (s *retrySettings) canRetry(method string, headers map[string]string) bool {
 	if s.maxAttempts <= 1 {
 		return false
+	}
+
+	if s.methods == nil {
+		return true
 	}
 
 	if _, ok := s.methods[method]; ok {
@@ -171,21 +158,14 @@ func (s *retrySettings) canRetry(method string, headers map[string]string) bool 
 	return false
 }
 
-// retryReason reports whether the result of an attempt is retried, and the reason to record.
-func (s *retrySettings) retryReason(resp *http.Response, err error, timedOut bool) (string, bool) {
-	if errors.Is(err, ErrCircuitOpen) {
-		return "", false
+// retryable reports whether the result of an attempt is retried. RetryPolicy never retries an open
+// circuit breaker, whatever RetryOn returns.
+func (s *retrySettings) retryable(resp *http.Response, err error) bool {
+	if !s.legacy && errors.Is(err, ErrCircuitOpen) {
+		return false
 	}
 
-	if !s.retryOn(resp, err) {
-		return "", false
-	}
-
-	if timedOut {
-		return retryReasonAttemptTimeout, true
-	}
-
-	return reasonOf(resp, err), true
+	return s.retryOn(resp, err)
 }
 
 func reasonOf(resp *http.Response, err error) string {
@@ -376,20 +356,27 @@ func waitWithContext(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// attemptWithTimeout makes one attempt. With a per-attempt timeout, the attempt's context is canceled
-// if the response headers have not arrived in time. Once they have, the timer is stopped and the
-// context lives until the body is closed, so reading the body is not cut off.
-func attemptWithTimeout(ctx context.Context, timeout time.Duration,
-	reqFunc func(context.Context) (*http.Response, error)) (resp *http.Response, timedOut bool, err error) {
-	if timeout <= 0 {
-		resp, err = reqFunc(ctx)
-		return resp, false, err
-	}
-
+// attemptWithTimeout makes one attempt under a per-attempt timeout. When timeout passes before the
+// response headers arrive, decide is asked whether a retry can follow; only then is the attempt's
+// context canceled, and decide's wait is handed on for that retry. Once the headers are in, the context
+// lives until the body is closed, so reading the body is not cut off.
+func attemptWithTimeout(ctx context.Context, timeout time.Duration, afterFunc func(time.Duration, func()) stopper,
+	decide func() (time.Duration, bool), reqFunc func(context.Context) (*http.Response, error)) attemptResult {
 	cancelCtx, cancel := context.WithCancelCause(ctx)
 	attemptCtx := attemptContext{Context: cancelCtx}
 
-	timer := time.AfterFunc(timeout, func() { cancel(errAttemptTimeout) })
+	var wait time.Duration
+
+	decided := make(chan struct{})
+
+	timer := afterFunc(timeout, func() {
+		defer close(decided)
+
+		var retry bool
+		if wait, retry = decide(); retry {
+			cancel(errAttemptTimeout)
+		}
+	})
 
 	// The timer and context are released on every way out, a panic in reqFunc included, unless the
 	// response body takes them over.
@@ -402,26 +389,26 @@ func attemptWithTimeout(ctx context.Context, timeout time.Duration,
 		}
 	}()
 
-	resp, err = reqFunc(attemptCtx)
+	resp, err := reqFunc(attemptCtx)
 
-	// Stop reports false if the timer has already fired, perhaps just after the headers arrived. The
-	// response's body would then fail to read, so the attempt is treated as timed out either way.
-	if timer.Stop() && err == nil && resp != nil && resp.Body != nil {
-		release = false
-		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: func() { cancel(nil) }}
-
-		return resp, false, nil
+	// Stop reports false once the timer has fired, perhaps just as the headers arrived, and its callback
+	// may still be deciding. Wait for it, so the cause read below is the one it settled on.
+	if !timer.Stop() {
+		<-decided
 	}
 
-	cancel(nil)
-
 	if ctx.Err() != nil || !errors.Is(context.Cause(cancelCtx), errAttemptTimeout) {
-		return resp, false, err
+		if err == nil && resp != nil && resp.Body != nil {
+			release = false
+			resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
+		}
+
+		return attemptResult{resp: resp, err: err}
 	}
 
 	drainAndCloseResponse(resp)
 
-	return nil, true, attemptTimeoutError(timeout, err)
+	return attemptResult{err: attemptTimeoutError(timeout, err), timedOut: true, wait: wait}
 }
 
 // attemptTimeoutError is the error of an attempt the per-attempt timeout cut off. It keeps the
@@ -479,12 +466,12 @@ func detachBody(resp *http.Response) {
 // cancelOnClose releases an attempt's context when the response body is closed.
 type cancelOnClose struct {
 	io.ReadCloser
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 }
 
 func (c *cancelOnClose) Close() error {
 	err := c.ReadCloser.Close()
-	c.cancel()
+	c.cancel(nil)
 
 	return err
 }

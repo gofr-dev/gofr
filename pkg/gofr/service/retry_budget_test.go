@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -75,6 +76,15 @@ func TestRetryBudget_Window(t *testing.T) {
 			steps: []step{{deposits: 10, withdraws: 103, want: 102}}}, // 0.2 × 10 + 10/s × 10s
 		{desc: "floor and ratio add up", budget: RetryBudget{Ratio: 0.1, MinPerSecond: 1, TTL: time.Second},
 			steps: []step{{deposits: 20, withdraws: 5, want: 3}}},
+		{desc: "a NaN Ratio counts as 0, so an otherwise zero budget uses the defaults", budget: RetryBudget{Ratio: math.NaN()},
+			steps: []step{{deposits: 10, withdraws: 103, want: 102}}},
+		{desc: "a negative Ratio counts as 0", budget: RetryBudget{Ratio: -1, MinPerSecond: 1, TTL: time.Second},
+			steps: []step{{deposits: 20, withdraws: 2, want: 1}}},
+		{desc: "TTL is rounded up to whole seconds and the floor uses the rounded TTL",
+			budget: RetryBudget{MinPerSecond: 2, TTL: 300 * time.Millisecond},
+			steps:  []step{{withdraws: 3, want: 2}}},
+		{desc: "TTL of 1.5s counts as 2s", budget: RetryBudget{MinPerSecond: 2, TTL: 1500 * time.Millisecond},
+			steps: []step{{withdraws: 5, want: 4}}},
 	}
 
 	for _, tc := range tests {
