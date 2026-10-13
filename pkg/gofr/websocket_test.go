@@ -654,6 +654,34 @@ func Test_WebSocket_HandlerErrorKeepsConnectionOpen(t *testing.T) {
 	assert.GreaterOrEqual(t, calls.Load(), int32(2))
 }
 
+func Test_WebSocket_SerializeFailureDoesNotSendFrame(t *testing.T) {
+	var calls atomic.Int32
+
+	app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+		if calls.Add(1) == 1 {
+			return make(chan int), nil
+		}
+
+		var message string
+
+		if err := ctx.Bind(&message); err != nil {
+			return nil, err
+		}
+
+		return message, nil
+	})
+
+	ws := dialWebSocket(t, app, wsURL)
+
+	require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte("hello")))
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+
+	assert.Equal(t, "hello", string(message))
+}
+
 func Test_handleWebSocketError(t *testing.T) {
 	tests := []struct {
 		desc      string
