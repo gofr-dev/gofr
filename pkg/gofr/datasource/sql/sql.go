@@ -65,9 +65,9 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
-	// ConnectTimeout is the network connect timeout in whole seconds for the
+	// connectTimeout is the network connect timeout in whole seconds for the
 	// networked dialects; zero or less leaves the driver default in place.
-	ConnectTimeout int
+	connectTimeout int
 }
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
@@ -393,7 +393,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 	connectTimeout, _ := parseConnectTimeout(configs)
 
 	return &DBConfig{
-		ConnectTimeout: connectTimeout,
+		connectTimeout: connectTimeout,
 		Dialect:        configs.Get("DB_DIALECT"),
 		HostName:       configs.Get("DB_HOST"),
 		User:           configs.Get("DB_USER"),
@@ -447,8 +447,8 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
 		}
 
-		if dbConfig.ConnectTimeout > 0 {
-			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.ConnectTimeout)
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.connectTimeout)
 		}
 
 		return connStr, nil
@@ -456,8 +456,8 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode)
 
-		if dbConfig.ConnectTimeout > 0 {
-			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.ConnectTimeout)
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.connectTimeout)
 		}
 
 		return connStr, nil

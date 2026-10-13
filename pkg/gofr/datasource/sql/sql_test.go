@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -53,6 +54,41 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	})
 
 	assert.Containsf(t, testLogs, expectedLog, "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
+}
+
+func TestNewSQL_InvalidConnectTimeoutWarns(t *testing.T) {
+	testCases := []struct {
+		name     string
+		timeout  string
+		wantWarn bool
+	}{
+		{name: "invalid value warns", timeout: "abc", wantWarn: true},
+		{name: "non-positive value warns", timeout: "0", wantWarn: true},
+		{name: "valid value is silent", timeout: "3"},
+		{name: "unset is silent", timeout: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := map[string]string{"DB_DIALECT": sqlite, "DB_NAME": filepath.Join(t.TempDir(), "t.db")}
+			if tc.timeout != "" {
+				conf["DB_CONNECT_TIMEOUT"] = tc.timeout
+			}
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				db := NewSQL(config.NewMockConfig(conf), logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t))
+				require.NotNil(t, db)
+				require.NoError(t, db.Close())
+			})
+
+			if tc.wantWarn {
+				assert.Contains(t, logs, "invalid DB_CONNECT_TIMEOUT")
+				assert.Contains(t, logs, "using the default of 10 seconds")
+			} else {
+				assert.NotContains(t, logs, "invalid DB_CONNECT_TIMEOUT")
+			}
+		})
+	}
 }
 
 func TestNewSQL_InvalidDialect(t *testing.T) {
@@ -136,7 +172,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		MaxIdleConn:    25,
 		MaxOpenConn:    50,
 		Charset:        "utf8mb4",
-		ConnectTimeout: 10,
+		connectTimeout: 10,
 	}
 
 	configs := getDBConfig(mockConfig)
@@ -166,7 +202,7 @@ func TestSQL_parseConnectTimeout(t *testing.T) {
 			got, err := parseConnectTimeout(conf)
 
 			assert.Equal(t, tc.wantSec, got)
-			assert.Equal(t, tc.wantSec, getDBConfig(conf).ConnectTimeout)
+			assert.Equal(t, tc.wantSec, getDBConfig(conf).connectTimeout)
 
 			if tc.wantErr {
 				require.ErrorIs(t, err, errInvalidConnectTimeout)
@@ -212,7 +248,7 @@ func TestSQL_ConfigCases(t *testing.T) {
 			MaxIdleConn:    tc.expectedIdle,
 			MaxOpenConn:    tc.expectedOpen,
 			SSLMode:        "disable",
-			ConnectTimeout: 10,
+			connectTimeout: 10,
 		}
 
 		configs := getDBConfig(mockConfig)
@@ -318,7 +354,7 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 	}
 }
 
-func TestSQL_getDBConnectionString_ConnectTimeout(t *testing.T) {
+func TestSQL_getDBConnectionString_connectTimeout(t *testing.T) {
 	testCases := []struct {
 		dialect string
 		timeout int
@@ -340,7 +376,7 @@ func TestSQL_getDBConnectionString_ConnectTimeout(t *testing.T) {
 			require.NoError(t, err)
 
 			withTimeout := *base
-			withTimeout.ConnectTimeout = tc.timeout
+			withTimeout.connectTimeout = tc.timeout
 
 			got, err := getDBConnectionString(&withTimeout)
 
