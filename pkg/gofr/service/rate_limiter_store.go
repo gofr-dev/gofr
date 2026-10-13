@@ -161,13 +161,15 @@ func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {
 	l.cleanupAt(l.now())
 }
 
-// cleanupAt removes the buckets that have been idle for longer than bucketTTL at the given time on the store's clock.
+// cleanupAt removes the buckets that, at the given time on the store's clock, have been idle for longer than
+// bucketTTL and have fully refilled. A bucket that still owes credit is kept: deleting it would hand the next
+// caller a fresh, full bucket, which lets a slow limiter (where Burst*interval exceeds bucketTTL) through early.
 func (l *LocalRateLimiterStore) cleanupAt(now int64) {
 	cutoff := now - int64(bucketTTL)
 
 	l.buckets.Range(func(key, value any) bool {
 		entry := value.(*bucketEntry)
-		if atomic.LoadInt64(&entry.lastAccess) < cutoff {
+		if atomic.LoadInt64(&entry.lastAccess) < cutoff && atomic.LoadInt64(&entry.bucket.tat) <= now {
 			l.buckets.CompareAndDelete(key, value)
 		}
 

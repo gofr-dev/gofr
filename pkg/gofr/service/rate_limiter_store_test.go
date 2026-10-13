@@ -109,6 +109,55 @@ func TestLocalRateLimiterStore_CleanupExpiredBuckets(t *testing.T) {
 	assert.False(t, exists)
 }
 
+// countAllowed sends requests for key at the given time until one is denied and returns how many were allowed.
+func countAllowed(store *LocalRateLimiterStore, key string, cfg *RateLimiterConfig, now int64) int {
+	allowed := 0
+
+	for ok, _ := store.allowAt(key, cfg, now); ok; ok, _ = store.allowAt(key, cfg, now) {
+		allowed++
+	}
+
+	return allowed
+}
+
+// TestLocalRateLimiterStore_CleanupKeepsOwedCredit runs a forced cleanup on a pinned clock and checks how many
+// requests the next caller gets: an evicted bucket comes back full, a kept one still owes its credit.
+func TestLocalRateLimiterStore_CleanupKeepsOwedCredit(t *testing.T) {
+	// 5 per hour refills one token every 12 minutes, so an emptied bucket needs an hour to refill.
+	slow := RateLimiterConfig{Requests: 5, Window: time.Hour, Burst: 5}
+
+	testCases := []struct {
+		desc       string
+		cleanupAt  time.Duration
+		expEvicted bool
+		expAllowed int // requests allowed at cleanupAt, after the cleanup
+	}{
+		{desc: "idle past the TTL but still owing credit is kept", cleanupAt: 15 * time.Minute, expAllowed: 1},
+		{desc: "idle past the TTL and nearly refilled is kept", cleanupAt: 59 * time.Minute, expAllowed: 4},
+		{desc: "idle past the TTL and fully refilled is evicted", cleanupAt: time.Hour, expEvicted: true, expAllowed: 5},
+		{desc: "accessed within the TTL is kept", cleanupAt: 5 * time.Minute, expAllowed: 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			store := NewLocalRateLimiterStore()
+			at := int64(tc.cleanupAt)
+
+			for range slow.Burst {
+				allowed, _ := store.allowAt("slow", &slow, 0)
+				require.True(t, allowed)
+			}
+
+			store.cleanupAt(at)
+
+			_, exists := store.buckets.Load("slow")
+			assert.Equal(t, tc.expEvicted, !exists)
+
+			assert.Equal(t, tc.expAllowed, countAllowed(store, "slow", &slow, at))
+		})
+	}
+}
+
 func TestLocalRateLimiterStore_ClockIsMonotonic(t *testing.T) {
 	store := NewLocalRateLimiterStore()
 	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Hour}
