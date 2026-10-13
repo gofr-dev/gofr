@@ -798,6 +798,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &PutResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryResponse",
+			expErr:    errInvalidResponseType,
 		},
 		{
 			desc:      "invalid query params",
@@ -805,6 +806,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: errInvalidQueryParam.Error(),
+			expErr:    errInvalidQueryParam,
 		},
 		{
 			desc: "query body marshal failure",
@@ -834,13 +836,21 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			err := client.QueryDataPoints(t.Context(), tc.param, tc.resp)
 
 			require.ErrorContains(t, err, tc.expErrMsg)
-
-			if tc.expErr != nil {
-				require.ErrorIs(t, err, tc.expErr)
-				require.NotErrorIs(t, err, errInvalidQueryParam)
-			}
+			requireSentinel(t, err, tc.expErr)
 		})
 	}
+}
+
+// requireSentinel asserts errors.Is(err, expErr) for rows that name a sentinel. Rows whose error
+// has no sentinel (a wrapped driver or JSON error) leave expErr nil and rely on the message.
+func requireSentinel(t *testing.T, err, expErr error) {
+	t.Helper()
+
+	if expErr == nil {
+		return
+	}
+
+	require.ErrorIs(t, err, expErr)
 }
 
 func TestQueryLatestDataPoints_Errors(t *testing.T) {
