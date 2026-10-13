@@ -1076,6 +1076,8 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 		{"trie: route and rule differ", gofrHTTP.MatcherTrie, "/api/users/42", "/api/users/{id}", "/api/{path:.*}"},
 		{"mux: no route and no rule", gofrHTTP.MatcherMux, "/nowhere", unknownRouteLabel, unknownRouteLabel},
 		{"trie: no route and no rule", gofrHTTP.MatcherTrie, "/nowhere", unknownRouteLabel, unknownRouteLabel},
+		{"mux: route at / is not the catch-all", gofrHTTP.MatcherMux, "/", "/", unknownRouteLabel},
+		{"trie: route at / is not the catch-all", gofrHTTP.MatcherTrie, "/", "/", unknownRouteLabel},
 	}
 
 	for i, tc := range testCases {
@@ -1094,6 +1096,7 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 
 			router := gofrHTTP.NewRouter()
 			router.Use(Middleware(config))
+			router.Add(http.MethodGet, "/", ok)
 			router.Add(http.MethodGet, "/api/users/{id}", ok)
 			router.PathPrefix("/").Handler(ok)
 

@@ -731,8 +731,8 @@ RBAC middleware implements industry-standard security practices to protect sensi
 - ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
   `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
   When the two disagree, the rule is broader or narrower than the route. `http.route` is
-  `<unmatched>` when no route matched, and for now also for an application route registered at `/`
-  (see the upgrade note below).
+  `<unmatched>` when no route matched, that is, when GoFr's catch-all answered the request. An
+  application route registered at `/` is reported as `/`.
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)
@@ -762,12 +762,6 @@ The value of `http.route` changes in two cases:
 
 Nothing fails when the value changes, so check every dashboard, alert or query that groups the
 `rbac.authorize` span by `http.route`: to keep grouping by rule, group by `rbac.rule` instead.
-
-One known gap: GoFr answers a request no route serves with a catch-all route whose template is `/`,
-the same template as an application route registered at `/`. The middleware cannot tell the two
-apart yet, so it reports both as `<unmatched>` rather than label every unmatched request as `/`.
-Requests to an application route at `/` are still authorized normally; only the span label is
-affected.
 
 ### What's Never Logged
 

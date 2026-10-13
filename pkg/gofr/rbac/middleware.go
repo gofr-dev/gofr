@@ -28,11 +28,12 @@ const unknownRouteLabel = "<unmatched>"
 // means everywhere else in a trace. The RBAC rule that governed the request can be broader or
 // narrower than that route, so it is recorded separately as rbac.rule.
 //
-// "/" is reported as unmatched: it is the template of GoFr's PathPrefix("/") catch-all, which
-// serves every request no route matched.
+// GoFr's PathPrefix("/") catch-all, which serves every request no route matched, is reported as
+// unmatched. An application route registered at "/" shares its template, so the two are told apart
+// by whether the matched route is a prefix route.
 func matchedRouteLabel(r *http.Request) string {
 	tmpl := gofrHTTP.RouteTemplate(r)
-	if tmpl == "" || tmpl == "/" {
+	if tmpl == "" || (tmpl == "/" && gofrHTTP.IsPrefixRoute(r)) {
 		return unknownRouteLabel
 	}
 
