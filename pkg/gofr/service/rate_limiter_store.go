@@ -32,7 +32,7 @@ const maxRefillPeriod = int64(1) << 61
 // the whole state is one int64, the theoretical arrival time (TAT) of the next conforming request,
 // so fractional refill rates need no floating point and every update is a single CAS.
 type tokenBucket struct {
-	tat           int64 // Theoretical arrival time, Unix nanoseconds; accessed atomically
+	tat           int64 // Theoretical arrival time, nanoseconds on the owning store's clock; accessed atomically
 	interval      int64 // Nanoseconds needed to accrue one token, in [1, maxRefillPeriod]
 	burstInterval int64 // Burst * interval, burst capped so this stays in [0, maxRefillPeriod]
 }
@@ -40,7 +40,7 @@ type tokenBucket struct {
 // bucketEntry holds bucket with last access time for cleanup.
 type bucketEntry struct {
 	bucket     *tokenBucket
-	lastAccess int64 // Unix timestamp
+	lastAccess int64 // Nanoseconds on the owning store's clock; accessed atomically
 }
 
 // newTokenBucket creates a token bucket that starts full. The configured rate is kept exactly; only a burst whose
@@ -72,12 +72,7 @@ func refillInterval(config *RateLimiterConfig) int64 {
 	}
 }
 
-// allow checks if a token can be consumed now.
-func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
-	return tb.allowAt(time.Now().UnixNano())
-}
-
-// allowAt checks if a token can be consumed at the given Unix nanosecond time.
+// allowAt checks if a token can be consumed at the given time, in nanoseconds on the owning store's clock.
 func (tb *tokenBucket) allowAt(now int64) (allowed bool, waitTime time.Duration) {
 	for {
 		oldTAT := atomic.LoadInt64(&tb.tat)
@@ -99,28 +94,41 @@ func (tb *tokenBucket) allowAt(now int64) (allowed bool, waitTime time.Duration)
 type LocalRateLimiterStore struct {
 	buckets *sync.Map
 	stopCh  chan struct{}
+	// epoch carries a monotonic clock reading. Bucket times are nanoseconds since epoch, so a wall-clock step
+	// (an NTP correction, a VM resume) neither blocks nor frees a bucket.
+	epoch time.Time
 }
 
 func NewLocalRateLimiterStore() *LocalRateLimiterStore {
 	return &LocalRateLimiterStore{
 		buckets: &sync.Map{},
+		epoch:   time.Now(),
 	}
 }
 
 func (l *LocalRateLimiterStore) Allow(_ context.Context, key string, config RateLimiterConfig) (bool, time.Duration, error) {
-	now := time.Now().Unix()
-	entry, _ := l.buckets.LoadOrStore(key, &bucketEntry{
-		bucket:     newTokenBucket(&config),
+	allowed, retryAfter := l.allowAt(key, &config, l.now())
+
+	return allowed, retryAfter, nil
+}
+
+// now returns the store's clock: monotonic nanoseconds since the store was created.
+func (l *LocalRateLimiterStore) now() int64 {
+	return int64(time.Since(l.epoch))
+}
+
+// allowAt checks the bucket for key at the given time on the store's clock, creating a full bucket on first use.
+func (l *LocalRateLimiterStore) allowAt(key string, config *RateLimiterConfig, now int64) (allowed bool, retryAfter time.Duration) {
+	value, _ := l.buckets.LoadOrStore(key, &bucketEntry{
+		bucket:     newTokenBucket(config),
 		lastAccess: now,
 	})
 
-	bucketEntry := entry.(*bucketEntry)
+	entry := value.(*bucketEntry)
 
-	atomic.StoreInt64(&bucketEntry.lastAccess, now)
+	atomic.StoreInt64(&entry.lastAccess, now)
 
-	allowed, retryAfter := bucketEntry.bucket.allow()
-
-	return allowed, retryAfter, nil
+	return entry.bucket.allowAt(now)
 }
 
 func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
@@ -150,15 +158,17 @@ func (l *LocalRateLimiterStore) StopCleanup() {
 }
 
 func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {
-	cutoff := time.Now().Unix() - int64(bucketTTL.Seconds())
-	cleaned := 0
+	l.cleanupAt(l.now())
+}
+
+// cleanupAt removes the buckets that have been idle for longer than bucketTTL at the given time on the store's clock.
+func (l *LocalRateLimiterStore) cleanupAt(now int64) {
+	cutoff := now - int64(bucketTTL)
 
 	l.buckets.Range(func(key, value any) bool {
 		entry := value.(*bucketEntry)
 		if atomic.LoadInt64(&entry.lastAccess) < cutoff {
-			l.buckets.Delete(key)
-
-			cleaned++
+			l.buckets.CompareAndDelete(key, value)
 		}
 
 		return true

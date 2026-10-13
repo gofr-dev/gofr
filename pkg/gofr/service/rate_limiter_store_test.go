@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,18 +27,18 @@ func TestTokenBucket_Allow(t *testing.T) {
 	tb := newTokenBucket(&cfg)
 
 	// Should allow first two requests
-	allowed, wait := tb.allow()
+	allowed, wait := tb.allowAt(0)
 	assert.True(t, allowed)
 	assert.Zero(t, wait)
 
-	allowed, wait = tb.allow()
+	allowed, wait = tb.allowAt(0)
 	assert.True(t, allowed)
 	assert.Zero(t, wait)
 
 	// Third request should be rate limited
-	allowed, wait = tb.allow()
+	allowed, wait = tb.allowAt(0)
 	assert.False(t, allowed)
-	assert.GreaterOrEqual(t, wait, time.Millisecond)
+	assert.Equal(t, 500*time.Millisecond, wait)
 }
 
 func TestLocalRateLimiterStore_Allow(t *testing.T) {
@@ -96,15 +97,34 @@ func TestLocalRateLimiterStore_CleanupExpiredBuckets(t *testing.T) {
 	_, _, err := store.Allow(t.Context(), key, cfg)
 	require.NoError(t, err)
 
-	// Simulate old lastAccess
+	// Simulate a store that was created, and last used, longer ago than bucketTTL.
+	store.epoch = store.epoch.Add(-bucketTTL - time.Minute)
+
 	entry, _ := store.buckets.Load(key)
-	bucketEntry := entry.(*bucketEntry)
-	bucketEntry.lastAccess = time.Now().Unix() - int64(bucketTTL.Seconds()) - 1
+	atomic.StoreInt64(&entry.(*bucketEntry).lastAccess, 0)
 
 	store.cleanupExpiredBuckets()
 
 	_, exists := store.buckets.Load(key)
 	assert.False(t, exists)
+}
+
+func TestLocalRateLimiterStore_ClockIsMonotonic(t *testing.T) {
+	store := NewLocalRateLimiterStore()
+	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Hour}
+
+	_, _, err := store.Allow(t.Context(), "clock-key", cfg)
+	require.NoError(t, err)
+
+	elapsed := int64(time.Since(store.epoch))
+	entry, _ := store.buckets.Load("clock-key")
+	bucketEntry := entry.(*bucketEntry)
+
+	// The epoch keeps its monotonic reading ("m=" in its String form), and bucket times are measured from it
+	// rather than from the Unix epoch, so a wall-clock step cannot move them.
+	assert.Contains(t, store.epoch.String(), " m=")
+	assert.LessOrEqual(t, atomic.LoadInt64(&bucketEntry.lastAccess), elapsed)
+	assert.LessOrEqual(t, atomic.LoadInt64(&bucketEntry.bucket.tat), elapsed+int64(time.Hour))
 }
 
 func TestLocalRateLimiterStore_StartAndStopCleanup(t *testing.T) {
