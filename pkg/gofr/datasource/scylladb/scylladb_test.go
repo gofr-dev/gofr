@@ -412,6 +412,9 @@ func Test_ExecCAS(t *testing.T) {
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).Times(1)
 		}, true, nil},
+		// This row asserts the current behavior for a non-struct, non-slice dest: ExecCAS
+		// reports applied=true without ever calling MapScanCAS. That is the bug tracked in
+		// #4364, not the intended behavior; it is pinned here as a regression guard.
 		{"success case: int dest, applied true", &mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
