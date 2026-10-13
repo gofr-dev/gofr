@@ -139,8 +139,10 @@ func (d *DB) Begin() (*Tx, error) {
 
 // Close stops the background connection-retry and metrics goroutines, waits for
 // them to exit, then closes the pool and runs the datasource cleanup. An in-flight
-// background ping is canceled rather than waited out, so Close does not block on an
-// unreachable host. Once Close returns, GoFr no longer touches the database.
+// background ping is canceled, but a driver may ignore cancellation while connecting
+// (lib/pq does), so the wait is bounded by closeWaitTimeout: Close always returns
+// within it, logging a warning if a background connection attempt did not stop, and
+// closes the pool regardless. That attempt then fails on the closed pool and exits.
 func (d *DB) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.stopSignal)
@@ -150,7 +152,7 @@ func (d *DB) Close() error {
 		}
 	})
 
-	d.background.Wait()
+	d.waitForBackground()
 
 	var err error
 
@@ -167,6 +169,35 @@ func (d *DB) Close() error {
 	}
 
 	return err
+}
+
+// closeWaitTimeout bounds how long Close waits for the background goroutines. It is
+// a variable so tests can lower it.
+//
+//nolint:gochecknoglobals // overridden by tests only.
+var closeWaitTimeout = 5 * time.Second
+
+// waitForBackground waits for the background goroutines, giving up after
+// closeWaitTimeout so a driver that ignores context cancellation cannot hang Close.
+func (d *DB) waitForBackground() {
+	done := make(chan struct{})
+
+	go func() {
+		d.background.Wait()
+		close(done)
+	}()
+
+	timer := time.NewTimer(closeWaitTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+	case <-timer.C:
+		if d.logger != nil {
+			d.logger.Warnf("closing SQL database after %s: a background connection attempt did not stop, "+
+				"its driver is not honoring context cancellation", closeWaitTimeout)
+		}
+	}
 }
 
 type Tx struct {

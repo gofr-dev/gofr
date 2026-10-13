@@ -15,6 +15,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -42,6 +43,8 @@ type blockingPingConnector struct {
 	active  atomic.Int32
 	started chan struct{}
 	release chan struct{}
+	// ignoreCtx makes a blocked ping wait on release only, like lib/pq's connect.
+	ignoreCtx bool
 }
 
 func (c *blockingPingConnector) Connect(context.Context) (driver.Conn, error) {
@@ -69,8 +72,14 @@ func (b blockingPingConn) Ping(ctx context.Context) error {
 	default:
 	}
 
+	// A nil channel never fires, which models a driver that ignores cancellation.
+	var done <-chan struct{}
+	if !b.c.ignoreCtx {
+		done = ctx.Done()
+	}
+
 	select {
-	case <-ctx.Done():
+	case <-done:
 		return ctx.Err()
 	case <-b.c.release:
 		return nil
@@ -184,4 +193,52 @@ func TestDB_Close_WaitsForBackgroundPing(t *testing.T) {
 
 	assert.Zero(t, connector.active.Load(), "a background ping was still running after Close returned")
 	goleak.VerifyNone(t, leakOpts)
+}
+
+// TestDB_Close_BoundedWhenDriverIgnoresCancel covers a driver that ignores context
+// cancellation (lib/pq does while connecting): Close must still return within its
+// bound, warn that the attempt did not stop, and leave nothing running once the
+// stuck attempt is released.
+func TestDB_Close_BoundedWhenDriverIgnoresCancel(t *testing.T) {
+	prev := closeWaitTimeout
+	closeWaitTimeout = 100 * time.Millisecond
+
+	t.Cleanup(func() { closeWaitTimeout = prev })
+
+	connector := &blockingPingConnector{started: make(chan struct{}, 1), release: make(chan struct{}), ignoreCtx: true}
+
+	var closeErr error
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		got := NewSQLFromConnector(connector, config.NewMockConfig(map[string]string{"DB_DIALECT": dialectPostgres}),
+			logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t), nil)
+		require.NotNil(t, got)
+
+		select {
+		case <-connector.started:
+		case <-time.After(5 * time.Second):
+			t.Error("background ping never started")
+			close(connector.release)
+
+			return
+		}
+
+		closed := make(chan error, 1)
+
+		go func() { closed <- got.Close() }()
+
+		select {
+		case closeErr = <-closed:
+		case <-time.After(2 * time.Second):
+			t.Error("Close blocked on a ping that ignores cancellation")
+		}
+
+		// Let the stuck ping finish so the goroutine exits and the test leaks nothing.
+		close(connector.release)
+	})
+
+	require.NoError(t, closeErr)
+	assert.Contains(t, logs, "a background connection attempt did not stop")
+	assert.Eventually(t, func() bool { return connector.active.Load() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"the released ping should have exited")
 }

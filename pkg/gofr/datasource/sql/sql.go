@@ -310,6 +310,13 @@ func retryConnection(ctx context.Context, database *DB) {
 		}
 
 		if database.DB.PingContext(ctx) != nil {
+			select {
+			case <-database.stopSignal:
+				// Close gave up waiting on this ping and closed the pool; exit quietly.
+				return
+			default:
+			}
+
 			database.logger.Info("retrying SQL database connection")
 
 			if !attemptReconnection(ctx, database, retryDuration) {
