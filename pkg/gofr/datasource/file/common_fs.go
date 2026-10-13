@@ -355,7 +355,7 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 		return &CommonFile{
 			name:         name,
 			size:         0,
-			contentType:  "application/x-directory",
+			contentType:  dirContentType,
 			lastModified: objects[0].LastModified,
 			isDir:        true,
 		}, nil

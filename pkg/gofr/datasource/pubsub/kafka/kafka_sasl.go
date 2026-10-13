@@ -26,18 +26,25 @@ func validateSecurityProtocol(conf *Config) error {
 	}
 }
 
+// SASL mechanisms getSASLMechanism supports, matched case-insensitively.
+const (
+	saslMechanismPlain       = "PLAIN"
+	saslMechanismScramSHA256 = "SCRAM-SHA-256"
+	saslMechanismScramSHA512 = "SCRAM-SHA-512"
+)
+
 func getSASLMechanism(mechanism, username, password string) (sasl.Mechanism, error) {
 	switch strings.ToUpper(mechanism) {
-	case "PLAIN":
+	case saslMechanismPlain:
 		return plain.Mechanism{
 			Username: username,
 			Password: password,
 		}, nil
-	case "SCRAM-SHA-256":
+	case saslMechanismScramSHA256:
 		mechanism, _ := scram.Mechanism(scram.SHA256, username, password)
 
 		return mechanism, nil
-	case "SCRAM-SHA-512":
+	case saslMechanismScramSHA512:
 		mechanism, _ := scram.Mechanism(scram.SHA512, username, password)
 
 		return mechanism, nil

@@ -87,7 +87,7 @@ func TestSwaggerHandler(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		testReq := httptest.NewRequest(http.MethodGet, "/.well-known/swagger"+"/"+tc.fileName, http.NoBody)
+		testReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/swagger"+"/"+tc.fileName, http.NoBody)
 		testReq = mux.SetURLVars(testReq, map[string]string{"name": tc.fileName})
 		gofrReq := gofrHTTP.NewRequest(testReq)
 
@@ -110,7 +110,7 @@ func TestSwaggerHandler(t *testing.T) {
 func TestSwaggerUIHandler_Error(t *testing.T) {
 	testContainer, _ := container.NewMockContainer(t)
 
-	testReq := httptest.NewRequest(http.MethodGet, "/.well-known/swagger"+"/abc.abc", http.NoBody)
+	testReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/swagger"+"/abc.abc", http.NoBody)
 	testReq = mux.SetURLVars(testReq, map[string]string{"name": "abc.abc"})
 
 	gofrReq := gofrHTTP.NewRequest(testReq)
