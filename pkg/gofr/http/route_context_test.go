@@ -4,11 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/internal/routemark"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // TestRouteTemplate_ResolvesUnderBothRouters is the guard for the accessor the
@@ -67,23 +72,26 @@ func TestWithRoute_NilIsNoOp(t *testing.T) {
 	assert.NotSame(t, req, withRoute(req, mux.NewRouter().Path("/x/{id}")), "a real route must be recorded")
 }
 
-// TestIsPrefixRoute tells GoFr's PathPrefix("/") catch-all apart from an
-// application route registered at "/": both have the template "/".
-func TestIsPrefixRoute(t *testing.T) {
+// TestCatchAllAnswered tells GoFr's marked catch-all apart from a route or a static directory
+// registered at "/": all of them have the template "/", under both routers.
+func TestCatchAllAnswered(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 
 	testCases := []struct {
 		desc    string
 		useTrie bool
+		static  bool
 		path    string
 		want    bool
 	}{
-		{"mux: route at /", false, "/", false},
-		{"trie: route at /", true, "/", false},
-		{"mux: catch-all", false, "/nowhere", true},
-		{"trie: catch-all", true, "/nowhere", true},
-		{"mux: route with a parameter", false, "/users/42", false},
-		{"trie: route with a parameter", true, "/users/42", false},
+		{"mux: route at /", false, false, "/", false},
+		{"trie: route at /", true, false, "/", false},
+		{"mux: catch-all", false, false, "/nowhere", true},
+		{"trie: catch-all", true, false, "/nowhere", true},
+		{"mux: route with a parameter", false, false, "/users/42", false},
+		{"trie: route with a parameter", true, false, "/users/42", false},
+		{"mux: static directory at /", false, true, "/a.txt", false},
+		{"trie: static directory at /", true, true, "/a.txt", false},
 	}
 
 	for i, tc := range testCases {
@@ -94,14 +102,21 @@ func TestIsPrefixRoute(t *testing.T) {
 			r.useTrie = tc.useTrie
 			r.Use(func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					got = IsPrefixRoute(req)
+					got = routemark.CatchAllAnswered(req)
 
 					next.ServeHTTP(w, req)
 				})
 			})
 			r.Add(http.MethodGet, "/", ok)
 			r.Add(http.MethodGet, "/users/{id}", ok)
-			r.PathPrefix("/").Handler(ok)
+
+			if tc.static {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o600))
+				r.AddStaticFiles(logging.NewMockLogger(logging.ERROR), "/", dir)
+			}
+
+			routemark.MarkCatchAll(r.PathPrefix("/")).Handler(ok)
 
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
@@ -115,6 +130,6 @@ func TestIsPrefixRoute(t *testing.T) {
 	t.Run("unrouted request", func(t *testing.T) {
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 
-		assert.False(t, IsPrefixRoute(req))
+		assert.False(t, routemark.CatchAllAnswered(req))
 	})
 }

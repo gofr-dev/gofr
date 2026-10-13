@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/internal/rbaccheck"
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/rbac"
 )
 
@@ -202,6 +203,10 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 
 	builtIn := c.nextIsBuiltIn()
 
+	if routemark.IsCatchAll(route) {
+		return
+	}
+
 	tmpl, err := route.GetPathTemplate()
 	if err != nil {
 		return
@@ -210,10 +215,6 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 	// mux anchors a Path regexp with "$" and leaves a PathPrefix one open.
 	pathRegexp, _ := route.GetPathRegexp()
 	if !strings.HasSuffix(pathRegexp, "$") {
-		if _, isCatchAll := route.GetHandler().(handler); isCatchAll && tmpl == "/" {
-			return
-		}
-
 		tmpl = strings.TrimSuffix(tmpl, "/") + "/{path:.*}"
 	}
 

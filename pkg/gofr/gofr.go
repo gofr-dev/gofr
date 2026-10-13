@@ -20,6 +20,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/internal/rbaccheck"
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -257,7 +258,9 @@ func (a *App) httpServerSetup() {
 
 	a.logReadiness()
 
-	a.httpServer.router.PathPrefix("/").Handler(handler{
+	// The one catch-all GoFr registers: marked so the RBAC trace label and route check can tell it
+	// from a route or static directory at "/", which share its template.
+	routemark.MarkCatchAll(a.httpServer.router.PathPrefix("/")).Handler(handler{
 		function:  catchAllHandler,
 		container: a.container,
 	})

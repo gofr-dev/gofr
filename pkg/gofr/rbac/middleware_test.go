@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +19,8 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/routemark"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMiddleware_NilConfig(t *testing.T) {
@@ -1071,13 +1075,16 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 		path      string
 		wantRoute string
 		wantRule  string
+		static    bool // serve a directory from "/", governed by a /{path:.*} rule
 	}{
-		{"mux: route and rule differ", gofrHTTP.MatcherMux, "/api/users/42", "/api/users/{id}", "/api/{path:.*}"},
-		{"trie: route and rule differ", gofrHTTP.MatcherTrie, "/api/users/42", "/api/users/{id}", "/api/{path:.*}"},
-		{"mux: no route and no rule", gofrHTTP.MatcherMux, "/nowhere", unknownRouteLabel, unknownRouteLabel},
-		{"trie: no route and no rule", gofrHTTP.MatcherTrie, "/nowhere", unknownRouteLabel, unknownRouteLabel},
-		{"mux: route at / is not the catch-all", gofrHTTP.MatcherMux, "/", "/", unknownRouteLabel},
-		{"trie: route at / is not the catch-all", gofrHTTP.MatcherTrie, "/", "/", unknownRouteLabel},
+		{"mux: route and rule differ", gofrHTTP.MatcherMux, "/api/users/42", "/api/users/{id}", "/api/{path:.*}", false},
+		{"trie: route and rule differ", gofrHTTP.MatcherTrie, "/api/users/42", "/api/users/{id}", "/api/{path:.*}", false},
+		{"mux: no route and no rule", gofrHTTP.MatcherMux, "/nowhere", unknownRouteLabel, unknownRouteLabel, false},
+		{"trie: no route and no rule", gofrHTTP.MatcherTrie, "/nowhere", unknownRouteLabel, unknownRouteLabel, false},
+		{"mux: route at / is not the catch-all", gofrHTTP.MatcherMux, "/", "/", unknownRouteLabel, false},
+		{"trie: route at / is not the catch-all", gofrHTTP.MatcherTrie, "/", "/", unknownRouteLabel, false},
+		{"mux: static directory at / is not the catch-all", gofrHTTP.MatcherMux, "/a.txt", "/", "/{path:.*}", true},
+		{"trie: static directory at / is not the catch-all", gofrHTTP.MatcherTrie, "/a.txt", "/", "/{path:.*}", true},
 	}
 
 	for i, tc := range testCases {
@@ -1087,9 +1094,12 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 			recorder := tracetest.NewSpanRecorder()
 			provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
 
-			config := newTestConfig(t, []EndpointMapping{
-				{Path: "/api/{path:.*}", Methods: []string{http.MethodGet}, Public: true},
-			}, nil)
+			endpoints := []EndpointMapping{{Path: "/api/{path:.*}", Methods: []string{http.MethodGet}, Public: true}}
+			if tc.static {
+				endpoints = append(endpoints, EndpointMapping{Path: "/{path:.*}", Methods: []string{http.MethodGet}, Public: true})
+			}
+
+			config := newTestConfig(t, endpoints, nil)
 			config.Tracer = provider.Tracer("test")
 
 			ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
@@ -1098,10 +1108,22 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 			router.Use(Middleware(config))
 			router.Add(http.MethodGet, "/", ok)
 			router.Add(http.MethodGet, "/api/users/{id}", ok)
-			router.PathPrefix("/").Handler(ok)
+
+			if tc.static {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o600))
+				router.AddStaticFiles(logging.NewMockLogger(logging.ERROR), "/", dir)
+			}
+
+			routemark.MarkCatchAll(router.PathPrefix("/")).Handler(ok)
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
-			router.ServeHTTP(httptest.NewRecorder(), req)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if tc.static {
+				require.Equal(t, http.StatusOK, rec.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 
 			spans := recorder.Ended()
 			require.Len(t, spans, 1, "TEST[%d], Failed.\n%s", i, tc.desc)

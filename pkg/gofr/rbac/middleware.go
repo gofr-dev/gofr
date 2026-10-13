@@ -16,6 +16,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/routemark"
 )
 
 type authMethod int
@@ -28,12 +29,12 @@ const unknownRouteLabel = "<unmatched>"
 // means everywhere else in a trace. The RBAC rule that governed the request can be broader or
 // narrower than that route, so it is recorded separately as rbac.rule.
 //
-// GoFr's PathPrefix("/") catch-all, which serves every request no route matched, is reported as
-// unmatched. An application route registered at "/" shares its template, so the two are told apart
-// by whether the matched route is a prefix route.
+// GoFr's catch-all, which serves every request no route matched, is reported as unmatched. An
+// application route or a static directory registered at "/" shares its template, so the two are
+// told apart by the mark GoFr puts on the catch-all when it registers it.
 func matchedRouteLabel(r *http.Request) string {
 	tmpl := gofrHTTP.RouteTemplate(r)
-	if tmpl == "" || (tmpl == "/" && gofrHTTP.IsPrefixRoute(r)) {
+	if tmpl == "" || routemark.CatchAllAnswered(r) {
 		return unknownRouteLabel
 	}
 
