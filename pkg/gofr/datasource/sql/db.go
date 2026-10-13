@@ -263,7 +263,6 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 	}
 }
 
-
 // isRowStruct reports whether Select maps a row's columns onto t's fields. Struct types that scan a
 // single column themselves, time.Time and sql.Scanner implementations such as sql.NullString, are
 // scanned directly instead.

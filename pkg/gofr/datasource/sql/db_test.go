@@ -301,7 +301,6 @@ func TestDB_SelectMultiRowIntoSliceOfPointers(t *testing.T) {
 	}, users)
 }
 
-
 func TestDB_SelectScannerAndTimeDestinations(t *testing.T) {
 	// time.Time and sql.Scanner types are structs that scan a single column
 	// themselves; they must not go through rowsToStruct (which would yield zeros).
@@ -387,7 +386,9 @@ func TestDB_SelectSkipsUnexportedAndIgnoredFields(t *testing.T) {
 	defer db.DB.Close()
 
 	mock.ExpectQuery("select users").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "secret"}).
+		// The third column is literally named "-": without the `db:"-"` skip,
+		// Secret would map to it and the test would fail, pinning the check.
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "-"}).
 			AddRow("1", "Vikash", "s1").
 			AddRow("2", "Gofr", "s2"))
 	setupMetrics(t, db, gomock.Any())
