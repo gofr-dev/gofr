@@ -37,8 +37,8 @@ type ShutdownFunc func(ctx context.Context) error
 // Prometheus /metrics endpoint and an OTLP push exporter can run together.
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
 // (Prometheus-only, or no readers) rather than crashing app start. A nil logger is
-// substituted with noopLogger, so a caller that does not want the diagnostics --
-// the deprecated Prometheus helper is one -- does not have to supply one.
+// substituted with noopLogger, so an external caller that passes nil gets no
+// diagnostics instead of a panic on the first log call.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
 	if logger == nil {
 		logger = noopLogger{}

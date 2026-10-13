@@ -98,6 +98,17 @@ alike — the join between a service's traces and its metrics holds either way y
 metrics side logs its own line (`metrics: …`), because an application with tracing switched off
 never reaches the tracing code at all.
 
+Some platforms set these variables for you. The Kubernetes OpenTelemetry Operator, when it injects
+SDK configuration into a pod, sets `OTEL_SERVICE_NAME` to the workload's name (the Deployment,
+StatefulSet and so on) unless the container already sets it. Azure Container Apps' managed
+OpenTelemetry agent puts the app name in `OTEL_RESOURCE_ATTRIBUTES`. On those platforms the backend
+shows the platform's name for the service unless you set `OTEL_SERVICE_NAME` yourself.
+
+**Upgrading:** releases up to v1.62.0 kept `APP_NAME` and ignored both variables; v1.62.0 logged a
+warning saying so. If your deployment sets `OTEL_SERVICE_NAME` (or `service.name=`) to a value other
+than `APP_NAME`, the backend shows that value after the upgrade. Unset it to keep reporting
+`APP_NAME`.
+
 `framework_version` is not overridable from the environment; GoFr applies it after the environment
 so it always reflects the framework actually running.
 

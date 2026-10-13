@@ -93,6 +93,9 @@ func Test_Build_degradesToNeverSample(t *testing.T) {
 }
 
 func Test_buildResource(t *testing.T) {
+	// Blank OTEL_SERVICE_NAME so rows that set neither variable do not pick up
+	// whatever the caller's shell exports; OTEL_RESOURCE_ATTRIBUTES is set below.
+	t.Setenv("OTEL_SERVICE_NAME", "")
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=staging")
 
 	Register("test-resource", stubBuilder)

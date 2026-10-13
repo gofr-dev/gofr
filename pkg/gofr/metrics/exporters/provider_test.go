@@ -189,7 +189,16 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 // "location" or "instance" label is empty, so the resource has to carry a source
 // for both. instance falls back to host.id, which is detected; location can only
 // come from the operator, via the standard OTel environment variable.
+// unsetServiceNameEnv blanks the variables that can name the service, so a test
+// that sets neither does not pick up whatever the caller's shell exports.
+func unsetServiceNameEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("OTEL_SERVICE_NAME", "")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "")
+}
+
 func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
+	unsetServiceNameEnv(t)
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
 
 	// host.id is only detected for push exporters, so select one.
@@ -372,6 +381,8 @@ func TestBuild_shutdownPropagatesReaderError(t *testing.T) {
 }
 
 func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.T) {
+	unsetServiceNameEnv(t)
+
 	RegisterResourceDetector("detector-fail", detectorFunc(func(context.Context) (*resource.Resource, error) {
 		return nil, errDetectorFailed
 	}))
@@ -425,6 +436,8 @@ func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.
 // service reports one name to its trace backend and another to its metric
 // backend, breaking the join between them.
 func Test_buildResource(t *testing.T) {
+	unsetServiceNameEnv(t)
+
 	tests := []struct {
 		name      string
 		cfg       Config
