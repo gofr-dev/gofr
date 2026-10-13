@@ -43,8 +43,9 @@ type bucketEntry struct {
 	lastAccess int64 // Nanoseconds on the owning store's clock; accessed atomically
 }
 
-// newTokenBucket creates a token bucket that starts full. The configured rate is kept exactly; only a burst whose
-// credit would exceed maxRefillPeriod is reduced to the largest burst that fits.
+// newTokenBucket creates a token bucket that starts full. The refill interval is rounded up to a whole nanosecond,
+// so the enforced rate never exceeds the configured one; only a burst whose credit would exceed maxRefillPeriod is
+// reduced to the largest burst that fits.
 func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 	interval := refillInterval(config) // in [1, maxRefillPeriod], so the division below is at least 1
 	burst := min(max(int64(config.Burst), 0), maxRefillPeriod/interval)
@@ -52,24 +53,27 @@ func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 	return &tokenBucket{interval: interval, burstInterval: burst * interval}
 }
 
-// refillInterval returns the nanoseconds needed to accrue one token, clamped to [1, maxRefillPeriod].
-// A non-positive or NaN rate, only reachable when a caller skips Validate, uses the default rate.
+// refillInterval returns the nanoseconds needed to accrue one token, rounded up and clamped to [1, maxRefillPeriod].
+// Invalid values, only reachable when a caller skips Validate, get the same defaults that Validate applies:
+// a Requests that Validate rejects becomes defaultRequestsPerMinute, and a non-positive Window becomes defaultWindow.
 func refillInterval(config *RateLimiterConfig) int64 {
-	rps := config.RequestsPerSecond()
-	if rps <= 0 || math.IsNaN(rps) {
-		rps = defaultRequestsPerMinute / defaultWindow.Seconds()
+	requests, window := config.Requests, float64(config.Window)
+
+	if !isValidRequests(requests) {
+		requests = defaultRequestsPerMinute
 	}
 
-	interval := float64(time.Second) / rps
+	if window <= 0 {
+		window = float64(defaultWindow)
+	}
 
-	switch {
-	case interval < 1:
-		return 1
-	case interval > float64(maxRefillPeriod):
+	// Rounding up fails closed: a rate that does not divide the window is enforced just below the configured rate.
+	interval := math.Ceil(window / requests)
+	if interval > float64(maxRefillPeriod) {
 		return maxRefillPeriod
-	default:
-		return int64(interval)
 	}
+
+	return max(int64(interval), 1)
 }
 
 // allowAt checks if a token can be consumed at the given time, in nanoseconds on the owning store's clock.
