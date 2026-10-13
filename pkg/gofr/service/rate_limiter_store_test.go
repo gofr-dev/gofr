@@ -27,16 +27,16 @@ func TestTokenBucket_Allow(t *testing.T) {
 	tb := newTokenBucket(&cfg)
 
 	// Should allow first two requests
-	allowed, wait := tb.allowAt(0)
+	allowed, wait, _ := tb.allowAt(0)
 	assert.True(t, allowed)
 	assert.Zero(t, wait)
 
-	allowed, wait = tb.allowAt(0)
+	allowed, wait, _ = tb.allowAt(0)
 	assert.True(t, allowed)
 	assert.Zero(t, wait)
 
 	// Third request should be rate limited
-	allowed, wait = tb.allowAt(0)
+	allowed, wait, _ = tb.allowAt(0)
 	assert.False(t, allowed)
 	assert.Equal(t, 500*time.Millisecond, wait)
 }
@@ -185,6 +185,52 @@ func TestLocalRateLimiterStore_CleanupKeepsOwedCredit(t *testing.T) {
 	}
 }
 
+// TestLocalRateLimiterStore_CleanupRacingARequest pins the interleavings where a request loads a bucket just
+// before cleanup evicts it: the request must not spend a token on the evicted bucket, it must use a new one.
+func TestLocalRateLimiterStore_CleanupRacingARequest(t *testing.T) {
+	cfg := RateLimiterConfig{Requests: 1, Window: time.Hour, Burst: 1}
+	idle := int64(2 * bucketTTL)
+
+	t.Run("request loaded before the cleanup sees the bucket as evicted", func(t *testing.T) {
+		store := NewLocalRateLimiterStore()
+		_, _ = store.allowAt("race", &cfg, -int64(time.Hour)) // consumed an hour ago, so refilled by now
+		loaded, _ := store.buckets.Load("race")
+
+		store.cleanupAt(idle)
+
+		allowed, _, evicted := loaded.(*bucketEntry).bucket.allowAt(idle)
+		assert.False(t, allowed)
+		assert.True(t, evicted)
+	})
+
+	t.Run("request finding an evicted bucket still mapped uses a new bucket", func(t *testing.T) {
+		store := NewLocalRateLimiterStore()
+		_, _ = store.allowAt("race", &cfg, -int64(time.Hour))
+		stale, _ := store.buckets.Load("race")
+
+		require.True(t, stale.(*bucketEntry).bucket.evictAt(idle)) // cleanup marked it but has not deleted it yet
+
+		allowed, _ := store.allowAt("race", &cfg, idle)
+		current, _ := store.buckets.Load("race")
+
+		assert.True(t, allowed)
+		assert.NotSame(t, stale, current)
+		assert.Equal(t, 0, countAllowed(store, "race", &cfg, idle))
+	})
+
+	t.Run("cleanup does not evict a bucket a request consumed from after the idle check", func(t *testing.T) {
+		store := NewLocalRateLimiterStore()
+		_, _ = store.allowAt("race", &cfg, -int64(time.Hour))
+		loaded, _ := store.buckets.Load("race")
+		bucket := loaded.(*bucketEntry).bucket
+
+		allowed, _, _ := bucket.allowAt(idle) // the request wins the race against evictAt
+
+		assert.True(t, allowed)
+		assert.False(t, bucket.evictAt(idle))
+	})
+}
+
 func TestLocalRateLimiterStore_ClockIsMonotonic(t *testing.T) {
 	store := NewLocalRateLimiterStore()
 	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Hour}
@@ -265,7 +311,7 @@ func runBucketSteps(t *testing.T, cfg *RateLimiterConfig, steps []bucketStep) {
 	base := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano()
 
 	for i, step := range steps {
-		allowed, wait := tb.allowAt(base + int64(step.at))
+		allowed, wait, _ := tb.allowAt(base + int64(step.at))
 
 		assert.Equal(t, step.expAllowed, allowed, "step %d", i)
 		assert.Equal(t, step.expWait, wait, "step %d", i)
@@ -521,7 +567,7 @@ func TestTokenBucket_ConcurrentBurst(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			results[i], _ = tb.allowAt(now)
+			results[i], _, _ = tb.allowAt(now)
 		}()
 	}
 

@@ -28,6 +28,10 @@ type RateLimiterStore interface {
 // (Burst*interval). Keeping the theoretical arrival time within now+2*maxRefillPeriod means it never overflows an int64.
 const maxRefillPeriod = int64(1) << 61
 
+// evictedTAT marks a bucket that cleanup has evicted. No live TAT reaches it, since a live TAT stays below
+// now+2*maxRefillPeriod.
+const evictedTAT = math.MaxInt64
+
 // tokenBucket is a lock-free token bucket implemented as a GCRA (generic cell rate algorithm):
 // the whole state is one int64, the theoretical arrival time (TAT) of the next conforming request,
 // so fractional refill rates need no floating point and every update is a single CAS.
@@ -77,21 +81,35 @@ func refillInterval(config *RateLimiterConfig) int64 {
 }
 
 // allowAt checks if a token can be consumed at the given time, in nanoseconds on the owning store's clock.
-func (tb *tokenBucket) allowAt(now int64) (allowed bool, waitTime time.Duration) {
+// It reports evicted, and consumes nothing, when cleanup has evicted the bucket; the caller must use a new one.
+func (tb *tokenBucket) allowAt(now int64) (allowed bool, waitTime time.Duration, evicted bool) {
 	for {
 		oldTAT := atomic.LoadInt64(&tb.tat)
+		if oldTAT == evictedTAT {
+			return false, 0, true
+		}
+
 		// A stored TAT is at most burstInterval ahead of the time it was set, so newTAT stays below
 		// now+2*maxRefillPeriod and cannot overflow.
 		newTAT := max(oldTAT, now) + tb.interval
 
 		if wait := newTAT - now - tb.burstInterval; wait > 0 {
-			return false, max(time.Duration(wait), time.Millisecond)
+			return false, max(time.Duration(wait), time.Millisecond), false
 		}
 
 		if atomic.CompareAndSwapInt64(&tb.tat, oldTAT, newTAT) {
-			return true, 0
+			return true, 0, false
 		}
 	}
+}
+
+// evictAt marks the bucket evicted if it has fully refilled at the given time, so that it holds exactly the
+// state of a new bucket. The single CAS makes the check and the mark atomic: a request that consumes a token
+// first makes the eviction fail, and a request that comes after it sees the mark.
+func (tb *tokenBucket) evictAt(now int64) bool {
+	tat := atomic.LoadInt64(&tb.tat)
+
+	return tat <= now && atomic.CompareAndSwapInt64(&tb.tat, tat, evictedTAT)
 }
 
 // LocalRateLimiterStore implements RateLimiterStore using in-memory buckets.
@@ -123,20 +141,29 @@ func (l *LocalRateLimiterStore) now() int64 {
 
 // allowAt checks the bucket for key at the given time on the store's clock, creating a full bucket on first use.
 func (l *LocalRateLimiterStore) allowAt(key string, config *RateLimiterConfig, now int64) (allowed bool, retryAfter time.Duration) {
-	// Load first so the steady-state path does not build a bucket only for LoadOrStore to discard it.
-	value, ok := l.buckets.Load(key)
-	if !ok {
-		value, _ = l.buckets.LoadOrStore(key, &bucketEntry{
-			bucket:     newTokenBucket(config),
-			lastAccess: now,
-		})
+	for {
+		// Load first so the steady-state path does not build a bucket only for LoadOrStore to discard it.
+		value, ok := l.buckets.Load(key)
+		if !ok {
+			value, _ = l.buckets.LoadOrStore(key, &bucketEntry{
+				bucket:     newTokenBucket(config),
+				lastAccess: now,
+			})
+		}
+
+		entry := value.(*bucketEntry)
+
+		atomic.StoreInt64(&entry.lastAccess, now)
+
+		allowed, retryAfter, evicted := entry.bucket.allowAt(now)
+		if !evicted {
+			return allowed, retryAfter
+		}
+
+		// Cleanup evicted this bucket between our load and our request. Drop it, unless cleanup already has,
+		// and retry with a new bucket.
+		l.buckets.CompareAndDelete(key, value)
 	}
-
-	entry := value.(*bucketEntry)
-
-	atomic.StoreInt64(&entry.lastAccess, now)
-
-	return entry.bucket.allowAt(now)
 }
 
 func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
@@ -172,12 +199,14 @@ func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {
 // cleanupAt removes the buckets that, at the given time on the store's clock, have been idle for longer than
 // bucketTTL and have fully refilled. A bucket that still owes credit is kept: deleting it would hand the next
 // caller a fresh, full bucket, which lets a slow limiter (where Burst*interval exceeds bucketTTL) through early.
+// evictAt marks a bucket before it is deleted, so a request racing the cleanup cannot spend a token on a bucket
+// that is about to be dropped.
 func (l *LocalRateLimiterStore) cleanupAt(now int64) {
 	cutoff := now - int64(bucketTTL)
 
 	l.buckets.Range(func(key, value any) bool {
 		entry := value.(*bucketEntry)
-		if atomic.LoadInt64(&entry.lastAccess) < cutoff && atomic.LoadInt64(&entry.bucket.tat) <= now {
+		if atomic.LoadInt64(&entry.lastAccess) < cutoff && entry.bucket.evictAt(now) {
 			l.buckets.CompareAndDelete(key, value)
 		}
 
