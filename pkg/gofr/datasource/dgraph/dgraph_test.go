@@ -500,11 +500,25 @@ func TestClient_HealthCheck(t *testing.T) {
 
 			status, err := client.HealthCheck(t.Context())
 
-			require.ErrorIs(t, err, tc.expErr)
-			require.ErrorIs(t, err, tc.expErrCause)
+			requireHealthCheckErr(t, err, tc.expErr, tc.expErrCause)
 			require.Equal(t, tc.expStatus, status)
 		})
 	}
+}
+
+// requireHealthCheckErr asserts the error returned by HealthCheck, using require.NoError
+// for the healthy case instead of require.ErrorIs(t, nil, nil).
+func requireHealthCheckErr(t *testing.T, err, expErr, expErrCause error) {
+	t.Helper()
+
+	if expErr == nil {
+		require.NoError(t, err)
+
+		return
+	}
+
+	require.ErrorIs(t, err, expErr)
+	require.ErrorIs(t, err, expErrCause)
 }
 
 func Test_mutationToString(t *testing.T) {
