@@ -132,9 +132,12 @@ func (m *mockSQSClient) ListQueues(
 	return &sqs.ListQueuesOutput{}, nil
 }
 
+// testRegion is the AWS region used by clients built for tests.
+const testRegion = "us-east-1"
+
 // Helper to create a connected client with mock for testing.
 func newTestClient(mockClient *mockSQSClient) *Client {
-	client := New(&Config{Region: "us-east-1"})
+	client := New(&Config{Region: testRegion})
 	client.UseLogger(NewMockLogger())
 	client.UseMetrics(NewMockMetrics())
 	client.conn = mockClient

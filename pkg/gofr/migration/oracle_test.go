@@ -112,7 +112,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 
 	mockTxSuccess.EXPECT().Commit().Return(nil)
 
-	err := mg.commitMigration(mockContainer, tdSuccess)
+	err := mg.commitMigration(mockContainer, &tdSuccess)
 	require.NoError(t, err, "Success case failed")
 
 	// Error case
@@ -131,7 +131,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 
 	mockTxError.EXPECT().Rollback().Return(nil).AnyTimes()
 
-	err = mg.commitMigration(mockContainer, tdError)
+	err = mg.commitMigration(mockContainer, &tdError)
 	assert.Equal(t, sql.ErrConnDone, err, "Error case failed")
 }
 
@@ -492,9 +492,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		data := transactionData{MigrationNumber: 1}
 
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 
 	t.Run("RollbackSuccess", func(t *testing.T) {
@@ -512,9 +512,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		mockTx.EXPECT().Rollback().Return(nil)
 		mockLogger.EXPECT().Fatalf(gomock.Any())
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 
 	t.Run("RollbackError", func(t *testing.T) {
@@ -532,9 +532,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		mockTx.EXPECT().Rollback().Return(sql.ErrConnDone)
 		mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 }
 
@@ -667,8 +667,8 @@ func TestOracleMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	// Should NOT expect ExecContext for INSERT.
 	// Should expect Commit (empty transaction).
 	mockTx.EXPECT().Commit().Return(nil)
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }

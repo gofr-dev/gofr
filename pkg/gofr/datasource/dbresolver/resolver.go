@@ -514,11 +514,11 @@ func (r *Resolver) HealthCheck() *datasource.Health {
 
 		switch *state {
 		case circuitStateClosed:
-			stateStr = "CLOSED"
+			stateStr = circuitStateClosedName
 		case circuitStateOpen:
-			stateStr = "OPEN"
+			stateStr = circuitStateOpenName
 		case circuitStateHalfOpen:
-			stateStr = "HALF_OPEN"
+			stateStr = circuitStateHalfOpenName
 		}
 
 		replicaDetails[i] = map[string]any{
