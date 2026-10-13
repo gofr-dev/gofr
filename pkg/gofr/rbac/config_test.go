@@ -664,59 +664,57 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 		content   string
 		wantErr   error
 		perms     string
-		audience  []string
 		startLine string
 		warn      string
 	}{
 		{
 			desc: "permissions mode from json", file: "rbac.json",
-			content:  `{"permissionsClaimPath": "scope", "audience": ["orders-api"], ` + endpoints + `}`,
-			perms:    "scope",
-			audience: []string{"orders-api"}, startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api]",
+			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`,
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, claim=scope",
 		},
 		{
 			desc: "permissions mode from yaml", file: "rbac.yaml",
-			content: "permissionsClaimPath: scope\naudience: [orders-api, billing-api]\nendpoints:\n" +
+			content: "permissionsClaimPath: scope\nendpoints:\n" +
 				"  - path: /orders\n    methods: [GET]\n    requiredPermissions: [orders:read]\n",
-			perms: "scope", audience: []string{"orders-api", "billing-api"},
-			startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api billing-api]",
+			perms: "scope", startLine: "RBAC enabled: mode=permissions, claim=scope",
 		},
 		{
-			desc: "roles mode", file: "rbac.json",
-			content:   `{"jwtClaimPath": "roles", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
-			startLine: "RBAC enabled: mode=roles, claim=roles, audience=[]",
+			desc: "permissions mode with a nested path and an index loads", file: "rbac.json",
+			content: `{"permissionsClaimPath": "realm.access[0]", ` + endpoints + `}`,
+			perms:   "realm.access[0]", startLine: "RBAC enabled: mode=permissions, claim=realm.access[0]",
+		},
+		{
+			desc: "roles mode keeps loading a claim path it cannot parse, as before", file: "rbac.json",
+			content:   `{"jwtClaimPath": "roles[x]", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=roles, claim=roles[x]",
 		},
 		{
 			desc: "header mode", file: "rbac.json",
 			content:   `{"roleHeader": "X-User-Role", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
-			startLine: "RBAC enabled: mode=header, claim=X-User-Role, audience=[]",
+			startLine: "RBAC enabled: mode=header, claim=X-User-Role",
 		},
 		{
 			desc: "both claim paths are rejected", file: "rbac.json",
-			content: `{"jwtClaimPath": "roles", "permissionsClaimPath": "scope", "audience": ["x"], ` + endpoints + `}`,
+			content: `{"jwtClaimPath": "roles", "permissionsClaimPath": "scope", ` + endpoints + `}`,
 			wantErr: errBothClaimPaths,
 		},
 		{
-			desc: "permissions mode without audience is rejected", file: "rbac.json",
-			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`,
-			wantErr: errAudienceRequired,
+			desc: "a permissions claim path that cannot be parsed is rejected", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope[x]", ` + endpoints + `}`,
+			wantErr: errInvalidPermissionsClaimPath,
 		},
 		{
-			desc: "audience without a JWT claim path is rejected", file: "rbac.json",
-			content: `{"roleHeader": "X-User-Role", "audience": ["x"], ` + endpoints + `}`,
-			wantErr: errAudienceWithoutJWT,
-		},
-		{
-			desc: "an empty audience entry is rejected", file: "rbac.json",
-			content: `{"permissionsClaimPath": "scope", "audience": ["orders-api", ""], ` + endpoints + `}`,
-			wantErr: errEmptyAudience,
+			desc: "roleHeader beside permissionsClaimPath warns that the header is ignored", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", "roleHeader": "X-User-Role", ` + endpoints + `}`,
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, claim=scope",
+			warn: "roleHeader is ignored",
 		},
 		{
 			desc: "permissions mode with a roles section warns that the roles are not consulted", file: "rbac.json",
-			content: `{"permissionsClaimPath": "scope", "audience": ["orders-api"], ` +
+			content: `{"permissionsClaimPath": "scope", ` +
 				`"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
-			perms: "scope", audience: []string{"orders-api"},
-			startLine: "RBAC enabled: mode=permissions, claim=scope, audience=[orders-api]",
+			perms:     "scope",
+			startLine: "RBAC enabled: mode=permissions, claim=scope",
 			warn:      "roles section is ignored",
 		},
 	}
@@ -744,7 +742,6 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.perms, config.PermissionsClaimPath, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, tc.audience, config.Audience, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Contains(t, logger.infoLogs, tc.startLine, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 			if tc.warn == "" {

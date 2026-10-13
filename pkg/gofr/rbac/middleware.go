@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 
@@ -95,14 +94,6 @@ var (
 
 	// errAuthorizationError is returned as a generic error message for unknown errors in traces.
 	errAuthorizationError = errors.New("authorization error")
-
-	// ErrAudienceMismatch is returned when the token's aud shares no value with the configured
-	// audience. It wraps ErrRoleNotFound, so it is a 401.
-	ErrAudienceMismatch = fmt.Errorf("%w: token audience not accepted", ErrRoleNotFound)
-
-	// ErrMissingExpiry is returned when a permissions-mode token carries no exp claim. It wraps
-	// ErrRoleNotFound, so it is a 401.
-	ErrMissingExpiry = fmt.Errorf("%w: token has no expiry", ErrRoleNotFound)
 )
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
@@ -110,7 +101,7 @@ var (
 //
 //nolint:gocognit,gocyclo // Middleware complexity is acceptable due to multiple authorization paths
 func Middleware(config *Config) func(handler http.Handler) http.Handler {
-	var claimsWarning sync.Once
+	var warnings extractionWarnings
 
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -159,8 +150,8 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// Extract what the request holds, using header-based or JWT-based extraction
 			h, err := extractHeld(r, config)
 			if err != nil {
-				reportExtractionFailure(r, config, err, &claimsWarning)
-				handleAuthError(w, r, config, "", routeLabel, 0, err)
+				reportExtractionFailure(r, config, err, &warnings)
+				handleAuthError(w, r, config, &denial{route: routeLabel, err: bareError(err)})
 
 				return
 			}
@@ -173,9 +164,9 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			if !authorized {
 				// A single role is reported as before; several are reported only as a count.
 				if h.multi() {
-					handleAuthError(w, r, config, "", routeLabel, h.count(), ErrAccessDenied)
+					handleAuthError(w, r, config, &denial{route: routeLabel, heldCount: h.count(), err: ErrAccessDenied})
 				} else {
-					handleAuthError(w, r, config, h.str, routeLabel, 0, ErrAccessDenied)
+					handleAuthError(w, r, config, &denial{role: h.str, route: routeLabel, err: ErrAccessDenied})
 				}
 
 				return
@@ -187,7 +178,7 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 
 			if config.Logger != nil {
 				entry := &AuditLog{Route: routeLabel, Role: granted}
-				if h.perms {
+				if h.permissionsMode {
 					entry.Role, entry.Permission = "", granted
 				}
 
@@ -201,13 +192,47 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 	}
 }
 
+// extractionWarnings holds the one-shot guards for the warnings reportExtractionFailure can raise, so
+// each is logged once per Config however many requests hit it.
+type extractionWarnings struct {
+	callOrder  sync.Once
+	unreadable sync.Once
+}
+
+// extractionFailure is why a role or permissions could not be read. Its Error is the bare sentinel
+// (ErrRoleNotFound or ErrAccessDenied) a custom ErrorHandler has always received; reason and cause
+// feed the metric label and the logs and never reach the client or the handler.
+type extractionFailure struct {
+	sentinel error  // ErrRoleNotFound (401) or ErrAccessDenied (403)
+	cause    error  // what went wrong, for logs; may be nil
+	reason   string // the reason label on the extraction failures metric
+}
+
+func (f *extractionFailure) Error() string { return f.sentinel.Error() }
+
+func (f *extractionFailure) Unwrap() error { return f.sentinel }
+
+// bareError returns the sentinel inside an extraction failure, or err itself when it is not one.
+func bareError(err error) error {
+	if f, ok := errors.AsType[*extractionFailure](err); ok {
+		return f.sentinel
+	}
+
+	return err
+}
+
 // reportExtractionFailure counts a request whose role or permissions could not be read, labeled by
 // cause, and warns about the two causes an operator can fix: a claim of an unreadable type (named by
-// its path, never its value), and RBAC running without the OAuth middleware in front of it (warned
-// once).
-func reportExtractionFailure(r *http.Request, config *Config, err error, claimsWarning *sync.Once) {
+// its path, never its value), and RBAC running without the OAuth middleware in front of it. Each warning
+// is logged once per Config; the metric still counts every request.
+func reportExtractionFailure(r *http.Request, config *Config, err error, warnings *extractionWarnings) {
+	f, ok := errors.AsType[*extractionFailure](err)
+	if !ok {
+		return
+	}
+
 	if config.Metrics != nil {
-		config.Metrics.IncrementCounter(r.Context(), extractionFailuresMetric, "reason", extractionFailureReason(err))
+		config.Metrics.IncrementCounter(r.Context(), extractionFailuresMetric, "reason", f.reason)
 	}
 
 	if config.Logger == nil {
@@ -215,13 +240,15 @@ func reportExtractionFailure(r *http.Request, config *Config, err error, claimsW
 	}
 
 	switch {
-	case errors.Is(err, errUnreadableClaim):
-		_, path := config.mode()
-		config.Logger.Warnf("RBAC: claim %q is not a string or an array of strings; request denied", path)
-	case errors.Is(err, errJWTClaimsNotFound) && !isWellKnown(r.URL.Path):
+	case f.reason == reasonUnreadableClaim:
+		warnings.unreadable.Do(func() {
+			_, path := config.mode()
+			config.Logger.Warnf("RBAC: claim %q is not a string or an array of strings; request denied", path)
+		})
+	case f.reason == reasonNoJWTClaims && !isWellKnown(r.URL.Path):
 		// The OAuth middleware never verifies /.well-known/*, so no claims there is not a call-order
 		// problem.
-		claimsWarning.Do(func() {
+		warnings.callOrder.Do(func() {
 			config.Logger.Warnf("RBAC: no JWT claims in the request; call EnableOAuth before EnableRBAC")
 		})
 	}
@@ -229,41 +256,32 @@ func reportExtractionFailure(r *http.Request, config *Config, err error, claimsW
 
 // Values of the reason label on the extraction failures metric.
 const (
-	reasonAudienceMismatch = "audience_mismatch"
-	reasonMissingExpiry    = "missing_expiry"
-	reasonNoJWTClaims      = "no_jwt_claims"
-	reasonUnreadableClaim  = "unreadable_claim"
-	reasonMissingRole      = "missing_role"
+	reasonNoJWTClaims     = "no_jwt_claims"
+	reasonUnreadableClaim = "unreadable_claim"
+	reasonMissingRole     = "missing_role"
 )
-
-// extractionFailureReason names the cause of an extraction failure for the metric's reason label.
-func extractionFailureReason(err error) string {
-	switch {
-	case errors.Is(err, ErrAudienceMismatch):
-		return reasonAudienceMismatch
-	case errors.Is(err, ErrMissingExpiry):
-		return reasonMissingExpiry
-	case errors.Is(err, errJWTClaimsNotFound):
-		return reasonNoJWTClaims
-	case errors.Is(err, errUnreadableClaim):
-		return reasonUnreadableClaim
-	default:
-		return reasonMissingRole
-	}
-}
 
 // isWellKnown reports whether path is under /.well-known, which the OAuth middleware does not verify.
 func isWellKnown(path string) bool {
 	return path == wellKnownPrefix || strings.HasPrefix(path, wellKnownPrefix+"/")
 }
 
+// denial is what a denied request is reported with: the audit log entry, and the error a custom
+// ErrorHandler receives.
+type denial struct {
+	role      string // the single role held, when there was exactly one
+	route     string
+	heldCount int // how many roles or permissions were held, when more than one could be
+	err       error
+}
+
 // handleAuthError handles authorization errors with custom error handler or default response.
-func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, heldCount int, err error) {
+func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, d *denial) {
 	// Record error in span if tracing is enabled
 	// Sanitize error message to prevent information leakage
 	if config.Tracer != nil {
 		span := trace.SpanFromContext(r.Context())
-		safeErr := sanitizeErrorForTrace(err)
+		safeErr := sanitizeErrorForTrace(d.err)
 		span.RecordError(safeErr)
 		span.SetStatus(codes.Error, safeErr.Error())
 	}
@@ -271,27 +289,25 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 	// Log audit event (always enabled when Logger is available)
 	// Audit logging is automatically performed using GoFr's logger
 	if config.Logger != nil {
-		logAuditEvent(config.Logger, r, &AuditLog{Route: route, Role: role, HeldCount: heldCount}, false)
+		logAuditEvent(config.Logger, r, &AuditLog{Route: d.route, Role: d.role, HeldCount: d.heldCount}, false)
 	}
 
 	// Use custom error handler if provided
 	if config.ErrorHandler != nil {
-		config.ErrorHandler(w, r, role, route, err)
+		config.ErrorHandler(w, r, d.role, d.route, d.err)
 		return
 	}
 
-	// Default error handling. A 401 means the token itself is not acceptable; a 403 means it is, but
-	// holds nothing that grants access (RFC 6750 §3.1).
-	switch {
-	case errors.Is(err, ErrAudienceMismatch):
-		http.Error(w, "Unauthorized: Token audience not accepted", http.StatusUnauthorized)
-	case errors.Is(err, ErrMissingExpiry):
-		http.Error(w, "Unauthorized: Token has no expiry", http.StatusUnauthorized)
-	case errors.Is(err, ErrRoleNotFound):
+	// Default error handling. A 401 means no usable credential was presented; a 403 means it was, but
+	// holds nothing that grants access. Only the status codes follow RFC 6750 §3.1; no WWW-Authenticate
+	// header is set.
+	if errors.Is(d.err, ErrRoleNotFound) {
 		http.Error(w, "Unauthorized: Missing or invalid role", http.StatusUnauthorized)
-	default:
-		http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
+
+		return
 	}
+
+	http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
 }
 
 // extractHeld extracts what the request holds for authorization.
@@ -299,75 +315,59 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 // (via JWTClaimPath), or header-based role extraction (via RoleHeader), in that order of precedence.
 // When a JWT claim path is set the header is never consulted, even if JWT extraction fails.
 // No default role is supported - role must be explicitly provided.
+// A failure is an *extractionFailure.
 func extractHeld(r *http.Request, config *Config) (held, error) {
-	switch {
-	case config.PermissionsClaimPath != "":
-		return extractHeldFromJWT(r, config, config.PermissionsClaimPath, true)
-	case config.JWTClaimPath != "":
-		return extractHeldFromJWT(r, config, config.JWTClaimPath, false)
-	case config.RoleHeader != "":
+	switch mode, _ := config.mode(); mode {
+	case modePermissions, modeRoles:
+		return extractHeldFromJWT(r, config)
+	case modeHeader:
 		if role := r.Header.Get(config.RoleHeader); role != "" {
 			return held{str: role}, nil
 		}
 	}
 
 	// No role found - no default role supported
-	return held{}, ErrRoleNotFound
+	return held{}, &extractionFailure{sentinel: ErrRoleNotFound, reason: reasonMissingRole}
 }
 
-// extractHeldFromJWT reads the claim at claimPath from the JWT claims in the request context, after
-// checking the token's audience (when configured) and, in permissions mode, that it expires.
-func extractHeldFromJWT(r *http.Request, config *Config, claimPath string, permissionsMode bool) (held, error) {
+// extractHeldFromJWT reads the claim named by the configured mode from the JWT claims in the request
+// context. It trusts the OAuth middleware to have validated the token, including aud and exp.
+func extractHeldFromJWT(r *http.Request, config *Config) (held, error) {
+	mode, claimPath := config.mode()
+	permissionsMode := mode == modePermissions
+
 	// Get JWT claims from context (set by OAuth middleware)
 	claims, ok := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok || claims == nil {
-		return held{}, fmt.Errorf("%w: %w", ErrRoleNotFound, errJWTClaimsNotFound)
-	}
-
-	if len(config.Audience) > 0 && !audienceAccepted(claims["aud"], config.Audience) {
-		return held{}, ErrAudienceMismatch
-	}
-
-	// The OAuth middleware rejects an exp in the past but accepts a token with none; a scope token
-	// that never expires is a standing credential, so permissions mode refuses it.
-	if permissionsMode && claims["exp"] == nil {
-		return held{}, ErrMissingExpiry
+		return held{}, &extractionFailure{sentinel: ErrRoleNotFound, cause: errJWTClaimsNotFound, reason: reasonNoJWTClaims}
 	}
 
 	value, err := extractClaimValue(claims, claimPath)
 	if err != nil {
 		// A verified token without a permissions claim holds no permissions: a 403, not a 401.
 		if permissionsMode {
-			return held{perms: true}, nil
+			return held{permissionsMode: true}, nil
 		}
 
 		// Do not fall back to the header: JWT is the only method when configured
-		return held{}, ErrRoleNotFound
+		return held{}, &extractionFailure{sentinel: ErrRoleNotFound, cause: err, reason: reasonMissingRole}
 	}
 
-	return heldFromClaim(value, permissionsMode)
-}
-
-// audienceAccepted reports whether the token's aud claim (a string or an array) shares a value with
-// accepted.
-func audienceAccepted(aud any, accepted []string) bool {
-	switch v := aud.(type) {
-	case string:
-		return slices.Contains(accepted, v)
-	case []any:
-		for _, entry := range v {
-			if s, ok := entry.(string); ok && slices.Contains(accepted, s) {
-				return true
-			}
-		}
+	h, err := heldFromClaim(value, permissionsMode)
+	if err == nil {
+		return h, nil
 	}
 
-	return false
+	if errors.Is(err, errUnreadableClaim) {
+		return held{}, &extractionFailure{sentinel: ErrAccessDenied, cause: err, reason: reasonUnreadableClaim}
+	}
+
+	return held{}, &extractionFailure{sentinel: ErrRoleNotFound, cause: err, reason: reasonMissingRole}
 }
 
-// extractClaimValue extracts a value from JWT claims. The whole path is first tried as one top-level
-// key, so namespaced claim names that contain dots work; otherwise it is read as a dot-notation or
-// array notation path.
+// extractClaimValue extracts a value from JWT claims by reading path as a dot-notation or array
+// notation path. Only when that finds nothing is the whole path tried as one top-level key, so a
+// namespaced claim name that contains dots still works without changing what an existing path reads.
 // Examples:
 //   - "role" -> claims["role"]
 //   - "https://example.com/roles" -> claims["https://example.com/roles"]
@@ -378,10 +378,21 @@ func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 		return nil, fmt.Errorf("%w", errEmptyClaimPath)
 	}
 
+	value, err := walkClaimPath(claims, path)
+	if err == nil {
+		return value, nil
+	}
+
 	if value, ok := claims[path]; ok {
 		return value, nil
 	}
 
+	return nil, err
+}
+
+// walkClaimPath reads path as array notation ("roles[0]"), dot notation ("permissions.role"), or a
+// plain key.
+func walkClaimPath(claims jwt.MapClaims, path string) (any, error) {
 	// Handle array notation: "roles[0]"
 	if idx := strings.Index(path, "["); idx != -1 {
 		return extractArrayClaim(claims, path, idx)
@@ -401,21 +412,39 @@ func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	return value, nil
 }
 
-// extractArrayClaim extracts a value from an array in JWT claims.
-func extractArrayClaim(claims jwt.MapClaims, path string, idx int) (any, error) {
-	key := path[:idx]
+// parseArrayPath splits "roles[0]" into its key and index.
+func parseArrayPath(path string, idx int) (key string, index int, err error) {
 	arrayPath := path[idx:]
 
-	// Extract array index
 	if !strings.HasPrefix(arrayPath, "[") || !strings.HasSuffix(arrayPath, "]") {
-		return nil, fmt.Errorf("%w: %s", errInvalidArrayNotation, path)
+		return "", 0, fmt.Errorf("%w: %s", errInvalidArrayNotation, path)
 	}
 
 	indexStr := strings.Trim(arrayPath, "[]")
 
-	var index int
 	if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
-		return nil, fmt.Errorf("%w: %s", errInvalidArrayIndex, indexStr)
+		return "", 0, fmt.Errorf("%w: %s", errInvalidArrayIndex, indexStr)
+	}
+
+	return path[:idx], index, nil
+}
+
+// validateClaimPath reports whether path can be read at all: an array notation path must parse.
+func validateClaimPath(path string) error {
+	if idx := strings.Index(path, "["); idx != -1 {
+		_, _, err := parseArrayPath(path, idx)
+
+		return err
+	}
+
+	return nil
+}
+
+// extractArrayClaim extracts a value from an array in JWT claims.
+func extractArrayClaim(claims jwt.MapClaims, path string, idx int) (any, error) {
+	key, index, err := parseArrayPath(path, idx)
+	if err != nil {
+		return nil, err
 	}
 
 	value, ok := claims[key]

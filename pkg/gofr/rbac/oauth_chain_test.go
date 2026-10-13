@@ -46,27 +46,15 @@ func TestMiddleware_BehindOAuth(t *testing.T) {
 	}{
 		{
 			desc:       "permissions mode: scope grants",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "exp": exp},
 			wantStatus: http.StatusOK,
 		},
 		{
 			desc:       "permissions mode: scope lacks the permission",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:read", "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read", "exp": exp},
 			wantStatus: http.StatusForbidden,
-		},
-		{
-			desc:       "permissions mode: token for another API",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:write", "aud": []string{"billing-api"}, "exp": exp},
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			desc:       "permissions mode: token without exp",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:write", "aud": "orders-api"},
-			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			desc: "roles mode: role array grants",

@@ -12,9 +12,14 @@ func main() {
 	// OAuth verifies the token and puts its claims in the request; RBAC then reads the "scope"
 	// claim named in configs/rbac.json. OAuth must be enabled first.
 	//
-	// Permissions mode trusts what the token says, so the issuer is checked here: a token from any
-	// other issuer, or with no "iss", gets a 401 even if it is signed by a key in the same JWKS.
-	if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10, jwt.WithIssuer(app.Config.Get("TOKEN_ISSUER"))); err != nil {
+	// RBAC does not validate the token, and permissions mode trusts what it says, so every check
+	// belongs here, where it runs on every request that carries a token: a token from another issuer,
+	// minted for another API, or with no expiry gets a 401 even if a key in the same JWKS signed it.
+	if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10,
+		jwt.WithIssuer(app.Config.Get("TOKEN_ISSUER")),
+		jwt.WithAudience("orders-api"),
+		jwt.WithExpirationRequired(),
+	); err != nil {
 		app.Logger().Fatalf("%v", err)
 	}
 

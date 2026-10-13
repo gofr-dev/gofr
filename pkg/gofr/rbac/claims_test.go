@@ -17,15 +17,15 @@ func TestHeldFromClaim(t *testing.T) {
 	}
 
 	testCases := []struct {
-		desc      string
-		value     any
-		split     bool
-		required  []string
-		wantErr   error
-		allowed   bool
-		granted   string
-		heldCount int
-		multi     bool
+		desc            string
+		value           any
+		permissionsMode bool
+		required        []string
+		wantErr         error
+		allowed         bool
+		granted         string
+		heldCount       int
+		multi           bool
 	}{
 		{
 			desc: "role array holds the permissions of every role", value: []any{"admin", "viewer"},
@@ -36,6 +36,14 @@ func TestHeldFromClaim(t *testing.T) {
 			required: []string{"users:write"}, heldCount: 2, multi: true,
 		},
 		{
+			desc: "role array entries that are numbers or booleans are read as their text, like a scalar claim", value: []any{123.0, true},
+			required: []string{"users:read"}, allowed: true, granted: "123", heldCount: 2, multi: true,
+		},
+		{
+			desc: "role array skips objects and nulls", value: []any{nil, map[string]any{"a": "b"}, "viewer"},
+			required: []string{"users:read"}, allowed: true, granted: "viewer", heldCount: 1, multi: true,
+		},
+		{
 			desc: "single role string is not split", value: "Org Admin",
 			required: []string{"org:manage"}, allowed: true, granted: "Org Admin", heldCount: 1,
 		},
@@ -44,22 +52,26 @@ func TestHeldFromClaim(t *testing.T) {
 			required: []string{"users:read"}, granted: "", heldCount: 1,
 		},
 		{
-			desc: "scope string is split on spaces", value: "orders:read  orders:write", split: true,
+			desc: "scope string is split on spaces", value: "orders:read  orders:write", permissionsMode: true,
 			required: []string{"orders:write"}, allowed: true, granted: "orders:write", heldCount: 2, multi: true,
 		},
 		{
-			desc: "permissions array entries are held as is", value: []any{"orders:read orders:write"}, split: true,
+			desc: "permissions array entries are held as is", value: []any{"orders:read orders:write"}, permissionsMode: true,
 			required: []string{"orders:write"}, heldCount: 1, multi: true,
 		},
 		{
-			desc: "empty and non-string array entries are ignored", value: []any{"", 42, true, "orders:read"}, split: true,
+			desc: "empty and non-string array entries are ignored", value: []any{"", 42, true, "orders:read"}, permissionsMode: true,
 			required: []string{"orders:read"}, allowed: true, granted: "orders:read", heldCount: 1, multi: true,
 		},
 		{
-			desc: "role array with only unusable entries holds nothing", value: []any{"", 7}, required: []string{"users:read"},
+			desc: "role array with only unusable entries holds nothing", value: []any{"", nil, map[string]any{"a": "b"}},
+			required:  []string{"users:read"},
 			heldCount: 0, multi: true,
 		},
-		{desc: "permission match is exact", value: "Orders:Read", split: true, required: []string{"orders:read"}, heldCount: 1, multi: true},
+		{
+			desc: "permission match is exact", value: "Orders:Read", permissionsMode: true,
+			required: []string{"orders:read"}, heldCount: 1, multi: true,
+		},
 		{desc: "empty string is a missing role", value: "", wantErr: ErrRoleNotFound},
 		{
 			desc: "null role claim holds no role, not even one named empty", value: nil,
@@ -70,17 +82,17 @@ func TestHeldFromClaim(t *testing.T) {
 			required: []string{"users:read"}, allowed: true, granted: "123", heldCount: 1,
 		},
 		{desc: "boolean role is read as its text", value: true, required: []string{"users:read"}, heldCount: 1},
-		{desc: "empty scope holds nothing", value: "", split: true, required: []string{"orders:read"}, multi: true},
-		{desc: "null scope holds nothing", value: nil, split: true, required: []string{"orders:read"}, multi: true},
-		{desc: "number scope is unreadable", value: 42.0, split: true, wantErr: errUnreadableClaim},
-		{desc: "boolean scope is unreadable", value: true, split: true, wantErr: errUnreadableClaim},
+		{desc: "empty scope holds nothing", value: "", permissionsMode: true, required: []string{"orders:read"}, multi: true},
+		{desc: "null scope holds nothing", value: nil, permissionsMode: true, required: []string{"orders:read"}, multi: true},
+		{desc: "number scope is unreadable", value: 42.0, permissionsMode: true, wantErr: errUnreadableClaim},
+		{desc: "boolean scope is unreadable", value: true, permissionsMode: true, wantErr: errUnreadableClaim},
 		{desc: "object role is unreadable", value: map[string]any{"a": "b"}, wantErr: errUnreadableClaim},
-		{desc: "object scope is unreadable", value: map[string]any{"a": "b"}, split: true, wantErr: errUnreadableClaim},
+		{desc: "object scope is unreadable", value: map[string]any{"a": "b"}, permissionsMode: true, wantErr: errUnreadableClaim},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			h, err := heldFromClaim(tc.value, tc.split)
+			h, err := heldFromClaim(tc.value, tc.permissionsMode)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -112,20 +124,20 @@ func TestHeld_GrantAllocs(t *testing.T) {
 	scope := "s0:read s1:read s2:read s3:read s4:read s5:read s6:read s7:read s8:read s9:read"
 
 	testCases := []struct {
-		desc  string
-		value any
-		split bool
-		need  []string
+		desc            string
+		value           any
+		permissionsMode bool
+		need            []string
 	}{
 		{desc: "ten roles, last one grants", value: roles, need: []string{"r9:read"}},
-		{desc: "ten-entry scope, last one grants", value: scope, split: true, need: []string{"s9:read"}},
-		{desc: "ten-entry scope, none grants", value: scope, split: true, need: []string{"x:read"}},
+		{desc: "ten-entry scope, last one grants", value: scope, permissionsMode: true, need: []string{"s9:read"}},
+		{desc: "ten-entry scope, none grants", value: scope, permissionsMode: true, need: []string{"x:read"}},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			allocs := testing.AllocsPerRun(100, func() {
-				h, _ := heldFromClaim(tc.value, tc.split)
+				h, _ := heldFromClaim(tc.value, tc.permissionsMode)
 				_, _ = h.grant(tc.need, roleSet)
 			})
 

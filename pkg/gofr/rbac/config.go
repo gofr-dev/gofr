@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
@@ -36,15 +35,9 @@ var (
 	// errBothClaimPaths is returned when both jwtClaimPath and permissionsClaimPath are set.
 	errBothClaimPaths = errors.New("jwtClaimPath and permissionsClaimPath cannot both be set")
 
-	// errAudienceRequired is returned when permissionsClaimPath is set without an audience.
-	errAudienceRequired = errors.New("permissionsClaimPath requires audience")
-
-	// errAudienceWithoutJWT is returned when audience is set but no JWT claim path is.
-	errAudienceWithoutJWT = errors.New("audience requires jwtClaimPath or permissionsClaimPath")
-
-	// errEmptyAudience is returned when an audience entry is empty, which would accept a token whose
-	// aud is "".
-	errEmptyAudience = errors.New("audience entries must not be empty")
+	// errInvalidPermissionsClaimPath is returned when permissionsClaimPath cannot be parsed, which would
+	// otherwise deny every request without a word.
+	errInvalidPermissionsClaimPath = errors.New("permissionsClaimPath cannot be parsed")
 )
 
 // extractionFailuresMetric counts requests whose role or permissions could not be read.
@@ -129,12 +122,9 @@ type Config struct {
 	// PermissionsClaimPath specifies the JWT claim that holds the permissions themselves.
 	// Example: "scope" for {"scope": "orders:read orders:write"}
 	// If set, Roles are not consulted: a string claim is split on spaces, an array claim is held entry
-	// by entry. Cannot be combined with JWTClaimPath, and requires Audience.
+	// by entry. Cannot be combined with JWTClaimPath. RBAC does not validate the token: set the audience
+	// and expiry checks on EnableOAuth with jwt.WithAudience and jwt.WithExpirationRequired.
 	PermissionsClaimPath string `json:"permissionsClaimPath,omitempty" yaml:"permissionsClaimPath,omitempty"`
-
-	// Audience lists the accepted values of the token's "aud" claim; the token must carry at least one.
-	// Required with PermissionsClaimPath; checked with JWTClaimPath when set.
-	Audience []string `json:"audience,omitempty" yaml:"audience,omitempty"`
 
 	// ErrorHandler is called when authorization fails
 	// If nil, default error response is sent
@@ -222,11 +212,15 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 // logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
 func (c *Config) logStartup(logger datasource.Logger) {
 	mode, source := c.mode()
-	logger.Infof("RBAC enabled: mode=%s, claim=%s, audience=%v", mode, source, c.Audience)
+	logger.Infof("RBAC enabled: mode=%s, claim=%s", mode, source)
 
 	if mode == modePermissions && len(c.Roles) > 0 {
 		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
 			"permissions are read from the token, not from roles")
+	}
+
+	if mode == modePermissions && c.RoleHeader != "" {
+		logger.Warnf("RBAC: permissionsClaimPath is set, so roleHeader is ignored")
 	}
 }
 
@@ -268,15 +262,14 @@ func (c *Config) validate() error {
 
 // validateClaimModes rejects claim settings that would otherwise be ambiguous or silently ignored.
 func (c *Config) validateClaimModes() error {
-	switch {
-	case c.JWTClaimPath != "" && c.PermissionsClaimPath != "":
+	if c.JWTClaimPath != "" && c.PermissionsClaimPath != "" {
 		return errBothClaimPaths
-	case c.PermissionsClaimPath != "" && len(c.Audience) == 0:
-		return errAudienceRequired
-	case len(c.Audience) > 0 && c.JWTClaimPath == "" && c.PermissionsClaimPath == "":
-		return errAudienceWithoutJWT
-	case slices.ContainsFunc(c.Audience, func(a string) bool { return strings.TrimSpace(a) == "" }):
-		return errEmptyAudience
+	}
+
+	// Only permissionsClaimPath is checked: a jwtClaimPath that cannot be parsed has always loaded, and
+	// rejecting it now would stop an existing service from starting.
+	if err := validateClaimPath(c.PermissionsClaimPath); err != nil {
+		return fmt.Errorf("%w: %w", errInvalidPermissionsClaimPath, err)
 	}
 
 	return nil

@@ -396,6 +396,20 @@ func TestExtractClaimValue(t *testing.T) {
 			expectError: false,
 		},
 		{
+			desc:        "the dotted walk wins over a top-level key of the same name",
+			claims:      jwt.MapClaims{"a.b": "admin", "a": map[string]any{"b": "viewer"}},
+			path:        "a.b",
+			expected:    "viewer",
+			expectError: false,
+		},
+		{
+			desc:        "a top-level key with dots is used when the walk finds nothing",
+			claims:      jwt.MapClaims{"https://example.com/roles": "admin"},
+			path:        "https://example.com/roles",
+			expected:    "admin",
+			expectError: false,
+		},
+		{
 			desc: "returns error for empty path",
 			claims: jwt.MapClaims{
 				"role": "admin",
@@ -835,20 +849,6 @@ func TestHandleAuthError(t *testing.T) {
 			customHandler:  false,
 		},
 		{
-			desc:           "audience mismatch is a 401 that names the audience, not a missing role",
-			config:         &Config{Logger: &mockLogger{logs: []string{}}},
-			err:            ErrAudienceMismatch,
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "Unauthorized: Token audience not accepted",
-		},
-		{
-			desc:           "missing expiry is a 401 that names the expiry, not a missing role",
-			config:         &Config{Logger: &mockLogger{logs: []string{}}},
-			err:            ErrMissingExpiry,
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "Unauthorized: Token has no expiry",
-		},
-		{
 			desc: "uses custom error handler when provided",
 			config: &Config{
 				Logger: &mockLogger{logs: []string{}},
@@ -869,7 +869,7 @@ func TestHandleAuthError(t *testing.T) {
 			w := httptest.NewRecorder()
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api", http.NoBody)
 
-			handleAuthError(w, req, tc.config, "admin", "/api", 0, tc.err)
+			handleAuthError(w, req, tc.config, &denial{role: "admin", route: "/api", err: tc.err})
 
 			assert.Equal(t, tc.expectedStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Contains(t, w.Body.String(), tc.expectedBody, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -1094,9 +1094,6 @@ type claimModeTestCase struct {
 	wantWarn   string
 }
 
-// claimModeExp is an exp claim far in the future (2100-01-01).
-const claimModeExp = float64(4102444800)
-
 func claimModeEndpoints() []EndpointMapping {
 	return []EndpointMapping{{Path: "/orders", Methods: []string{"GET"}, RequiredPermissions: []string{"orders:write"}}}
 }
@@ -1135,6 +1132,20 @@ func rolesClaimModeTestCases() []claimModeTestCase {
 			claims: jwt.MapClaims{"https://example.com/roles": []any{"admin"}}, wantStatus: http.StatusOK, wantRole: "admin",
 		},
 		{
+			desc:   "roles mode: the dotted walk wins over a top-level key of the same name",
+			config: Config{JWTClaimPath: "a.b", Roles: roles, Endpoints: endpoints},
+			claims: jwt.MapClaims{"a.b": "admin", "a": map[string]any{"b": "viewer"}}, wantStatus: http.StatusForbidden,
+			wantRole: "viewer",
+		},
+		{
+			desc: "roles mode: an array of numbers is read as role names",
+			config: Config{
+				JWTClaimPath: "roles", Endpoints: endpoints,
+				Roles: []RoleDefinition{{Name: "123", Permissions: []string{"orders:write"}}},
+			},
+			claims: jwt.MapClaims{"roles": []any{123.0}}, wantStatus: http.StatusOK, wantRole: "123",
+		},
+		{
 			desc:   "roles mode: missing claim is 401",
 			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
 			claims: jwt.MapClaims{"sub": "u1"}, wantStatus: http.StatusUnauthorized, wantReason: "missing_role",
@@ -1149,12 +1160,6 @@ func rolesClaimModeTestCases() []claimModeTestCase {
 			config: Config{JWTClaimPath: "roles", Roles: roles, Endpoints: endpoints},
 			claims: jwt.MapClaims{"roles": map[string]any{"id": 12345.0}}, wantStatus: http.StatusForbidden,
 			wantReason: "unreadable_claim", wantWarn: `"roles"`,
-		},
-		{
-			desc:   "roles mode: audience is checked when set",
-			config: Config{JWTClaimPath: "roles", Audience: []string{"orders-api"}, Roles: roles, Endpoints: endpoints},
-			claims: jwt.MapClaims{"roles": []any{"admin"}, "aud": "other-api"}, wantStatus: http.StatusUnauthorized,
-			wantReason: "audience_mismatch",
 		},
 		{
 			desc: "roles mode: a number claim is read as a role name, as before multi-value claims",
@@ -1184,81 +1189,58 @@ func rolesClaimModeTestCases() []claimModeTestCase {
 
 func permissionsClaimModeTestCases() []claimModeTestCase {
 	endpoints := claimModeEndpoints()
-	exp := claimModeExp
 
 	return []claimModeTestCase{
 		{
 			desc:       "permissions mode: scope string grants",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:read orders:write", "aud": "orders-api", "exp": exp},
-			wantStatus: http.StatusOK, wantPerm: "orders:write",
-		},
-		{
-			desc:       "permissions mode: audience array sharing one value grants",
-			config:     Config{PermissionsClaimPath: "permissions", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"permissions": []any{"orders:write"}, "aud": []any{"web", "orders-api"}, "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read orders:write"},
 			wantStatus: http.StatusOK, wantPerm: "orders:write",
 		},
 		{
 			desc:       "permissions mode: scope without the permission is 403 with a count",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:read profile", "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": "orders:read profile"},
 			wantStatus: http.StatusForbidden, wantCount: 2,
 		},
 		{
-			desc:       "permissions mode: audience mismatch is 401",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:write", "aud": []any{"billing-api"}, "exp": exp},
-			wantStatus: http.StatusUnauthorized, wantReason: "audience_mismatch",
-		},
-		{
-			desc:       "permissions mode: missing aud is 401",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:write", "exp": exp},
-			wantStatus: http.StatusUnauthorized, wantReason: "audience_mismatch",
-		},
-		{
-			desc:       "permissions mode: missing exp is 401",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "orders:write", "aud": "orders-api"},
-			wantStatus: http.StatusUnauthorized, wantReason: "missing_expiry",
-		},
-		{
 			desc:       "permissions mode: missing scope holds nothing and is 403",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"sub": "u1"},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			desc:       "permissions mode: null scope holds nothing and is 403",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": nil, "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": nil},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			desc:       "permissions mode: empty scope holds nothing and is 403",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": "", "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": ""},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			desc:       "permissions mode: empty scope array holds nothing and is 403",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": []any{}, "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": []any{}},
 			wantStatus: http.StatusForbidden,
 		},
 		{
 			desc:       "permissions mode: a number claim is 403 and warns with the path only",
-			config:     Config{PermissionsClaimPath: "scope", Audience: []string{"orders-api"}, Endpoints: endpoints},
-			claims:     jwt.MapClaims{"scope": 12345.0, "aud": "orders-api", "exp": exp},
+			config:     Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims:     jwt.MapClaims{"scope": 12345.0},
 			wantStatus: http.StatusForbidden, wantReason: "unreadable_claim", wantWarn: `"scope"`,
 		},
 	}
 }
 
 // serveClaimMode runs one request through the middleware and returns the response, the logger and
-// the role the ErrorHandler received.
-func serveClaimMode(t *testing.T, tc *claimModeTestCase) (w *httptest.ResponseRecorder, logger *mockLogger, handlerRole string) {
+// the role and error the ErrorHandler received.
+func serveClaimMode(t *testing.T, tc *claimModeTestCase) (
+	w *httptest.ResponseRecorder, logger *mockLogger, handlerRole string, handlerErr error,
+) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -1274,7 +1256,7 @@ func serveClaimMode(t *testing.T, tc *claimModeTestCase) (w *httptest.ResponseRe
 
 	handlerRole = "<not called>"
 	cfg.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, role, _ string, err error) {
-		handlerRole = role
+		handlerRole, handlerErr = role, err
 
 		status := http.StatusForbidden
 		if errors.Is(err, ErrRoleNotFound) {
@@ -1296,13 +1278,13 @@ func serveClaimMode(t *testing.T, tc *claimModeTestCase) (w *httptest.ResponseRe
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(w, req)
 
-	return w, logger, handlerRole
+	return w, logger, handlerRole, handlerErr
 }
 
 func TestMiddleware_ClaimModes(t *testing.T) {
 	for i, tc := range claimModeTestCases() {
 		t.Run(tc.desc, func(t *testing.T) {
-			w, logger, handlerRole := serveClaimMode(t, &tc)
+			w, logger, handlerRole, handlerErr := serveClaimMode(t, &tc)
 
 			assert.Equal(t, tc.wantStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -1315,6 +1297,15 @@ func TestMiddleware_ClaimModes(t *testing.T) {
 
 			if tc.wantStatus != http.StatusOK {
 				assert.Equal(t, tc.wantRole, handlerRole, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+				// A custom ErrorHandler may compare with == or switch on the error, so it gets the bare sentinel
+				// and never a wrapped cause.
+				want := ErrAccessDenied
+				if tc.wantStatus == http.StatusUnauthorized {
+					want = ErrRoleNotFound
+				}
+
+				assert.Same(t, want, handlerErr, "TEST[%d], handler must get the bare sentinel, not %v.\n%s", i, handlerErr, tc.desc)
 			}
 
 			if tc.wantWarn == "" {
@@ -1329,6 +1320,31 @@ func TestMiddleware_ClaimModes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMiddleware_UnreadableClaimWarnsOnce(t *testing.T) {
+	logger := &mockLogger{}
+	cfg := &Config{
+		JWTClaimPath: "roles",
+		Roles:        []RoleDefinition{{Name: "admin", Permissions: []string{"a:b"}}},
+		Endpoints:    []EndpointMapping{{Path: "/x", Methods: []string{"GET"}, RequiredPermissions: []string{"a:b"}}},
+		Logger:       logger,
+	}
+	require.NoError(t, cfg.processUnifiedConfig())
+
+	wrapped := Middleware(cfg)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	for range 5 {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+		req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, jwt.MapClaims{"roles": map[string]any{"id": 1.0}}))
+
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	}
+
+	require.Len(t, logger.warnLogs, 1)
+	assert.Contains(t, logger.warnLogs[0], `"roles"`)
 }
 
 func TestMiddleware_MissingClaimsWarnsOnce(t *testing.T) {
@@ -1376,7 +1392,6 @@ func BenchmarkMiddleware(b *testing.B) {
 	}
 
 	endpoints := []EndpointMapping{{Path: "/r", Methods: []string{"GET"}, RequiredPermissions: []string{"res9:read"}}}
-	exp := float64(4102444800)
 
 	benchmarks := []struct {
 		name   string
@@ -1394,8 +1409,8 @@ func BenchmarkMiddleware(b *testing.B) {
 		},
 		{
 			name:   "permissions mode, 10-entry scope",
-			config: &Config{PermissionsClaimPath: "scope", Audience: []string{"api"}, Endpoints: endpoints},
-			claims: jwt.MapClaims{"scope": strings.Join(scope, " "), "aud": "api", "exp": exp},
+			config: &Config{PermissionsClaimPath: "scope", Endpoints: endpoints},
+			claims: jwt.MapClaims{"scope": strings.Join(scope, " ")},
 		},
 	}
 
