@@ -6,7 +6,11 @@ import (
 	"time"
 )
 
-const defaultRetryBudgetTTL = 10 * time.Second
+const (
+	defaultRetryBudgetTTL          = 10 * time.Second
+	defaultRetryBudgetRatio        = 0.2
+	defaultRetryBudgetMinPerSecond = 10
+)
 
 // RetryBudget caps how many retries a RetryPolicy may make, as a share of the calls made to the service.
 //
@@ -16,6 +20,9 @@ const defaultRetryBudgetTTL = 10 * time.Second
 //
 // Ratio keeps retries proportional to traffic: with Ratio 0.2, retries add at most 20% load to an
 // upstream that is failing every call. MinPerSecond lets a service with little traffic still retry.
+//
+// A budget with both Ratio and MinPerSecond 0 would allow no retry at all, so it uses Ratio 0.2 and
+// MinPerSecond 10 instead. To make no retries, set RetryPolicy.MaxAttempts to 1.
 //
 // Each service a RetryPolicy is added to keeps its own counts; one RetryBudget value can be shared.
 type RetryBudget struct {
@@ -51,9 +58,14 @@ func newRetryBudget(cfg RetryBudget, now func() time.Time) *retryBudget {
 
 	seconds := max(int(math.Ceil(ttl.Seconds())), 1)
 
+	ratio, minPerSecond := max(cfg.Ratio, 0), max(cfg.MinPerSecond, 0)
+	if ratio == 0 && minPerSecond == 0 {
+		ratio, minPerSecond = defaultRetryBudgetRatio, defaultRetryBudgetMinPerSecond
+	}
+
 	return &retryBudget{
-		ratio: max(cfg.Ratio, 0),
-		floor: float64(max(cfg.MinPerSecond, 0) * seconds),
+		ratio: ratio,
+		floor: float64(minPerSecond * seconds),
 		slots: make([]budgetSlot, seconds),
 		now:   now,
 		start: now(),

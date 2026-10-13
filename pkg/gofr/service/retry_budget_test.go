@@ -71,6 +71,8 @@ func TestRetryBudget_Window(t *testing.T) {
 			}},
 		{desc: "TTL defaults to 10s", budget: RetryBudget{MinPerSecond: 1},
 			steps: []step{{withdraws: 11, want: 10}}},
+		{desc: "an all-zero budget uses Ratio 0.2 and MinPerSecond 10", budget: RetryBudget{},
+			steps: []step{{deposits: 10, withdraws: 103, want: 102}}}, // 0.2 × 10 + 10/s × 10s
 		{desc: "floor and ratio add up", budget: RetryBudget{Ratio: 0.1, MinPerSecond: 1, TTL: time.Second},
 			steps: []step{{deposits: 20, withdraws: 5, want: 3}}},
 	}

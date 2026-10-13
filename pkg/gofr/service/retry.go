@@ -200,9 +200,11 @@ func (rp *retryProvider) doWithPolicy(ctx context.Context, method string, header
 	for retry := 1; ; retry++ {
 		ctxDone := ctx.Err() != nil
 
-		resp, timedOut, err := attemptWithTimeout(ctx, p.perAttemptTimeout, reqFunc)
+		terminal := !canRetry || retry >= p.maxAttempts
 
-		if !canRetry || retry >= p.maxAttempts || ctxDone || contextEndedTheAttempt(ctx, err) {
+		resp, timedOut, err := attemptWithTimeout(ctx, p.attemptTimeout(terminal), reqFunc)
+
+		if terminal || ctxDone || contextEndedTheAttempt(ctx, err) {
 			return resp, err
 		}
 

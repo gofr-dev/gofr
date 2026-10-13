@@ -27,7 +27,7 @@ const (
 	retryReasonAttemptTimeout = "attempt_timeout"
 )
 
-// errAttemptTimeout is returned when the last attempt was abandoned by RetryPolicy.PerAttemptTimeout.
+// errAttemptTimeout is returned when an attempt abandoned by RetryPolicy.PerAttemptTimeout is not retried.
 // It wraps context.DeadlineExceeded, so it reads as the timeout it is.
 var errAttemptTimeout = fmt.Errorf("attempt exceeded the retry policy's per-attempt timeout: %w", context.DeadlineExceeded)
 
@@ -55,7 +55,8 @@ type RetryPolicy struct {
 	// Default "Idempotency-Key".
 	IdempotencyKeyHeader string
 	// PerAttemptTimeout bounds how long one attempt waits for the response headers. 0 means no bound.
-	// Reading the body of the returned response is not bounded by it.
+	// Reading the body of the returned response is not bounded by it. An attempt that no retry can follow
+	// -- the last one, or any attempt of a request that may not be retried -- is not bounded either.
 	PerAttemptTimeout time.Duration
 	// Budget caps the retries made to the service. nil means unlimited.
 	Budget *RetryBudget
@@ -137,6 +138,17 @@ func (p *RetryPolicy) resolve() *retrySettings {
 	}
 
 	return s
+}
+
+// attemptTimeout is the bound on an attempt. PerAttemptTimeout keeps room for a retry, so a terminal
+// attempt -- one no retry can follow -- is bounded only by the caller's context: cutting it off would
+// report a timeout for a request the server may still complete.
+func (s *retrySettings) attemptTimeout(terminal bool) time.Duration {
+	if terminal {
+		return 0
+	}
+
+	return s.perAttemptTimeout
 }
 
 // canRetry reports whether a request may be sent more than once: its method is always retried, or it

@@ -391,8 +391,9 @@ func TestRetryPolicy_PerAttemptTimeout_LastAttemptError(t *testing.T) {
 		}
 	})
 
-	svc, _ := newPolicyService(t, server.URL, nil,
-		&RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond})
+	// The timed-out attempt could be retried, so it is bounded; RetryOn then declines the retry.
+	svc, _ := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond,
+		RetryOn: func(*http.Response, error) bool { return false }})
 
 	resp, err := svc.Get(t.Context(), "test", nil)
 
@@ -402,6 +403,52 @@ func TestRetryPolicy_PerAttemptTimeout_LastAttemptError(t *testing.T) {
 
 	var urlErr *url.Error
 	require.ErrorAs(t, err, &urlErr, "the transport error naming the request must be kept")
+}
+
+func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
+	const slow = 200 * time.Millisecond
+
+	get := func(ctx context.Context, svc HTTP) (*http.Response, error) { return svc.Get(ctx, "test", nil) }
+	post := func(ctx context.Context, svc HTTP) (*http.Response, error) {
+		return svc.Post(ctx, "test", nil, []byte("{}"))
+	}
+
+	tests := []struct {
+		desc     string
+		policy   RetryPolicy
+		call     func(context.Context, HTTP) (*http.Response, error)
+		wantHits int32
+	}{
+		{desc: "a POST without an idempotency key is never retried, so it is not cut off",
+			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 50 * time.Millisecond}, call: post, wantHits: 1},
+		{desc: "a single-attempt policy is not cut off",
+			policy: RetryPolicy{MaxAttempts: 1, PerAttemptTimeout: 50 * time.Millisecond}, call: get, wantHits: 1},
+		{desc: "the last attempt is not cut off",
+			policy: RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond}, call: get, wantHits: 2},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Every attempt answers after slow, well past PerAttemptTimeout; only a bounded attempt is cut off.
+			server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, r *http.Request) {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(slow):
+				}
+
+				_, _ = io.WriteString(w, "done")
+			})
+
+			svc, _ := newPolicyService(t, server.URL, nil, &tc.policy)
+
+			resp, err := tc.call(t.Context(), svc)
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, "done", readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantHits, hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
 }
 
 func TestRetryPolicy_PerAttemptTimeout_CountedByInnerCircuitBreaker(t *testing.T) {
@@ -646,7 +693,7 @@ func TestRetryPolicy_Budget(t *testing.T) {
 
 	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable)
 	svc, rec := newPolicyService(t, server.URL, metrics,
-		&RetryPolicy{MaxAttempts: 3, Budget: &RetryBudget{Ratio: 0, MinPerSecond: 0}})
+		&RetryPolicy{MaxAttempts: 3, Budget: &RetryBudget{Ratio: 0.5}}) // 1 retry needs 2 first attempts
 
 	resp, err := svc.Get(t.Context(), "test", nil)
 	require.NoError(t, err)

@@ -276,8 +276,8 @@ a.AddHTTPService("orders", "https://orders.example.com",
 | `MaxRetryAfter` | `30s` | The longest `Retry-After` that is honored; a longer one is cut to this. |
 | `Methods` | `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, `QUERY` | Methods that are always retried. A request with any other method is sent once, unless it carries the idempotency key header. |
 | `IdempotencyKeyHeader` | `Idempotency-Key` | A request carrying this header with a non-empty value is retried whatever its method (for example a `POST`), since the server can use the key to drop the duplicate. |
-| `PerAttemptTimeout` | `0`: none | The longest one attempt may wait for the response headers. An attempt that takes longer is abandoned and retried. Reading the body of a successful response is not limited. |
-| `Budget` | `nil`: unlimited | Caps retries per service to `Ratio` × first attempts plus `MinPerSecond` per second, counted over `TTL` (default 10s). When the budget is spent, the last result is returned without retrying. |
+| `PerAttemptTimeout` | `0`: none | The longest one attempt may wait for the response headers. An attempt that takes longer is abandoned and retried. Reading the body of a successful response is not limited. An attempt that no retry can follow is not limited either: the last attempt, and every attempt of a request that is never retried (such as a `POST` without an idempotency key). Cutting such an attempt off would report a timeout for a request the server may still complete; only the caller's context bounds it. |
+| `Budget` | `nil`: unlimited | Caps retries per service to `Ratio` × first attempts plus `MinPerSecond` per second, counted over `TTL` (default 10s). When the budget is spent, the last result is returned without retrying. A budget with both `Ratio` and `MinPerSecond` left at `0`, such as `&service.RetryBudget{}`, uses `Ratio` 0.2 and `MinPerSecond` 10. To make no retries, set `MaxAttempts` to `1`. |
 
 How a call proceeds:
 
