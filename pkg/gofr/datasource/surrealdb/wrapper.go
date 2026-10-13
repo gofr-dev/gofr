@@ -12,6 +12,9 @@ type DBWrapper struct {
 	db *surrealdb.DB
 }
 
+// Ensure DBWrapper satisfies dbCloser so disconnect's type assertion keeps working at compile time.
+var _ dbCloser = (*DBWrapper)(nil)
+
 // NewDBWrapper creates a new wrapper around a surrealdb.DB instance.
 func NewDBWrapper(db *surrealdb.DB) *DBWrapper {
 	return &DBWrapper{db: db}
