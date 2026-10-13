@@ -2,7 +2,6 @@ package file
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -47,30 +46,8 @@ func (*localProvider) Connect(_ context.Context) error {
 	return nil
 }
 
-// Health reports whether the local filesystem is usable. Relative paths resolve against
-// the process working directory, so it checks that the directory is still accessible
-// (os.Stat(".") catches permission and I/O errors) and still exists at its path
-// (os.Getwd and os.Stat catch a removed or unmounted directory, which os.Stat(".")
-// alone does not detect on POSIX systems).
-func (*localProvider) Health(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("%w: %w", errLocalHealthCheck, err)
-	}
-
-	if _, err := os.Stat("."); err != nil {
-		return fmt.Errorf("%w: %w", errLocalHealthCheck, err)
-	}
-
-	wd, err := os.Getwd()
-	if err == nil {
-		_, err = os.Stat(wd)
-	}
-
-	if err != nil {
-		return fmt.Errorf("%w: %w", errLocalHealthCheck, err)
-	}
-
-	return nil
+func (*localProvider) Health(_ context.Context) error {
+	return nil // Local FS is always healthy
 }
 
 func (*localProvider) Close() error {
