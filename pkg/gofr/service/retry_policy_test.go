@@ -28,6 +28,11 @@ import (
 
 var errPolicyConnRefused = errors.New("dial tcp: connection refused")
 
+// safeRetryMethods are the methods that are safe to send twice, for tests of a RetryConfig that sets Methods.
+func safeRetryMethods() []string {
+	return []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodDelete, methodQuery}
+}
+
 func TestStandardRetryable(t *testing.T) {
 	tests := []struct {
 		desc   string
@@ -198,14 +203,14 @@ func statusSequence(t *testing.T, header http.Header, statuses ...int) (*httptes
 	})
 }
 
-func newPolicyService(t *testing.T, serverURL string, metrics Metrics, policy *RetryPolicy) (HTTP, *waitRecorder) {
+func newPolicyService(t *testing.T, serverURL string, metrics Metrics, cfg *RetryConfig) (HTTP, *waitRecorder) {
 	t.Helper()
 
 	svc := NewHTTPService(serverURL, logging.NewMockLogger(logging.DEBUG), metrics,
-		WithAttributes(map[string]string{"name": "svc"}), policy)
+		WithAttributes(map[string]string{"name": "svc"}), cfg)
 
 	rp, ok := svc.(*retryProvider)
-	require.True(t, ok, "RetryPolicy must wrap the service in a retryProvider")
+	require.True(t, ok, "RetryConfig must wrap the service in a retryProvider")
 
 	rec := &waitRecorder{}
 	rp.wait = rec.wait
@@ -224,43 +229,52 @@ func readBody(t *testing.T, resp *http.Response) string {
 	return string(b)
 }
 
-func TestRetryPolicy_RetryDecision(t *testing.T) {
+func TestRetryConfig_RetryDecision(t *testing.T) {
 	retryAfter1 := http.Header{"Retry-After": {"1"}}
 	retryAfter120 := http.Header{"Retry-After": {"120"}}
 
 	tests := []struct {
 		desc      string
-		policy    RetryPolicy
+		cfg       RetryConfig
 		header    http.Header
 		statuses  []int
 		wantCode  int
 		wantHits  int32
 		wantWaits []time.Duration
 	}{
-		{desc: "503 then 200", policy: RetryPolicy{MaxAttempts: 3},
+		{desc: "503 then 200", cfg: RetryConfig{MaxRetries: 2, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			statuses: []int{503, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{0}},
-		{desc: "backoff used for the wait", policy: RetryPolicy{MaxAttempts: 3, Backoff: ConstantBackoff{Delay: 20 * time.Millisecond}},
+		{desc: "backoff used for the wait",
+			cfg: RetryConfig{MaxRetries: 2, Backoff: ConstantBackoff{Delay: 20 * time.Millisecond},
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			statuses: []int{502, 504, 200}, wantCode: 200, wantHits: 3,
 			wantWaits: []time.Duration{20 * time.Millisecond, 20 * time.Millisecond}},
-		{desc: "MaxAttempts reached returns last response", policy: RetryPolicy{MaxAttempts: 3},
+		{desc: "MaxRetries exhausted returns last response",
+			cfg:      RetryConfig{MaxRetries: 2, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			statuses: []int{503}, wantCode: 503, wantHits: 3, wantWaits: []time.Duration{0, 0}},
-		{desc: "MaxAttempts 1 never retries", policy: RetryPolicy{MaxAttempts: 1},
+		{desc: "MaxRetries 0 never retries",
+			cfg:      RetryConfig{MaxRetries: 0, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			statuses: []int{503}, wantCode: 503, wantHits: 1},
-		{desc: "500 is not retried by the standard rule", policy: RetryPolicy{MaxAttempts: 3},
+		{desc: "500 is not retried by the standard rule",
+			cfg:      RetryConfig{MaxRetries: 2, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			statuses: []int{500, 200}, wantCode: 500, wantHits: 1},
 		{desc: "429 Retry-After honored over backoff",
-			policy: RetryPolicy{MaxAttempts: 2, RespectRetryAfter: true, Backoff: ConstantBackoff{Delay: time.Millisecond}},
+			cfg: RetryConfig{MaxRetries: 1, RespectRetryAfter: true, Backoff: ConstantBackoff{Delay: time.Millisecond},
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			header: retryAfter1, statuses: []int{429, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{time.Second}},
 		{desc: "Retry-After ignored unless RespectRetryAfter",
-			policy: RetryPolicy{MaxAttempts: 2, Backoff: ConstantBackoff{Delay: time.Millisecond}},
+			cfg: RetryConfig{MaxRetries: 1, Backoff: ConstantBackoff{Delay: time.Millisecond},
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			header: retryAfter1, statuses: []int{429, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{time.Millisecond}},
-		{desc: "Retry-After capped at the 30s default", policy: RetryPolicy{MaxAttempts: 2, RespectRetryAfter: true},
+		{desc: "Retry-After capped at the 30s default",
+			cfg:    RetryConfig{MaxRetries: 1, RespectRetryAfter: true, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			header: retryAfter120, statuses: []int{503, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{30 * time.Second}},
 		{desc: "Retry-After capped at MaxRetryAfter",
-			policy: RetryPolicy{MaxAttempts: 2, RespectRetryAfter: true, MaxRetryAfter: 5 * time.Second},
+			cfg: RetryConfig{MaxRetries: 1, RespectRetryAfter: true, MaxRetryAfter: 5 * time.Second,
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			header: retryAfter120, statuses: []int{503, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{5 * time.Second}},
 		{desc: "custom RetryOn overrides the standard rule",
-			policy: RetryPolicy{MaxAttempts: 3, RetryOn: func(r *http.Response, _ error) bool {
+			cfg: RetryConfig{MaxRetries: 2, Methods: safeRetryMethods(), RetryOn: func(r *http.Response, _ error) bool {
 				return r != nil && r.StatusCode == http.StatusInternalServerError
 			}},
 			statuses: []int{500, 503, 200}, wantCode: 503, wantHits: 2, wantWaits: []time.Duration{0}},
@@ -269,7 +283,7 @@ func TestRetryPolicy_RetryDecision(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			server, hits := statusSequence(t, tc.header, tc.statuses...)
-			svc, rec := newPolicyService(t, server.URL, nil, &tc.policy)
+			svc, rec := newPolicyService(t, server.URL, nil, &tc.cfg)
 
 			resp, err := svc.Get(t.Context(), "test", nil)
 			require.NoError(t, err)
@@ -282,7 +296,9 @@ func TestRetryPolicy_RetryDecision(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_Methods(t *testing.T) {
+// TestRetryConfig_Methods runs with the safe-method list unless a case names its own. A nil Methods
+// retries every method, which TestRetryConfig_ZeroValueFieldsKeepTodaysRule covers.
+func TestRetryConfig_Methods(t *testing.T) {
 	type call func(ctx context.Context, svc HTTP) (*http.Response, error)
 
 	tests := []struct {
@@ -327,6 +343,14 @@ func TestRetryPolicy_Methods(t *testing.T) {
 			call: func(ctx context.Context, s HTTP) (*http.Response, error) {
 				return s.GetWithHeaders(ctx, "x", nil, nil)
 			}},
+		{desc: "empty Methods sends GET once", methods: []string{}, wantHits: 1,
+			call: func(ctx context.Context, s HTTP) (*http.Response, error) {
+				return s.Get(ctx, "x", nil)
+			}},
+		{desc: "empty Methods retries POST with key", methods: []string{}, wantHits: 2,
+			call: func(ctx context.Context, s HTTP) (*http.Response, error) {
+				return s.PostWithHeaders(ctx, "x", nil, []byte(`{}`), map[string]string{"Idempotency-Key": "k1"})
+			}},
 		{desc: "custom Methods includes POST", methods: []string{"post"}, wantHits: 2,
 			call: func(ctx context.Context, s HTTP) (*http.Response, error) {
 				return s.Post(ctx, "x", nil, []byte(`{}`))
@@ -336,8 +360,14 @@ func TestRetryPolicy_Methods(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			server, hits := statusSequence(t, nil, http.StatusServiceUnavailable, http.StatusOK)
+
+			methods := tc.methods
+			if methods == nil {
+				methods = safeRetryMethods()
+			}
+
 			svc, _ := newPolicyService(t, server.URL, nil,
-				&RetryPolicy{MaxAttempts: 2, Methods: tc.methods, IdempotencyKeyHeader: tc.keyName})
+				&RetryConfig{MaxRetries: 1, Methods: methods, IdempotencyKeyHeader: tc.keyName, RetryOn: StandardRetryable})
 
 			resp, err := tc.call(t.Context(), svc)
 			require.NoError(t, err)
@@ -349,7 +379,16 @@ func TestRetryPolicy_Methods(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_PerAttemptTimeout(t *testing.T) {
+func TestRetryConfig_ResolveDefaults(t *testing.T) {
+	s := (&RetryConfig{MaxRetries: 2, IdempotencyKeyHeader: "x-request-id"}).resolve()
+
+	assert.Nil(t, s.methods, "nil Methods means every method is retried")
+	assert.Equal(t, 30*time.Second, s.maxRetryAfter)
+	assert.Equal(t, "X-Request-Id", s.idempotencyKeyHeader)
+	assert.Equal(t, "Idempotency-Key", (&RetryConfig{MaxRetries: 2, PerAttemptTimeout: time.Second}).resolve().idempotencyKeyHeader)
+}
+
+func TestRetryConfig_PerAttemptTimeout(t *testing.T) {
 	const body = "slow but complete body"
 
 	server, hits := scriptedServer(t, func(n int32, w http.ResponseWriter, r *http.Request) {
@@ -371,7 +410,7 @@ func TestRetryPolicy_PerAttemptTimeout(t *testing.T) {
 	})
 
 	svc, rec := newPolicyService(t, server.URL, nil,
-		&RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 100 * time.Millisecond})
+		&RetryConfig{MaxRetries: 1, PerAttemptTimeout: 100 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 	start := time.Now()
 	resp, err := svc.Get(t.Context(), "test", nil)
@@ -384,7 +423,7 @@ func TestRetryPolicy_PerAttemptTimeout(t *testing.T) {
 	assert.Less(t, time.Since(start), 3*time.Second, "the hung attempt must be abandoned, not waited out")
 }
 
-func TestRetryPolicy_PerAttemptTimeout_TimeoutError(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_TimeoutError(t *testing.T) {
 	server, _ := scriptedServer(t, func(_ int32, _ http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
@@ -394,7 +433,8 @@ func TestRetryPolicy_PerAttemptTimeout_TimeoutError(t *testing.T) {
 
 	// The timed-out attempt is cut off for a retry, but the caller cancels during the wait, so the
 	// timeout is what the caller gets.
-	svc, rec := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond})
+	svc, rec := newPolicyService(t, server.URL, nil,
+		&RetryConfig{MaxRetries: 1, PerAttemptTimeout: 50 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -411,26 +451,28 @@ func TestRetryPolicy_PerAttemptTimeout_TimeoutError(t *testing.T) {
 	require.ErrorAs(t, err, &urlErr, "the transport error naming the request must be kept")
 }
 
-// TestRetryPolicy_PerAttemptTimeout_NoRetryPossible covers attempts the per-attempt timer must leave
+// TestRetryConfig_PerAttemptTimeout_NoRetryPossible covers attempts the per-attempt timer must leave
 // running: when it fires, no retry could follow, so cutting the attempt off would only turn the
 // upstream's answer into a timeout.
-func TestRetryPolicy_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
 	const answerAfter = 250 * time.Millisecond
 
 	never := func(*http.Response, error) bool { return false }
 
 	tests := []struct {
 		desc     string
-		policy   RetryPolicy
+		cfg      RetryConfig
 		deadline time.Duration
 	}{
 		{desc: "the deadline leaves no room for another attempt",
-			policy:   RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 150 * time.Millisecond},
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 150 * time.Millisecond,
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			deadline: 280 * time.Millisecond},
 		{desc: "the budget is spent",
-			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 100 * time.Millisecond, Budget: &RetryBudget{Ratio: 0.1}}},
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 100 * time.Millisecond, Budget: &RetryBudget{Ratio: 0.1},
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()}},
 		{desc: "RetryOn does not retry a timeout",
-			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 100 * time.Millisecond, RetryOn: never}},
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 100 * time.Millisecond, RetryOn: never, Methods: safeRetryMethods()}},
 	}
 
 	for i, tc := range tests {
@@ -445,7 +487,7 @@ func TestRetryPolicy_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
 				_, _ = io.WriteString(w, "done")
 			})
 
-			svc, _ := newPolicyService(t, server.URL, nil, &tc.policy)
+			svc, _ := newPolicyService(t, server.URL, nil, &tc.cfg)
 
 			ctx := t.Context()
 
@@ -465,10 +507,10 @@ func TestRetryPolicy_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
 	}
 }
 
-// TestRetryPolicy_PerAttemptTimeout_PanickingRetryOn covers a RetryOn that panics on the nil response
+// TestRetryConfig_PerAttemptTimeout_PanickingRetryOn covers a RetryOn that panics on the nil response
 // of a timeout. The timer asks it on its own goroutine, where a panic would kill the process; it must
 // count as "no retry" there, so the attempt runs on and the caller's own goroutine sees what follows.
-func TestRetryPolicy_PerAttemptTimeout_PanickingRetryOn(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_PanickingRetryOn(t *testing.T) {
 	server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
@@ -479,7 +521,8 @@ func TestRetryPolicy_PerAttemptTimeout_PanickingRetryOn(t *testing.T) {
 		_, _ = io.WriteString(w, "done")
 	})
 
-	svc, _ := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 50 * time.Millisecond,
+	svc, _ := newPolicyService(t, server.URL, nil, &RetryConfig{MaxRetries: 2, PerAttemptTimeout: 50 * time.Millisecond,
+		Methods: safeRetryMethods(),
 		RetryOn: func(resp *http.Response, _ error) bool { return resp.StatusCode >= http.StatusInternalServerError }})
 
 	resp, err := svc.Get(t.Context(), "test", nil)
@@ -494,10 +537,11 @@ type hugeBackoff struct{}
 
 func (hugeBackoff) Next(int) time.Duration { return time.Duration(math.MaxInt64) }
 
-func TestRetryPolicy_HugeWaitDoesNotOverflowTheDeadlineCheck(t *testing.T) {
+func TestRetryConfig_HugeWaitDoesNotOverflowTheDeadlineCheck(t *testing.T) {
 	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable, http.StatusOK)
 	svc, rec := newPolicyService(t, server.URL, nil,
-		&RetryPolicy{MaxAttempts: 3, Backoff: hugeBackoff{}, PerAttemptTimeout: 100 * time.Millisecond})
+		&RetryConfig{MaxRetries: 2, Backoff: hugeBackoff{}, PerAttemptTimeout: 100 * time.Millisecond,
+			RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
@@ -511,9 +555,9 @@ func TestRetryPolicy_HugeWaitDoesNotOverflowTheDeadlineCheck(t *testing.T) {
 	assert.Empty(t, rec.recorded(), "a wait past the deadline must not be started")
 }
 
-// TestRetryPolicy_PerAttemptTimeout_BoundsBodyRead covers a retryable response whose body stalls: the
+// TestRetryConfig_PerAttemptTimeout_BoundsBodyRead covers a retryable response whose body stalls: the
 // read made before the retry must give up after PerAttemptTimeout instead of blocking the call.
-func TestRetryPolicy_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
 	tests := []struct {
 		desc    string
 		backoff Backoff
@@ -542,7 +586,8 @@ func TestRetryPolicy_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
 			})
 
 			svc, _ := newPolicyService(t, server.URL, nil,
-				&RetryPolicy{MaxAttempts: 3, Backoff: tc.backoff, PerAttemptTimeout: 100 * time.Millisecond})
+				&RetryConfig{MaxRetries: 2, Backoff: tc.backoff, PerAttemptTimeout: 100 * time.Millisecond,
+					RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 			start := time.Now()
 
@@ -587,7 +632,7 @@ func TestRetryConfig_MaxRetries(t *testing.T) {
 
 // TestRetryConfig_Metrics pins RetryConfig's metrics to today's shape: app_http_retry_count{service}
 // after each failed attempt past the first, nothing for a retry that succeeds, and none of
-// RetryPolicy's reason label, wait histogram or debug log.
+// the configured mode's reason label, wait histogram or debug log.
 func TestRetryConfig_Metrics(t *testing.T) {
 	tests := []struct {
 		desc      string
@@ -630,7 +675,7 @@ func TestRetryConfig_Metrics(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
 	const slow = 200 * time.Millisecond
 
 	get := func(ctx context.Context, svc HTTP) (*http.Response, error) { return svc.Get(ctx, "test", nil) }
@@ -640,16 +685,19 @@ func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
 
 	tests := []struct {
 		desc     string
-		policy   RetryPolicy
+		cfg      RetryConfig
 		call     func(context.Context, HTTP) (*http.Response, error)
 		wantHits int32
 	}{
 		{desc: "a POST without an idempotency key is never retried, so it is not cut off",
-			policy: RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: 50 * time.Millisecond}, call: post, wantHits: 1},
-		{desc: "a single-attempt policy is not cut off",
-			policy: RetryPolicy{MaxAttempts: 1, PerAttemptTimeout: 50 * time.Millisecond}, call: get, wantHits: 1},
+			cfg:  RetryConfig{MaxRetries: 2, PerAttemptTimeout: 50 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
+			call: post, wantHits: 1},
+		{desc: "a single-attempt config is not cut off",
+			cfg:  RetryConfig{MaxRetries: 0, PerAttemptTimeout: 50 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
+			call: get, wantHits: 1},
 		{desc: "the last attempt is not cut off",
-			policy: RetryPolicy{MaxAttempts: 2, PerAttemptTimeout: 50 * time.Millisecond}, call: get, wantHits: 2},
+			cfg:  RetryConfig{MaxRetries: 1, PerAttemptTimeout: 50 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
+			call: get, wantHits: 2},
 	}
 
 	for i, tc := range tests {
@@ -665,7 +713,7 @@ func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
 				_, _ = io.WriteString(w, "done")
 			})
 
-			svc, _ := newPolicyService(t, server.URL, nil, &tc.policy)
+			svc, _ := newPolicyService(t, server.URL, nil, &tc.cfg)
 
 			resp, err := tc.call(t.Context(), svc)
 
@@ -676,7 +724,7 @@ func TestRetryPolicy_PerAttemptTimeout_NotOnTerminalAttempt(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_PerAttemptTimeout_CountedByInnerCircuitBreaker(t *testing.T) {
+func TestRetryConfig_PerAttemptTimeout_CountedByInnerCircuitBreaker(t *testing.T) {
 	server, hits := scriptedServer(t, func(_ int32, _ http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
@@ -687,7 +735,7 @@ func TestRetryPolicy_PerAttemptTimeout_CountedByInnerCircuitBreaker(t *testing.T
 	// Breaker registered first, so it sits inside the retries, as the docs recommend.
 	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil,
 		&CircuitBreakerConfig{Threshold: 1, Interval: time.Hour},
-		&RetryPolicy{MaxAttempts: 5, PerAttemptTimeout: 50 * time.Millisecond})
+		&RetryConfig{MaxRetries: 4, PerAttemptTimeout: 50 * time.Millisecond, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 	svc.(*retryProvider).wait = (&waitRecorder{}).wait
 
 	resp, err := svc.Get(t.Context(), "test", nil)
@@ -697,12 +745,13 @@ func TestRetryPolicy_PerAttemptTimeout_CountedByInnerCircuitBreaker(t *testing.T
 	assert.Equal(t, int32(2), hits.Load(), "threshold 1 opens on the second failure; no attempt follows")
 }
 
-func TestRetryPolicy_CanceledWaitSpendsNoBudget(t *testing.T) {
+func TestRetryConfig_CanceledWaitSpendsNoBudget(t *testing.T) {
 	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable)
 
 	// The floor allows exactly one retry in the window.
 	svc, rec := newPolicyService(t, server.URL, nil,
-		&RetryPolicy{MaxAttempts: 2, Budget: &RetryBudget{MinPerSecond: 1, TTL: time.Second}})
+		&RetryConfig{MaxRetries: 1, Budget: &RetryBudget{MinPerSecond: 1, TTL: time.Second},
+			RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 	// First call: canceled during the wait, so no retry is made.
 	ctx, cancel := context.WithCancel(t.Context())
@@ -857,7 +906,7 @@ func (c *closeCounter) Close() error {
 	return nil
 }
 
-func TestRetryPolicy_ContextEnds(t *testing.T) {
+func TestRetryConfig_ContextEnds(t *testing.T) {
 	tests := []struct {
 		desc     string
 		timeout  time.Duration
@@ -871,7 +920,8 @@ func TestRetryPolicy_ContextEnds(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			server, hits := statusSequence(t, http.Header{"Retry-After": {"10"}}, http.StatusServiceUnavailable, http.StatusOK)
-			svc, rec := newPolicyService(t, server.URL, nil, &RetryPolicy{MaxAttempts: 3, RespectRetryAfter: true})
+			svc, rec := newPolicyService(t, server.URL, nil, &RetryConfig{MaxRetries: 2, RespectRetryAfter: true,
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 			ctx, cancel := context.WithCancel(t.Context())
 			if tc.timeout > 0 {
@@ -895,7 +945,7 @@ func TestRetryPolicy_ContextEnds(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_NoRetryWithoutTimeForAnAttempt(t *testing.T) {
+func TestRetryConfig_NoRetryWithoutTimeForAnAttempt(t *testing.T) {
 	tests := []struct {
 		desc       string
 		deadline   time.Duration
@@ -915,7 +965,7 @@ func TestRetryPolicy_NoRetryWithoutTimeForAnAttempt(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			server, hits := statusSequence(t, nil, http.StatusServiceUnavailable, http.StatusOK)
 			svc, _ := newPolicyService(t, server.URL, nil,
-				&RetryPolicy{MaxAttempts: 3, PerAttemptTimeout: tc.attemptMax})
+				&RetryConfig{MaxRetries: 2, PerAttemptTimeout: tc.attemptMax, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 			ctx, cancel := context.WithTimeout(t.Context(), tc.deadline)
 			defer cancel()
@@ -955,7 +1005,7 @@ func (f *fixedErrHTTP) Get(_ context.Context, _ string, _ map[string]any) (*http
 	return nil, f.err
 }
 
-func TestRetryPolicy_NeverRetried(t *testing.T) {
+func TestRetryConfig_NeverRetried(t *testing.T) {
 	always := func(*http.Response, error) bool { return true }
 
 	tests := []struct {
@@ -971,7 +1021,7 @@ func TestRetryPolicy_NeverRetried(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			inner := &fixedErrHTTP{err: tc.err}
-			svc := (&RetryPolicy{MaxAttempts: 3, RetryOn: always}).AddOption(inner)
+			svc := (&RetryConfig{MaxRetries: 2, RetryOn: always, Methods: safeRetryMethods()}).AddOption(inner)
 			svc.(*retryProvider).wait = (&waitRecorder{}).wait
 
 			resp, err := svc.Get(t.Context(), "x", nil)
@@ -983,9 +1033,9 @@ func TestRetryPolicy_NeverRetried(t *testing.T) {
 	}
 }
 
-func TestRetryPolicy_RateLimitErrorRetryAfter(t *testing.T) {
+func TestRetryConfig_RateLimitErrorRetryAfter(t *testing.T) {
 	inner := &fixedErrHTTP{err: &RateLimitError{ServiceKey: "svc", RetryAfter: 2 * time.Second}}
-	svc := (&RetryPolicy{MaxAttempts: 2, RespectRetryAfter: true}).AddOption(inner)
+	svc := (&RetryConfig{MaxRetries: 1, RespectRetryAfter: true, RetryOn: StandardRetryable, Methods: safeRetryMethods()}).AddOption(inner)
 	rec := &waitRecorder{}
 	svc.(*retryProvider).wait = rec.wait
 
@@ -999,7 +1049,7 @@ func TestRetryPolicy_RateLimitErrorRetryAfter(t *testing.T) {
 	assert.Equal(t, []time.Duration{2 * time.Second}, rec.recorded())
 }
 
-func TestRetryPolicy_Budget(t *testing.T) {
+func TestRetryConfig_Budget(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 
@@ -1009,8 +1059,9 @@ func TestRetryPolicy_Budget(t *testing.T) {
 	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_budget_exhausted_total", "service", "svc").Times(1)
 
 	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable)
+	// A Ratio of 0.5: 1 retry needs 2 first attempts.
 	svc, rec := newPolicyService(t, server.URL, metrics,
-		&RetryPolicy{MaxAttempts: 3, Budget: &RetryBudget{Ratio: 0.5}}) // 1 retry needs 2 first attempts
+		&RetryConfig{MaxRetries: 2, Budget: &RetryBudget{Ratio: 0.5}, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 	resp, err := svc.Get(t.Context(), "test", nil)
 	require.NoError(t, err)
@@ -1020,7 +1071,7 @@ func TestRetryPolicy_Budget(t *testing.T) {
 	assert.Empty(t, rec.recorded())
 }
 
-func TestRetryPolicy_Observability(t *testing.T) {
+func TestRetryConfig_Observability(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 
@@ -1042,7 +1093,8 @@ func TestRetryPolicy_Observability(t *testing.T) {
 	// The mock logger writes to the stdout it saw when it was built, so the service is built inside.
 	logs := testutil.StdoutOutputForFunc(func() {
 		svc, _ := newPolicyService(t, server.URL, metrics,
-			&RetryPolicy{MaxAttempts: 3, Backoff: ConstantBackoff{Delay: 10 * time.Millisecond}})
+			&RetryConfig{MaxRetries: 2, Backoff: ConstantBackoff{Delay: 10 * time.Millisecond},
+				RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
 		var err error
 

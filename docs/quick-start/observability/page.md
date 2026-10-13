@@ -232,7 +232,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 - app_http_retry_wait_seconds
 - histogram
-- Time waited before each retry of an HTTP service call made with `RetryPolicy`, in seconds
+- Time waited before each retry of an HTTP service call made with a `RetryConfig` that sets more than `MaxRetries`, in seconds
 
 ---
 

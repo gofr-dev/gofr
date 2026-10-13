@@ -12,7 +12,7 @@ const (
 	defaultRetryBudgetMinPerSecond = 10
 )
 
-// RetryBudget caps how many retries a RetryPolicy may make, as a share of the calls made to the service.
+// RetryBudget caps how many retries a RetryConfig may make, as a share of the calls made to the service.
 //
 // Over the last TTL, a retry is allowed while
 //
@@ -25,10 +25,10 @@ const (
 // the window and for MinPerSecond × TTL.
 //
 // A Ratio that is negative or NaN counts as 0. A budget with both Ratio and MinPerSecond 0 would allow
-// no retry at all, so it uses Ratio 0.2 and MinPerSecond 10 instead. To make no retries, set
-// RetryPolicy.MaxAttempts to 1.
+// no retry at all, so it uses Ratio 0.2 and MinPerSecond 10 instead. To make no retries, leave
+// RetryConfig.MaxRetries at 0.
 //
-// Each service a RetryPolicy is added to keeps its own counts; one RetryBudget value can be shared.
+// Each service a RetryConfig is added to keeps its own counts; one RetryBudget value can be shared.
 type RetryBudget struct {
 	// Ratio is the number of retries allowed per first attempt, e.g. 0.2.
 	Ratio float64

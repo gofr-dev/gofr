@@ -27,60 +27,20 @@ const (
 	retryReasonAttemptTimeout = "attempt_timeout"
 )
 
-// errAttemptTimeout is returned when an attempt abandoned by RetryPolicy.PerAttemptTimeout is not retried.
+// errAttemptTimeout is returned when an attempt abandoned by RetryConfig.PerAttemptTimeout is not retried.
 // It wraps context.DeadlineExceeded, so it reads as the timeout it is.
-var errAttemptTimeout = fmt.Errorf("attempt exceeded the retry policy's per-attempt timeout: %w", context.DeadlineExceeded)
-
-// RetryPolicy retries failed calls to an HTTP service, waiting between attempts and retrying only
-// requests that are safe to send twice. Unlike RetryConfig, it is meant for upstreams that can be
-// overloaded: it backs off, honors Retry-After, bounds each attempt, and can cap retries with a budget.
-//
-// Every field is optional; the zero value makes a single attempt.
-type RetryPolicy struct {
-	// MaxAttempts is the total number of attempts, including the first. 0 or 1 means no retry.
-	MaxAttempts int
-	// Backoff gives the wait before each retry. nil means no wait.
-	Backoff Backoff
-	// RetryOn decides whether an attempt's result is retried. nil means StandardRetryable.
-	// An open circuit breaker and the caller's own context ending are never retried, whatever it returns.
-	RetryOn func(*http.Response, error) bool
-	// RespectRetryAfter makes the policy wait for the server's Retry-After on a 429 or 503, and for
-	// RateLimitError.RetryAfter, instead of the backoff.
-	RespectRetryAfter bool
-	// MaxRetryAfter caps the honored Retry-After. Default 30s.
-	MaxRetryAfter time.Duration
-	// Methods are the methods that are always retried. Default GET, HEAD, OPTIONS, PUT, DELETE and QUERY.
-	Methods []string
-	// IdempotencyKeyHeader names the header that makes any other request, such as a POST, safe to retry.
-	// Default "Idempotency-Key".
-	IdempotencyKeyHeader string
-	// PerAttemptTimeout bounds how long one attempt waits for the response headers, so a hung attempt is
-	// given up for a retry. 0 means no bound. It never cuts off an attempt no retry would follow: the
-	// last one, any attempt of a request that may not be retried, and an attempt whose timer finds, when
-	// it fires, that RetryOn does not retry a timeout, the budget is spent, or the caller's deadline has
-	// no room for another attempt. Such an attempt runs until the upstream answers or the caller's
-	// context ends. Reading the body of the returned response is not bounded by it; reading a response
-	// before a retry is.
-	PerAttemptTimeout time.Duration
-	// Budget caps the retries made to the service. nil means unlimited.
-	Budget *RetryBudget
-}
-
-// AddOption wraps h so its calls are retried under the policy.
-func (p *RetryPolicy) AddOption(h HTTP) HTTP {
-	return newRetryProvider(h, p.resolve(), waitWithContext)
-}
+var errAttemptTimeout = fmt.Errorf("attempt exceeded the retry per-attempt timeout: %w", context.DeadlineExceeded)
 
 // debugLogger is the part of logging.Logger the retry layer uses. The service Logger only has Log.
 type debugLogger interface {
 	Debugf(format string, args ...any)
 }
 
-// retrySettings is a RetryPolicy with its defaults filled in, or RetryConfig's preset.
+// retrySettings is a RetryConfig with its defaults filled in.
 type retrySettings struct {
-	// legacy marks RetryConfig's preset. It keeps three of RetryConfig's ways that RetryPolicy does not
-	// share: app_http_retry_count{service} is counted after each failed attempt past the first, with no
-	// reason label, wait histogram, span event or log; ErrCircuitOpen is retried; and a retry is made
+	// legacy marks a RetryConfig that sets only MaxRetries. It keeps three ways such a RetryConfig has
+	// always had: app_http_retry_count{service} is counted after each failed attempt past the first, with
+	// no reason label, wait histogram, span event or log; ErrCircuitOpen is retried; and a retry is made
 	// whatever the caller's deadline leaves.
 	legacy               bool
 	maxAttempts          int
@@ -94,19 +54,26 @@ type retrySettings struct {
 	budget               *retryBudget
 }
 
-func (p *RetryPolicy) resolve() *retrySettings {
+// onlyMaxRetries reports whether every field besides MaxRetries is left at its zero value.
+func (r *RetryConfig) onlyMaxRetries() bool {
+	return r.Backoff == nil && r.RetryOn == nil && !r.RespectRetryAfter && r.MaxRetryAfter == 0 &&
+		r.Methods == nil && r.IdempotencyKeyHeader == "" && r.PerAttemptTimeout == 0 && r.Budget == nil
+}
+
+func (r *RetryConfig) resolve() *retrySettings {
 	s := &retrySettings{
-		maxAttempts:          max(p.MaxAttempts, 1),
-		backoff:              p.Backoff,
-		retryOn:              p.RetryOn,
-		respectRetryAfter:    p.RespectRetryAfter,
-		maxRetryAfter:        p.MaxRetryAfter,
-		idempotencyKeyHeader: http.CanonicalHeaderKey(p.IdempotencyKeyHeader),
-		perAttemptTimeout:    p.PerAttemptTimeout,
+		legacy:               r.onlyMaxRetries(),
+		maxAttempts:          min(max(r.MaxRetries, 0), math.MaxInt-1) + 1,
+		backoff:              r.Backoff,
+		retryOn:              r.RetryOn,
+		respectRetryAfter:    r.RespectRetryAfter,
+		maxRetryAfter:        r.MaxRetryAfter,
+		idempotencyKeyHeader: http.CanonicalHeaderKey(r.IdempotencyKeyHeader),
+		perAttemptTimeout:    r.PerAttemptTimeout,
 	}
 
 	if s.retryOn == nil {
-		s.retryOn = StandardRetryable
+		s.retryOn = legacyRetryable
 	}
 
 	if s.maxRetryAfter <= 0 {
@@ -117,18 +84,15 @@ func (p *RetryPolicy) resolve() *retrySettings {
 		s.idempotencyKeyHeader = defaultIdempotencyKeyHeader
 	}
 
-	methods := p.Methods
-	if methods == nil {
-		methods = []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodDelete, methodQuery}
+	if r.Methods != nil {
+		s.methods = make(map[string]struct{}, len(r.Methods))
+		for _, m := range r.Methods {
+			s.methods[strings.ToUpper(m)] = struct{}{}
+		}
 	}
 
-	s.methods = make(map[string]struct{}, len(methods))
-	for _, m := range methods {
-		s.methods[strings.ToUpper(m)] = struct{}{}
-	}
-
-	if p.Budget != nil {
-		s.budget = newRetryBudget(*p.Budget, time.Now)
+	if r.Budget != nil {
+		s.budget = newRetryBudget(*r.Budget, time.Now)
 	}
 
 	return s
@@ -158,8 +122,8 @@ func (s *retrySettings) canRetry(method string, headers map[string]string) bool 
 	return false
 }
 
-// retryable reports whether the result of an attempt is retried. RetryPolicy never retries an open
-// circuit breaker, whatever RetryOn returns.
+// retryable reports whether the result of an attempt is retried. Unless the RetryConfig sets only
+// MaxRetries, an open circuit breaker is never retried, whatever RetryOn returns.
 func (s *retrySettings) retryable(resp *http.Response, err error) bool {
 	if !s.legacy && errors.Is(err, ErrCircuitOpen) {
 		return false
@@ -311,9 +275,9 @@ func (b ExponentialBackoff) ceiling(attempt int) time.Duration {
 	return time.Duration(c)
 }
 
-// StandardRetryable is the default RetryPolicy.RetryOn. It retries network errors, a RateLimitError
-// from RateLimiterConfig, and the statuses 408, 429, 502, 503 and 504. It never retries 500, 501 or
-// 505, or an open circuit breaker. Any other error, including a timeout, counts as a network error; the
+// StandardRetryable is the RetryConfig.RetryOn for an upstream that can be overloaded. It retries
+// network errors, a RateLimitError from RateLimiterConfig, and the statuses 408, 429, 502, 503 and 504.
+// It never retries 500, 501 or 505, or an open circuit breaker. Any other error, including a timeout, counts as a network error; the
 // caller's own context ending is never retried, whatever RetryOn returns.
 //
 // A custom rule can build on it:

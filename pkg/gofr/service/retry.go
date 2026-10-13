@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -19,33 +18,70 @@ const (
 	retryBudgetExhaustedMetric = "app_http_retry_budget_exhausted_total"
 )
 
-// RetryConfig retries a failed call right away, up to MaxRetries times: any error, or a status above 500,
-// whatever the method. For backoff, Retry-After, retrying only safe requests, a per-attempt timeout or a
-// retry budget, use RetryPolicy.
+// RetryConfig retries failed calls to an HTTP service, up to MaxRetries times. With only MaxRetries set,
+// it retries right away on any error or a status above 500, whatever the method.
+//
+// The other fields are for upstreams that can be overloaded: they back off, honor Retry-After, retry only
+// requests that are safe to send twice, bound each attempt, and cap retries with a budget. Each one's
+// zero value keeps the behavior above, so they are independent: Backoff alone still replays a POST and
+// does not retry a 429. A safe setup also sets Methods and RetryOn: StandardRetryable.
+//
+// Setting any field besides MaxRetries also changes three things at once: each retry is counted in
+// app_http_retry_count with a reason label, its wait is recorded in app_http_retry_wait_seconds, and it
+// is added to the caller's span and logged at debug level (instead of app_http_retry_count{service}
+// being counted after each failed retry); an open circuit breaker is no longer retried; and a retry is
+// skipped when the caller's deadline has no room for it.
 type RetryConfig struct {
 	// MaxRetries is the number of retries after the first attempt. 0 or less makes a single attempt.
 	MaxRetries int
+	// Backoff gives the wait before each retry. nil means no wait.
+	Backoff Backoff
+	// RetryOn decides whether an attempt's result is retried. nil means any error, or a status above 500.
+	// StandardRetryable is the rule for an upstream that can be overloaded. Once any field besides
+	// MaxRetries is set, an open circuit breaker and the caller's own context ending are never retried,
+	// whatever it returns.
+	RetryOn func(*http.Response, error) bool
+	// RespectRetryAfter waits for the server's Retry-After on a 429 or 503, and for
+	// RateLimitError.RetryAfter, instead of the backoff.
+	RespectRetryAfter bool
+	// MaxRetryAfter caps the honored Retry-After. It is used only when RespectRetryAfter is set. Default 30s.
+	MaxRetryAfter time.Duration
+	// Methods are the methods that are always retried. nil means every method. When set, a request with
+	// any other method is sent once, unless it carries the idempotency key header; an empty, non-nil
+	// list retries only requests that carry it.
+	Methods []string
+	// IdempotencyKeyHeader names the header that makes any other request, such as a POST, safe to retry.
+	// It is used only when Methods is set. Default "Idempotency-Key".
+	IdempotencyKeyHeader string
+	// PerAttemptTimeout bounds how long one attempt waits for the response headers, so a hung attempt is
+	// given up for a retry. 0 means no bound. It never cuts off an attempt no retry would follow: the
+	// last one, any attempt of a request that may not be retried, and an attempt whose timer finds, when
+	// it fires, that RetryOn does not retry a timeout, the budget is spent, or the caller's deadline has
+	// no room for another attempt. Such an attempt runs until the upstream answers or the caller's
+	// context ends. Reading the body of the returned response is not bounded by it; reading a response
+	// before a retry is.
+	PerAttemptTimeout time.Duration
+	// Budget caps the retries made to the service. nil means unlimited.
+	Budget *RetryBudget
 }
 
 // AddOption wraps h so its calls are retried.
-//
-// RetryConfig runs on the same engine as RetryPolicy, preset to its own rule: every method, no wait, no
-// per-attempt timeout and no budget. It keeps its own metrics, described on retrySettings.legacy.
 func (r *RetryConfig) AddOption(h HTTP) HTTP {
-	return newRetryProvider(h, &retrySettings{
-		legacy:      true,
-		maxAttempts: min(max(r.MaxRetries, 0), math.MaxInt-1) + 1,
-		retryOn:     legacyRetryable,
-	}, noWait)
+	s := r.resolve()
+	if s.legacy {
+		return newRetryProvider(h, s, noWait)
+	}
+
+	return newRetryProvider(h, s, waitWithContext)
 }
 
-// legacyRetryable is RetryConfig's rule: any error, or a status above 500.
+// legacyRetryable is RetryConfig's default rule: any error, or a status above 500.
 func legacyRetryable(resp *http.Response, err error) bool {
 	return err != nil || resp.StatusCode > http.StatusInternalServerError
 }
 
-// noWait is RetryConfig's wait. It never fails, not even for a done context: the next attempt is then
-// made and is the last, which is what the caller has always been handed.
+// noWait is the wait of a RetryConfig with only MaxRetries set. It never fails, not even for a done
+// context: the next attempt is then made and is the last, which is what the caller has always been handed.
 func noWait(context.Context, time.Duration) error { return nil }
 
 func newRetryProvider(h HTTP, s *retrySettings, wait func(context.Context, time.Duration) error) *retryProvider {
@@ -68,7 +104,7 @@ func newRetryProvider(h HTTP, s *retrySettings, wait func(context.Context, time.
 	return rp
 }
 
-// retryProvider retries calls to the wrapped service under settings, from a RetryConfig or a RetryPolicy.
+// retryProvider retries calls to the wrapped service under settings resolved from a RetryConfig.
 type retryProvider struct {
 	settings    *retrySettings
 	wait        func(context.Context, time.Duration) error
@@ -324,7 +360,8 @@ func (rp *retryProvider) planRetry(ctx context.Context, attempt int, a attemptRe
 // timeout, one full attempt after it. A retry sent with a few milliseconds left would only swap the
 // response in hand for the caller's deadline error.
 //
-// RetryConfig makes no such check: it retries until the context is done, then makes one last attempt.
+// A RetryConfig with only MaxRetries set makes no such check: it retries until the context is done, then
+// makes one last attempt.
 func (rp *retryProvider) roomForRetry(ctx context.Context, wait time.Duration) bool {
 	deadline, ok := ctx.Deadline()
 	if rp.settings.legacy || !ok {
@@ -404,16 +441,16 @@ func (rp *retryProvider) budgetAllows(withdraw, count bool) bool {
 	return allowed
 }
 
-// countLegacyRetry counts attempt number attempt in RetryConfig's metric if it was a retry that failed.
-// The metric has no reason label, and a retry that succeeds is not counted.
+// countLegacyRetry counts attempt number attempt, for a RetryConfig with only MaxRetries set, if it was a
+// retry that failed. The metric has no reason label, and a retry that succeeds is not counted.
 func (rp *retryProvider) countLegacyRetry(attempt int, a attemptResult) {
 	if rp.settings.legacy && attempt > 1 && rp.metrics != nil && legacyRetryable(a.resp, a.err) {
 		rp.metrics.IncrementCounter(context.Background(), retryCountMetric, "service", rp.serviceName)
 	}
 }
 
-// recordRetry reports that retry number retry is about to be made, after waiting wait. RetryConfig
-// reports retries its own way, in doWithRetry.
+// recordRetry reports that retry number retry is about to be made, after waiting wait. A RetryConfig with
+// only MaxRetries set reports retries its own way, in countLegacyRetry.
 func (rp *retryProvider) recordRetry(ctx context.Context, retry int, reason string, wait time.Duration) {
 	if rp.settings.legacy {
 		return
