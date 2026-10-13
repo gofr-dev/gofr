@@ -863,7 +863,6 @@ func TestHandleAuthError(t *testing.T) {
 // mockLogger implements the datasource.Logger interface for testing.
 type mockLogger struct {
 	errorLogs []string
-	warnLogs  []string
 	infoLogs  []string // Capture actual log messages
 	logs      []string
 	infoArgs  []any // Capture structured log arguments (used for both Info and Debug)
@@ -895,10 +894,7 @@ func (m *mockLogger) Errorf(format string, args ...any) {
 
 func (m *mockLogger) Warn(_ ...any) { m.logs = append(m.logs, "WARN") }
 
-func (m *mockLogger) Warnf(format string, args ...any) {
-	m.logs = append(m.logs, "WARNF")
-	m.warnLogs = append(m.warnLogs, fmt.Sprintf(format, args...))
-}
+func (m *mockLogger) Warnf(_ string, _ ...any) { m.logs = append(m.logs, "WARNF") }
 
 func TestMiddleware_WithTracing(t *testing.T) {
 	t.Run("starts tracing when tracer is available", func(t *testing.T) {

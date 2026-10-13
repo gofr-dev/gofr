@@ -1,10 +1,9 @@
-package rbac
+package rbaccheck
 
 import (
 	"regexp"
 	"regexp/syntax"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -18,153 +17,6 @@ const freeVariablePattern = "[^/]+"
 // invalidPattern stands for the pattern of a segment mux would refuse. It does not compile, so the
 // segment covers nothing.
 const invalidPattern = "["
-
-// ReportRouteMismatches compares the config against the complete route table and logs every
-// mismatch it finds. routes are the routes the application registered and builtInRoutes the ones
-// GoFr registered itself, which need no rule but keep a rule written for them live. Each route is
-// "METHOD /template" in mux syntax, with "*" for a route registered without a method matcher; a
-// prefix route is passed with a trailing catch-all segment, as "/static/{path:.*}". It reports
-// whether any mismatch was logged as an error.
-//
-// It logs one line for each kind of mismatch, listing its entries as "METHOD path":
-//
-//   - a dead rule matches no route - usually a typo in its path, or a method the route does not
-//     register - so the route it was written for is unguarded. A dead public rule cannot leave a
-//     route unguarded, so it is only warned about.
-//   - an uncovered route is matched by no rule, so it is served without role checks.
-//   - a partly covered route is matched by rules for some of its requests but not all of them.
-//
-// Paths are compared as written, the way requests are matched: "/api/users/" and "/api/users" are
-// different paths. The dead-rule check is lenient - a rule is live if some request could match it
-// and a route - so that a live rule is never reported as dead. The coverage check is strict: a
-// rule covers a route only when the check can show that it matches every request the route
-// serves, and a route it cannot show that for is reported as partly covered.
-func (c *Config) ReportRouteMismatches(routes, builtInRoutes []string) bool {
-	rc := newRouteChecker()
-
-	rules := make([]routeEntry, len(c.rules))
-	for i := range c.rules {
-		rules[i] = rc.newEntry(c.rules[i].method, c.rules[i].pattern)
-	}
-
-	var (
-		live                 = make([]bool, len(rules))
-		uncovered, partial   []string
-		deadGuards, deadOpen []string
-	)
-
-	for _, route := range builtInRoutes {
-		entry := rc.parseEntry(route)
-		markLiveRules(rules, &entry, live)
-	}
-
-	for _, route := range routes {
-		entry := rc.parseEntry(route)
-
-		switch covering := classifyRoute(rules, &entry, live); {
-		case covering == nil:
-			uncovered = append(uncovered, entry.label)
-		case len(covering) > 0:
-			partial = append(partial, entry.label+" (by "+strings.Join(sortedUnique(covering), " and ")+")")
-		}
-	}
-
-	for i := range rules {
-		switch {
-		case live[i]:
-		case c.rules[i].isPublic:
-			deadOpen = append(deadOpen, rules[i].label)
-		default:
-			deadGuards = append(deadGuards, rules[i].label)
-		}
-	}
-
-	c.logRouteMismatches(sortedUnique(deadGuards), sortedUnique(deadOpen), sortedUnique(uncovered), sortedUnique(partial))
-
-	return len(deadGuards)+len(uncovered)+len(partial) > 0
-}
-
-// logRouteMismatches writes one line for each non-empty kind of mismatch.
-func (c *Config) logRouteMismatches(deadGuards, deadOpen, uncovered, partial []string) {
-	if c.Logger == nil {
-		return
-	}
-
-	if len(deadOpen) > 0 {
-		c.Logger.Warnf("RBAC: public rules match no registered route: %s", strings.Join(deadOpen, ", "))
-	}
-
-	if len(deadGuards) > 0 {
-		c.Logger.Errorf("RBAC route check failed: rules match no registered route: %s. These rules protect "+
-			"nothing; fix each rule's path or methods, or remove it.", strings.Join(deadGuards, ", "))
-	}
-
-	if len(uncovered) > 0 {
-		c.Logger.Errorf("RBAC route check failed: routes covered by no rule: %s. They are served without role "+
-			"checks; add a rule for each, with \"public\": true for a route meant to be open.", strings.Join(uncovered, ", "))
-	}
-
-	if len(partial) > 0 {
-		c.Logger.Errorf("RBAC route check failed: routes only partly covered: %s. Requests these rules do not "+
-			"match are served without role checks; add a rule that matches each route in full.", strings.Join(partial, ", "))
-	}
-}
-
-// classifyRoute marks every rule that overlaps route as live, and reports how route is covered: an
-// empty non-nil slice when some rule covers it, the labels of the rules that overlap it when none
-// does, and nil when no rule overlaps it.
-func classifyRoute(rules []routeEntry, route *routeEntry, live []bool) []string {
-	covered, overlapping := false, []string{}
-
-	for i := range rules {
-		if !rules[i].overlaps(route) {
-			continue
-		}
-
-		live[i] = true
-
-		switch {
-		case covered:
-		case rules[i].covers(route):
-			covered = true
-		default:
-			overlapping = append(overlapping, rules[i].label)
-		}
-	}
-
-	switch {
-	case covered:
-		return []string{}
-	case len(overlapping) == 0:
-		return nil
-	default:
-		return overlapping
-	}
-}
-
-// markLiveRules marks every rule that overlaps route as live.
-func markLiveRules(rules []routeEntry, route *routeEntry, live []bool) {
-	for i := range rules {
-		if !live[i] && rules[i].overlaps(route) {
-			live[i] = true
-		}
-	}
-}
-
-// sortedUnique sorts entries and drops repeats, in place.
-func sortedUnique(entries []string) []string {
-	sort.Strings(entries)
-
-	out := entries[:0]
-
-	for i, entry := range entries {
-		if i == 0 || entry != entries[i-1] {
-			out = append(out, entry)
-		}
-	}
-
-	return out
-}
 
 // routeChecker holds what one check shares across its comparisons: each distinct constraint is
 // compiled once, however many rules and routes carry it.
@@ -219,16 +71,6 @@ type pathSegment struct {
 	// re is constraint compiled and anchored, or nil for a free variable or one that does not
 	// compile.
 	re *regexp.Regexp
-}
-
-// parseEntry parses "METHOD path". A string with no space is a path with anyMethod.
-func (rc *routeChecker) parseEntry(s string) routeEntry {
-	method, path, found := strings.Cut(s, " ")
-	if !found {
-		method, path = anyMethod, s
-	}
-
-	return rc.newEntry(strings.ToUpper(method), path)
 }
 
 func (rc *routeChecker) newEntry(method, path string) routeEntry {
@@ -553,4 +395,33 @@ func (s *pathSegment) mayBeEmpty() bool {
 	default:
 		return s.re.MatchString("")
 	}
+}
+
+// splitPatternSegments splits a path pattern on "/", ignoring separators that sit inside a
+// "{name:regex}" constraint - "{path:[a-z/]+}" is one segment, not three. It is the rbac
+// resolver's split, repeated here because the resolver's is unexported.
+func splitPatternSegments(pattern string) []string {
+	var (
+		segments []string
+		depth    int
+		start    int
+	)
+
+	for i, r := range pattern {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case '/':
+			if depth == 0 {
+				segments = append(segments, pattern[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	return append(segments, pattern[start:])
 }

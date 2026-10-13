@@ -730,7 +730,9 @@ RBAC middleware implements industry-standard security practices to protect sensi
 **Traces (OpenTelemetry):**
 - ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
   `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
-  When the two disagree, the rule is broader or narrower than the route.
+  When the two disagree, the rule is broader or narrower than the route. `http.route` is
+  `<unmatched>` when no route matched, and for now also for an application route registered at `/`
+  (see the upgrade note below).
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)
@@ -745,6 +747,27 @@ RBAC middleware implements industry-standard security practices to protect sensi
 - ✅ HTTP method, route, status, and reason included
 - ❌ No authorization tokens, headers, or request bodies logged
 - ❌ No user IDs or personal information logged
+
+#### Upgrade note: `http.route` on the `rbac.authorize` span
+
+Earlier releases set `http.route` on the `rbac.authorize` span to the path of the RBAC rule that
+governed the request, or `<unmatched>` when no rule did. It is now the route the router matched, the
+same value as on the request's HTTP span, and the old value moved to the new `rbac.rule` attribute.
+
+The value of `http.route` changes in two cases:
+
+- **The rule is broader or narrower than the route.** A request to `GET /api/users/42` governed by
+  a rule for `/api/{path:.*}` was reported as `/api/{path:.*}` and is now `/api/users/{id}`.
+- **No rule matches the request.** It was reported as `<unmatched>` and is now the route template.
+
+Nothing fails when the value changes, so check every dashboard, alert or query that groups the
+`rbac.authorize` span by `http.route`: to keep grouping by rule, group by `rbac.rule` instead.
+
+One known gap: GoFr answers a request no route serves with a catch-all route whose template is `/`,
+the same template as an application route registered at `/`. The middleware cannot tell the two
+apart yet, so it reports both as `<unmatched>` rather than label every unmatched request as `/`.
+Requests to an application route at `/` are still authorized normally; only the span label is
+affected.
 
 ### What's Never Logged
 

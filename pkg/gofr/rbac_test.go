@@ -182,19 +182,37 @@ const rbacLeavingPingUncovered = `{"roleHeader":"X-User-Role",` +
 	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
 	`"endpoints":[{"path":"/.well-known/alive","methods":["GET"],"public":true},` + rbacPublicStatic + `]}`
 
+// rbacWithDeadPublicRule adds a public rule whose path matches no registered route.
+const rbacWithDeadPublicRule = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` +
+	`{"path":"/healthz","methods":["GET"],"public":true},` + rbacPublicStatic + `]}`
+
+// rbacPartlyCoveringItems guards GET /items/{id} only for numeric ids.
+const rbacPartlyCoveringItems = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` +
+	`{"path":"/items/{id:[0-9]+}","methods":["GET"],"requiredPermissions":["admin:read"]},` + rbacPublicStatic + `]}`
+
 // routeCheckFailed starts every ERROR line the route check writes.
 const routeCheckFailed = "RBAC route check failed"
 
-func TestApp_prepareHTTPServer(t *testing.T) {
-	tests := []struct {
-		desc        string
-		config      string
-		mode        string     // GOFR_RBAC_ROUTE_CHECK; empty leaves it unset
-		setup       func(*App) // extra registration before the check runs
-		wantLog     []string   // on stderr, where ERROR lines go
-		notLog      []string   // must not appear on stderr
-		wantOutcome startupOutcome
-	}{
+// prepareHTTPServerCase is one case of TestApp_prepareHTTPServer.
+type prepareHTTPServerCase struct {
+	desc        string
+	config      string
+	mode        string     // GOFR_RBAC_ROUTE_CHECK; empty leaves it unset
+	setup       func(*App) // extra registration before the check runs
+	wantLog     []string   // on stderr, where ERROR lines go
+	notLog      []string   // must not appear on stderr
+	wantWarn    []string   // on stdout, where WARN lines go
+	wantOutcome startupOutcome
+}
+
+func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
+	t.Helper()
+
+	return []prepareHTTPServerCase{
 		{
 			desc:   "rules that all match a route log nothing",
 			config: rbacGuardingPing,
@@ -248,6 +266,19 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			wantLog: []string{routeCheckFailed, "* /{path:.*}"},
 		},
 		{
+			desc:     "a dead public rule is a warning that does not stop startup",
+			config:   rbacWithDeadPublicRule,
+			mode:     "fail",
+			wantWarn: []string{"public rules match no registered route: GET /healthz"},
+			notLog:   []string{routeCheckFailed},
+		},
+		{
+			desc:    "a partly covered route is logged as an error",
+			config:  rbacPartlyCoveringItems,
+			setup:   func(a *App) { a.GET("/items/{id}", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "routes only partly covered", "GET /items/{id} (by GET /items/{id:[0-9]+})"},
+		},
+		{
 			desc:    "an application route under /.well-known is checked, GoFr's own are not",
 			config:  rbacGuardingPing,
 			setup:   func(a *App) { a.GET("/.well-known/custom", func(*Context) (any, error) { return "ok", nil }) },
@@ -255,8 +286,10 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			notLog:  []string{"/.well-known/health", "/.well-known/alive", "favicon.ico"},
 		},
 	}
+}
 
-	for i, tc := range tests {
+func TestApp_prepareHTTPServer(t *testing.T) {
+	for i, tc := range prepareHTTPServerCases(t) {
 		t.Run(tc.desc, func(t *testing.T) {
 			testutil.NewServerConfigs(t)
 
@@ -264,7 +297,7 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 				t.Setenv("GOFR_RBAC_ROUTE_CHECK", tc.mode)
 			}
 
-			outcome, stderr := runPrepareHTTPServer(t, tc.config, tc.setup)
+			outcome, stdout, stderr := runPrepareHTTPServer(t, tc.config, tc.setup)
 
 			assert.Equal(t, tc.wantOutcome, outcome, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -275,31 +308,38 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 			for _, unwanted := range tc.notLog {
 				assert.NotContains(t, stderr, unwanted, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
+
+			for _, want := range tc.wantWarn {
+				assert.Contains(t, stdout, want, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
 
 // runPrepareHTTPServer builds an app serving GET /ping with the RBAC config content, applies setup
-// when it is set, and runs prepareHTTPServer, returning its outcome and what it wrote to stderr.
-func runPrepareHTTPServer(t *testing.T, config string, setup func(*App)) (outcome startupOutcome, stderr string) {
+// when it is set, and runs prepareHTTPServer, returning its outcome and what it wrote to stdout and
+// stderr.
+func runPrepareHTTPServer(t *testing.T, config string, setup func(*App)) (outcome startupOutcome, stdout, stderr string) {
 	t.Helper()
 
 	path := writeRBACConfig(t, t.TempDir(), "rbac.json", config)
 
-	stderr = testutil.StderrOutputForFunc(func() {
-		a := New()
-		a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+	stdout = testutil.StdoutOutputForFunc(func() {
+		stderr = testutil.StderrOutputForFunc(func() {
+			a := New()
+			a.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 
-		if setup != nil {
-			setup(a)
-		}
+			if setup != nil {
+				setup(a)
+			}
 
-		require.NoError(t, a.EnableRBAC(path))
+			require.NoError(t, a.EnableRBAC(path))
 
-		outcome = a.prepareHTTPServer()
+			outcome = a.prepareHTTPServer()
+		})
 	})
 
-	return outcome, stderr
+	return outcome, stdout, stderr
 }
 
 // TestRun_RBACRouteCheckFailExitsNonZero checks that GOFR_RBAC_ROUTE_CHECK=fail reaches the

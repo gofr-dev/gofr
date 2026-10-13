@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/internal/rbaccheck"
 	"gofr.dev/pkg/gofr/rbac"
 )
 
@@ -105,11 +106,40 @@ func (a *App) rbacRouteCheckMode() string {
 	}
 }
 
-// rbacRouteCollector builds the route lists the RBAC route check reads, from the router walk
+// checkRBACRoutes runs the RBAC route check against the route table httpServerSetup collected, and
+// logs one line for each kind of mismatch it finds. It reports whether any mismatch can leave a
+// request served without role checks.
+func (a *App) checkRBACRoutes() bool {
+	m := rbaccheck.Check(a.rbacConfig.Endpoints, a.rbacRoutes)
+	logger := a.Logger()
+
+	if len(m.DeadPublicRules) > 0 {
+		logger.Warnf("RBAC: public rules match no registered route: %s", strings.Join(m.DeadPublicRules, ", "))
+	}
+
+	if len(m.DeadRules) > 0 {
+		logger.Errorf("RBAC route check failed: rules match no registered route: %s. These rules protect "+
+			"nothing; fix each rule's path or methods, or remove it.", strings.Join(m.DeadRules, ", "))
+	}
+
+	if len(m.Uncovered) > 0 {
+		logger.Errorf("RBAC route check failed: routes covered by no rule: %s. They are served without role "+
+			"checks; add a rule for each, with \"public\": true for a route meant to be open.", strings.Join(m.Uncovered, ", "))
+	}
+
+	if len(m.PartlyCovered) > 0 {
+		logger.Errorf("RBAC route check failed: routes only partly covered: %s. Requests these rules do not "+
+			"match are served without role checks; add a rule that matches each route in full.", strings.Join(m.PartlyCovered, ", "))
+	}
+
+	return m.Failed()
+}
+
+// rbacRouteCollector builds the route table the RBAC route check reads, from the router walk
 // httpServerSetup already makes. A disabled collector adds nothing.
 type rbacRouteCollector struct {
 	enabled bool
-	seen    map[string]bool
+	seen    map[rbaccheck.Route]bool
 
 	// builtInFrom and builtInTo bound, as positions in the router walk, the routes GoFr registers
 	// itself; walked is the position of the next route add sees. The routes are told apart by
@@ -117,11 +147,11 @@ type rbacRouteCollector struct {
 	// /.well-known/ is still checked.
 	builtInFrom, builtInTo, walked int
 
-	labels, builtInLabels []string
+	routes []rbaccheck.Route
 }
 
 func newRBACRouteCollector(enabled bool) *rbacRouteCollector {
-	return &rbacRouteCollector{enabled: enabled, seen: make(map[string]bool)}
+	return &rbacRouteCollector{enabled: enabled, seen: make(map[rbaccheck.Route]bool)}
 }
 
 // startBuiltIns marks the routes registered on router from now on as GoFr's own, until endBuiltIns.
@@ -160,9 +190,9 @@ func countRoutes(router *mux.Router) int {
 	return n
 }
 
-// add records route as one "METHOD /template" entry per method, "*" for a route with no method
-// matcher, among the built-in routes when it falls between startBuiltIns and endBuiltIns. A prefix
-// route gets a trailing catch-all segment, so that it stands for every path under the prefix.
+// add records route once per method, "*" for a route with no method matcher, as built in when it
+// falls between startBuiltIns and endBuiltIns. A prefix route gets a trailing catch-all segment, so
+// that it stands for every path under the prefix.
 // GoFr's PathPrefix("/") catch-all is left out: it answers 404 for every path no other route
 // serves, and would otherwise make every rule look live.
 func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
@@ -192,17 +222,12 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 	}
 
 	for _, method := range methods {
-		label := strings.ToUpper(method) + " " + tmpl
-		if c.seen[label] {
+		r := rbaccheck.Route{Method: strings.ToUpper(method), Path: tmpl, BuiltIn: builtIn}
+		if c.seen[r] {
 			continue
 		}
 
-		c.seen[label] = true
-
-		if builtIn {
-			c.builtInLabels = append(c.builtInLabels, label)
-		} else {
-			c.labels = append(c.labels, label)
-		}
+		c.seen[r] = true
+		c.routes = append(c.routes, r)
 	}
 }

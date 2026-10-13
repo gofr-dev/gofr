@@ -19,6 +19,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/rbaccheck"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -84,10 +85,9 @@ type App struct {
 	// complete route table. See prepareHTTPServer.
 	rbacConfig *rbac.Config
 
-	// rbacRoutes is the route table as the RBAC route check reads it, "METHOD /template" per entry,
-	// and rbacBuiltInRoutes the part of it GoFr registered itself. httpServerSetup fills both from
+	// rbacRoutes is the route table as the RBAC route check reads it. httpServerSetup fills it from
 	// the walk it already makes, and only when rbacConfig is set.
-	rbacRoutes, rbacBuiltInRoutes []string
+	rbacRoutes []rbaccheck.Route
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
 	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
@@ -277,7 +277,7 @@ func (a *App) httpServerSetup() {
 		return nil
 	})
 
-	a.rbacRoutes, a.rbacBuiltInRoutes = routes.labels, routes.builtInLabels
+	a.rbacRoutes = routes.routes
 
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
 }

@@ -316,7 +316,7 @@ func (a *App) prepareHTTPServer() startupOutcome {
 		return startupOK
 	}
 
-	if !a.rbacConfig.ReportRouteMismatches(a.rbacRoutes, a.rbacBuiltInRoutes) || mode != rbacRouteCheckFail {
+	if !a.checkRBACRoutes() || mode != rbacRouteCheckFail {
 		return startupOK
 	}
 
