@@ -266,9 +266,11 @@ func (rp *retryProvider) budgetAllows(withdraw bool) bool {
 		return true
 	}
 
-	allowed := b.allows()
+	var allowed bool
 	if withdraw {
 		allowed = b.tryWithdraw()
+	} else {
+		allowed = b.allows()
 	}
 
 	if !allowed && rp.metrics != nil {

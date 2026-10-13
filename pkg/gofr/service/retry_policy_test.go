@@ -501,6 +501,21 @@ func TestRetryPolicy_CanceledWaitSpendsNoBudget(t *testing.T) {
 	assert.Equal(t, int32(3), hits.Load(), "a canceled wait must not spend the budget")
 }
 
+func TestAttemptWithTimeout_ReleasesOnPanic(t *testing.T) {
+	var attemptCtx context.Context
+
+	require.Panics(t, func() {
+		//nolint:bodyclose // reqFunc panics, so no response is ever returned
+		_, _, _ = attemptWithTimeout(t.Context(), time.Hour, func(ctx context.Context) (*http.Response, error) {
+			attemptCtx = ctx
+
+			panic("request failed")
+		})
+	})
+
+	require.Error(t, attemptCtx.Err(), "a panicking attempt must not leave its context and timer running")
+}
+
 func TestDetachBody(t *testing.T) {
 	small := "busy"
 	large := strings.Repeat("x", discardedBodyLimit*3)

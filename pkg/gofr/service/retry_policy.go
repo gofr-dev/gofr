@@ -391,12 +391,25 @@ func attemptWithTimeout(ctx context.Context, timeout time.Duration,
 
 	timer := time.AfterFunc(timeout, func() { cancel(errAttemptTimeout) })
 
+	// The timer and context are released on every way out, a panic in reqFunc included, unless the
+	// response body takes them over.
+	release := true
+
+	defer func() {
+		if release {
+			timer.Stop()
+			cancel(nil)
+		}
+	}()
+
 	resp, err = reqFunc(attemptCtx)
 
 	// Stop reports false if the timer has already fired, perhaps just after the headers arrived. The
 	// response's body would then fail to read, so the attempt is treated as timed out either way.
 	if timer.Stop() && err == nil && resp != nil && resp.Body != nil {
+		release = false
 		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: func() { cancel(nil) }}
+
 		return resp, false, nil
 	}
 
@@ -408,15 +421,20 @@ func attemptWithTimeout(ctx context.Context, timeout time.Duration,
 
 	drainAndCloseResponse(resp)
 
-	// Keep the transport's error (a *url.Error naming the request) when there is one.
+	return nil, true, attemptTimeoutError(timeout, err)
+}
+
+// attemptTimeoutError is the error of an attempt the per-attempt timeout cut off. It keeps the
+// transport's error (a *url.Error naming the request) when there is one.
+func attemptTimeoutError(timeout time.Duration, err error) error {
 	switch {
 	case err == nil:
-		err = fmt.Errorf("%w (%v)", errAttemptTimeout, timeout)
+		return fmt.Errorf("%w (%v)", errAttemptTimeout, timeout)
 	case !errors.Is(err, errAttemptTimeout):
-		err = fmt.Errorf("%w (%v): %w", errAttemptTimeout, timeout, err)
+		return fmt.Errorf("%w (%v): %w", errAttemptTimeout, timeout, err)
+	default:
+		return err
 	}
-
-	return nil, true, err
 }
 
 // attemptContext is the context of one attempt. When the per-attempt timeout ends it, Err reports
