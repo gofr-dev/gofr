@@ -66,7 +66,7 @@ go get -u gofr.dev/pkg/gofr
 
 ## 🏃 **Running GoFr**
 
-Here's a simple example to get a GoFr application up and running:
+Here's a simple example to get a GoFr  application up and running :
 
 ```go
 package main
@@ -131,7 +131,7 @@ git clone https://github.com/gofr-dev/gofr.git
 git clone git@github.com:gofr-dev/gofr.git
 ```
 
-### 🎁 **Get a GoFr T-Shirt & Stickers!**
+### 🎁 **Get a GoFr T-Shirt & Stickers! **
 
 If your PR is merged, or if you contribute by writing articles or promoting GoFr, we invite you to fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your GoFr merchandise as a token of our appreciation! 
 
