@@ -152,11 +152,26 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 		l.enabler = e
 	}
 
+	// Resolved once, here, for the same reason as enabler: the embedded logger is
+	// assigned in New and never reassigned, so a per-request assertion would pay
+	// for a question whose answer cannot change.
+	if e, ok := base.(entryLogger); ok {
+		l.entries = e
+	}
+
 	if remoteConfigURL != "" {
 		go l.UpdateLogLevel()
 	}
 
 	return l
+}
+
+// entryLogger is the optional interface a logger implements when it can take an
+// already-built entry directly, without the one-element slice a variadic Log
+// allocates to carry it. It mirrors the middleware's own contract.
+type entryLogger interface {
+	LogEntry(any)
+	ErrorEntry(any)
 }
 
 // logEnabler is the optional interface a logger implements when it can report,
@@ -174,7 +189,41 @@ type remoteLogger struct {
 	// enabler is the embedded logger's LogEnabled, resolved once in New. nil
 	// when the embedded logger does not implement it.
 	enabler logEnabler
+	// entries is the embedded logger's single-value log path, resolved once in
+	// New. nil when the embedded logger does not implement it.
+	entries entryLogger
 	logging.Logger
+}
+
+// LogEntry forwards a single pre-built entry to the embedded logger's
+// allocation-free path, bypassing the slice a variadic Log allocates.
+//
+// Forwarding is safe with respect to the dynamic level: this type does not gate
+// on currentLevel, it PUSHES level changes down with ChangeLevel, and the
+// embedded logger applies them to its own atomic before deciding. So an entry
+// routed this way passes exactly the same gate as one routed through Log.
+//
+// An embedded logger without the fast path leaves entries nil and falls back to
+// Log, which is what every external Logger implementation will do.
+func (r *remoteLogger) LogEntry(entry any) {
+	if r.entries == nil {
+		r.Log(entry)
+
+		return
+	}
+
+	r.entries.LogEntry(entry)
+}
+
+// ErrorEntry forwards a single pre-built entry at ERROR, mirroring LogEntry.
+func (r *remoteLogger) ErrorEntry(entry any) {
+	if r.entries == nil {
+		r.Error(entry)
+
+		return
+	}
+
+	r.entries.ErrorEntry(entry)
 }
 
 // LogEnabled reports whether an entry written through Log survives the level
@@ -236,8 +285,25 @@ func (r *remoteLogger) UpdateLogLevel() {
 			r.currentLevel = newLevel
 			r.mu.Unlock()
 
-			logLevelChange(r, oldLevel, newLevel)
-			r.ChangeLevel(newLevel)
+			// Announce so the message always passes the gate. The gate is the
+			// level in force when the announcement is written (enabled: msg
+			// level >= current level), and the announcement is written at the
+			// higher endpoint of the transition.
+			//
+			// We order the announcement so the gate is the *lower* endpoint at
+			// the moment we write: when lowering, ChangeLevel first (gate
+			// becomes the new, lower level); when raising, announce first (gate
+			// is still the old, lower level). The higher endpoint always clears
+			// the lower gate, so no transition — including into or out of
+			// FATAL — is silently dropped, while transitions that already
+			// emitted keep the severity they had.
+			if newLevel < oldLevel {
+				r.ChangeLevel(newLevel)
+				logLevelChange(r, oldLevel, newLevel, oldLevel)
+			} else {
+				logLevelChange(r, oldLevel, newLevel, newLevel)
+				r.ChangeLevel(newLevel)
+			}
 		} else {
 			r.mu.Unlock()
 		}
@@ -255,19 +321,19 @@ func (r *remoteLogger) UpdateLogLevel() {
 	}
 }
 
-// Helper function to log level changes at appropriate level.
-func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
-	// Use the higher level to ensure visibility
-	logLevel := oldLevel
-	if newLevel > oldLevel {
-		logLevel = newLevel
-	}
-
+// logLevelChange announces a remote level change. announceLevel is the level to
+// emit the announcement at, chosen by the caller (the higher endpoint of the
+// transition) so it passes the gate in force at the moment of the call (see
+// UpdateLogLevel). A FATAL announceLevel arises for X -> FATAL transitions and
+// is emitted via Errorf: it is the most severe level that is still guaranteed
+// to be visible, and it avoids routing through Fatalf (which would exit the
+// process).
+func logLevelChange(r *remoteLogger, oldLevel, newLevel, announceLevel logging.Level) {
 	message := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
 
-	switch logLevel {
+	switch announceLevel {
 	case logging.FATAL:
-		r.Warnf("%s", message)
+		r.Errorf("%s", message)
 	case logging.ERROR:
 		r.Errorf("%s", message)
 	case logging.WARN:
