@@ -457,12 +457,12 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 	mockStructSlice := make([]testStruct, 0)
 
 	testCases := []struct {
-		desc      string
-		batchName string
-		dest      any
-		mockCall  func()
-		expRes    any
-		expErr    error
+		desc       string
+		batchName  string
+		dest       any
+		mockCall   func()
+		expApplied bool
+		expErr     error
 	}{
 		{
 			desc:      "success case: batch found and executed",
@@ -470,21 +470,21 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(nil).Times(1)
+				mockDeps.mockSession.EXPECT().executeBatchCAS(mockDeps.mockBatch, gomock.Any()).Return(true, nil).Times(1)
 			},
-			expRes: &mockStructSlice,
-			expErr: nil,
+			expApplied: true,
+			expErr:     nil,
 		},
 		{
-			desc:      "failure case: executeBatch returns error",
+			desc:      "failure case: executeBatchCAS returns error",
 			batchName: mockBatchName,
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(assert.AnError).Times(1)
+				mockDeps.mockSession.EXPECT().executeBatchCAS(mockDeps.mockBatch, gomock.Any()).Return(false, assert.AnError).Times(1)
 			},
-			expRes: &mockStructSlice,
-			expErr: assert.AnError,
+			expApplied: false,
+			expErr:     assert.AnError,
 		},
 		{
 			desc:      "failure case: batch not initialized",
@@ -495,8 +495,8 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 
 				client.scylla.batches = nil
 			},
-			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialized,
+			expApplied: false,
+			expErr:     errBatchNotInitialized,
 		},
 	}
 
@@ -504,9 +504,9 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 		tc.mockCall()
 
 		ctx := context.Background()
-		err := client.ExecuteBatchWithCtx(ctx, tc.batchName)
+		applied, err := client.ExecuteBatchCASWithCtx(ctx, tc.batchName, tc.dest)
 
-		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed: %s", i, tc.desc)
+		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed: %s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed: %s", i, tc.desc)
 	}
 }
