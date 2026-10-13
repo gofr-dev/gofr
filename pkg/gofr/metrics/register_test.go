@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -386,4 +388,30 @@ func testMeter(tb testing.TB, appName, appVersion string) metric.Meter {
 	tb.Cleanup(func() { _ = shutdown(context.Background()) })
 
 	return meter
+}
+
+// Test_IncrementCounterNotRegistered_LogsMetricName guards the message a caller sees when a
+// metric was never registered. The concrete logger stores a single argument in the `message`
+// field and JSON-encodes it, so handing it the error struct leaves `"message":{}` and hides
+// which metric was wrong. The site must pass the error text instead.
+func Test_IncrementCounterNotRegistered_LogsMetricName(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "gofr.log")
+	logger := logging.NewFileLogger(logPath)
+
+	metrics := NewMetricsManager(testMeter(t, "testing-app", "v1.0.0"), logger)
+	metrics.IncrementCounter(t.Context(), "rbac_role_extraction_failures")
+
+	if c, ok := logger.(interface{ Close() error }); ok {
+		_ = c.Close()
+	}
+
+	contents, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+
+	got := string(contents)
+
+	assert.Contains(t, got, "Metrics rbac_role_extraction_failures is not registered",
+		"the log must name the metric that was not registered")
+	assert.NotContains(t, got, `"message":{}`,
+		"the error must not be marshalled to an empty JSON object")
 }

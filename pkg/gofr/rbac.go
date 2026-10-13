@@ -59,6 +59,15 @@ func (a *App) enableRBAC(configPath ...string) error {
 	metrics := a.Metrics()
 	tracer := otel.GetTracerProvider().Tracer("gofr-rbac")
 
+	// Register the counter the RBAC middleware increments when a request carries no
+	// readable role. It has to be registered when RBAC is enabled, exactly as the
+	// GraphQL, gRPC and cron metrics are registered when their feature is added.
+	// Without it IncrementCounter finds no such metric, logs a "not registered"
+	// error for every request that has no readable role, and the counter never
+	// reaches the metrics endpoint.
+	metrics.NewCounter("rbac_role_extraction_failures",
+		"Number of requests where the RBAC role could not be extracted from the request.")
+
 	// Load configuration directly with dependencies
 	config, err := rbac.LoadPermissions(path, logger, metrics, tracer)
 	if err != nil {
