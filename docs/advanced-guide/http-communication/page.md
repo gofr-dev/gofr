@@ -244,7 +244,8 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
-- Low rates: `Requests` is counted per `Window` and may work out to less than one request per second (for example, `Requests: 5, Window: time.Minute` refills one token every 12 seconds). A zero, negative, NaN or `+Inf` `Requests` is treated as invalid and falls back to the default of 60 requests per window. This differs from the server-side rate limiter middleware, where `+Inf` means unlimited.
+- Low rates: `Requests` is counted per `Window` and may work out to less than one request per second. With the in-memory store, `Requests: 5, Window: time.Minute` refills one token every 12 seconds. The Redis store does not handle such rates correctly yet: it only adds whole tokens on each call, so a caller that calls more often than once per refill interval (here, every 12 seconds) gets no tokens back after the first burst.
+- Invalid rates: a zero, negative, NaN, `+Inf` or too large (`math.MaxInt` or more) `Requests` is treated as invalid and falls back to the default of 60 requests per window, and a zero or negative `Window` falls back to one minute. This differs from the server-side rate limiter middleware, where `+Inf` means unlimited.
 
 ### File-Based Token Authentication
 
