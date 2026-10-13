@@ -326,7 +326,7 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		var name string
 
 		f := v.Type().Field(i)
-		tag := f.Tag.Get("db")
+		tag := f.Tag.Get(dbStructTag)
 
 		if tag != "" {
 			name = tag

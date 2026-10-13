@@ -114,7 +114,7 @@ func DGraphInsertHandler(c *gofr.Context) (any, error) {
 	// Create an api.Mutation object
 	mutation := &api.Mutation{
 		SetJson:   []byte(mutationData), // Set the JSON payload
-		CommitNow: true,                 // Auto-commit the transaction
+		CommitNow: true,                 // Optional: commits within the mutation RPC. Mutate commits either way.
 	}
 
 	// Run the mutation in Dgraph

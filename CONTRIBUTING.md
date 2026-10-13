@@ -114,6 +114,12 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 * No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
 * Exported functions must have an associated godoc.
+* New integrations — a datasource, a message broker, an external service — ship as their own Go
+  module, not in core. The `gofr_no*` build tags are **not** the pattern to follow: they exist only
+  for subsystems that were already compiled into core before the module pattern, where moving them
+  out would change import paths and setup calls for every existing user. A new integration has no
+  such users, so there is nothing to break, and it stays out of everyone else's binary by default.
+  A PR proposing a new `gofr_no*` tag should almost always be a module instead.
 * Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is

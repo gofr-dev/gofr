@@ -339,7 +339,7 @@ func TestElasticsearchMigrator_commitMigration_Success(t *testing.T) {
 		UsedDatasources: map[string]bool{dsElasticsearch: true},
 	}
 
-	err := mg.commitMigration(mockContainer, data)
+	err := mg.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -359,7 +359,7 @@ func TestElasticsearchMigrator_commitMigration_Failure(t *testing.T) {
 		UsedDatasources: map[string]bool{dsElasticsearch: true},
 	}
 
-	err := mg.commitMigration(mockContainer, data)
+	err := mg.commitMigration(mockContainer, &data)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to record migration")
 }
@@ -384,9 +384,9 @@ func TestElasticsearchMigrator_commitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
 
@@ -483,12 +483,12 @@ func TestElasticsearchMigrator_Delegation(t *testing.T) {
 	m := elasticsearchMigrator{migrator: mockMigrator}
 	data := transactionData{MigrationNumber: 4}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 	mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(4))
 	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(assert.AnError)
 	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(assert.AnError)
 
-	m.rollback(mockContainer, data)
+	m.rollback(mockContainer, &data)
 
 	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), assert.AnError)
 	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), assert.AnError)
