@@ -195,8 +195,8 @@ type migrator interface {
 
 	beginTransaction(c *container.Container) transactionData
 
-	commitMigration(c *container.Container, data transactionData) error
-	rollback(c *container.Container, data transactionData)
+	commitMigration(c *container.Container, data *transactionData) error
+	rollback(c *container.Container, data *transactionData)
 
 	locker
 }

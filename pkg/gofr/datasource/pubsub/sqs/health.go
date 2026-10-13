@@ -15,7 +15,7 @@ const healthCheckTimeout = 5 * time.Second
 func (c *Client) Health() datasource.Health {
 	health := datasource.Health{
 		Details: map[string]any{
-			"backend": "SQS",
+			"backend": backendName,
 			"region":  c.cfg.Region,
 		},
 	}
