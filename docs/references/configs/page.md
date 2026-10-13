@@ -344,6 +344,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  0 (unlimited)
 ---
 
+-  DB_CONNECT_TIMEOUT
+-  Timeout in whole seconds for establishing a database connection (MySQL, PostgreSQL, Supabase and CockroachDB; SQLite is unaffected). A host that accepts the connection but never answers fails the attempt after this long instead of blocking. An invalid or non-positive value logs a warning and uses the default.
+-  10
+
+---
+
 -  DB_SSL_MODE
 -  TLS/SSL mode for database connections. Supported modes: **disable** (no TLS), **preferred** (attempts TLS, falls back to plain), **require** (enforces TLS, skips validation), **skip-verify** (enforces TLS, no certificate validation), **verify-ca** (enforces TLS, validates certificate against CA), **verify-full** (enforces TLS with full validation including hostname). Currently supported for MySQL/MariaDB and PostgreSQL.
 -  disable
