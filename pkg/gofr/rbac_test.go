@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -194,6 +195,13 @@ const rbacPartlyCoveringItems = `{"roleHeader":"X-User-Role",` +
 	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` +
 	`{"path":"/items/{id:[0-9]+}","methods":["GET"],"requiredPermissions":["admin:read"]},` + rbacPublicStatic + `]}`
 
+// rbacGuardingPingAndAdminWithTypo guards GET /ping and GET /admin, and holds a rule with a typo.
+const rbacGuardingPingAndAdminWithTypo = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/ping","methods":["GET"],"requiredPermissions":["admin:read"]},` +
+	`{"path":"/admin","methods":["GET"],"requiredPermissions":["admin:read"]},` +
+	`{"path":"/amdin/{id}","methods":["GET"],"requiredPermissions":["admin:read"]},` + rbacPublicStatic + `]}`
+
 // routeCheckFailed starts every ERROR line the route check writes.
 const routeCheckFailed = "RBAC route check failed"
 
@@ -201,6 +209,7 @@ const routeCheckFailed = "RBAC route check failed"
 type prepareHTTPServerCase struct {
 	desc        string
 	config      string
+	second      string     // a second config passed to EnableRBAC after config; empty installs one
 	mode        string     // GOFR_RBAC_ROUTE_CHECK; empty leaves it unset
 	setup       func(*App) // extra registration before the check runs
 	wantLog     []string   // on stderr, where ERROR lines go
@@ -266,6 +275,22 @@ func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 			wantLog: []string{routeCheckFailed, "* /{path:.*}"},
 		},
 		{
+			desc:    "with two configs, a route one of them guards is not reported, and a dead rule in the first is",
+			config:  rbacGuardingPingAndAdminWithTypo,
+			second:  rbacGuardingPing,
+			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "config 1: GET /amdin/{id}"},
+			notLog:  []string{"routes covered by no rule", "routes only partly covered", "GET /admin", "config 2"},
+		},
+		{
+			desc:    "with two configs, a route neither guards is reported",
+			config:  rbacGuardingPing,
+			second:  rbacGuardingPing,
+			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "routes covered by no rule: GET /admin"},
+			notLog:  []string{"rules match no registered route"},
+		},
+		{
 			desc:     "a dead public rule is a warning that does not stop startup",
 			config:   rbacWithDeadPublicRule,
 			mode:     "fail",
@@ -297,7 +322,7 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 				t.Setenv("GOFR_RBAC_ROUTE_CHECK", tc.mode)
 			}
 
-			outcome, stdout, stderr := runPrepareHTTPServer(t, tc.config, tc.setup)
+			outcome, stdout, stderr := runPrepareHTTPServer(t, []string{tc.config, tc.second}, tc.setup)
 
 			assert.Equal(t, tc.wantOutcome, outcome, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -319,10 +344,16 @@ func TestApp_prepareHTTPServer(t *testing.T) {
 // runPrepareHTTPServer builds an app serving GET /ping with the RBAC config content, applies setup
 // when it is set, and runs prepareHTTPServer, returning its outcome and what it wrote to stdout and
 // stderr.
-func runPrepareHTTPServer(t *testing.T, config string, setup func(*App)) (outcome startupOutcome, stdout, stderr string) {
+func runPrepareHTTPServer(t *testing.T, configs []string, setup func(*App)) (outcome startupOutcome, stdout, stderr string) {
 	t.Helper()
 
-	path := writeRBACConfig(t, t.TempDir(), "rbac.json", config)
+	var paths []string
+
+	for i, config := range configs {
+		if config != "" {
+			paths = append(paths, writeRBACConfig(t, t.TempDir(), fmt.Sprintf("rbac%d.json", i), config))
+		}
+	}
 
 	stdout = testutil.StdoutOutputForFunc(func() {
 		stderr = testutil.StderrOutputForFunc(func() {
@@ -333,7 +364,9 @@ func runPrepareHTTPServer(t *testing.T, config string, setup func(*App)) (outcom
 				setup(a)
 			}
 
-			require.NoError(t, a.EnableRBAC(path))
+			for _, path := range paths {
+				require.NoError(t, a.EnableRBAC(path))
+			}
 
 			outcome = a.prepareHTTPServer()
 		})

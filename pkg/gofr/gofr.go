@@ -82,12 +82,13 @@ type App struct {
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
 
-	// rbacConfig is the RBAC config installed by EnableRBAC, kept so Run can check it against the
-	// complete route table. See prepareHTTPServer.
-	rbacConfig *rbac.Config
+	// rbacConfigs holds every RBAC config installed by EnableRBAC, in order, kept so Run can check
+	// them against the complete route table. Each call installs a middleware that enforces its own
+	// config, so all of them are checked. See prepareHTTPServer.
+	rbacConfigs []*rbac.Config
 
 	// rbacRoutes is the route table as the RBAC route check reads it. httpServerSetup fills it from
-	// the walk it already makes, and only when rbacConfig is set.
+	// the walk it already makes, and only when rbacConfigs is set.
 	rbacRoutes []rbaccheck.Route
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
@@ -231,7 +232,7 @@ func (a *App) httpServerSetup() {
 		}
 	}
 
-	routes := newRBACRouteCollector(a.rbacConfig != nil)
+	routes := newRBACRouteCollector(len(a.rbacConfigs) > 0)
 
 	// Register default routes - these are only added when HTTP server is actually starting
 	routes.startBuiltIns(&a.httpServer.router.Router)

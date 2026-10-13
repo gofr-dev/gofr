@@ -208,6 +208,57 @@ func TestCheck(t *testing.T) {
 	}
 }
 
+func TestCheckAll(t *testing.T) {
+	static := []rbac.EndpointMapping{guard("/static", "*"), guard("/static/{path:.*}", "*")}
+	numeric := guard("/api/users/{id:[0-9]+}", http.MethodGet)
+
+	testCases := []struct {
+		desc    string
+		configs [][]rbac.EndpointMapping
+		want    Mismatches
+	}{
+		{
+			desc:    "one config is checked as Check does",
+			configs: [][]rbac.EndpointMapping{coveringRules()},
+		},
+		{
+			desc: "a route one config covers is not reported for the other",
+			configs: [][]rbac.EndpointMapping{
+				coveringRules(),
+				append([]rbac.EndpointMapping{guard("/api/users", http.MethodGet)}, static...),
+			},
+			want: Mismatches{},
+		},
+		{
+			desc: "a route no config covers is uncovered, and a dead rule is numbered by config",
+			configs: [][]rbac.EndpointMapping{
+				append([]rbac.EndpointMapping{guard("/api/users", "*"), guard("/api/users/{id}", "*"), guard("/api/user", http.MethodGet)}, static...),
+				append([]rbac.EndpointMapping{guard("/api/users", http.MethodGet)}, static...),
+			},
+			want: Mismatches{DeadRules: []string{"config 1: GET /api/user"}, Uncovered: []string{"GET /api/posts"}},
+		},
+		{
+			desc: "a route only partly covered by every config is partly covered",
+			configs: [][]rbac.EndpointMapping{
+				append([]rbac.EndpointMapping{guard("/api/users", "*"), guard("/api/posts", "*"), numeric}, static...),
+				append([]rbac.EndpointMapping{guard("/api/posts", "*"), numeric}, static...),
+			},
+			want: Mismatches{
+				Uncovered:     []string{"DELETE /api/users/{id}"},
+				PartlyCovered: []string{"GET /api/users/{id} (by GET /api/users/{id:[0-9]+})"},
+			},
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := CheckAll(tc.configs, coverageRoutes())
+
+			assert.Equal(t, tc.want, got, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
 func TestMismatches_Failed(t *testing.T) {
 	testCases := []struct {
 		desc       string

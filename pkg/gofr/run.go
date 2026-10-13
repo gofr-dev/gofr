@@ -307,7 +307,7 @@ func (a *App) prepareHTTPServer() startupOutcome {
 
 	a.httpServerSetup()
 
-	if a.rbacConfig == nil {
+	if len(a.rbacConfigs) == 0 {
 		return startupOK
 	}
 

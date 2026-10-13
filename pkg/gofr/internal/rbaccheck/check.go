@@ -5,6 +5,7 @@
 package rbaccheck
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -104,6 +105,77 @@ func Check(endpoints []rbac.EndpointMapping, routes []Route) Mismatches {
 	m.PartlyCovered = sortedUnique(m.PartlyCovered)
 
 	return m
+}
+
+// CheckAll checks every config an app installed, in the order they were installed. Each installed
+// config enforces its own rules on every request, so a route is served without role checks only
+// when no config has a rule that covers it: a route is reported as uncovered when every config
+// leaves it uncovered, and as partly covered when no config covers it in full. A dead rule is
+// reported for each config that holds it, with the config's number once there is more than one.
+func CheckAll(configs [][]rbac.EndpointMapping, routes []Route) Mismatches {
+	results := make([]Mismatches, len(configs))
+	for i := range configs {
+		results[i] = Check(configs[i], routes)
+	}
+
+	if len(results) == 1 {
+		return results[0]
+	}
+
+	var m Mismatches
+
+	for i := range results {
+		for _, d := range results[i].DeadRules {
+			m.DeadRules = append(m.DeadRules, fmt.Sprintf("config %d: %s", i+1, d))
+		}
+
+		for _, d := range results[i].DeadPublicRules {
+			m.DeadPublicRules = append(m.DeadPublicRules, fmt.Sprintf("config %d: %s", i+1, d))
+		}
+	}
+
+	m.Uncovered, m.PartlyCovered = commonGaps(results)
+	m.DeadRules = sortedUnique(m.DeadRules)
+	m.DeadPublicRules = sortedUnique(m.DeadPublicRules)
+
+	return m
+}
+
+// commonGaps returns the routes no config covers in full: uncovered when every config leaves them
+// uncovered, partly covered otherwise.
+func commonGaps(results []Mismatches) (uncovered, partlyCovered []string) {
+	// A route a config lists in neither Uncovered nor PartlyCovered is covered by it in full.
+	gaps := make(map[string]int)      // route -> configs that do not cover it in full
+	partly := make(map[string]string) // route -> first PartlyCovered entry naming its rules
+	unc := make(map[string]int)
+
+	for i := range results {
+		for _, u := range results[i].Uncovered {
+			gaps[u]++
+			unc[u]++
+		}
+
+		for _, p := range results[i].PartlyCovered {
+			route, _, _ := strings.Cut(p, " (by ")
+			gaps[route]++
+
+			if _, seen := partly[route]; !seen {
+				partly[route] = p
+			}
+		}
+	}
+
+	for route, n := range gaps {
+		switch {
+		case n < len(results): // some config covers it in full
+		case unc[route] == len(results):
+			uncovered = append(uncovered, route)
+		default:
+			partlyCovered = append(partlyCovered, partly[route])
+		}
+	}
+
+	return sortedUnique(uncovered), sortedUnique(partlyCovered)
 }
 
 // buildRules reads endpoints the way the rbac matcher does: an endpoint with no methods stands for

@@ -75,7 +75,7 @@ func (a *App) enableRBAC(configPath ...string) error {
 	middlewareFunc := rbac.Middleware(config)
 	a.UseMiddleware(middlewareFunc)
 
-	a.rbacConfig = config
+	a.rbacConfigs = append(a.rbacConfigs, config)
 
 	return nil
 }
@@ -111,7 +111,12 @@ func (a *App) rbacRouteCheckMode() string {
 // logs one line for each kind of mismatch it finds. It reports whether any mismatch can leave a
 // request served without role checks.
 func (a *App) checkRBACRoutes() bool {
-	m := rbaccheck.Check(a.rbacConfig.Endpoints, a.rbacRoutes)
+	endpoints := make([][]rbac.EndpointMapping, len(a.rbacConfigs))
+	for i, config := range a.rbacConfigs {
+		endpoints[i] = config.Endpoints
+	}
+
+	m := rbaccheck.CheckAll(endpoints, a.rbacRoutes)
 	logger := a.Logger()
 
 	if len(m.DeadPublicRules) > 0 {
