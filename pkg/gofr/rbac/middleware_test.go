@@ -410,6 +410,20 @@ func TestExtractClaimValue(t *testing.T) {
 			expectError: false,
 		},
 		{
+			desc:        "a flat key with dots is read when the dotted walk fails on a non-object parent",
+			claims:      jwt.MapClaims{"a": "x", "a.b": "admin"},
+			path:        "a.b",
+			expected:    "admin",
+			expectError: false,
+		},
+		{
+			desc:        "a flat key with dots is read when the dotted walk finds no parent",
+			claims:      jwt.MapClaims{"realm_access.roles": []any{"admin"}},
+			path:        "realm_access.roles",
+			expected:    []any{"admin"},
+			expectError: false,
+		},
+		{
 			desc: "returns error for empty path",
 			claims: jwt.MapClaims{
 				"role": "admin",

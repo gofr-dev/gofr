@@ -133,6 +133,11 @@ one whole top-level key. This is what makes namespaced claim names such as
 reads: with `jwtClaimPath: "a.b"` and a token that has both `"a.b"` and `{"a": {"b": ...}}`, the
 nested value is the one used.
 
+One request that got a 401 before can now be allowed: with `jwtClaimPath: "a.b"`, a token that has a flat
+key `"a.b"` (for example `{"a": "x", "a.b": "admin"}`, or `{"realm_access.roles": ["admin"]}` with path
+`realm_access.roles`) used to fail the dotted walk and get a 401. It now reads the whole key. This needs your
+identity provider to put a flat key with dots into a signed token.
+
 ### Configuration Reference
 
 | Key | Type | Used in | Meaning |
@@ -212,12 +217,21 @@ and expiry in `EnableOAuth`, with the parser options of
 [`golang-jwt/jwt`](https://pkg.go.dev/github.com/golang-jwt/jwt/v5#ParserOption):
 
 ```go
-app.EnableOAuth(app.Config.Get("JWKS_URL"), 10,
-    jwt.WithIssuer(app.Config.Get("TOKEN_ISSUER")),
+issuer := app.Config.Get("TOKEN_ISSUER")
+if issuer == "" {
+    app.Logger().Fatalf("TOKEN_ISSUER is not set")
+}
+
+if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10,
+    jwt.WithIssuer(issuer),
     jwt.WithAudience("orders-api"),
     jwt.WithExpirationRequired(),
-)
+); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
 ```
+
+An empty issuer disables the issuer check (`jwt.WithIssuer("")` checks nothing), so the app should refuse to start without it, as above.
 
 These run on **every request that carries a token**, not only on routes that have a rule in
 `endpoints`, so a token minted for another API, or one that never expires, is refused with a 401

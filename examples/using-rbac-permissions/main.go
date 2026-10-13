@@ -15,8 +15,15 @@ func main() {
 	// RBAC does not validate the token, and permissions mode trusts what it says, so every check
 	// belongs here, where it runs on every request that carries a token: a token from another issuer,
 	// minted for another API, or with no expiry gets a 401 even if a key in the same JWKS signed it.
+	//
+	// An empty issuer makes jwt.WithIssuer a no-op, so refuse to start without one.
+	issuer := app.Config.Get("TOKEN_ISSUER")
+	if issuer == "" {
+		app.Logger().Fatalf("TOKEN_ISSUER is not set")
+	}
+
 	if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10,
-		jwt.WithIssuer(app.Config.Get("TOKEN_ISSUER")),
+		jwt.WithIssuer(issuer),
 		jwt.WithAudience("orders-api"),
 		jwt.WithExpirationRequired(),
 	); err != nil {
