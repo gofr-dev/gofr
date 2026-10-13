@@ -77,8 +77,7 @@ func (s *Server) writeJSON(w http.ResponseWriter, resp rpcResponse) {
 	if err := json.NewEncoder(&buf).Encode(resp); err != nil {
 		s.logf("failed to encode MCP response: %v", err)
 
-		buf.Reset()
-
+		// A failed Encode writes nothing to buf, so the fallback can reuse it as is.
 		fallback := rpcResponse{JSONRPC: jsonRPCVersion, ID: resp.ID, Error: &rpcError{Code: codeInternal, Message: msgInternal}}
 		if err = json.NewEncoder(&buf).Encode(fallback); err != nil {
 			// Only reachable with an ID that is not valid JSON, which ServeHTTP never produces.

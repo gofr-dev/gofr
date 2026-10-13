@@ -409,6 +409,8 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	// The envelope is a fixed map that always marshals, so Encode can only fail writing to the
 	// client; the status is already committed, so logging the failure is all that is left to do.
+	// net/http buffers the first 2 KB of a response, and this envelope is well under that, so a
+	// client that has gone away usually does not surface here: no log does not mean it was received.
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		logger.Error("failed to write panic recovery response: " + err.Error())
 	}
