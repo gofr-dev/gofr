@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
@@ -42,6 +43,11 @@ var (
 
 // extractionFailuresMetric counts requests whose role or permissions could not be read.
 const extractionFailuresMetric = "rbac_role_extraction_failures"
+
+// counterRegistered holds the metrics managers that already registered extractionFailuresMetric.
+//
+//nolint:gochecknoglobals // registry of managers, safe for concurrent use; the manager API cannot report a duplicate.
+var counterRegistered sync.Map
 
 // Modes reported in the startup line, naming where authorization reads from.
 const (
@@ -198,9 +204,7 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 		return nil, fmt.Errorf("failed to process unified config: %w", err)
 	}
 
-	if metrics != nil {
-		metrics.NewCounter(extractionFailuresMetric, "Number of requests whose RBAC role or permissions could not be read")
-	}
+	registerExtractionMetric(metrics)
 
 	if logger != nil {
 		config.logStartup(logger)
@@ -209,10 +213,23 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	return &config, nil
 }
 
+// registerExtractionMetric registers the counter once per metrics manager. The manager only logs an
+// ERROR when a name is registered twice and tells the caller nothing, so remember which managers
+// already hold the counter.
+func registerExtractionMetric(metrics container.Metrics) {
+	if metrics == nil {
+		return
+	}
+
+	if _, registered := counterRegistered.LoadOrStore(metrics, struct{}{}); !registered {
+		metrics.NewCounter(extractionFailuresMetric, "Number of requests whose RBAC role or permissions could not be read")
+	}
+}
+
 // logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
 func (c *Config) logStartup(logger datasource.Logger) {
 	mode, source := c.mode()
-	logger.Infof("RBAC enabled: mode=%s, claim=%s", mode, source)
+	logger.Infof("RBAC enabled: mode=%s, source=%s", mode, source)
 
 	if mode == modePermissions && len(c.Roles) > 0 {
 		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +

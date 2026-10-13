@@ -163,7 +163,7 @@ Exactly one mode is active:
 At startup RBAC logs one line naming the mode it runs in, for example:
 
 ```
-RBAC enabled: mode=permissions, claim=scope
+RBAC enabled: mode=permissions, source=scope
 ```
 
 ### Role Arrays

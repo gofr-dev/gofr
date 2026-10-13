@@ -40,7 +40,7 @@ type AuditLog struct {
 	Role string `json:"role,omitempty"`
 	// Permission is, in permissions mode, the permission that granted access.
 	Permission string `json:"permission,omitempty"`
-	HeldCount  int    `json:"held_count,omitempty"`
+	HeldCount  int    `json:"held_count"`
 }
 
 // PrettyPrint formats the RBAC audit log for terminal output, matching HTTP log format.

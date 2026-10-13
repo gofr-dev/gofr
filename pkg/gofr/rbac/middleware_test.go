@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -456,6 +457,26 @@ func TestExtractClaimValue(t *testing.T) {
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestAuditLog_HeldCountIsAlwaysLogged(t *testing.T) {
+	testCases := []struct {
+		desc string
+		log  AuditLog
+		want string
+	}{
+		{desc: "a denial that held nothing logs held_count 0", log: AuditLog{Route: "/orders"}, want: `"held_count":0`},
+		{desc: "a denial that held two logs held_count 2", log: AuditLog{Route: "/orders", HeldCount: 2}, want: `"held_count":2`},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			out, err := json.Marshal(tc.log)
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, string(out), tc.want, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
