@@ -9,7 +9,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
-	gofr.dev v1.61.0
+	gofr.dev v1.62.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.84.0
 )
