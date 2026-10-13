@@ -247,7 +247,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	param, ok := parameters.(*QueryParam)
 	if !ok {
-		return fmt.Errorf("%w: Must be *QueryParam", errInvalidQueryParam)
+		return fmt.Errorf("%w: Must be *QueryParam", errInvalidParam)
 	}
 
 	queryResp, ok := resp.(*QueryResponse)

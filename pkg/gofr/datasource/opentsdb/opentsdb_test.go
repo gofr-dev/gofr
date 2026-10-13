@@ -782,6 +782,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 		resp      any
 		mockCall  func(m *MockhttpClient)
 		expErrMsg string
+		expErr    error
 	}{
 		{
 			desc:      "invalid param type",
@@ -789,6 +790,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryParam",
+			expErr:    errInvalidParam,
 		},
 		{
 			desc:      "invalid response type",
@@ -832,6 +834,11 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			err := client.QueryDataPoints(t.Context(), tc.param, tc.resp)
 
 			require.ErrorContains(t, err, tc.expErrMsg)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+				require.NotErrorIs(t, err, errInvalidQueryParam)
+			}
 		})
 	}
 }
