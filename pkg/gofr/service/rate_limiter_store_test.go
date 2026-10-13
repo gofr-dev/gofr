@@ -89,6 +89,33 @@ func TestLocalRateLimiterStore_Allow(t *testing.T) {
 	}
 }
 
+func TestLocalRateLimiterStore_AllowDoesNotAllocateForAnExistingKey(t *testing.T) {
+	store := NewLocalRateLimiterStore()
+	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Second}
+	ctx := t.Context()
+
+	_, _, err := store.Allow(ctx, "steady-key", cfg)
+	require.NoError(t, err)
+
+	allocs := testing.AllocsPerRun(100, func() {
+		_, _, _ = store.Allow(ctx, "steady-key", cfg)
+	})
+
+	assert.Zero(t, allocs)
+}
+
+func BenchmarkLocalRateLimiterStore_Allow(b *testing.B) {
+	store := NewLocalRateLimiterStore()
+	cfg := RateLimiterConfig{Requests: 1e6, Burst: 1e6, Window: time.Second}
+	ctx := b.Context()
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_, _, _ = store.Allow(ctx, "bench-key", cfg)
+	}
+}
+
 func TestLocalRateLimiterStore_CleanupExpiredBuckets(t *testing.T) {
 	store := NewLocalRateLimiterStore()
 	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Second}

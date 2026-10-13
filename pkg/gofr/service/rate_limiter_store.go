@@ -119,10 +119,14 @@ func (l *LocalRateLimiterStore) now() int64 {
 
 // allowAt checks the bucket for key at the given time on the store's clock, creating a full bucket on first use.
 func (l *LocalRateLimiterStore) allowAt(key string, config *RateLimiterConfig, now int64) (allowed bool, retryAfter time.Duration) {
-	value, _ := l.buckets.LoadOrStore(key, &bucketEntry{
-		bucket:     newTokenBucket(config),
-		lastAccess: now,
-	})
+	// Load first so the steady-state path does not build a bucket only for LoadOrStore to discard it.
+	value, ok := l.buckets.Load(key)
+	if !ok {
+		value, _ = l.buckets.LoadOrStore(key, &bucketEntry{
+			bucket:     newTokenBucket(config),
+			lastAccess: now,
+		})
+	}
 
 	entry := value.(*bucketEntry)
 
