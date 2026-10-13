@@ -150,12 +150,16 @@ error still shows why every route is unprotected.
 
 Every name in `inheritsFrom` must match the `name` of a role in `roles`. A name that matches no role,
 such as the typo `"inheritsFrom": ["viewr"]`, does not stop the config from loading: the role keeps
-its own permissions and inherits nothing through that name. GoFr logs one error per unknown name when
-the config loads:
+its own permissions and inherits nothing through that name. When the config loads, GoFr logs one error
+for each role that declares an unknown name, and the startup line reports that the config loaded with
+errors:
 
 ```
 RBAC: role "editor" inherits from unknown role "viewr"; no permissions are inherited from it
+Loaded RBAC config with 1 error(s); see the RBAC errors logged above
 ```
+
+If two roles share a `name`, only the first is used, both for permissions and for this check.
 
 Fix the name in the config to restore the inherited permissions.
 

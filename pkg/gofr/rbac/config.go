@@ -290,19 +290,34 @@ func (c *Config) buildRolePermissionsMap() {
 	c.logUnknownInheritedRoles()
 }
 
-// logUnknownInheritedRoles logs each inheritsFrom name that matches no defined role. Such a role still
-// loads with its own permissions, so without this log a misspelled parent silently grants less.
+// logUnknownInheritedRoles logs each inheritsFrom name that matches no defined role, once per role. Such a
+// role still loads with its own permissions, so without this log a misspelled parent silently grants less.
 func (c *Config) logUnknownInheritedRoles() {
 	if c.Logger == nil {
 		return
 	}
 
+	checked := make(map[string]bool, len(c.Roles))
+
 	for _, roleDef := range c.Roles {
+		// getEffectivePermissions reads only the first definition of a name, so a repeated one is skipped.
+		if checked[roleDef.Name] {
+			continue
+		}
+
+		checked[roleDef.Name] = true
+
+		logged := make(map[string]bool)
+
 		for _, inheritedName := range roleDef.InheritsFrom {
-			if _, ok := c.rolePermissionsMap[inheritedName]; !ok {
-				c.Logger.Errorf("RBAC: role %q inherits from unknown role %q; no permissions are inherited from it",
-					roleDef.Name, inheritedName)
+			if _, ok := c.rolePermissionsMap[inheritedName]; ok || logged[inheritedName] {
+				continue
 			}
+
+			logged[inheritedName] = true
+
+			c.Logger.Errorf("RBAC: role %q inherits from unknown role %q; no permissions are inherited from it",
+				roleDef.Name, inheritedName)
 		}
 	}
 }

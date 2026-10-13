@@ -529,13 +529,15 @@ func TestConfig_getEffectivePermissions(t *testing.T) {
 	}
 }
 
-func TestConfig_buildRolePermissionsMap(t *testing.T) {
-	testCases := []struct {
-		desc          string
-		roles         []RoleDefinition
-		expectedPerms map[string][]string
-		expectedLogs  []string
-	}{
+type buildRolePermissionsMapTestCase struct {
+	desc          string
+	roles         []RoleDefinition
+	expectedPerms map[string][]string
+	expectedLogs  []string
+}
+
+func buildRolePermissionsMapTestCases() []buildRolePermissionsMapTestCase {
+	return []buildRolePermissionsMapTestCase{
 		{
 			desc: "inherits from every known role without logging",
 			roles: []RoleDefinition{
@@ -588,9 +590,35 @@ func TestConfig_buildRolePermissionsMap(t *testing.T) {
 				`RBAC: role "admin" inherits from unknown role "viewr"; no permissions are inherited from it`,
 			},
 		},
+		{
+			desc: "logs an unknown parent once when a role declares it twice",
+			roles: []RoleDefinition{
+				{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewr", "viewr"}},
+			},
+			expectedPerms: map[string][]string{
+				"editor": {"users:write"},
+			},
+			expectedLogs: []string{
+				`RBAC: role "editor" inherits from unknown role "viewr"; no permissions are inherited from it`,
+			},
+		},
+		{
+			desc: "checks only the role definition the resolver uses when a name repeats",
+			roles: []RoleDefinition{
+				{Name: "viewer", Permissions: []string{"users:read"}},
+				{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewer"}},
+				{Name: "editor", Permissions: []string{"users:delete"}, InheritsFrom: []string{"viewr"}},
+			},
+			expectedPerms: map[string][]string{
+				"viewer": {"users:read"},
+				"editor": {"users:write", "users:read"},
+			},
+		},
 	}
+}
 
-	for i, tc := range testCases {
+func TestConfig_buildRolePermissionsMap(t *testing.T) {
+	for i, tc := range buildRolePermissionsMapTestCases() {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := &mockLogger{}
 			config := &Config{Roles: tc.roles, Logger: logger}

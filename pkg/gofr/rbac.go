@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/rbac"
 )
 
@@ -59,17 +60,42 @@ func (a *App) enableRBAC(configPath ...string) error {
 	metrics := a.Metrics()
 	tracer := otel.GetTracerProvider().Tracer("gofr-rbac")
 
-	// Load configuration directly with dependencies
-	config, err := rbac.LoadPermissions(path, logger, metrics, tracer)
+	// Load configuration directly with dependencies. The load logs through a counting logger, so the
+	// summary line below can say that errors were logged instead of reading as a clean success.
+	loadLogger := &errorCountingLogger{Logger: logger}
+
+	config, err := rbac.LoadPermissions(path, loadLogger, metrics, tracer)
 	if err != nil {
 		return fmt.Errorf("failed to load RBAC config: %w", err)
 	}
 
-	a.Logger().Infof("Loaded RBAC config successfully")
+	config.Logger = logger
+
+	if loadLogger.errors > 0 {
+		a.Logger().Errorf("Loaded RBAC config with %d error(s); see the RBAC errors logged above", loadLogger.errors)
+	} else {
+		a.Logger().Infof("Loaded RBAC config successfully")
+	}
 
 	// Apply middleware using the config
 	middlewareFunc := rbac.Middleware(config)
 	a.UseMiddleware(middlewareFunc)
 
 	return nil
+}
+
+// errorCountingLogger counts the error lines logged through it while the RBAC config loads.
+type errorCountingLogger struct {
+	datasource.Logger
+	errors int
+}
+
+func (l *errorCountingLogger) Error(args ...any) {
+	l.errors++
+	l.Logger.Error(args...)
+}
+
+func (l *errorCountingLogger) Errorf(format string, args ...any) {
+	l.errors++
+	l.Logger.Errorf(format, args...)
 }

@@ -23,6 +23,12 @@ const rbacInheritanceGuardingRoot = `{"roleHeader":"X-User-Role",` +
 	`{"name":"editor","permissions":["users:write"],"inheritsFrom":["viewer"]}],` +
 	`"endpoints":[{"path":"/","methods":["GET"],"requiredPermissions":["users:read"]}]}`
 
+// rbacUnknownParentGuardingRoot has one role inheriting from a misspelled parent, so the config
+// loads with one logged error.
+const rbacUnknownParentGuardingRoot = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"editor","permissions":["users:read"],"inheritsFrom":["viewr"]}],` +
+	`"endpoints":[{"path":"/","methods":["GET"],"requiredPermissions":["users:read"]}]}`
+
 const rbacGuardingRootYAML = `roleHeader: X-User-Role
 roles:
   - name: admin
@@ -49,6 +55,7 @@ type enableRBACTestCase struct {
 	setup      func(t *testing.T) []string // returns the EnableRBAC arguments
 	wantErr    string
 	wantStatus int
+	wantLog    string // a line EnableRBAC must log at error level
 }
 
 // enableRBACTestCases lists the EnableRBAC scenarios: the valid ones install the middleware
@@ -78,6 +85,15 @@ func enableRBACTestCases() []enableRBACTestCase {
 				return []string{writeRBACConfig(t, t.TempDir(), "rbac.json", rbacInheritanceGuardingRoot)}
 			},
 			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			desc: "config with an unknown inherited role",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				return []string{writeRBACConfig(t, t.TempDir(), "rbac.json", rbacUnknownParentGuardingRoot)}
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantLog:    "Loaded RBAC config with 1 error(s)",
 		},
 		{
 			desc: "default path",
@@ -147,6 +163,12 @@ func TestEnableRBAC(t *testing.T) {
 				a = newAuthTestApp(t)
 				err = a.EnableRBAC(args...)
 			})
+
+			if tc.wantLog != "" {
+				assert.Contains(t, logs, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				assert.NotContains(t, logs, "Loaded RBAC config with", "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 
 			if tc.wantErr == "" {
 				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
