@@ -34,7 +34,7 @@ func (c *Client) IndexDocument(ctx context.Context, index, id string, document a
 		Index:      index,
 		DocumentID: id,
 		Body:       bytes.NewReader(body),
-		Refresh:    "true",
+		Refresh:    refreshTrue,
 	}
 
 	res, err := req.Do(tracedCtx, c.client)
@@ -120,7 +120,7 @@ func (c *Client) UpdateDocument(ctx context.Context, index, id string, update ma
 		Index:      index,
 		DocumentID: id,
 		Body:       bytes.NewReader(body),
-		Refresh:    "true",
+		Refresh:    refreshTrue,
 	}
 
 	res, err := req.Do(tracedCtx, c.client)

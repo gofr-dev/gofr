@@ -12,7 +12,7 @@ func TestMessage(_ *testing.T) {
 
 type mockMessage struct {
 	duplicate bool
-	qos       int
+	qos       byte
 	retained  bool
 	topic     string
 	messageID int
@@ -24,7 +24,7 @@ func (m mockMessage) Duplicate() bool {
 }
 
 func (m mockMessage) Qos() byte {
-	return byte(m.qos)
+	return m.qos
 }
 
 func (m mockMessage) Retained() bool {

@@ -3,7 +3,7 @@ package google
 import (
 	"testing"
 
-	gcPubSub "cloud.google.com/go/pubsub"
+	gcPubSub "cloud.google.com/go/pubsub" //nolint:staticcheck // the package under test is still on pubsub v1; the v2 migration is a separate change
 	"github.com/stretchr/testify/assert"
 )
 

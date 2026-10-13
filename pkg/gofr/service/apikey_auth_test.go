@@ -48,7 +48,7 @@ func TestAddAuthorizationHeader_APIKey(t *testing.T) {
 			apiKey:   "valid",
 			headers:  map[string]string{xAPIKeyHeader: "existing-value"},
 			response: map[string]string{xAPIKeyHeader: "existing-value"},
-			err:      AuthErr{Message: `value existing-value already exists for header X-Api-Key`},
+			err:      AuthErr{Message: `a value already exists for header X-Api-Key`},
 		},
 		{
 			apiKey:   "valid",
