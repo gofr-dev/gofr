@@ -143,6 +143,7 @@ func (d *DB) Begin() (*Tx, error) {
 // (lib/pq does), so the wait is bounded by closeWaitTimeout: Close always returns
 // within it, logging a warning if a background connection attempt did not stop, and
 // closes the pool regardless. That attempt then fails on the closed pool and exits.
+// Only the first Close waits; a later one returns without waiting again.
 func (d *DB) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.stopSignal)
@@ -150,9 +151,9 @@ func (d *DB) Close() error {
 		if d.cancelBackground != nil {
 			d.cancelBackground()
 		}
-	})
 
-	d.waitForBackground()
+		d.waitForBackground()
+	})
 
 	var err error
 
