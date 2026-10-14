@@ -11,6 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/rbac"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -23,6 +24,12 @@ const rbacGuardingRoot = `{"roleHeader":"X-User-Role",` +
 const rbacInheritanceGuardingRoot = `{"roleHeader":"X-User-Role",` +
 	`"roles":[{"name":"viewer","permissions":["users:read"]},` +
 	`{"name":"editor","permissions":["users:write"],"inheritsFrom":["viewer"]}],` +
+	`"endpoints":[{"path":"/","methods":["GET"],"requiredPermissions":["users:read"]}]}`
+
+// rbacUnknownParentGuardingRoot has one role inheriting from a misspelled parent, so the config
+// loads with one logged error.
+const rbacUnknownParentGuardingRoot = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"editor","permissions":["users:read"],"inheritsFrom":["viewr"]}],` +
 	`"endpoints":[{"path":"/","methods":["GET"],"requiredPermissions":["users:read"]}]}`
 
 const rbacGuardingRootYAML = `roleHeader: X-User-Role
@@ -51,6 +58,7 @@ type enableRBACTestCase struct {
 	setup      func(t *testing.T) []string // returns the EnableRBAC arguments
 	wantErr    string
 	wantStatus int
+	wantLogs   []string // lines EnableRBAC must log at error level
 }
 
 // enableRBACTestCases lists the EnableRBAC scenarios: the valid ones install the middleware
@@ -80,6 +88,16 @@ func enableRBACTestCases() []enableRBACTestCase {
 				return []string{writeRBACConfig(t, t.TempDir(), "rbac.json", rbacInheritanceGuardingRoot)}
 			},
 			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			desc: "config with an unknown inherited role",
+			setup: func(t *testing.T) []string {
+				t.Helper()
+				return []string{writeRBACConfig(t, t.TempDir(), "rbac.json", rbacUnknownParentGuardingRoot)}
+			},
+			wantStatus: http.StatusUnauthorized,
+			// the role line proves the counting logger forwards; quotes are escaped in the JSON log line
+			wantLogs: []string{"Loaded RBAC config with 1 error(s)", `inherits from unknown role \"viewr\"`},
 		},
 		{
 			desc: "default path",
@@ -150,6 +168,14 @@ func TestEnableRBAC(t *testing.T) {
 				err = a.EnableRBAC(args...)
 			})
 
+			for _, want := range tc.wantLogs {
+				assert.Contains(t, logs, want, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			if len(tc.wantLogs) == 0 {
+				assert.NotContains(t, logs, "Loaded RBAC config with", "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
 			if tc.wantErr == "" {
 				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -193,6 +219,36 @@ func TestEnableRBAC_RegistersExtractionCounterOncePerApp(t *testing.T) {
 					require.NoError(t, a.EnableRBAC(path), "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
 			}
+		})
+	}
+}
+
+func TestApp_loadRBACConfig(t *testing.T) {
+	tests := []struct {
+		desc   string
+		config string
+	}{
+		{"config that loads cleanly", rbacGuardingRoot},
+		{"config that loads with a logged error", rbacUnknownParentGuardingRoot},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			a := newAuthTestApp(t)
+			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
+
+			var (
+				config *rbac.Config
+				err    error
+			)
+
+			testutil.StderrOutputForFunc(func() {
+				config, err = a.loadRBACConfig(path)
+			})
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			// Only the load is counted: request-time logging must reach the app logger directly.
+			assert.Same(t, a.Logger(), config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
