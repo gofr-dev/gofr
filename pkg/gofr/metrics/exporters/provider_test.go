@@ -528,10 +528,9 @@ func assertResourceAttrs(t *testing.T, res *resource.Resource, wantAttrs map[str
 	}
 }
 
-// Build is exported, so a caller outside the framework can reach it without a
-// logger -- Prometheus, deprecated but still public, is one such caller. noopLogger
-// is documented as the fallback for exactly that caller; this pins that it is
-// actually substituted rather than dereferenced.
+// Build is exported, so an external caller can reach it without a logger.
+// noopLogger is documented as the fallback for that caller; this pins that it
+// is actually substituted rather than dereferenced.
 func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
 	Register("nil-logger-test", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
 		return metricSdk.NewManualReader(), nil
