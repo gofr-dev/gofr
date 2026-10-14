@@ -185,7 +185,8 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				logAuditEvent(config.Logger, r, entry, true)
 			}
 
-			// Store the granting role in context and continue
+			// Store what granted access in context and continue: the granting role, or in permissions
+			// mode the granting permission
 			ctx := context.WithValue(r.Context(), userRole, granted)
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})

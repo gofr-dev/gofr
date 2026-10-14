@@ -13,34 +13,36 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-func TestLoadPermissions_RegistersMetricOncePerManager(t *testing.T) {
-	const content = `{"permissionsClaimPath": "scope", "endpoints": ` +
-		`[{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]}`
-
+// TestLoadPermissions_RegistersNoMetric pins that loading a config registers nothing: EnableRBAC
+// registers the extraction counter once per app, and a load that registered it too would log a
+// duplicate-metric error on every second load.
+func TestLoadPermissions_RegistersNoMetric(t *testing.T) {
 	testCases := []struct {
-		desc     string
-		managers int // distinct metrics managers; each is loaded twice and must register once
+		desc    string
+		content string
 	}{
-		{desc: "loading twice with the same manager registers the counter once", managers: 1},
-		{desc: "each manager registers its own counter", managers: 2},
+		{
+			desc: "roles mode",
+			content: `{"roleHeader": "X-User-Role", "roles": [{"name": "admin", "permissions": ["orders:read"]}], ` +
+				`"endpoints": [{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]}`,
+		},
+		{
+			desc: "permissions mode",
+			content: `{"permissionsClaimPath": "scope", "endpoints": ` +
+				`[{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]}`,
+		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "rbac.json")
-			require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+			require.NoError(t, os.WriteFile(path, []byte(tc.content), 0600))
 
-			ctrl := gomock.NewController(t)
+			// No expectations: any registration fails the test.
+			metrics := container.NewMockMetrics(gomock.NewController(t))
 
-			for range tc.managers {
-				metrics := container.NewMockMetrics(ctrl)
-				metrics.EXPECT().NewCounter("rbac_role_extraction_failures", gomock.Any()).Times(1)
-
-				for range 2 {
-					_, err := LoadPermissions(path, &mockLogger{}, metrics, nil)
-					require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				}
-			}
+			_, err := LoadPermissions(path, &mockLogger{}, metrics, nil)
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
@@ -759,10 +761,6 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			metrics := container.NewMockMetrics(ctrl)
 			logger := &mockLogger{}
-
-			if tc.wantErr == nil {
-				metrics.EXPECT().NewCounter("rbac_role_extraction_failures", gomock.Any())
-			}
 
 			config, err := LoadPermissions(path, logger, metrics, nil)
 			if tc.wantErr != nil {

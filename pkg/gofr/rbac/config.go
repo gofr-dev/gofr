@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
@@ -41,13 +40,9 @@ var (
 	errInvalidPermissionsClaimPath = errors.New("permissionsClaimPath cannot be parsed")
 )
 
-// extractionFailuresMetric counts requests whose role or permissions could not be read.
+// extractionFailuresMetric counts requests whose role or permissions could not be read. App.EnableRBAC
+// registers it, once per app.
 const extractionFailuresMetric = "rbac_role_extraction_failures"
-
-// counterRegistered holds the metrics managers that already registered extractionFailuresMetric.
-//
-//nolint:gochecknoglobals // registry of managers, safe for concurrent use; the manager API cannot report a duplicate.
-var counterRegistered sync.Map
 
 // Modes reported in the startup line, naming where authorization reads from.
 const (
@@ -204,26 +199,11 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 		return nil, fmt.Errorf("failed to process unified config: %w", err)
 	}
 
-	registerExtractionMetric(metrics)
-
 	if logger != nil {
 		config.logStartup(logger)
 	}
 
 	return &config, nil
-}
-
-// registerExtractionMetric registers the counter once per metrics manager. The manager only logs an
-// ERROR when a name is registered twice and tells the caller nothing, so remember which managers
-// already hold the counter.
-func registerExtractionMetric(metrics container.Metrics) {
-	if metrics == nil {
-		return
-	}
-
-	if _, registered := counterRegistered.LoadOrStore(metrics, struct{}{}); !registered {
-		metrics.NewCounter(extractionFailuresMetric, "Number of requests whose RBAC role or permissions could not be read")
-	}
 }
 
 // logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.

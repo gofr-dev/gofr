@@ -483,6 +483,12 @@ server, see [`examples/using-rbac-permissions`](https://github.com/gofr-dev/gofr
 
 ## Accessing Role in Handlers
 
+RBAC itself stores what granted a request in the request context, under a key internal to the
+`rbac` package: the role, when the request holds one; the one role that granted access, when the
+claim is an array of roles; and the permission that granted access, in permissions mode. Public
+routes store nothing. Handlers cannot read that key, so read the role from the claims or header as
+shown below.
+
 For business logic, you can access the user's role from the request context:
 
 **JWT-Based RBAC** (when using JWT role extraction):

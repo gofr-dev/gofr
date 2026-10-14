@@ -71,6 +71,16 @@ func (a *App) enableRBAC(configPath ...string) error {
 
 	a.Logger().Infof("Loaded RBAC config successfully")
 
+	// RBAC metrics are opt-in and registered here (like GraphQL/gRPC/cron/LLM), when the first config
+	// is installed. EnableRBAC can run more than once, so guard on the first call to avoid a
+	// duplicate-metric error; this runs in the single-threaded setup phase, so no synchronization is
+	// needed.
+	if !a.rbacEnabled && metrics != nil {
+		metrics.NewCounter("rbac_role_extraction_failures", "Number of requests whose RBAC role or permissions could not be read")
+	}
+
+	a.rbacEnabled = true
+
 	// Apply middleware using the config
 	middlewareFunc := rbac.Middleware(config)
 	a.UseMiddleware(middlewareFunc)
