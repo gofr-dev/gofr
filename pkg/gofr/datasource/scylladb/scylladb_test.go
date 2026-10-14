@@ -440,50 +440,57 @@ func Test_ExecCAS(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockDeps := initTest(t)
-
+	// Each row gets its own client and mocks (initTest creates a fresh gomock
+	// controller per call) so one row's expectations can never be satisfied
+	// by another row's leftover AnyTimes() stub.
 	testCases := []struct {
 		desc       string
 		dest       any
-		mockCall   func()
+		mockCall   func(mockDeps *mockDependencies)
 		expApplied bool
 		expErr     error
 	}{
-		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).AnyTimes()
-		}, true, nil},
-
-		{"success case: int dest, applied true", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(&mockInt).Return(true, nil).AnyTimes()
-		}, true, nil},
-
-		{"failure case: struct dest, error", &mockStruct, func() {
+		{"success case: struct dest, applied true", &mockStruct, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil)
 		}, true, nil},
-		{"failure case: dest is not pointer", mockInt, func() {
+
+		{"success case: int dest, applied true", &mockInt, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().ScanCAS(&mockInt).Return(true, nil)
+		}, true, nil},
+
+		{"failure case: struct dest, error", &mockStruct, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock)
+		}, false, errMock},
+		{"failure case: dest is not pointer", mockInt, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 		}, false, errDestinationIsNotPointer},
-		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
+		{"failure case: dest is slice", &[]int{}, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
-		{"failure case: dest is map", &map[string]any{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
+		{"failure case: dest is map", &map[string]any{}, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 		}, false, errUnexpectedMap},
 	}
 
-	for i, tc := range testCases {
-		tc.mockCall()
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
 
-		applied, err := client.ExecCAS(tc.dest, query)
+			tc.mockCall(mockDeps)
 
-		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			applied, err := client.ExecCAS(tc.dest, query)
+
+			assert.Equal(t, tc.expApplied, applied)
+			assert.Equal(t, tc.expErr, err)
+		})
 	}
 }
 
