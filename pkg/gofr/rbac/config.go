@@ -161,6 +161,9 @@ type Config struct {
 // The file format is automatically detected based on the file extension.
 // Supported formats: .json, .yaml, .yml.
 // Dependencies (logger, metrics, tracer) are optional and can be set after loading.
+// It does not register the rbac_role_extraction_failures counter that Middleware increments;
+// App.EnableRBAC does. A caller that uses LoadPermissions and Middleware directly with metrics must
+// register that counter itself, or each failed extraction logs an error and is not counted.
 func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
