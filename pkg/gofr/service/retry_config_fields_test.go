@@ -128,7 +128,8 @@ func TestRetryConfig_ConfiguredSwitch(t *testing.T) {
 }
 
 // TestRetryConfig_ConfiguredByAnyField pins that every field besides MaxRetries, set on its own, turns the
-// configured behaviors on.
+// configured behaviors on -- except MaxRetryAfter and IdempotencyKeyHeader, which only qualify
+// RespectRetryAfter and Methods and do nothing alone.
 func TestRetryConfig_ConfiguredByAnyField(t *testing.T) {
 	tests := []struct {
 		desc           string
@@ -141,10 +142,10 @@ func TestRetryConfig_ConfiguredByAnyField(t *testing.T) {
 		{desc: "Backoff", cfg: RetryConfig{Backoff: ConstantBackoff{}}, wantConfigured: true},
 		{desc: "RetryOn", cfg: RetryConfig{RetryOn: StandardRetryable}, wantConfigured: true},
 		{desc: "RespectRetryAfter", cfg: RetryConfig{RespectRetryAfter: true}, wantConfigured: true},
-		{desc: "MaxRetryAfter", cfg: RetryConfig{MaxRetryAfter: time.Second}, wantConfigured: true},
+		{desc: "MaxRetryAfter alone", cfg: RetryConfig{MaxRetries: 3, MaxRetryAfter: time.Second}},
 		{desc: "Methods", cfg: RetryConfig{Methods: []string{http.MethodGet}}, wantConfigured: true},
 		{desc: "empty non-nil Methods", cfg: RetryConfig{Methods: []string{}}, wantConfigured: true},
-		{desc: "IdempotencyKeyHeader", cfg: RetryConfig{IdempotencyKeyHeader: "X-Key"}, wantConfigured: true},
+		{desc: "IdempotencyKeyHeader alone", cfg: RetryConfig{MaxRetries: 3, IdempotencyKeyHeader: "X-Key"}},
 		{desc: "PerAttemptTimeout", cfg: RetryConfig{PerAttemptTimeout: time.Second}, wantConfigured: true},
 		{desc: "Budget", cfg: RetryConfig{Budget: &RetryBudget{}}, wantConfigured: true},
 	}

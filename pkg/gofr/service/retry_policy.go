@@ -54,10 +54,12 @@ type retrySettings struct {
 	budget               *retryBudget
 }
 
-// onlyMaxRetries reports whether every field besides MaxRetries is left at its zero value.
+// onlyMaxRetries reports whether every field besides MaxRetries is left at its zero value. MaxRetryAfter
+// and IdempotencyKeyHeader are not checked: they only qualify RespectRetryAfter and Methods, and alone
+// change nothing.
 func (r *RetryConfig) onlyMaxRetries() bool {
-	return r.Backoff == nil && r.RetryOn == nil && !r.RespectRetryAfter && r.MaxRetryAfter == 0 &&
-		r.Methods == nil && r.IdempotencyKeyHeader == "" && r.PerAttemptTimeout == 0 && r.Budget == nil
+	return r.Backoff == nil && r.RetryOn == nil && !r.RespectRetryAfter && r.Methods == nil &&
+		r.PerAttemptTimeout == 0 && r.Budget == nil
 }
 
 func (r *RetryConfig) resolve() *retrySettings {
@@ -206,7 +208,8 @@ func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 	return max(t.Sub(now), 0), true
 }
 
-// Backoff gives the wait before a retry.
+// Backoff gives the wait before a retry. Concurrent calls share one Backoff, so Next must be safe for
+// concurrent use.
 type Backoff interface {
 	// Next returns the wait before retry number attempt; attempt is 1 for the first retry.
 	Next(attempt int) time.Duration
@@ -277,8 +280,9 @@ func (b ExponentialBackoff) ceiling(attempt int) time.Duration {
 
 // StandardRetryable is the RetryConfig.RetryOn for an upstream that can be overloaded. It retries
 // network errors, a RateLimitError from RateLimiterConfig, and the statuses 408, 429, 502, 503 and 504.
-// It never retries 500, 501 or 505, or an open circuit breaker. Any other error, including a timeout, counts as a network error; the
-// caller's own context ending is never retried, whatever RetryOn returns.
+// It never retries 500, 501 or 505, or an open circuit breaker. Any other error, including a timeout,
+// counts as a network error. The caller's own context ending is not its concern: RetryConfig never
+// retries it, whatever RetryOn returns.
 //
 // A custom rule can build on it:
 //

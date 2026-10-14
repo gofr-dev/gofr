@@ -28,6 +28,9 @@ const (
 // no retry at all, so it uses Ratio 0.2 and MinPerSecond 10 instead. To make no retries, leave
 // RetryConfig.MaxRetries at 0.
 //
+// A retry is taken from the budget before the wait for it, so concurrent calls never all wait for the one
+// retry left; a wait cut short by the caller's context gives it back.
+//
 // Each service a RetryConfig is added to keeps its own counts; one RetryBudget value can be shared.
 type RetryBudget struct {
 	// Ratio is the number of retries allowed per first attempt, e.g. 0.2.
@@ -98,18 +101,30 @@ func (b *retryBudget) allows() bool {
 }
 
 // tryWithdraw records a retry and reports true if the budget allows it; otherwise it records nothing.
-func (b *retryBudget) tryWithdraw() bool {
+// second is the slot the retry was recorded in, for refund.
+func (b *retryBudget) tryWithdraw() (second int64, ok bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	slot := b.current()
 	if !b.hasRoom(slot) {
-		return false
+		return 0, false
 	}
 
 	slot.withdrawals++
 
-	return true
+	return slot.second, true
+}
+
+// refund takes back a retry recorded in second that was not made. A retry already out of the window
+// has nothing left to take back.
+func (b *retryBudget) refund(second int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if s := &b.slots[second%int64(len(b.slots))]; s.second == second && s.withdrawals > 0 {
+		s.withdrawals--
+	}
 }
 
 // hasRoom reports whether one more retry fits, counting the slots of the last TTL up to current.

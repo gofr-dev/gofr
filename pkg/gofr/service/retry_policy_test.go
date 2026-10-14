@@ -780,6 +780,37 @@ func TestRetryConfig_CanceledWaitSpendsNoBudget(t *testing.T) {
 	assert.Equal(t, int32(3), hits.Load(), "a canceled wait must not spend the budget")
 }
 
+func TestRetryConfig_BudgetSpentBeforeTheWait(t *testing.T) {
+	server, hits := statusSequence(t, nil, http.StatusServiceUnavailable)
+
+	// The floor allows exactly one retry in the window.
+	svc, rec := newPolicyService(t, server.URL, nil,
+		&RetryConfig{MaxRetries: 1, Budget: &RetryBudget{MinPerSecond: 1, TTL: time.Second},
+			Backoff: ConstantBackoff{Delay: time.Second}, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
+
+	get := func() {
+		resp, err := svc.Get(t.Context(), "test", nil)
+		require.NoError(t, err)
+
+		_ = readBody(t, resp)
+	}
+
+	// A second call made while the first waits for its retry finds the budget already spent. Only the
+	// first wait makes it: a second call that wrongly waits too must not start a third.
+	var nested atomic.Bool
+
+	rec.onWait = func() {
+		if nested.CompareAndSwap(false, true) {
+			get()
+		}
+	}
+
+	get()
+
+	assert.Len(t, rec.recorded(), 1, "a call must not wait for a retry the budget then refuses")
+	assert.Equal(t, int32(3), hits.Load(), "only the first call's retry may be made")
+}
+
 func TestRetryConfig_SharedBudgetCountsPerService(t *testing.T) {
 	// One value shared by two services; the floor allows exactly one retry in the window.
 	budget := &RetryBudget{MinPerSecond: 1, TTL: time.Second}

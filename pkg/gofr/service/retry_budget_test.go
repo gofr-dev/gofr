@@ -102,13 +102,49 @@ func TestRetryBudget_Window(t *testing.T) {
 				got := 0
 
 				for range s.withdraws {
-					if b.tryWithdraw() {
+					if _, ok := b.tryWithdraw(); ok {
 						got++
 					}
 				}
 
 				assert.Equal(t, s.want, got, "step %d", i)
 			}
+		})
+	}
+}
+
+func TestRetryBudget_Refund(t *testing.T) {
+	tests := []struct {
+		desc string
+		// reuse moves the clock on, so the refunded withdrawal's slot is taken by a later second that
+		// spends the one retry again.
+		reuse bool
+		want  bool // whether a retry is allowed after the refund
+	}{
+		{desc: "a refund makes room for another retry", want: true},
+		{desc: "a refund after its slot was reused takes nothing from the later second", reuse: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			clock := &fakeClock{t: time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)}
+			// The floor allows exactly one retry in the window.
+			b := newRetryBudget(RetryBudget{MinPerSecond: 1, TTL: time.Second}, clock.now)
+
+			second, ok := b.tryWithdraw()
+			assert.True(t, ok)
+
+			if tc.reuse {
+				clock.advance(time.Second)
+
+				_, ok = b.tryWithdraw()
+				assert.True(t, ok)
+			}
+
+			b.refund(second)
+
+			_, ok = b.tryWithdraw()
+			assert.Equal(t, tc.want, ok)
 		})
 	}
 }
@@ -134,7 +170,7 @@ func TestRetryBudget_Concurrent(t *testing.T) {
 			for range perWorker {
 				b.deposit()
 
-				if b.tryWithdraw() {
+				if _, ok := b.tryWithdraw(); ok {
 					allowed.Add(1)
 				}
 			}

@@ -26,7 +26,8 @@ const (
 // zero value keeps the behavior above, so they are independent: Backoff alone still replays a POST and
 // does not retry a 429. A safe setup also sets Methods and RetryOn: StandardRetryable.
 //
-// Setting any field besides MaxRetries also changes three things at once: each retry is counted in
+// Setting any field besides MaxRetries also changes three things at once (MaxRetryAfter and
+// IdempotencyKeyHeader do not count on their own, since they only qualify RespectRetryAfter and Methods): each retry is counted in
 // app_http_retry_count with a reason label, its wait is recorded in app_http_retry_wait_seconds, and it
 // is added to the caller's span and logged at debug level (instead of app_http_retry_count{service}
 // being counted after each failed retry); an open circuit breaker is no longer retried; and a retry is
@@ -252,6 +253,13 @@ func (rp *retryProvider) replace(ctx context.Context, attempt int, a attemptResu
 		return false
 	}
 
+	// The budget is spent before the wait, so concurrent calls cannot all wait for the one retry it
+	// has left; a wait cut short gives it back.
+	refund, ok := rp.withdrawBudget()
+	if !ok {
+		return false
+	}
+
 	bound := rp.bodyReadBound(a.resp)
 
 	// The connection goes back to the pool during the wait; the response stays readable in case no
@@ -260,8 +268,9 @@ func (rp *retryProvider) replace(ctx context.Context, attempt int, a attemptResu
 		bound(func() { detachBody(a.resp) })
 	}
 
-	// The budget is spent, and the retry recorded, only once the wait is over and the retry is made.
-	if rp.wait(ctx, wait) != nil || !rp.budgetAllows(true, true) {
+	if rp.wait(ctx, wait) != nil {
+		refund()
+
 		return false
 	}
 
@@ -321,7 +330,7 @@ func (rp *retryProvider) retryAfterTimeout(ctx context.Context, attempt int) (wa
 
 	wait = s.waitBefore(attempt, nil, errAttemptTimeout)
 
-	if !rp.roomForRetry(ctx, wait) || !rp.budgetAllows(false, false) {
+	if !rp.roomForRetry(ctx, wait) || !rp.budgetAllows() {
 		return 0, false
 	}
 
@@ -329,8 +338,8 @@ func (rp *retryProvider) retryAfterTimeout(ctx context.Context, attempt int) (wa
 }
 
 // planRetry decides whether a retry follows attempt number attempt, and if so, the reason to record and
-// the wait before it. A retry is not made if the result is not retryable, the wait would outlast the
-// caller's deadline, or the budget is spent.
+// the wait before it. A retry is not made if the result is not retryable or the wait would outlast the
+// caller's deadline. The budget is left to replace.
 func (rp *retryProvider) planRetry(ctx context.Context, attempt int, a attemptResult) (reason string,
 	wait time.Duration, ok bool) {
 	s := rp.settings
@@ -347,11 +356,6 @@ func (rp *retryProvider) planRetry(ctx context.Context, attempt int, a attemptRe
 		if !rp.roomForRetry(ctx, wait) {
 			return "", 0, false
 		}
-	}
-
-	// Checked before the wait too, so a call does not wait for a retry the budget already refuses.
-	if !rp.budgetAllows(false, true) {
-		return "", 0, false
 	}
 
 	return reason, wait, true
@@ -420,26 +424,31 @@ func bodyOf(resp *http.Response) io.ReadCloser {
 	return resp.Body
 }
 
-// budgetAllows reports whether the budget allows a retry, and spends it if withdraw is set. If count is
-// set, a refusal is counted in app_http_retry_budget_exhausted_total.
-func (rp *retryProvider) budgetAllows(withdraw, count bool) bool {
+// budgetAllows reports whether the budget would allow a retry now, without spending it.
+func (rp *retryProvider) budgetAllows() bool {
+	b := rp.settings.budget
+
+	return b == nil || b.allows()
+}
+
+// withdrawBudget spends one retry of the budget, and returns the function that gives it back if the
+// retry is not made. A refusal is counted in app_http_retry_budget_exhausted_total.
+func (rp *retryProvider) withdrawBudget() (refund func(), ok bool) {
 	b := rp.settings.budget
 	if b == nil {
-		return true
+		return func() {}, true
 	}
 
-	var allowed bool
-	if withdraw {
-		allowed = b.tryWithdraw()
-	} else {
-		allowed = b.allows()
+	second, ok := b.tryWithdraw()
+	if !ok {
+		if rp.metrics != nil {
+			rp.metrics.IncrementCounter(context.Background(), retryBudgetExhaustedMetric, "service", rp.serviceName)
+		}
+
+		return nil, false
 	}
 
-	if !allowed && count && rp.metrics != nil {
-		rp.metrics.IncrementCounter(context.Background(), retryBudgetExhaustedMetric, "service", rp.serviceName)
-	}
-
-	return allowed
+	return func() { b.refund(second) }, true
 }
 
 // countLegacyRetry counts attempt number attempt, for a RetryConfig with only MaxRetries set, if it was a
