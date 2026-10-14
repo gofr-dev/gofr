@@ -17,6 +17,7 @@ import (
 const (
 	defaultTimeout           = 5 * time.Second
 	arangoEdgeCollectionType = 3
+	statusDown               = "DOWN"
 )
 
 // Client represents an ArangoDB client.
@@ -56,6 +57,7 @@ var (
 	ErrDatabaseExists         = errors.New("database already exists")
 	ErrCollectionExists       = errors.New("collection already exists")
 	ErrGraphExists            = errors.New("graph already exists")
+	errNotConnected           = errors.New("not connected to ArangoDB, check the Connect error logs")
 )
 
 // New creates a new ArangoDB client with the provided configuration.
@@ -94,6 +96,14 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to the ArangoDB server.
 func (c *Client) Connect() {
+	// Register the histogram before any step that can fail, so operations record latency even when
+	// the server is unreachable at startup and becomes available later.
+	arangoBuckets := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
+	c.metrics.NewHistogram("app_arango_stats", "Response time of ArangoDB operations in microseconds.", arangoBuckets...)
+
 	if err := c.validateConfig(); err != nil {
 		c.logger.Errorf("config validation error: %v", err)
 		return
@@ -127,14 +137,16 @@ func (c *Client) Connect() {
 		return
 	}
 
-	// Initialize metrics
-	arangoBuckets := []float64{
-		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
-		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
-	}
-	c.metrics.NewHistogram("app_arango_stats", "Response time of ArangoDB operations in microseconds.", arangoBuckets...)
-
 	c.logger.Logf("Connected to ArangoDB successfully at %s", c.endpoint)
+}
+
+// arangoClient returns the underlying driver client, or errNotConnected when Connect failed before creating it.
+func (c *Client) arangoClient() (arangodb.Client, error) {
+	if c.client == nil {
+		return nil, errNotConnected
+	}
+
+	return c.client, nil
 }
 
 func (c *Client) validateConfig() error {
@@ -239,7 +251,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	ctx, done := c.instrumentOp(ctx, &QueryLog{Operation: "query", Database: dbName, Query: query})
 	defer done()
 
-	db, err := c.client.GetDatabase(ctx, dbName, nil)
+	db, err := c.database(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -363,9 +375,18 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		},
 	}
 
+	if c.client == nil {
+		h.Status = statusDown
+		h.Details["error"] = errNotConnected.Error()
+
+		return &h, errNotConnected
+	}
+
 	version, err := c.client.Version(ctx)
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
+		h.Details["error"] = err.Error()
+
 		return &h, errStatusDown
 	}
 
