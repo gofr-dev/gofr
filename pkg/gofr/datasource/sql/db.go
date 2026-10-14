@@ -29,7 +29,8 @@ type DB struct {
 	closeOnce  sync.Once
 	// background tracks the retry and metrics goroutines so Close can wait for
 	// them; cancelBackground aborts the retry goroutine's in-flight ping. Both are
-	// set by finalizeConnection; a DB built without it has nothing to wait for.
+	// set by finalizeConnection; a DB not built through it starts no background
+	// goroutines, so Close has nothing to wait for.
 	background       sync.WaitGroup
 	cancelBackground context.CancelFunc
 	// cleanup, when non-nil, tears down resources owned by the datasource that
