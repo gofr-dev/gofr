@@ -3,6 +3,7 @@ package scylladb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/gocql/gocql"
@@ -10,6 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+// samePointerMatcher matches only the exact pointer it was built with, so it
+// can tell apart "the same destination reached the session" from "an equal
+// looking value reached it" the way gomock.Eq's reflect.DeepEqual would.
+type samePointerMatcher struct {
+	want any
+}
+
+func (m samePointerMatcher) Matches(x any) bool { return x == m.want }
+func (m samePointerMatcher) String() string     { return fmt.Sprintf("is exactly %v", m.want) }
+
+func samePointer(want any) gomock.Matcher { return samePointerMatcher{want: want} }
 
 const mockBatchName = "mockBatch"
 
@@ -395,6 +408,25 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, applied, tc.expErr == nil, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func Test_ExecuteBatchCASForwardsDest(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	var (
+		id   int
+		name string
+	)
+
+	mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+	mockDeps.mockSession.EXPECT().
+		executeBatchCAS(mockDeps.mockBatch, samePointer(&id), samePointer(&name)).
+		Return(true, nil).Times(1)
+
+	applied, err := client.ExecuteBatchCAS(mockBatchName, &id, &name)
+
+	require.NoError(t, err)
+	assert.True(t, applied)
 }
 
 func Test_ExecCAS(t *testing.T) {

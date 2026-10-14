@@ -320,7 +320,7 @@ func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 
 // ExecuteBatchCAS executes a Compare and set operation on ScyllaDB cluster using the provided batch name.
 func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
-	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest)
+	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest...)
 }
 
 // ExecuteBatchCASWithCtx takes default context, batch name and destination returns bool and error.
