@@ -1452,7 +1452,7 @@ func (mr *MockmigratorMockRecorder) checkAndCreateMigrationTable(c any) *gomock.
 }
 
 // commitMigration mocks base method.
-func (m *Mockmigrator) commitMigration(c *container.Container, data transactionData) error {
+func (m *Mockmigrator) commitMigration(c *container.Container, data *transactionData) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "commitMigration", c, data)
 	ret0, _ := ret[0].(error)
@@ -1509,7 +1509,7 @@ func (mr *MockmigratorMockRecorder) name() *gomock.Call {
 }
 
 // rollback mocks base method.
-func (m *Mockmigrator) rollback(c *container.Container, data transactionData) {
+func (m *Mockmigrator) rollback(c *container.Container, data *transactionData) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "rollback", c, data)
 }

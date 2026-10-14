@@ -50,6 +50,13 @@ var (
 	jsonContentType      = []string{contentTypeJSON}
 )
 
+const (
+	// defaultXMLContentType is the Content-Type of an XML response that does not set its own.
+	defaultXMLContentType = "application/xml"
+	// errorMessageKey is the key under which an error response carries the error's message.
+	errorMessageKey = "message"
+)
+
 // respEncoder pairs a reusable buffer with the encoder bound to it, plus the
 // response envelope itself.
 //
@@ -215,44 +222,54 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 		return true
 
 	case resTypes.XML:
-		contentType := v.ContentType
-
-		if contentType == "" {
-			contentType = "application/xml"
-		}
-
-		r.w.Header().Set("Content-Type", contentType)
-		r.w.WriteHeader(statusCode)
-
-		if len(v.Content) > 0 {
-			_, _ = r.w.Write(v.Content)
-		}
+		r.handleXML(v, statusCode)
 
 		return true
 
 	case resTypes.Redirect:
-		// Redirect status codes are determined by HTTP method, not error state.
-		// QUERY (RFC 10008 §3) gives 303 See Other an explicit meaning: "the original
-		// query can be accomplished via a normal retrieval request on the URI referenced
-		// by the Location response field." That is the one status code the RFC calls
-		// out for QUERY, so QUERY joins the 303 branch. 307 would preserve method+body,
-		// but GoFr's existing coarse redirect handling already drops the body on the
-		// GET (302) path too, so 303 keeps QUERY consistent with the framework rather
-		// than making it a special case — and satisfies the RFC's specific guidance.
-		redirectStatusCode := http.StatusFound
-
-		if r.method == http.MethodPost || r.method == http.MethodPut ||
-			r.method == http.MethodPatch || r.method == MethodQuery {
-			redirectStatusCode = http.StatusSeeOther
-		}
-
-		r.w.Header().Set("Location", v.URL)
-		r.w.WriteHeader(redirectStatusCode)
+		r.handleRedirect(v)
 
 		return true
 	}
 
 	return false
+}
+
+// handleXML writes an XML response, defaulting its Content-Type to application/xml.
+func (r Responder) handleXML(v resTypes.XML, statusCode int) {
+	contentType := v.ContentType
+
+	if contentType == "" {
+		contentType = defaultXMLContentType
+	}
+
+	r.w.Header().Set("Content-Type", contentType)
+	r.w.WriteHeader(statusCode)
+
+	if len(v.Content) > 0 {
+		_, _ = r.w.Write(v.Content)
+	}
+}
+
+// handleRedirect writes a redirect to v.URL. Its status code is determined by the HTTP method,
+// not by error state.
+func (r Responder) handleRedirect(v resTypes.Redirect) {
+	// QUERY (RFC 10008 §3) gives 303 See Other an explicit meaning: "the original
+	// query can be accomplished via a normal retrieval request on the URI referenced
+	// by the Location response field." That is the one status code the RFC calls
+	// out for QUERY, so QUERY joins the 303 branch. 307 would preserve method+body,
+	// but GoFr's existing coarse redirect handling already drops the body on the
+	// GET (302) path too, so 303 keeps QUERY consistent with the framework rather
+	// than making it a special case — and satisfies the RFC's specific guidance.
+	redirectStatusCode := http.StatusFound
+
+	if r.method == http.MethodPost || r.method == http.MethodPut ||
+		r.method == http.MethodPatch || r.method == MethodQuery {
+		redirectStatusCode = http.StatusSeeOther
+	}
+
+	r.w.Header().Set("Location", v.URL)
+	r.w.WriteHeader(redirectStatusCode)
 }
 
 // getStatusCodeForSpecialResponse returns the appropriate status code for special response types.
@@ -371,11 +388,11 @@ type ResponseMarshaller interface {
 // createErrorResponse returns an error response that always contains a "message" field,
 // and if the error implements ResponseMarshaller, it merges custom fields into the response.
 func createErrorResponse(err error) map[string]any {
-	resp := map[string]any{"message": err.Error()}
+	resp := map[string]any{errorMessageKey: err.Error()}
 
 	if rm, ok := err.(ResponseMarshaller); ok {
 		for k, v := range rm.Response() {
-			if k == "message" {
+			if k == errorMessageKey {
 				continue // Skip to avoid overriding the Error() message
 			}
 

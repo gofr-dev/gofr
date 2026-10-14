@@ -28,7 +28,7 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	var argsStr string
 
 	if len(ql.Args) > 0 {
-		var parts []string
+		parts := make([]string, 0, len(ql.Args))
 
 		for _, a := range ql.Args {
 			parts = append(parts, clean(fmt.Sprintf("%v", a)))
