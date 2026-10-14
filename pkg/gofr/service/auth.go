@@ -2,10 +2,25 @@ package service
 
 import (
 	"context"
+	"maps"
 	"net/http"
 )
 
 const AuthHeader = "Authorization"
+
+// cloneHeaders returns a copy of headers for an option to write its own headers into. An option must never write
+// to the caller's map: retry hands that same map to every attempt, and callers reuse or share one across calls.
+func cloneHeaders(headers map[string]string) map[string]string {
+	cloned := make(map[string]string, len(headers)+1)
+	maps.Copy(cloned, headers)
+
+	return cloned
+}
+
+// headerExistsMessage names the header but not its value, which is usually a credential.
+func headerExistsMessage(header string) string {
+	return "a value already exists for header " + header
+}
 
 type authProvider struct {
 	auth func(context.Context, map[string]string) (map[string]string, error)

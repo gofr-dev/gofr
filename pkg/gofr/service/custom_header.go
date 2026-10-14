@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"net/http"
 )
 
@@ -93,13 +94,9 @@ func (a *customHeader) QueryWithHeaders(ctx context.Context, path string, queryP
 }
 
 func setCustomHeader(headers, customHeader map[string]string) map[string]string {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
-	for key, value := range customHeader {
-		headers[key] = value
-	}
+	maps.Copy(headers, customHeader)
 
 	return headers
 }
