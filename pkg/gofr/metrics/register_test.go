@@ -413,5 +413,5 @@ func Test_IncrementCounterNotRegistered_LogsMetricName(t *testing.T) {
 	assert.Contains(t, got, "Metrics rbac_role_extraction_failures is not registered",
 		"the log must name the metric that was not registered")
 	assert.NotContains(t, got, `"message":{}`,
-		"the error must not be marshalled to an empty JSON object")
+		"the error must not be marshaled to an empty JSON object")
 }
