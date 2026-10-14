@@ -1,6 +1,7 @@
 package nats
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -270,6 +271,31 @@ func TestStreamManager_CreateStream_Config(t *testing.T) {
 			expJSCfg:  jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
 			createErr: jetstream.ErrStreamNameAlreadyInUse,
 			expErr:    nil,
+		},
+		{
+			name:      "wrapped stream already in use is treated as success",
+			cfg:       &StreamConfig{Stream: "s", Subjects: []string{"a"}},
+			expJSCfg:  jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
+			createErr: fmt.Errorf("create stream: %w", jetstream.ErrStreamNameAlreadyInUse),
+			expErr:    nil,
+		},
+		{
+			name:     "stream name in use error code with reworded description is treated as success",
+			cfg:      &StreamConfig{Stream: "s", Subjects: []string{"a"}},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
+			createErr: &jetstream.APIError{ErrorCode: jetstream.JSErrCodeStreamNameInUse,
+				Description: "stream exists"},
+			expErr: nil,
+		},
+		{
+			// jetstream.APIError.Is matches by error code, so this 10059 error is reported as
+			// ErrStreamNotFound even though its text mentions "stream name already in use".
+			name:     "other api error mentioning stream name in use is not tolerated",
+			cfg:      &StreamConfig{Stream: "s", Subjects: []string{"a"}},
+			expJSCfg: jetstream.StreamConfig{Name: "s", Subjects: []string{"a"}},
+			createErr: &jetstream.APIError{ErrorCode: jetstream.JSErrCodeStreamNotFound,
+				Description: "stream name already in use"},
+			expErr: jetstream.ErrStreamNotFound,
 		},
 	}
 
