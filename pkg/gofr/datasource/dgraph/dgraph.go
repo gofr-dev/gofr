@@ -243,7 +243,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 		Duration: duration,
 	}
 
-	d.sendOperationStats(tracedCtx, start, mutationToString(mutation), "mutate", span, ql, "dgraph_mutate_duration")
+	d.sendOperationStats(tracedCtx, start, ql.URL, "mutate", span, ql, "dgraph_mutate_duration")
 
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
