@@ -27,7 +27,6 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -71,8 +70,6 @@ func Test_Query_Success(t *testing.T) {
 	mockTxn.EXPECT().Query(gomock.Any(), "my query").Return(&api.Response{Json: []byte(`{"result": "success"}`)}, nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Debugf("dgraph query succeeded in %dµs", gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_query_duration", gomock.Any())
 
@@ -95,7 +92,6 @@ func Test_Query_Error(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_query_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 	mockLogger.EXPECT().Error("dgraph query failed: ", errQueryFailed)
 
 	resp, err := client.Query(context.Background(), "my query")
@@ -115,9 +111,7 @@ func Test_QueryWithVars_Success(t *testing.T) {
 
 	mockTxn.EXPECT().QueryWithVars(gomock.Any(), query, vars).Return(&api.Response{Json: []byte(`{"result": "success"}`)}, nil)
 
-	mockLogger.EXPECT().Debugf("dgraph queryWithVars succeeded in %dµs", gomock.Any())
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_query_with_vars_duration", gomock.Any())
 
@@ -143,7 +137,6 @@ func Test_QueryWithVars_Error(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph queryWithVars failed: ", errQueryFailed)
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 
 	// Call the QueryWithVars method
 	resp, err := client.QueryWithVars(context.Background(), query, vars)
@@ -164,8 +157,6 @@ func Test_Mutate_Success(t *testing.T) {
 	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Debugf("dgraph mutation succeeded in %dµs", gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_mutate_duration", gomock.Any())
 
@@ -213,7 +204,6 @@ func Test_Mutate_Error(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph mutation failed: ", errMutationFailed)
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 
 	// Call the Mutate method
 	resp, err := client.Mutate(context.Background(), mutation)
@@ -229,8 +219,6 @@ func Test_Alter_Success(t *testing.T) {
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), op).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
-	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	err := client.Alter(context.Background(), op)
@@ -246,7 +234,6 @@ func Test_Alter_Error(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 	mockLogger.EXPECT().Error("dgraph alter failed: ", errAlterFailed)
 
 	err := client.Alter(context.Background(), op)
@@ -313,8 +300,6 @@ func Test_ApplySchema_Success(t *testing.T) {
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
-	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	err := client.ApplySchema(context.Background(), schema)
@@ -343,8 +328,6 @@ func Test_AddOrUpdateField_Success(t *testing.T) {
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
-	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	err := client.AddOrUpdateField(context.Background(), fieldName, fieldType, directives)
@@ -370,8 +353,6 @@ func Test_DropField_Success(t *testing.T) {
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
-	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	err := client.DropField(context.Background(), fieldName)
@@ -389,7 +370,6 @@ func Test_DropField_Error(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
 	mockLogger.EXPECT().Error("dgraph alter failed: ", errAlterFailed)
 
 	err := client.DropField(context.Background(), fieldName)
