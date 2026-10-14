@@ -303,6 +303,34 @@ func TestConnection_ReadFailed(t *testing.T) {
 	}
 }
 
+func TestConnection_ReadCount(t *testing.T) {
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte("one"))
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte("two"))
+	})
+	defer server.Close()
+
+	conn, resp := connectToWebSocket(t, server.URL)
+
+	defer conn.Close()
+	defer resp.Body.Close()
+
+	assert.Equal(t, uint64(0), conn.ReadCount())
+
+	var message string
+
+	require.NoError(t, conn.Bind(&message))
+	assert.Equal(t, uint64(1), conn.ReadCount())
+
+	_, _, err := conn.ReadMessage()
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), conn.ReadCount())
+
+	_, _, err = conn.ReadMessage()
+	require.Error(t, err)
+	assert.Equal(t, uint64(2), conn.ReadCount(), "a failed read must not be counted")
+}
+
 // TestConnection_ReadMessage_ErrorHandling tests reading messages with error scenarios.
 func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 	tests := []struct {

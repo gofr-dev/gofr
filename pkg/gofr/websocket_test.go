@@ -642,16 +642,40 @@ func Test_WebSocket_HandlerErrorKeepsConnectionOpen(t *testing.T) {
 
 	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
 
-	var message []byte
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
 
-	for string(message) != "good" {
-		var err error
-
-		_, message, err = ws.ReadMessage()
-		require.NoError(t, err)
-	}
-
+	assert.Equal(t, "good", string(message))
 	assert.GreaterOrEqual(t, calls.Load(), int32(2))
+}
+
+func Test_WebSocket_HandlerErrorBeforeReadingStopsLoop(t *testing.T) {
+	var calls atomic.Int32
+
+	app, wsURL := newWebSocketTestApp(t, func(*Context) (any, error) {
+		calls.Add(1)
+
+		return nil, errInvalidPayload
+	})
+
+	// The handler fails as soon as the connection is registered, so it may already be gone by the time
+	// dialWebSocket would look for it.
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	require.Eventually(t, func() bool { return calls.Load() == 1 }, 3*time.Second, time.Millisecond)
+
+	requireHandlerLoopEnded(t, app)
+
+	assert.Equal(t, int32(1), calls.Load())
+
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+	_, _, err = ws.ReadMessage()
+	require.Error(t, err, "the client must see the connection close, not a frame")
 }
 
 func Test_WebSocket_SerializeFailureDoesNotSendFrame(t *testing.T) {

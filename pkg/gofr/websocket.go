@@ -112,9 +112,16 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
 	for {
+		reads := conn.ReadCount()
+
 		response, err := handler(ctx)
-		if handleWebSocketError(ctx, "error handling message", err) || (err != nil && conn.ReadFailed()) {
-			break
+		if err != nil {
+			// A handler error that consumed no message would repeat identically on the next pass, so end the loop.
+			if handleWebSocketError(ctx, "error handling message", err) || conn.ReadFailed() || conn.ReadCount() == reads {
+				break
+			}
+
+			continue
 		}
 
 		message, err := serializeMessage(response)
