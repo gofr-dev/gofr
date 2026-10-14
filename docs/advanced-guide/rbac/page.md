@@ -363,6 +363,17 @@ A rule set that opens the static directory and a login route:
 {"path": "/static/{path:.*}", "methods": ["*"], "public": true}
 ```
 
+A static directory served at the root, with `app.AddStaticFiles("/", dir)`, is the route
+`* /{path:.*}`, and the rule that covers it also matches GoFr's health routes,
+`/.well-known/alive` and `/.well-known/health`. The check does not report this, because those
+routes are exempt, but a request to them without a role gets a 401, so a liveness probe fails. Open
+them with a public rule; the more specific rule wins, whatever order the two are written in:
+
+```json
+{"path": "/.well-known/{path:.*}", "methods": ["GET"], "public": true},
+{"path": "/{path:.*}", "methods": ["*"], "requiredPermissions": ["files:read"]}
+```
+
 The dead-rule check is lenient on purpose: two path variables with different constraints —
 `{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, so a rule like
 that is not reported as dead. The coverage check is strict: a rule covers a route only when the
@@ -382,6 +393,16 @@ matches IDs that start with a space, so it neither matches nor covers `{id:[0-9]
 
 The check sees the route table, not the middleware in front of it: a request answered before
 routing (a CORS preflight, for example) never reaches RBAC either way.
+
+When `EnableRBAC` is called more than once, every config enforces its own rules on each request, so
+the check looks at all of them. A route is reported as uncovered or partly covered only when no
+config covers it in full. A dead rule is reported for each config that holds it, prefixed with the
+config's number in the order `EnableRBAC` was called:
+
+```
+RBAC route check failed: rules match no registered route: config 1: GET /amdin/{id}. These rules
+protect nothing; fix each rule's path or methods, or remove it.
+```
 
 #### Choosing what a mismatch does
 

@@ -228,6 +228,11 @@ func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 			notLog: []string{routeCheckFailed},
 		},
 		{
+			desc:   "the catch-all GoFr registers is not checked as a route",
+			config: rbacGuardingPing,
+			notLog: []string{"/{path:.*}"},
+		},
+		{
 			desc:    "a dead rule is logged as an error",
 			config:  rbacWithDeadRule,
 			wantLog: []string{routeCheckFailed, "DELETE /api/user/{id}"},
