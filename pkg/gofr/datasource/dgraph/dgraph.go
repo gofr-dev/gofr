@@ -156,7 +156,9 @@ func (d *Client) Query(ctx context.Context, query string) (_ any, err error) {
 	defer func() { finishSpan(span, err) }()
 
 	// Execute query
-	resp, err := d.client.NewTxn().Query(tracedCtx, query)
+	var resp *api.Response
+
+	resp, err = d.client.NewTxn().Query(tracedCtx, query)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the query details
@@ -186,7 +188,9 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 	defer func() { finishSpan(span, err) }()
 
 	// Execute the query with variables
-	resp, err := d.client.NewTxn().QueryWithVars(tracedCtx, query, vars)
+	var resp *api.Response
+
+	resp, err = d.client.NewTxn().QueryWithVars(tracedCtx, query, vars)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the query details
@@ -227,7 +231,9 @@ func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 	}
 
 	// Execute mutation
-	resp, err := d.mutateInTxn(tracedCtx, mutation)
+	var resp *api.Response
+
+	resp, err = d.mutateInTxn(tracedCtx, mutation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the mutation details
