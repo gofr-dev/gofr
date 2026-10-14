@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/internal/rbaccheck"
 	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/rbac"
@@ -58,18 +59,10 @@ func (a *App) enableRBAC(configPath ...string) error {
 		}
 	}
 
-	// Get dependencies
-	logger := a.Logger()
-	metrics := a.Metrics()
-	tracer := otel.GetTracerProvider().Tracer("gofr-rbac")
-
-	// Load configuration directly with dependencies
-	config, err := rbac.LoadPermissions(path, logger, metrics, tracer)
+	config, err := a.loadRBACConfig(path)
 	if err != nil {
-		return fmt.Errorf("failed to load RBAC config: %w", err)
+		return err
 	}
-
-	a.Logger().Infof("Loaded RBAC config successfully")
 
 	// Apply middleware using the config
 	middlewareFunc := rbac.Middleware(config)
@@ -78,6 +71,45 @@ func (a *App) enableRBAC(configPath ...string) error {
 	a.rbacConfigs = append(a.rbacConfigs, config)
 
 	return nil
+}
+
+// loadRBACConfig loads the config at path and logs the startup summary. The load logs through a
+// counting logger, so the summary can say that errors were logged instead of reading as a clean
+// success. The returned config logs through the app logger, not the counting wrapper.
+func (a *App) loadRBACConfig(path string) (*rbac.Config, error) {
+	logger := a.Logger()
+	loadLogger := &errorCountingLogger{Logger: logger}
+
+	config, err := rbac.LoadPermissions(path, loadLogger, a.Metrics(), otel.GetTracerProvider().Tracer("gofr-rbac"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load RBAC config: %w", err)
+	}
+
+	config.Logger = logger
+
+	if loadLogger.errors > 0 {
+		logger.Errorf("Loaded RBAC config with %d error(s); see the RBAC errors logged above", loadLogger.errors)
+	} else {
+		logger.Infof("Loaded RBAC config successfully")
+	}
+
+	return config, nil
+}
+
+// errorCountingLogger counts the error lines logged through it while the RBAC config loads.
+type errorCountingLogger struct {
+	datasource.Logger
+	errors int
+}
+
+func (l *errorCountingLogger) Error(args ...any) {
+	l.errors++
+	l.Logger.Error(args...)
+}
+
+func (l *errorCountingLogger) Errorf(format string, args ...any) {
+	l.errors++
+	l.Logger.Errorf(format, args...)
 }
 
 // rbacRouteCheckKey selects what the startup route check does on a mismatch. See rbacRouteCheckMode.
