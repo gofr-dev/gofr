@@ -168,7 +168,7 @@ func (d *Client) Query(ctx context.Context, query string) (_ any, err error) {
 		Duration: duration,
 	}
 
-	d.sendOperationStats(tracedCtx, start, query, "query", span, ql, "dgraph_query_duration")
+	d.sendOperationStats(tracedCtx, query, "query", span, ql, "dgraph_query_duration")
 
 	if err != nil {
 		d.logger.Error("dgraph query failed: ", err)
@@ -204,7 +204,7 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		span.SetAttributes(attribute.String("dgraph.query.vars", fmt.Sprintf("%v", vars)))
 	}
 
-	d.sendOperationStats(tracedCtx, start, query, "query-with-vars", span, ql, "dgraph_query_with_vars_duration")
+	d.sendOperationStats(tracedCtx, query, "query-with-vars", span, ql, "dgraph_query_with_vars_duration")
 
 	if err != nil {
 		d.logger.Error("dgraph queryWithVars failed: ", err)
@@ -243,7 +243,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (_ any, err error) {
 		Duration: duration,
 	}
 
-	d.sendOperationStats(tracedCtx, start, ql.URL, "mutate", span, ql, "dgraph_mutate_duration")
+	d.sendOperationStats(tracedCtx, ql.URL, "mutate", span, ql, "dgraph_mutate_duration")
 
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
@@ -330,7 +330,7 @@ func (d *Client) Alter(ctx context.Context, op any) (err error) {
 		span.SetAttributes(attribute.String("dgraph.alter.operation", operation.String()))
 	}
 
-	d.sendOperationStats(tracedCtx, start, operation.String(), "alter", span, ql, "dgraph_alter_duration")
+	d.sendOperationStats(tracedCtx, operation.String(), "alter", span, ql, "dgraph_alter_duration")
 
 	if err != nil {
 		d.logger.Error("dgraph alter failed: ", err)
@@ -377,13 +377,11 @@ func (d *Client) addTrace(ctx context.Context, method string) (context.Context, 
 	return tracedCtx, span
 }
 
-func (d *Client) sendOperationStats(ctx context.Context, start time.Time, query, method string,
+func (d *Client) sendOperationStats(ctx context.Context, query, method string,
 	span trace.Span, queryLog *QueryLog, metricName string) {
-	duration := time.Since(start).Microseconds()
-
 	if span != nil {
 		span.SetAttributes(attribute.String(fmt.Sprintf("dgraph.%v.query", method), query))
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("dgraph.%v.duration", method), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("dgraph.%v.duration", method), queryLog.Duration))
 	}
 
 	queryLog.PrettyPrint(d.logger)
