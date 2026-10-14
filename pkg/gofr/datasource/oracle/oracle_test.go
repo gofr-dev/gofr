@@ -1069,3 +1069,48 @@ func Test_sqlConn_Select_Errors(t *testing.T) {
 		})
 	}
 }
+
+// Test_Oracle_HealthCheck_PingUsesCallerContext verifies that HealthCheck correctly
+// propagates the caller's context down to the underlying connection's Ping method.
+func Test_Oracle_HealthCheck_PingUsesCallerContext(t *testing.T) {
+	mockConn, _, c := getOracleTestConnection(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	// Expect Ping to receive the exact context passed into HealthCheck.
+	mockConn.EXPECT().Ping(ctx).Return(context.Canceled)
+
+	resp, err := c.HealthCheck(ctx)
+
+	require.ErrorIs(t, err, errStatusDown)
+
+	health, ok := resp.(*Health)
+	require.True(t, ok)
+	assert.Equal(t, StatusDown, health.Status)
+}
+
+// Test_Select_InvalidDestType_Cases tests that Select validates destination pointer types
+// (rejecting non-slice pointers like &map or &struct) prior to invoking the database driver.
+func Test_Select_InvalidDestType_Cases(t *testing.T) {
+	tests := []struct {
+		desc string
+		dest any
+	}{
+		{desc: "pointer to map", dest: &map[string]any{}},
+		{desc: "pointer to struct", dest: &Health{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, _, c := getOracleTestConnection(t)
+
+			// Select should fail fast on type validation without making any call to the connection.
+			mockConn.EXPECT().Select(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+			err := c.Select(t.Context(), tc.dest, "SELECT 1 FROM dual")
+
+			require.ErrorIs(t, err, errInvalidDestType)
+		})
+	}
+}
