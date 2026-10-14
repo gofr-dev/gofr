@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
@@ -475,6 +477,13 @@ func Test_buildResource(t *testing.T) {
 			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "framework_version=hacked"},
 			wantAttrs: map[string]string{"framework_version": version.Framework},
 		},
+		{
+			name:      "malformed OTEL_RESOURCE_ATTRIBUTES keeps its valid entries and is reported",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "broken,deployment.environment=prod"},
+			wantAttrs: map[string]string{"deployment.environment": "prod"},
+			wantLog:   "resource detection was incomplete",
+		},
 	}
 
 	for _, tt := range tests {
@@ -482,6 +491,8 @@ func Test_buildResource(t *testing.T) {
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
+
+			handled := countOtelErrors(t)
 
 			var res *resource.Resource
 
@@ -493,8 +504,30 @@ func Test_buildResource(t *testing.T) {
 
 			assertServiceNameWarning(t, out, tt.wantLog)
 			assertResourceAttrs(t, res, tt.wantAttrs)
+
+			// buildResource reports a malformed environment through the logger above;
+			// it must not also hand it to otel.Handle, which the SDK already does on
+			// its own re-reads of the environment.
+			if n := handled.Load(); n != 0 {
+				t.Errorf("buildResource called otel.Handle %d time(s), want 0", n)
+			}
 		})
 	}
+}
+
+// countOtelErrors swaps the global OTel error handler for one that counts calls,
+// restoring the previous handler when the test ends.
+func countOtelErrors(t *testing.T) *atomic.Int32 {
+	t.Helper()
+
+	var n atomic.Int32
+
+	prev := otel.GetErrorHandler()
+
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) { n.Add(1) }))
+	t.Cleanup(func() { otel.SetErrorHandler(prev) })
+
+	return &n
 }
 
 func assertServiceNameWarning(t *testing.T, out, wantLog string) {

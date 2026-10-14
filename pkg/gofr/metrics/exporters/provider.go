@@ -84,11 +84,11 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 // tracing switched off never reaches that one, so without this a metrics-only app
 // would drop the operator's value silently.
 //
-// It reads the environment through resource.Environment rather than the raw
-// variables so the warning reflects exactly what resource.WithFromEnv resolved,
-// including the service.name form embedded in OTEL_RESOURCE_ATTRIBUTES.
-func warnIfEnvServiceNameIgnored(appName string, logger Logger) {
-	for _, kv := range resource.Environment().Attributes() {
+// It reads env, the resource the SDK's environment detector resolved, rather than
+// the raw variables, so the warning also covers the service.name form embedded in
+// OTEL_RESOURCE_ATTRIBUTES.
+func warnIfEnvServiceNameIgnored(env *resource.Resource, appName string, logger Logger) {
+	for _, kv := range env.Attributes() {
 		// GoFr pins semconv v1.17.0 while the SDK's fromEnv detector pins a newer
 		// one; ServiceNameKey is the identical attribute.Key("service.name") in
 		// both, so comparing across the two versions is safe.
@@ -110,7 +110,17 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		attribute.String("framework_version", version.Framework),
 	}
 
-	warnIfEnvServiceNameIgnored(cfg.AppName, logger)
+	// Run the environment detector once and reuse its result for the warning and
+	// the resource. resource.Environment() would parse the variables a second time
+	// and hand a malformed OTEL_RESOURCE_ATTRIBUTES to otel.Handle on top of the
+	// warning below. The SDK still reports it on its own re-reads (resource.Default,
+	// metricSdk.WithResource); GoFr cannot stop those.
+	env, err := resource.New(ctx, resource.WithFromEnv())
+	if err != nil {
+		logger.Warnf("metrics: resource detection was incomplete: %v", err)
+	}
+
+	warnIfEnvServiceNameIgnored(env, cfg.AppName, logger)
 
 	opts := []resource.Option{
 		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend requires but the
@@ -122,11 +132,11 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// complete resource on its own rather than one that is only correct once a
 		// particular consumer merges it.
 		//
-		// The order stays WithFromEnv first: resource.New merges each later option
-		// as the winner, so WithAttributes last is what keeps service.name and
+		// The order stays the environment first: resource.New merges each later
+		// option as the winner, so attrs last is what keeps service.name and
 		// framework_version out of the environment's reach. Test_buildResource pins
 		// both, so a reshuffle of this slice fails.
-		resource.WithFromEnv(),
+		resource.WithAttributes(env.Attributes()...),
 		resource.WithAttributes(attrs...),
 	}
 

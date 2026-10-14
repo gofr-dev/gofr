@@ -116,7 +116,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  OTEL_SERVICE_NAME
--  Standard OpenTelemetry service name. Ignored: GoFr sets service.name on exported traces and metrics from APP_NAME, and logs a warning at startup when this is set to a different value. Set APP_NAME to rename the service.
+-  Standard OpenTelemetry service name. Ignored: GoFr sets service.name on exported traces and metrics from APP_NAME, and logs a warning at startup when this is set to a different value. Tracing and metrics each log it, so with both enabled the warning appears twice, once prefixed "traces:" and once "metrics:". Set APP_NAME to rename the service.
 
 ---
 
