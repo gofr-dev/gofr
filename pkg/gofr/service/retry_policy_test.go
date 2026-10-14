@@ -232,6 +232,7 @@ func readBody(t *testing.T, resp *http.Response) string {
 func TestRetryConfig_RetryDecision(t *testing.T) {
 	retryAfter1 := http.Header{"Retry-After": {"1"}}
 	retryAfter120 := http.Header{"Retry-After": {"120"}}
+	retryAfterDate := http.Header{"Retry-After": {time.Now().Add(2 * time.Minute).UTC().Format(http.TimeFormat)}}
 
 	tests := []struct {
 		desc      string
@@ -273,6 +274,10 @@ func TestRetryConfig_RetryDecision(t *testing.T) {
 			cfg: RetryConfig{MaxRetries: 1, RespectRetryAfter: true, MaxRetryAfter: 5 * time.Second,
 				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
 			header: retryAfter120, statuses: []int{503, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{5 * time.Second}},
+		{desc: "Retry-After as an HTTP date honored over backoff",
+			cfg: RetryConfig{MaxRetries: 1, RespectRetryAfter: true, MaxRetryAfter: 5 * time.Second,
+				Backoff: ConstantBackoff{Delay: time.Millisecond}, RetryOn: StandardRetryable, Methods: safeRetryMethods()},
+			header: retryAfterDate, statuses: []int{429, 200}, wantCode: 200, wantHits: 2, wantWaits: []time.Duration{5 * time.Second}},
 		{desc: "custom RetryOn overrides the standard rule",
 			cfg: RetryConfig{MaxRetries: 2, Methods: safeRetryMethods(), RetryOn: func(r *http.Response, _ error) bool {
 				return r != nil && r.StatusCode == http.StatusInternalServerError
@@ -773,6 +778,38 @@ func TestRetryConfig_CanceledWaitSpendsNoBudget(t *testing.T) {
 	_ = readBody(t, resp)
 
 	assert.Equal(t, int32(3), hits.Load(), "a canceled wait must not spend the budget")
+}
+
+func TestRetryConfig_SharedBudgetCountsPerService(t *testing.T) {
+	// One value shared by two services; the floor allows exactly one retry in the window.
+	budget := &RetryBudget{MinPerSecond: 1, TTL: time.Second}
+
+	newService := func() (HTTP, *atomic.Int32) {
+		server, hits := statusSequence(t, nil, http.StatusServiceUnavailable)
+		svc, _ := newPolicyService(t, server.URL, nil,
+			&RetryConfig{MaxRetries: 1, Budget: budget, RetryOn: StandardRetryable, Methods: safeRetryMethods()})
+
+		return svc, hits
+	}
+
+	first, firstHits := newService()
+	second, secondHits := newService()
+
+	get := func(svc HTTP) {
+		resp, err := svc.Get(t.Context(), "test", nil)
+		require.NoError(t, err)
+
+		_ = readBody(t, resp)
+	}
+
+	// The first service spends its one retry, then has none left.
+	get(first)
+	get(first)
+	require.Equal(t, int32(3), firstHits.Load(), "the first service's budget must allow one retry, then none")
+
+	// The second service still has its own.
+	get(second)
+	assert.Equal(t, int32(2), secondHits.Load(), "services sharing a RetryBudget value must not share its counts")
 }
 
 func TestAttemptWithTimeout_ReleasesOnPanic(t *testing.T) {

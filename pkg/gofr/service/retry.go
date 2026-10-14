@@ -59,7 +59,8 @@ type RetryConfig struct {
 	// it fires, that RetryOn does not retry a timeout, the budget is spent, or the caller's deadline has
 	// no room for another attempt. Such an attempt runs until the upstream answers or the caller's
 	// context ends. Reading the body of the returned response is not bounded by it; reading a response
-	// before a retry is.
+	// before a retry is. With no PerAttemptTimeout, only the caller's context bounds that read, so an
+	// upstream that stalls a response body holds the call until the context ends.
 	PerAttemptTimeout time.Duration
 	// Budget caps the retries made to the service. nil means unlimited.
 	Budget *RetryBudget
