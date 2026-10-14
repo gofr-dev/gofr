@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -159,4 +161,25 @@ func TestEnableRBAC(t *testing.T) {
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
+}
+
+// TestEnableRBAC_RegistersRoleExtractionFailureCounter guards the counter the RBAC middleware
+// increments on a failed role extraction. The middleware calls IncrementCounter for
+// "rbac_role_extraction_failures", so enabling RBAC must register that counter; otherwise the
+// increment finds no such metric and the series never reaches the metrics endpoint.
+func TestEnableRBAC_RegistersRoleExtractionFailureCounter(t *testing.T) {
+	a := newAuthTestApp(t)
+
+	require.NoError(t, a.EnableRBAC(writeRBACConfig(t, t.TempDir(), "rbac.json", rbacGuardingRoot)))
+
+	// A request with no role header fails extraction (401) and must be counted.
+	require.Equal(t, http.StatusUnauthorized, unauthenticatedStatus(t, a))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", http.NoBody)
+
+	metrics.GetHandler(a.Metrics()).ServeHTTP(rec, req)
+
+	assert.Contains(t, rec.Body.String(), "rbac_role_extraction_failures",
+		"the role-extraction failure counter must be registered so a failed extraction reaches /metrics")
 }
