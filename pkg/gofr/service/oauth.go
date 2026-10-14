@@ -99,12 +99,10 @@ func validateTokenURL(tokenURL string) error {
 func (c *OAuthConfig) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	var err error
 
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
-	if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
-		return nil, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
+	if headers[AuthHeader] != "" {
+		return nil, AuthErr{Message: headerExistsMessage(AuthHeader)}
 	}
 
 	clientCredentials := clientcredentials.Config{
