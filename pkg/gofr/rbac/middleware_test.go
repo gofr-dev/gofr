@@ -1470,3 +1470,48 @@ func BenchmarkMiddleware(b *testing.B) {
 		})
 	}
 }
+
+func TestAuditLog_PrettyPrint(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		log      AuditLog
+		wantHeld string
+	}{
+		{desc: "role", log: AuditLog{Role: "admin", Permission: "orders:read", HeldCount: 3}, wantHeld: "[admin]"},
+		{desc: "permission", log: AuditLog{Permission: "orders:read", HeldCount: 3}, wantHeld: "[orders:read]"},
+		{desc: "held count", log: AuditLog{HeldCount: 3}, wantHeld: "[3 held]"},
+		{desc: "nothing held", log: AuditLog{}, wantHeld: "[]"},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			tc.log.CorrelationID, tc.log.Status, tc.log.Route = "corr-1", "DENIED", "/orders"
+
+			var buf strings.Builder
+			tc.log.PrettyPrint(&buf)
+
+			out := buf.String()
+			assert.Contains(t, out, "corr-1 DENIED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, out, "RBAC /orders "+tc.wantHeld, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestExtractionFailure_Error(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		failure *extractionFailure
+		want    string
+	}{
+		{desc: "401 sentinel hides the cause",
+			failure: &extractionFailure{sentinel: ErrRoleNotFound, cause: errClaimPathNotFound, reason: reasonMissingRole},
+			want:    ErrRoleNotFound.Error()},
+		{desc: "403 sentinel hides the cause",
+			failure: &extractionFailure{sentinel: ErrAccessDenied, cause: errUnreadableClaim, reason: reasonUnreadableClaim},
+			want:    ErrAccessDenied.Error()},
+	}
+
+	for i, tc := range testCases {
+		assert.Equal(t, tc.want, tc.failure.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}

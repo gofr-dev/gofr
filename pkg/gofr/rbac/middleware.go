@@ -211,8 +211,6 @@ type extractionFailure struct {
 
 func (f *extractionFailure) Error() string { return f.sentinel.Error() }
 
-func (f *extractionFailure) Unwrap() error { return f.sentinel }
-
 // bareError returns the sentinel inside an extraction failure, or err itself when it is not one.
 func bareError(err error) error {
 	if f, ok := errors.AsType[*extractionFailure](err); ok {
