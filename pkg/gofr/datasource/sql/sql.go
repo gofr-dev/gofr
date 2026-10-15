@@ -405,7 +405,9 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
+			quoteConnValue(dbConfig.HostName), quoteConnValue(dbConfig.Port), quoteConnValue(dbConfig.User),
+			quoteConnValue(dbConfig.Password), quoteConnValue(dbConfig.Database),
+			quoteConnValue(dbConfig.SSLMode)), nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
@@ -413,6 +415,21 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	default:
 		return "", errUnsupportedDialect
 	}
+}
+
+// quoteConnValue quotes a value for a libpq key/value connection string. Values holding a
+// space, a single quote or a backslash have to be wrapped in single quotes, with backslashes
+// and single quotes inside them escaped, otherwise libpq ends the value at the space and reads
+// the backslash as an escape. Values without those characters are returned untouched, so the
+// connection strings we build today stay byte for byte the same.
+func quoteConnValue(value string) string {
+	if !strings.ContainsAny(value, ` '\`) {
+		return value
+	}
+
+	escaped := strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(value)
+
+	return "'" + escaped + "'"
 }
 
 func pushDBMetrics(database *DB, metrics Metrics) {
