@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -45,13 +44,7 @@ var (
 	errUnsupportedDialect = fmt.Errorf(
 		"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
 	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
-	// errInvalidConnectTimeout reports a DB_CONNECT_TIMEOUT that is not a positive whole number of seconds.
-	errInvalidConnectTimeout = errors.New("invalid DB_CONNECT_TIMEOUT, expected a positive whole number of seconds")
 )
-
-// defaultConnectTimeoutSeconds bounds a networked connect so a host that accepts
-// TCP but never answers fails the attempt instead of blocking it forever.
-const defaultConnectTimeoutSeconds = 10
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -65,9 +58,6 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
-	// connectTimeout is the network connect timeout in whole seconds for the
-	// networked dialects; zero or less leaves the driver default in place.
-	connectTimeout int
 }
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
@@ -140,8 +130,6 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	if dbConfig.Dialect == "" {
 		return nil
 	}
-
-	warnOnInvalidConnectTimeout(configs, logger)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
@@ -390,40 +378,18 @@ func getDBConfig(configs config.Config) *DBConfig {
 		maxOpenConn = defaultMaxOpenConn
 	}
 
-	connectTimeout, _ := parseConnectTimeout(configs)
-
 	return &DBConfig{
-		connectTimeout: connectTimeout,
-		Dialect:        configs.Get("DB_DIALECT"),
-		HostName:       configs.Get("DB_HOST"),
-		User:           configs.Get("DB_USER"),
-		Password:       configs.Get("DB_PASSWORD"),
-		Port:           configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
-		Database:       configs.Get("DB_NAME"),
-		MaxOpenConn:    maxOpenConn,
-		MaxIdleConn:    maxIdleConn,
+		Dialect:     configs.Get("DB_DIALECT"),
+		HostName:    configs.Get("DB_HOST"),
+		User:        configs.Get("DB_USER"),
+		Password:    configs.Get("DB_PASSWORD"),
+		Port:        configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
+		Database:    configs.Get("DB_NAME"),
+		MaxOpenConn: maxOpenConn,
+		MaxIdleConn: maxIdleConn,
 		// Supported for postgres, supabase, cockroachdb, and mysql
 		SSLMode: configs.GetOrDefault("DB_SSL_MODE", sslModeDisable),
 		Charset: configs.Get("DB_CHARSET"),
-	}
-}
-
-// parseConnectTimeout reads DB_CONNECT_TIMEOUT (whole seconds). A missing key gives
-// the default silently; an invalid or non-positive value gives the default and an error.
-func parseConnectTimeout(configs config.Config) (int, error) {
-	raw := configs.GetOrDefault("DB_CONNECT_TIMEOUT", strconv.Itoa(defaultConnectTimeoutSeconds))
-
-	seconds, err := strconv.Atoi(raw)
-	if err != nil || seconds <= 0 {
-		return defaultConnectTimeoutSeconds, fmt.Errorf("%w: %q", errInvalidConnectTimeout, raw)
-	}
-
-	return seconds, nil
-}
-
-func warnOnInvalidConnectTimeout(configs config.Config, logger datasource.Logger) {
-	if _, err := parseConnectTimeout(configs); err != nil {
-		logger.Warnf("%v; using the default of %d seconds", err, defaultConnectTimeoutSeconds)
 	}
 }
 
@@ -447,20 +413,10 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
 		}
 
-		if dbConfig.connectTimeout > 0 {
-			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.connectTimeout)
-		}
-
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
-		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode)
-
-		if dbConfig.connectTimeout > 0 {
-			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.connectTimeout)
-		}
-
-		return connStr, nil
+		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
