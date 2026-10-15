@@ -180,8 +180,13 @@ func (a *App) checkRBACRoutes() bool {
 	}
 
 	if len(m.PartlyCovered) > 0 {
+		partly := make([]string, len(m.PartlyCovered))
+		for i, p := range m.PartlyCovered {
+			partly[i] = p.String()
+		}
+
 		logger.Errorf("RBAC route check failed: routes only partly covered: %s. Requests these rules do not "+
-			"match are served without role checks; add a rule that matches each route in full.", strings.Join(m.PartlyCovered, ", "))
+			"match are served without role checks; add a rule that matches each route in full.", strings.Join(partly, ", "))
 	}
 
 	return m.Failed()
