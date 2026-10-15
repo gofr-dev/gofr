@@ -4,19 +4,14 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -35,60 +30,6 @@ func (fakeConnector) Driver() driver.Driver                        { return fake
 type fakeDriver struct{}
 
 func (fakeDriver) Open(string) (driver.Conn, error) { return nil, errFakeNoConn }
-
-// blockingPingConnector hands out connections whose first ping (the connect check)
-// succeeds and whose later pings block until their context is done. It lets a test
-// hold the background retry goroutine mid-ping while Close runs.
-type blockingPingConnector struct {
-	pings   atomic.Int32
-	active  atomic.Int32
-	started chan struct{}
-	release chan struct{}
-	// ignoreCtx makes a blocked ping wait on release only, like lib/pq's connect.
-	ignoreCtx bool
-	// releaseErr is what a released ping returns, e.g. the failure of a connect
-	// that finishes after Close has closed the pool.
-	releaseErr error
-}
-
-func (c *blockingPingConnector) Connect(context.Context) (driver.Conn, error) {
-	return blockingPingConn{c: c}, nil
-}
-
-func (*blockingPingConnector) Driver() driver.Driver { return fakeDriver{} }
-
-type blockingPingConn struct{ c *blockingPingConnector }
-
-func (blockingPingConn) Prepare(string) (driver.Stmt, error) { return nil, errFakeNoConn }
-func (blockingPingConn) Close() error                        { return nil }
-func (blockingPingConn) Begin() (driver.Tx, error)           { return nil, errFakeNoConn }
-
-func (b blockingPingConn) Ping(ctx context.Context) error {
-	if b.c.pings.Add(1) == 1 {
-		return nil
-	}
-
-	b.c.active.Add(1)
-	defer b.c.active.Add(-1)
-
-	select {
-	case b.c.started <- struct{}{}:
-	default:
-	}
-
-	// A nil channel never fires, which models a driver that ignores cancellation.
-	var done <-chan struct{}
-	if !b.c.ignoreCtx {
-		done = ctx.Done()
-	}
-
-	select {
-	case <-done:
-		return ctx.Err()
-	case <-b.c.release:
-		return b.c.releaseErr
-	}
-}
 
 func newConnectorMetrics(t *testing.T) Metrics {
 	t.Helper()
@@ -162,99 +103,4 @@ func TestNewSQLFromConnector_NilCleanup(t *testing.T) {
 	require.NotNil(t, got)
 
 	assert.NoError(t, got.Close())
-}
-
-// TestDB_Close_WaitsForBackgroundPing pins Close's contract: it cancels a background
-// ping that is in flight and waits for the retry and metrics goroutines to exit, so
-// nothing touches the database after Close returns.
-func TestDB_Close_WaitsForBackgroundPing(t *testing.T) {
-	leakOpts := goleak.IgnoreCurrent()
-
-	connector := &blockingPingConnector{started: make(chan struct{}, 1), release: make(chan struct{})}
-	// Unblocks the ping if Close failed to cancel it, so a red run leaks nothing.
-	t.Cleanup(func() { close(connector.release) })
-
-	got := NewSQLFromConnector(connector, config.NewMockConfig(map[string]string{"DB_DIALECT": dialectPostgres}),
-		logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t), nil)
-	require.NotNil(t, got)
-
-	select {
-	case <-connector.started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("background ping never started")
-	}
-
-	closed := make(chan error, 1)
-
-	go func() { closed <- got.Close() }()
-
-	select {
-	case err := <-closed:
-		require.NoError(t, err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("Close blocked on an in-flight background ping")
-	}
-
-	assert.Zero(t, connector.active.Load(), "a background ping was still running after Close returned")
-	goleak.VerifyNone(t, leakOpts)
-}
-
-// TestDB_Close_BoundedWhenDriverIgnoresCancel covers a driver that ignores context
-// cancellation (lib/pq does while connecting): Close must still return within its
-// bound and warn that the attempt did not stop. A second Close must not wait or warn
-// again, and once the stuck attempt is released and fails, the retry goroutine must
-// exit without logging a retry.
-func TestDB_Close_BoundedWhenDriverIgnoresCancel(t *testing.T) {
-	prev := closeWaitTimeout
-	closeWaitTimeout = 100 * time.Millisecond
-
-	t.Cleanup(func() { closeWaitTimeout = prev })
-
-	connector := &blockingPingConnector{started: make(chan struct{}, 1), release: make(chan struct{}), ignoreCtx: true,
-		releaseErr: errFakeNoConn}
-
-	var closeErr error
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		got := NewSQLFromConnector(connector, config.NewMockConfig(map[string]string{"DB_DIALECT": dialectPostgres}),
-			logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t), nil)
-		require.NotNil(t, got)
-
-		select {
-		case <-connector.started:
-		case <-time.After(5 * time.Second):
-			t.Error("background ping never started")
-			close(connector.release)
-
-			return
-		}
-
-		closed := make(chan error, 1)
-
-		go func() { closed <- errors.Join(got.Close(), got.Close()) }()
-
-		select {
-		case closeErr = <-closed:
-		case <-time.After(2 * time.Second):
-			t.Error("Close blocked on a ping that ignores cancellation")
-		}
-
-		// Let the stuck ping fail so the goroutine exits and the test leaks nothing.
-		close(connector.release)
-
-		exited := make(chan struct{})
-
-		go func() { got.background.Wait(); close(exited) }()
-
-		select {
-		case <-exited:
-		case <-time.After(2 * time.Second):
-			t.Error("the background goroutines did not exit after the stuck ping was released")
-		}
-	})
-
-	require.NoError(t, closeErr)
-	assert.Equal(t, 1, strings.Count(logs, "a background connection attempt did not stop"),
-		"only the first Close should wait for the stuck attempt")
-	assert.NotContains(t, logs, "retrying SQL database connection")
 }

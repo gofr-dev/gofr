@@ -1,12 +1,10 @@
 package sql
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -54,41 +52,6 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	})
 
 	assert.Containsf(t, testLogs, expectedLog, "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
-}
-
-func TestNewSQL_InvalidConnectTimeoutWarns(t *testing.T) {
-	testCases := []struct {
-		name     string
-		timeout  string
-		wantWarn bool
-	}{
-		{name: "invalid value warns", timeout: "abc", wantWarn: true},
-		{name: "non-positive value warns", timeout: "0", wantWarn: true},
-		{name: "valid value is silent", timeout: "3"},
-		{name: "unset is silent", timeout: ""},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			conf := map[string]string{"DB_DIALECT": sqlite, "DB_NAME": filepath.Join(t.TempDir(), "t.db")}
-			if tc.timeout != "" {
-				conf["DB_CONNECT_TIMEOUT"] = tc.timeout
-			}
-
-			logs := testutil.StdoutOutputForFunc(func() {
-				db := NewSQL(config.NewMockConfig(conf), logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t))
-				require.NotNil(t, db)
-				require.NoError(t, db.Close())
-			})
-
-			if tc.wantWarn {
-				assert.Contains(t, logs, "invalid DB_CONNECT_TIMEOUT")
-				assert.Contains(t, logs, "using the default of 10 seconds")
-			} else {
-				assert.NotContains(t, logs, "invalid DB_CONNECT_TIMEOUT")
-			}
-		})
-	}
 }
 
 func TestNewSQL_InvalidDialect(t *testing.T) {
@@ -162,55 +125,21 @@ func TestSQL_GetDBConfig(t *testing.T) {
 	})
 
 	expectedConfigs := &DBConfig{
-		Dialect:        "mysql",
-		HostName:       "host",
-		User:           "user",
-		Password:       "password",
-		Port:           "3201",
-		Database:       "test",
-		SSLMode:        "require",
-		MaxIdleConn:    25,
-		MaxOpenConn:    50,
-		Charset:        "utf8mb4",
-		connectTimeout: 10,
+		Dialect:     "mysql",
+		HostName:    "host",
+		User:        "user",
+		Password:    "password",
+		Port:        "3201",
+		Database:    "test",
+		SSLMode:     "require",
+		MaxIdleConn: 25,
+		MaxOpenConn: 50,
+		Charset:     "utf8mb4",
 	}
 
 	configs := getDBConfig(mockConfig)
 
 	assert.Equal(t, expectedConfigs, configs)
-}
-
-func TestSQL_parseConnectTimeout(t *testing.T) {
-	testCases := []struct {
-		name    string
-		value   map[string]string
-		wantSec int
-		wantErr bool
-	}{
-		{name: "unset uses the default", value: map[string]string{}, wantSec: 10},
-		{name: "override", value: map[string]string{"DB_CONNECT_TIMEOUT": "3"}, wantSec: 3},
-		{name: "not a number falls back with an error", value: map[string]string{"DB_CONNECT_TIMEOUT": "abc"}, wantSec: 10, wantErr: true},
-		{name: "fractional falls back with an error", value: map[string]string{"DB_CONNECT_TIMEOUT": "1.5"}, wantSec: 10, wantErr: true},
-		{name: "zero falls back with an error", value: map[string]string{"DB_CONNECT_TIMEOUT": "0"}, wantSec: 10, wantErr: true},
-		{name: "negative falls back with an error", value: map[string]string{"DB_CONNECT_TIMEOUT": "-5"}, wantSec: 10, wantErr: true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			conf := config.NewMockConfig(tc.value)
-
-			got, err := parseConnectTimeout(conf)
-
-			assert.Equal(t, tc.wantSec, got)
-			assert.Equal(t, tc.wantSec, getDBConfig(conf).connectTimeout)
-
-			if tc.wantErr {
-				require.ErrorIs(t, err, errInvalidConnectTimeout)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }
 
 func TestSQL_ConfigCases(t *testing.T) {
@@ -244,11 +173,10 @@ func TestSQL_ConfigCases(t *testing.T) {
 		})
 
 		expectedConfig := &DBConfig{
-			Port:           "3306",
-			MaxIdleConn:    tc.expectedIdle,
-			MaxOpenConn:    tc.expectedOpen,
-			SSLMode:        "disable",
-			connectTimeout: 10,
+			Port:        "3306",
+			MaxIdleConn: tc.expectedIdle,
+			MaxOpenConn: tc.expectedOpen,
+			SSLMode:     "disable",
 		}
 
 		configs := getDBConfig(mockConfig)
@@ -350,38 +278,6 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 
 			assert.Equal(t, tc.expOut, connString)
 			assert.Equal(t, tc.expErr, err)
-		})
-	}
-}
-
-func TestSQL_getDBConnectionString_connectTimeout(t *testing.T) {
-	testCases := []struct {
-		dialect string
-		timeout int
-		want    string
-	}{
-		{"mysql", 7, "&timeout=7s"},
-		{"mysql", 0, ""},
-		{"postgres", 10, " connect_timeout=10"},
-		{"supabase", 3, " connect_timeout=3"},
-		{"cockroachdb", 4, " connect_timeout=4"},
-		{"postgres", 0, ""},
-		{"sqlite", 10, ""},
-	}
-
-	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("%s/%d", tc.dialect, tc.timeout), func(t *testing.T) {
-			base := &DBConfig{Dialect: tc.dialect, HostName: "h", User: "u", Password: "p", Port: "1", Database: "d.db", SSLMode: "disable"}
-			want, err := getDBConnectionString(base)
-			require.NoError(t, err)
-
-			withTimeout := *base
-			withTimeout.connectTimeout = tc.timeout
-
-			got, err := getDBConnectionString(&withTimeout)
-
-			require.NoError(t, err)
-			assert.Equal(t, want+tc.want, got)
 		})
 	}
 }
@@ -1311,7 +1207,7 @@ func TestAttemptReconnection(t *testing.T) {
 			database.stopSignal = tc.stopSignal()
 			tc.setupMock(mock)
 
-			got := attemptReconnection(context.Background(), database, time.Millisecond)
+			got := attemptReconnection(database, time.Millisecond)
 
 			assert.Equal(t, tc.expResult, got)
 			require.NoError(t, mock.ExpectationsWereMet())
@@ -1326,7 +1222,7 @@ func TestRetryConnection_StopsWhileWaiting(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		retryConnection(context.Background(), database)
+		retryConnection(database)
 		close(done)
 	}()
 
