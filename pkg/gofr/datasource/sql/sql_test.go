@@ -346,6 +346,14 @@ func TestSQL_getDBConnectionString_PostgresQuoting(t *testing.T) {
 			expOut: `host=host port=3201 user=user password='a\'b' dbname=test sslmode=disable`,
 		},
 		{
+			desc: "password with all three characters at once",
+			configs: &DBConfig{
+				Dialect: "postgres", HostName: "host", User: "user", Password: `p \'s w0rd`,
+				Port: "3201", Database: "test", SSLMode: "disable",
+			},
+			expOut: `host=host port=3201 user=user password='p \\\'s w0rd' dbname=test sslmode=disable`,
+		},
+		{
 			desc: "user and database are quoted too",
 			configs: &DBConfig{
 				Dialect: "cockroachdb", HostName: "host", User: "us er", Password: "password",
