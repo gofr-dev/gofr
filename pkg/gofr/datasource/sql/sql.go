@@ -58,6 +58,9 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
+	// connectTimeout is the network connect timeout in whole seconds for the
+	// networked dialects; zero leaves the driver default (no timeout) in place.
+	connectTimeout int
 }
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
@@ -130,6 +133,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	if dbConfig.Dialect == "" {
 		return nil
 	}
+
+	dbConfig.connectTimeout = getConnectTimeout(dbConfig.Dialect, configs, logger)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
@@ -393,6 +398,25 @@ func getDBConfig(configs config.Config) *DBConfig {
 	}
 }
 
+// getConnectTimeout reads DB_CONNECT_TIMEOUT (whole seconds) for a networked dialect. Unset or 0
+// means no timeout, as before the key existed; a negative or non-numeric value is logged and
+// ignored. SQLite does not dial, so the key is not read for it.
+func getConnectTimeout(dialect string, configs config.Config, logger datasource.Logger) int {
+	raw := configs.Get("DB_CONNECT_TIMEOUT")
+	if dialect == sqlite || raw == "" {
+		return 0
+	}
+
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		logger.Warnf("invalid DB_CONNECT_TIMEOUT %q, expected a whole number of seconds; connecting without a timeout", raw)
+
+		return 0
+	}
+
+	return seconds
+}
+
 func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	switch dbConfig.Dialect {
 	case dialectMysql:
@@ -413,10 +437,20 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
 		}
 
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.connectTimeout)
+		}
+
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
-		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
+		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode)
+
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.connectTimeout)
+		}
+
+		return connStr, nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
