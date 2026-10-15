@@ -21,7 +21,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  APP_NAME
--  Name of the application
+-  Name of the application. It is also the `service.name` on the resource attached to exported traces and metrics; OTEL_SERVICE_NAME and a service.name= entry in OTEL_RESOURCE_ATTRIBUTES are ignored.
 -  gofr-app
 
 ---
@@ -111,7 +111,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  OTEL_RESOURCE_ATTRIBUTES
--  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric and span, except service.name, which comes from APP_NAME (a service.name= entry is ignored with a warning), and framework_version, which cannot be overridden. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
+-  OTEL_SERVICE_NAME
+-  Standard OpenTelemetry service name. Ignored: GoFr sets service.name on exported traces and metrics from APP_NAME, and logs a warning at startup when this is set to a different value. Tracing and metrics each log it, so with both enabled the warning appears twice, once prefixed "traces:" and once "metrics:". Set APP_NAME to rename the service.
 
 ---
 
