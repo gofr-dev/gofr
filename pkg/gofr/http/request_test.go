@@ -209,7 +209,7 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 	writer.Close()
 
 	// Create a new HTTP request with the multipart data
-	req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/upload", &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	return req
@@ -272,7 +272,7 @@ func Test_Params(t *testing.T) {
 
 func TestBind_FormURLEncoded(t *testing.T) {
 	// Create a new HTTP request with form-encoded data
-	req := NewRequest(httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader("Name=John&Age=30")))
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/abc", strings.NewReader("Name=John&Age=30")))
 	req.req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	x := struct {
@@ -302,7 +302,7 @@ func TestBind_BinaryOctetStream(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := NewRequest(httptest.NewRequest(http.MethodPost, "/binary", bytes.NewReader(tc.data)))
+			req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/binary", bytes.NewReader(tc.data)))
 			req.req.Header.Set("Content-Type", "binary/octet-stream")
 
 			var result []byte
@@ -320,7 +320,7 @@ func TestBind_BinaryOctetStream(t *testing.T) {
 }
 func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 	req := &Request{
-		req: httptest.NewRequest(http.MethodPost, "/binary", http.NoBody),
+		req: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/binary", http.NoBody),
 	}
 	req.req.Header.Set("Content-Type", "binary/octet-stream")
 

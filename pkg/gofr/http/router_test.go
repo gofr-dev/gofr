@@ -35,7 +35,7 @@ func TestRouter(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -67,7 +67,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -115,7 +115,7 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -215,7 +215,7 @@ func TestRouter_PathNormalization(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tc.input, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.input, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -263,7 +263,7 @@ func TestRouter_DoubleSlashPath_POST(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodPost, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -562,6 +562,48 @@ func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
 				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
+			}
+		})
+	}
+}
+
+// staticTestEndpoint is the normalized form every endpoint spelling below must converge to.
+// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+const staticTestEndpoint = "/static"
+
+// Test_StaticFileServing_EndpointForms covers the endpoint forms a direct caller can pass
+// to Router.AddStaticFiles. The route patterns are built from endpoint verbatim while
+// ServeHTTP normalizes incoming paths with path.Clean, so a leading or trailing slash
+// registers a pattern no request can ever match — every request under the endpoint 404s
+// even though registration logs success. (App.AddStaticFiles normalizes as well, so its
+// error logs agree on one form; this is the guarantee at the site where the patterns
+// are built.)
+func Test_StaticFileServing_EndpointForms(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"bare", "static"},
+		{"leading slash", "/static"},
+		{"trailing slash", "static/"},
+		{"leading and trailing slash", "/static/"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, path := range []string{staticTestEndpoint, staticTestEndpoint + "/index.html"} {
+				router := NewRouter()
+				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), tc.endpoint, tempDir)
+
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", tc.endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", tc.endpoint, path)
 			}
 		})
 	}
@@ -883,7 +925,7 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 			router := NewRouter()
 			router.AddStaticFiles(logger, tc.staticServerPath, tempDir)
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
