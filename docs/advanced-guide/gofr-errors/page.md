@@ -55,6 +55,12 @@ automatically handle HTTP status code selection. These include:
 
 ---
 
+- `ErrorMethodNotAllowed`
+- Represents an error for a registered route requested with a method it does not accept
+- 405 (Method Not Allowed)
+
+---
+
 - `ErrorRequestTimeout`
 - Represents an error for request which timed out
 - 408 (Request Timeout)
@@ -66,6 +72,10 @@ automatically handle HTTP status code selection. These include:
 - 500 (Internal Server Error)
 
 {% /table %}
+
+A request for a path that is registered, but not for the method used, is answered with
+`ErrorMethodNotAllowed`: a 405 whose `Allow` header lists the methods the path accepts. A path that is
+not registered for any method is answered with `ErrorInvalidRoute`.
 
 #### Usage:
 To use the predefined HTTP errors, users need to import the GoFr http package and can simply call them:

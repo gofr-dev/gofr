@@ -2207,3 +2207,136 @@ func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
 		})
 	}
 }
+
+// Test_HTTPMethodNotAllowed_OptionsListedOnce covers a path that lists OPTIONS itself. App has no
+// OPTIONS verb, so registering on the router is the one way that happens, and the catch-all must
+// not add a second one.
+func Test_HTTPMethodNotAllowed_OptionsListedOnce(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+	app.GET("/preflighted", func(*Context) (any, error) { return "ok", nil })
+	app.httpServer.router.Add(http.MethodOptions, "/preflighted", http.NotFoundHandler())
+
+	app.httpServerSetup()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/preflighted", http.NoBody)
+	w := httptest.NewRecorder()
+
+	app.httpServer.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	assert.Equal(t, "GET, OPTIONS", w.Header().Get("Allow"))
+}
+
+// Test_HTTPMethodNotAllowed_And_NotFound covers #3853 through the app's real router, middleware
+// chain included. A wrong method on a registered path is a 405 naming the methods the path takes;
+// an unregistered path stays a 404.
+//
+// The CORS and X-Correlation-ID headers and the request-log line are asserted on every row because
+// they are what a 404 or 405 served outside the middleware chain loses: answered from mux's
+// NotFoundHandler/MethodNotAllowedHandler, the CORS preflight to a GET-only path became a 405 with
+// no CORS headers, and neither response was logged, traced or measured.
+func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedAllow string
+		expectedBody  string
+	}{
+		{"GET registered route returns 200", http.MethodGet, "/thing", http.StatusOK, "", `{"data":"ok"}`},
+		{
+			"POST on GET-only route returns 405 with Allow header", http.MethodPost, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"DELETE on GET-only route returns 405 with Allow header", http.MethodDelete, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"GET on multi-method route returns 405 with the methods sorted and OPTIONS last", http.MethodGet, "/multi",
+			http.StatusMethodNotAllowed, "POST, PUT, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"path parameter route returns 405 for its concrete path", http.MethodGet, "/items/42",
+			http.StatusMethodNotAllowed, "DELETE, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"GET on unregistered route returns 404", http.MethodGet, "/unregistered",
+			http.StatusNotFound, "", `{"error":{"message":"route not registered"}}`,
+		},
+		{
+			"POST on unregistered route returns 404", http.MethodPost, "/unregistered",
+			http.StatusNotFound, "", `{"error":{"message":"route not registered"}}`,
+		},
+		{
+			// The preflight a browser sends before a cross-origin POST. CORS answers it before any
+			// route handler, so it must never reach the 405.
+			"CORS preflight on GET-only route is answered by CORS", http.MethodOptions, "/thing",
+			http.StatusOK, "", "",
+		},
+	}
+
+	type result struct {
+		code          int
+		allow, body   string
+		cors, traceID string
+	}
+
+	results := make([]result, len(tests))
+
+	// The logger captures os.Stdout when it is created, so the app is built inside the capture.
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.GET("/thing", func(*Context) (any, error) { return "ok", nil })
+		app.POST("/multi", func(*Context) (any, error) { return "multi-post", nil })
+		app.PUT("/multi", func(*Context) (any, error) { return "multi-put", nil })
+		app.DELETE("/items/{id}", func(*Context) (any, error) { return nil, nil })
+
+		app.httpServerSetup()
+
+		for i, tc := range tests {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			req.Header.Set("Origin", "https://example.com")
+
+			if tc.method == http.MethodOptions {
+				req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			}
+
+			w := httptest.NewRecorder()
+			app.httpServer.router.ServeHTTP(w, req)
+
+			results[i] = result{
+				code:    w.Code,
+				allow:   w.Header().Get("Allow"),
+				body:    w.Body.String(),
+				cors:    w.Header().Get("Access-Control-Allow-Origin"),
+				traceID: w.Header().Get("X-Correlation-ID"),
+			}
+		}
+	})
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := results[i]
+
+			assert.Equal(t, tc.expectedCode, got.code)
+			assert.Equal(t, tc.expectedAllow, got.allow)
+
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, got.body)
+			}
+
+			assert.Equal(t, "*", got.cors, "CORS middleware did not run")
+			assert.NotEmpty(t, got.traceID, "Tracer/Logging middleware did not run")
+		})
+	}
+
+	assert.Contains(t, logs, `"response":405`, "a 405 was not access-logged")
+	assert.Contains(t, logs, `"response":404`, "a 404 was not access-logged")
+	assert.Contains(t, logs, "Registered HTTP server on port")
+}
