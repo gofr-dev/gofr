@@ -3,12 +3,26 @@ package scylladb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+// samePointerMatcher matches only the exact pointer it was built with, so it
+// can tell apart "the same destination reached the session" from "an equal
+// looking value reached it" the way gomock.Eq's reflect.DeepEqual would.
+type samePointerMatcher struct {
+	want any
+}
+
+func (m samePointerMatcher) Matches(x any) bool { return x == m.want }
+func (m samePointerMatcher) String() string     { return fmt.Sprintf("is exactly %v", m.want) }
+
+func samePointer(want any) gomock.Matcher { return samePointerMatcher{want: want} }
 
 const mockBatchName = "mockBatch"
 
@@ -396,6 +410,25 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 	}
 }
 
+func Test_ExecuteBatchCASForwardsDest(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	var (
+		id   int
+		name string
+	)
+
+	mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+	mockDeps.mockSession.EXPECT().
+		executeBatchCAS(mockDeps.mockBatch, samePointer(&id), samePointer(&name)).
+		Return(true, nil).Times(1)
+
+	applied, err := client.ExecuteBatchCAS(mockBatchName, &id, &name)
+
+	require.NoError(t, err)
+	assert.True(t, applied)
+}
+
 func Test_ExecCAS(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test') IF NOT EXISTS"
 
@@ -407,57 +440,100 @@ func Test_ExecCAS(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockDeps := initTest(t)
-
+	// Each row gets its own client and mocks (initTest creates a fresh gomock
+	// controller per call) so one row's expectations can never be satisfied
+	// by another row's leftover AnyTimes() stub.
 	testCases := []struct {
 		desc       string
 		dest       any
-		mockCall   func()
+		mockCall   func(mockDeps *mockDependencies)
 		expApplied bool
 		expErr     error
 	}{
-		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).AnyTimes()
+		{"success case: struct dest, applied true", &mockStruct, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil)
 		}, true, nil},
 
-		{"success case: int dest, applied true", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(true, nil).AnyTimes()
+		{"success case: int dest, applied true", &mockInt, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().ScanCAS(&mockInt).Return(true, nil)
 		}, true, nil},
 
-		{"failure case: struct dest, error", &mockStruct, func() {
+		{"failure case: struct dest, error", &mockStruct, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).AnyTimes()
-		}, true, nil},
-		{"failure case: int dest, error", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(false, errMock).AnyTimes()
-		}, true, nil},
-		{"failure case: dest is not pointer", mockInt, func() {
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock)
+		}, false, errMock},
+		{"failure case: dest is not pointer", mockInt, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 		}, false, errDestinationIsNotPointer},
-		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+		{"failure case: dest is slice", &[]int{}, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
-		{"failure case: dest is map", &map[string]any{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+		{"failure case: dest is map", &map[string]any{}, func(mockDeps *mockDependencies) {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 		}, false, errUnexpectedMap},
 	}
 
-	for i, tc := range testCases {
-		tc.mockCall()
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
 
-		applied, err := client.ExecCAS(tc.dest, query)
+			tc.mockCall(mockDeps)
 
-		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			applied, err := client.ExecCAS(tc.dest, query)
+
+			assert.Equal(t, tc.expApplied, applied)
+			assert.Equal(t, tc.expErr, err)
+		})
 	}
 }
+
+func Test_ExecCASForwardsValuesAndDest(t *testing.T) {
+	const stmt = "UPDATE users SET name = ? WHERE id = ? IF name = ?"
+
+	values := []any{"b", 1, "a"}
+
+	testCases := []struct {
+		desc       string
+		scanErr    error
+		expApplied bool
+		expErr     error
+		expName    string
+	}{
+		{desc: "applied", expApplied: true, expName: ""},
+		{desc: "not applied, existing value scanned", expApplied: false, expName: "current"},
+		{desc: "error", scanErr: errMock, expApplied: false, expErr: errMock},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, mockDeps := initTest(t)
+
+			var name string
+
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(stmt, values...).Return(mockDeps.mockQuery)
+			mockDeps.mockQuery.EXPECT().ScanCAS(&name).DoAndReturn(func(dest ...any) (bool, error) {
+				*(dest[0].(*string)) = tc.expName
+
+				return tc.expApplied, tc.scanErr
+			})
+
+			applied, err := client.ExecCAS(&name, stmt, values...)
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expApplied, applied)
+			assert.Equal(t, tc.expName, name)
+		})
+	}
+}
+
 func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 	client, mockDeps := initTest(t)
 

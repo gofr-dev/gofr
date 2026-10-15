@@ -14,7 +14,7 @@ func (c *Client) ExecuteBatch(name string) error {
 }
 
 func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
-	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest)
+	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest...)
 }
 
 func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
