@@ -79,40 +79,45 @@ type App struct {
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
 
-	// exit is os.Exit, indirected so a test can observe the status a failed startup reports without
-	// taking the test binary down with it. Nil means os.Exit, which is what every real app uses.
+	// exit is os.Exit, indirected so a test can observe the status a failed startup or a failed
+	// command reports without taking the test binary down with it. Nil means os.Exit, which is what
+	// every real app uses.
 	exit func(int)
 }
 
-// exitCodeStartupFailed is what Run reports to the process when startup was abandoned: a failed
-// OnStart hook, an unclaimable MCP port, or an MCP_PORT that could never be served.
+// exitCodeFailure is the status the process reports when a run failed: startup was abandoned (a
+// failed OnStart hook, an unclaimable MCP port, or an MCP_PORT that could never be served), or a
+// CMD app's subcommand failed (its handler returned an error, or the subcommand was missing or
+// unknown).
 //
-// It matters because an orchestrator reads it and nothing else. Under restartPolicy: OnFailure, or
-// in a Job, a service that refused to start and exited 0 is recorded as having succeeded and is
-// never retried -- the process-level version of the silent partial startup this package exists to
-// prevent.
-const exitCodeStartupFailed = 1
+// It matters because whatever started the process reads it and nothing else. Under restartPolicy:
+// OnFailure, or in a Job, a service that refused to start and exited 0 is recorded as having
+// succeeded and is never retried; a shell or CI job records a failed command that exited 0 as a
+// success.
+const exitCodeFailure = 1
 
-// abortStartup reports a failed startup to the process.
+// exitProcess reports code to the process: through a.exit when a test has set it, otherwise with
+// os.Exit. It is the only place in this package that ends the process.
 //
-// This is not the Logger.Fatalf it replaced. Fatalf was os.Exit from library code, mid-setup, with
-// the container's datasources still open and nothing unwound. This runs at the bottom of Run, after
-// shutdownAfterFailedStartup has released everything, with no server started and nothing left to
-// clean up -- the top of the call stack, which is where a Go program is supposed to decide its exit
-// status.
-func (a *App) abortStartup() {
+// This is not the Logger.Fatalf that startup used to call. Fatalf was os.Exit from library code,
+// mid-setup, with the container's datasources still open and nothing unwound. exitProcess is only
+// called at the top of the call stack, once there is nothing left to clean up: at the bottom of Run
+// after shutdownAfterFailedStartup has released everything and no server was started, and at the
+// end of runCMD after telemetry has been flushed and the logger closed.
+func (a *App) exitProcess(code int) {
 	if a.exit != nil {
-		a.exit(exitCodeStartupFailed)
+		a.exit(code)
 
 		return
 	}
 
-	// deep-exit is the right rule and this is the exception it exists to make you argue for: Run is
-	// the last call in an application's main, everything startup opened has already been released,
-	// and the alternative is an orchestrator reading success for a service that refused to start.
-	// The logger's Fatal carries the same exemption for the same kind of reason.
+	// deep-exit is the right rule and this is the exception it exists to make you argue for: both
+	// callers are the last thing an application's main does (app.Run), everything the run opened
+	// has already been released, and the exit status is the only channel an orchestrator, shell or
+	// CI job reads to learn that the run failed. The logger's Fatal carries the same exemption for
+	// the same kind of reason.
 	//nolint:revive // deep-exit: see above -- top of the call stack, after cleanup, nothing skipped.
-	os.Exit(exitCodeStartupFailed)
+	os.Exit(code)
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {

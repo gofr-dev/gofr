@@ -22,24 +22,42 @@ const telemetryFlushTimeout = 10 * time.Second
 // the process exits, which for a CLI invocation is every window and every batch.
 // The flush is bounded by telemetryFlushTimeout so an unreachable collector
 // cannot hang the invocation.
+//
+// If the command failed, runCMD then exits the process with exitCodeFailure,
+// after the flush and after the logger is closed. Because that is os.Exit, functions
+// deferred in the application's main() do not run on the failure path; cleanup that
+// must happen either way should not rely on a defer in main().
 func (a *App) runCMD() {
-	a.cmd.Run(a.container)
+	failed := a.cmd.Run(a.container)
 
-	if a.container != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
-		defer cancel()
-
-		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush metrics: %v", err)
-		}
-
-		if err := a.shutdownTraces(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush traces: %v", err)
-		}
-	}
+	a.flushCMDTelemetry()
 
 	if closer, ok := a.container.Logger.(io.Closer); ok {
 		closer.Close()
+	}
+
+	if failed {
+		a.exitProcess(exitCodeFailure)
+	}
+}
+
+// flushCMDTelemetry flushes the final metric window and pending span batch after a
+// CMD app's handler returns. Kept separate so its deferred cancel runs before
+// runCMD exits the process on the failure path.
+func (a *App) flushCMDTelemetry() {
+	if a.container == nil {
+		return
+	}
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+	defer cancel()
+
+	if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush metrics: %v", err)
+	}
+
+	if err := a.shutdownTraces(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush traces: %v", err)
 	}
 }
 
@@ -119,7 +137,7 @@ const (
 // decides the exit status.
 func (a *App) finishAbandonedStartup(outcome startupOutcome) {
 	if outcome == startupFailed {
-		a.abortStartup()
+		a.exitProcess(exitCodeFailure)
 	}
 }
 
