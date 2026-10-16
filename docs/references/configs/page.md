@@ -205,6 +205,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  GOFR_RBAC_ROUTE_CHECK
+-  What the startup check does when the RBAC config and the registered routes disagree — see [Startup Route Check](/docs/advanced-guide/rbac#startup-route-check). `warn` logs each mismatch as an error and keeps starting, `fail` logs them and stops startup with exit status 1, `off` skips the check. Any other value is logged as an error and treated as `warn`.
+-  warn
+
+---
+
 -  LOG_DISABLE_PROBES
 -  Disable log probes for health checks
 -  false
@@ -224,7 +230,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  HEALTH_CHECK_TIMEOUT
--  Upper bound on one round of health checks, as a duration (`2s`). Backends that have not answered by then are left out of the response and the aggregate status is DEGRADED. A check that is still running when the round is abandoned keeps running, so a probe arriving before it finishes reports DEGRADED with no per-dependency detail rather than starting a second round against the same unresponsive backend. Unset or `0` means the round is bounded only by each backend client's own timeout.
+-  Upper bound on one round of health checks, as a duration (`2s`). Backends that have not answered by then are left out of the response and the aggregate status is DEGRADED. Datasources whose health check honors its context are canceled at that deadline. Once every outstanding check has returned, the next probe checks them again. Checks that cannot be canceled keep running after the round is abandoned: the SQL, Redis and PubSub health checks take no context, and a few datasources (such as Couchbase and NATS KV) don't yet honor the one they receive. While one of those is still running, a probe reports DEGRADED with no per-dependency detail rather than starting a second round against the same unresponsive backend. Unset or `0` means the round is bounded only by each backend client's own timeout.
 -  disabled
 
 {% /table %}

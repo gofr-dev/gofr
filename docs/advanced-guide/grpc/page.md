@@ -304,6 +304,16 @@ The gRPC rate limiter uses the same `middleware.RateLimiterConfig` as the HTTP r
 - `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for a global rate limit across all clients
 - `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` gRPC metadata headers for IP extraction. Only enable when behind a trusted reverse proxy.
 
+> **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero (a `NaN` rate is also
+> rejected). If the config is invalid, the interceptor logs the error at `ERROR` level (via the logger you pass, or
+> stderr if it is `nil`) and passes every RPC through **without rate limiting** (the app does not crash). To fail fast
+> at startup instead, call `cfg.Validate()` and handle the returned error yourself. Because this is reported only once
+> at startup, a zero `app_grpc_rate_limit_exceeded_total` does not prove the limiter is active.
+>
+> `MaxKeys` of `0` selects the default of 100000 keys. A negative `MaxKeys` does not disable the limiter: when GoFr
+> builds the default in-memory store it falls back to the same default of 100000 and logs the correction at `ERROR`
+> level. A custom `Store` is responsible for its own bound.
+
 > **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.).
 > Without a trusted proxy, clients can spoof metadata headers to bypass rate limits.
 

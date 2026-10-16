@@ -196,9 +196,9 @@ func TestCheckEndpointAuthorization_PublicEndpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{Public: true}
-	authorized, reason := checkEndpointAuthorization("any", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "any"}, endpoint, config)
 	assert.True(t, authorized)
-	assert.Equal(t, "public-endpoint", reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_ExactPermission(t *testing.T) {
@@ -211,9 +211,9 @@ func TestCheckEndpointAuthorization_ExactPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read"}}
-	authorized, reason := checkEndpointAuthorization("admin", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "admin"}, endpoint, config)
 	assert.True(t, authorized)
-	assert.Equal(t, "permission-based", reason)
+	assert.Equal(t, "admin", granted)
 }
 
 func TestCheckEndpointAuthorization_WildcardsNotSupported(t *testing.T) {
@@ -226,9 +226,9 @@ func TestCheckEndpointAuthorization_WildcardsNotSupported(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read"}}
-	authorized, reason := checkEndpointAuthorization("admin", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "admin"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_ResourceWildcardNotSupported(t *testing.T) {
@@ -241,9 +241,9 @@ func TestCheckEndpointAuthorization_ResourceWildcardNotSupported(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read"}}
-	authorized, reason := checkEndpointAuthorization("admin", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "admin"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_NoPermission(t *testing.T) {
@@ -256,9 +256,9 @@ func TestCheckEndpointAuthorization_NoPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:write"}}
-	authorized, reason := checkEndpointAuthorization("viewer", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "viewer"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_EmptyRequiredPermissions(t *testing.T) {
@@ -271,9 +271,9 @@ func TestCheckEndpointAuthorization_EmptyRequiredPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{}}
-	authorized, reason := checkEndpointAuthorization("admin", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "admin"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_NoRolePermissions(t *testing.T) {
@@ -286,9 +286,9 @@ func TestCheckEndpointAuthorization_NoRolePermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read"}}
-	authorized, reason := checkEndpointAuthorization("guest", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "guest"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestCheckEndpointAuthorization_InheritedPermissions(t *testing.T) {
@@ -302,9 +302,9 @@ func TestCheckEndpointAuthorization_InheritedPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read"}}
-	authorized, reason := checkEndpointAuthorization("editor", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "editor"}, endpoint, config)
 	assert.True(t, authorized)
-	assert.Equal(t, "permission-based", reason)
+	assert.Equal(t, "editor", granted)
 }
 
 func TestCheckEndpointAuthorization_MultiplePermissions_OR_First(t *testing.T) {
@@ -317,9 +317,9 @@ func TestCheckEndpointAuthorization_MultiplePermissions_OR_First(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read", "users:admin"}}
-	authorized, reason := checkEndpointAuthorization("viewer", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "viewer"}, endpoint, config)
 	assert.True(t, authorized)
-	assert.Equal(t, "permission-based", reason)
+	assert.Equal(t, "viewer", granted)
 }
 
 func TestCheckEndpointAuthorization_MultiplePermissions_OR_Second(t *testing.T) {
@@ -332,9 +332,9 @@ func TestCheckEndpointAuthorization_MultiplePermissions_OR_Second(t *testing.T) 
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read", "users:admin"}}
-	authorized, reason := checkEndpointAuthorization("admin", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "admin"}, endpoint, config)
 	assert.True(t, authorized)
-	assert.Equal(t, "permission-based", reason)
+	assert.Equal(t, "admin", granted)
 }
 
 func TestCheckEndpointAuthorization_MultiplePermissions_None(t *testing.T) {
@@ -347,9 +347,9 @@ func TestCheckEndpointAuthorization_MultiplePermissions_None(t *testing.T) {
 	require.NoError(t, err)
 
 	endpoint := &EndpointMapping{RequiredPermissions: []string{"users:read", "users:write"}}
-	authorized, reason := checkEndpointAuthorization("guest", endpoint, config)
+	authorized, granted := checkEndpointAuthorization(held{str: "guest"}, endpoint, config)
 	assert.False(t, authorized)
-	assert.Empty(t, reason)
+	assert.Empty(t, granted)
 }
 
 func TestGetEndpointForRequest(t *testing.T) {
