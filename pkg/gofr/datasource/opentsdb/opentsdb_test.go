@@ -758,6 +758,13 @@ func TestPutDataPoints_Errors(t *testing.T) {
 			expErr:   errInvalidResponseType,
 		},
 		{
+			desc:     "invalid datapoints type",
+			datas:    "not-datapoints",
+			resp:     &PutResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidParam,
+		},
+		{
 			desc:     "empty datapoints",
 			datas:    []DataPoint{},
 			resp:     &PutResponse{},
@@ -810,6 +817,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 		resp      any
 		mockCall  func(m *MockhttpClient)
 		expErrMsg string
+		expErr    error
 	}{
 		{
 			desc:      "invalid param type",
@@ -817,6 +825,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryParam",
+			expErr:    errInvalidParam,
 		},
 		{
 			desc:      "invalid response type",
@@ -824,6 +833,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &PutResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryResponse",
+			expErr:    errInvalidResponseType,
 		},
 		{
 			desc:      "invalid query params",
@@ -831,6 +841,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: errInvalidQueryParam.Error(),
+			expErr:    errInvalidQueryParam,
 		},
 		{
 			desc: "query body marshal failure",
@@ -860,8 +871,21 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			err := client.QueryDataPoints(t.Context(), tc.param, tc.resp)
 
 			require.ErrorContains(t, err, tc.expErrMsg)
+			requireSentinel(t, err, tc.expErr)
 		})
 	}
+}
+
+// requireSentinel asserts errors.Is(err, expErr) for rows that name a sentinel. Rows whose error
+// has no sentinel (a wrapped driver or JSON error) leave expErr nil and rely on the message.
+func requireSentinel(t *testing.T, err, expErr error) {
+	t.Helper()
+
+	if expErr == nil {
+		return
+	}
+
+	require.ErrorIs(t, err, expErr)
 }
 
 func TestQueryLatestDataPoints_Errors(t *testing.T) {
