@@ -21,7 +21,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  APP_NAME
--  Name of the application
+-  Name of the application. It is also the `service.name` on the resource attached to exported traces and metrics; OTEL_SERVICE_NAME and a service.name= entry in OTEL_RESOURCE_ATTRIBUTES are ignored.
 -  gofr-app
 
 ---
@@ -111,7 +111,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  OTEL_RESOURCE_ATTRIBUTES
--  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+-  Standard OpenTelemetry resource attributes, comma-separated key=value. Merged into the resource attached to every exported metric and span, except service.name, which comes from APP_NAME (a service.name= entry is ignored with a warning), and framework_version, which cannot be overridden. Required for the gcp exporter outside Google Cloud: its ingest rejects any point whose prometheus_target has no location (e.g. "location=us-central1").
+
+---
+
+-  OTEL_SERVICE_NAME
+-  Standard OpenTelemetry service name. Ignored: GoFr sets service.name on exported traces and metrics from APP_NAME, and logs a warning at startup when this is set to a different value. Tracing and metrics each log it, so with both enabled the warning appears twice, once prefixed "traces:" and once "metrics:". Set APP_NAME to rename the service.
 
 ---
 
@@ -124,6 +129,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  GRPC_PORT
 -  Port on which the gRPC server listens
 -  9000
+
+---
+
+-  MCP_PORT
+-  Port on which the MCP server listens, bound to loopback. Only used when `app.EnableMCP()` is called; a port that cannot be claimed fails startup. Set to `0` to keep tools available in-process while serving no MCP transport. A non-numeric or out-of-range value refuses startup. Note the default collides with Vault's — see [MCP](/docs/advanced-guide/mcp).
+-  8200
 
 ---
 
@@ -696,16 +707,37 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - Name
 - Description
+- Default Value
 
 ---
 
 -  GOOGLE_PROJECT_ID
 -  ID of the Google Cloud project. Required for Google Pub/Sub.
+-  None
 
 ---
 
 -  GOOGLE_SUBSCRIPTION_NAME
 -  Name of the Google Pub/Sub subscription. Required for Google Pub/Sub.
+-  None
+
+---
+
+-  GOOGLE_MAX_OUTSTANDING_MESSAGES
+-  Max messages the client holds waiting for delivery to the handler, per subscribed topic (the memory/goroutine bound, not the handler concurrency). 0 uses the default; a negative value means no limit.
+-  1000
+
+---
+
+-  GOOGLE_MAX_OUTSTANDING_BYTES
+-  Max total size (bytes) of messages held waiting for delivery, per subscribed topic. 0 uses the default; a negative value means no limit.
+-  1000000000
+
+---
+
+-  GOOGLE_NUM_GOROUTINES
+-  Number of StreamingPull streams opened by the subscriber, per subscribed topic. It is the stream count, not handler concurrency, and does not raise throughput under GoFr's one-message-at-a-time delivery. 0 or a negative value uses the default.
+-  10
 
 {% /table %}
 

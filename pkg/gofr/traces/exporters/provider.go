@@ -140,11 +140,11 @@ func spanExporter(ctx context.Context, name string, cfg *Config, logger Logger) 
 // operator who sets the one exception has no way to tell it was dropped —
 // service.name is read off the backend's service list, not off a log line.
 //
-// It reads the environment through resource.Environment rather than os.Getenv so
-// the warning reflects exactly what resource.WithFromEnv resolved, including the
-// service.name form embedded in OTEL_RESOURCE_ATTRIBUTES.
-func warnIfEnvServiceNameIgnored(appName string, logger Logger) {
-	for _, kv := range resource.Environment().Attributes() {
+// It reads env, the resource the SDK's environment detector resolved, rather than
+// os.Getenv, so the warning also covers the service.name form embedded in
+// OTEL_RESOURCE_ATTRIBUTES.
+func warnIfEnvServiceNameIgnored(env *resource.Resource, appName string, logger Logger) {
+	for _, kv := range env.Attributes() {
 		if kv.Key != semconv.ServiceNameKey || kv.Value.AsString() == appName {
 			continue
 		}
@@ -168,7 +168,17 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		attribute.String("framework_version", version.Framework),
 	}
 
-	warnIfEnvServiceNameIgnored(cfg.AppName, logger)
+	// Run the environment detector once and reuse its result for the warning and
+	// the resource. resource.Environment() would parse the variables a second time
+	// and hand a malformed OTEL_RESOURCE_ATTRIBUTES to otel.Handle on top of the
+	// warning below. The SDK still reports it on its own re-reads (resource.Default,
+	// sdktrace.WithResource); GoFr cannot stop those.
+	env, err := resource.New(ctx, resource.WithFromEnv())
+	if err != nil {
+		logger.Warnf("traces: resource detection was incomplete: %v", err)
+	}
+
+	warnIfEnvServiceNameIgnored(env, cfg.AppName, logger)
 
 	opts := []resource.Option{
 		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend needs but the
@@ -177,14 +187,14 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// service.name and nothing else, so the variable was silently ignored.
 		//
 		// The order here is load-bearing, not incidental: resource.New merges each
-		// later option as the winner, so WithAttributes after WithFromEnv is what
-		// makes APP_NAME outrank OTEL_SERVICE_NAME. That is deliberate — the
+		// later option as the winner, so attrs after the environment's attributes is
+		// what makes APP_NAME outrank OTEL_SERVICE_NAME. That is deliberate — the
 		// already-shipped metrics resource resolves service.name the same way, and
 		// a traces-only flip would report one service.name to the trace backend and
 		// a different one to the metric backend, breaking the join between them.
 		// warnIfEnvServiceNameIgnored above makes the discarded value visible;
 		// Test_buildResource pins the outcome so a reshuffle of this slice fails.
-		resource.WithFromEnv(),
+		resource.WithAttributes(env.Attributes()...),
 		resource.WithAttributes(attrs...),
 	}
 

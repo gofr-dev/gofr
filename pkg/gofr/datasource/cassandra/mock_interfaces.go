@@ -326,6 +326,20 @@ func (m *Mockiterator) EXPECT() *MockiteratorMockRecorder {
 	return m.recorder
 }
 
+// close mocks base method.
+func (m *Mockiterator) close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// close indicates an expected call of close.
+func (mr *MockiteratorMockRecorder) close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "close", reflect.TypeOf((*Mockiterator)(nil).close))
+}
+
 // columns mocks base method.
 func (m *Mockiterator) columns() []gocql.ColumnInfo {
 	m.ctrl.T.Helper()

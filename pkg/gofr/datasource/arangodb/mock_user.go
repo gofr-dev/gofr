@@ -7,6 +7,9 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// mockUserName is the name every MockUser reports.
+const mockUserName = "testUser"
+
 // MockUser implements the complete arangodb.user interface.
 type MockUser struct {
 	ctrl   *gomock.Controller
@@ -17,7 +20,7 @@ type MockUser struct {
 func NewMockUser(ctrl *gomock.Controller) *MockUser {
 	return &MockUser{
 		ctrl:   ctrl,
-		name:   "testUser",
+		name:   mockUserName,
 		active: true,
 	}
 }

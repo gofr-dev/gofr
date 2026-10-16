@@ -24,7 +24,7 @@ type RateLimiterStore interface {
 type memoryRateLimiterStore struct {
 	limiters    sync.Map // map[string]*limiterEntry
 	keyCount    int64    // atomic counter for tracking number of keys
-	maxKeys     int64    // maximum allowed keys (0 = unlimited)
+	maxKeys     int64    // maximum allowed keys (always positive; see NewMemoryRateLimiterStore)
 	stopCh      chan struct{}
 	cleanupOnce sync.Once
 	stopOnce    sync.Once
@@ -46,9 +46,11 @@ const (
 // NewMemoryRateLimiterStore creates a new in-memory rate limiter store.
 // The config is stored to ensure consistent rate limiting for all keys.
 func NewMemoryRateLimiterStore(config RateLimiterConfig) RateLimiterStore {
+	// A zero (unset) or negative MaxKeys falls back to the default bound, so a store built
+	// directly without RateLimiterConfig.Validate can never grow without limit.
 	maxKeys := config.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = defaultMaxKeys // Default max keys to prevent memory exhaustion
+	if maxKeys <= 0 {
+		maxKeys = defaultMaxKeys
 	}
 
 	return &memoryRateLimiterStore{
