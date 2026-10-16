@@ -15,7 +15,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/routemark"
 )
 
 type authMethod int
@@ -23,6 +25,22 @@ type authMethod int
 const userRole authMethod = 4
 
 const unknownRouteLabel = "<unmatched>"
+
+// matchedRouteLabel returns the route template the router matched for r, which is what http.route
+// means everywhere else in a trace. The RBAC rule that governed the request can be broader or
+// narrower than that route, so it is recorded separately as rbac.rule.
+//
+// GoFr's catch-all, which serves every request no route matched, is reported as unmatched. An
+// application route or a static directory registered at "/" shares its template, so the two are
+// told apart by the mark GoFr puts on the catch-all when it registers it.
+func matchedRouteLabel(r *http.Request) string {
+	tmpl := gofrHTTP.RouteTemplate(r)
+	if tmpl == "" || routemark.CatchAllAnswered(r) {
+		return unknownRouteLabel
+	}
+
+	return tmpl
+}
 
 // wellKnownPrefix is the path prefix the OAuth middleware passes through without verifying a token.
 const wellKnownPrefix = "/.well-known"
@@ -125,7 +143,8 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
 				span.SetAttributes(
 					attribute.String("http.method", r.Method),
-					attribute.String("http.route", routeLabel),
+					attribute.String("http.route", matchedRouteLabel(r)),
+					attribute.String("rbac.rule", routeLabel),
 				)
 				r = r.WithContext(ctx)
 
