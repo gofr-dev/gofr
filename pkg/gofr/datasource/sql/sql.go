@@ -261,9 +261,13 @@ func finalizeConnection(database *DB) *DB {
 
 	database = pingToTestConnection(database)
 
-	go retryConnection(database)
+	// Close cancels ctx and waits on background, so no goroutine outlives the pool.
+	ctx, cancel := context.WithCancel(context.Background())
+	database.cancelBackground = cancel
 
-	go pushDBMetrics(database, database.metrics)
+	database.background.Go(func() { retryConnection(ctx, database) })
+
+	database.background.Go(func() { pushDBMetrics(database, database.metrics) })
 
 	return database
 }
@@ -293,7 +297,7 @@ func pingToTestConnection(database *DB) *DB {
 	return database
 }
 
-func retryConnection(database *DB) {
+func retryConnection(ctx context.Context, database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	retryDuration := connRetryFrequencyInSeconds * time.Second
@@ -305,10 +309,17 @@ func retryConnection(database *DB) {
 		default:
 		}
 
-		if database.DB.PingContext(context.Background()) != nil {
+		if database.DB.PingContext(ctx) != nil {
+			select {
+			case <-database.stopSignal:
+				// Close gave up waiting on this ping and closed the pool; exit quietly.
+				return
+			default:
+			}
+
 			database.logger.Info("retrying SQL database connection")
 
-			if !attemptReconnection(database, retryDuration) {
+			if !attemptReconnection(ctx, database, retryDuration) {
 				return
 			}
 		}
@@ -321,7 +332,7 @@ func retryConnection(database *DB) {
 	}
 }
 
-func attemptReconnection(database *DB, retryDuration time.Duration) bool {
+func attemptReconnection(ctx context.Context, database *DB, retryDuration time.Duration) bool {
 	for {
 		select {
 		case <-database.stopSignal:
@@ -329,7 +340,7 @@ func attemptReconnection(database *DB, retryDuration time.Duration) bool {
 		default:
 		}
 
-		err := database.DB.PingContext(context.Background())
+		err := database.DB.PingContext(ctx)
 		if err == nil {
 			printConnectionSuccessLog("connected", database.config, database.logger)
 
