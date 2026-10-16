@@ -7,18 +7,25 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/routemark"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMiddleware_NilConfig(t *testing.T) {
@@ -1513,5 +1520,76 @@ func TestExtractionFailure_Error(t *testing.T) {
 
 	for i, tc := range testCases {
 		assert.Equal(t, tc.want, tc.failure.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestMiddleware_TraceRouteLabels(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		router    string
+		path      string
+		wantRoute string
+		wantRule  string
+		static    bool // serve a directory from "/", governed by a /{path:.*} rule
+	}{
+		{"mux: route and rule differ", gofrHTTP.MatcherMux, "/api/users/42", "/api/users/{id}", "/api/{path:.*}", false},
+		{"trie: route and rule differ", gofrHTTP.MatcherTrie, "/api/users/42", "/api/users/{id}", "/api/{path:.*}", false},
+		{"mux: no route and no rule", gofrHTTP.MatcherMux, "/nowhere", unknownRouteLabel, unknownRouteLabel, false},
+		{"trie: no route and no rule", gofrHTTP.MatcherTrie, "/nowhere", unknownRouteLabel, unknownRouteLabel, false},
+		{"mux: route at / is not the catch-all", gofrHTTP.MatcherMux, "/", "/", unknownRouteLabel, false},
+		{"trie: route at / is not the catch-all", gofrHTTP.MatcherTrie, "/", "/", unknownRouteLabel, false},
+		{"mux: static directory at / is not the catch-all", gofrHTTP.MatcherMux, "/a.txt", "/", "/{path:.*}", true},
+		{"trie: static directory at / is not the catch-all", gofrHTTP.MatcherTrie, "/a.txt", "/", "/{path:.*}", true},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv(gofrHTTP.RouterEnvVar, tc.router)
+
+			recorder := tracetest.NewSpanRecorder()
+			provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+
+			endpoints := []EndpointMapping{{Path: "/api/{path:.*}", Methods: []string{http.MethodGet}, Public: true}}
+			if tc.static {
+				endpoints = append(endpoints, EndpointMapping{Path: "/{path:.*}", Methods: []string{http.MethodGet}, Public: true})
+			}
+
+			config := newTestConfig(t, endpoints, nil)
+			config.Tracer = provider.Tracer("test")
+
+			ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+			router := gofrHTTP.NewRouter()
+			router.Use(Middleware(config))
+			router.Add(http.MethodGet, "/", ok)
+			router.Add(http.MethodGet, "/api/users/{id}", ok)
+
+			if tc.static {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o600))
+				router.AddStaticFiles(logging.NewMockLogger(logging.ERROR), "/", dir)
+			}
+
+			routemark.MarkCatchAll(router.PathPrefix("/")).Handler(ok)
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if tc.static {
+				require.Equal(t, http.StatusOK, rec.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			spans := recorder.Ended()
+			require.Len(t, spans, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			attrs := make(map[string]string)
+			for _, kv := range spans[0].Attributes() {
+				attrs[string(kv.Key)] = kv.Value.String()
+			}
+
+			assert.Equal(t, tc.wantRoute, attrs["http.route"], "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantRule, attrs["rbac.rule"], "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
 	}
 }
