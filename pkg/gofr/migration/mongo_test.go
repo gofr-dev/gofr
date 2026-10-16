@@ -129,7 +129,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
 
-		err := migratorWithMongo.commitMigration(mockContainer, td)
+		err := migratorWithMongo.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -311,6 +311,6 @@ func Test_MongoCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	err := migratorWithMongo.commitMigration(mockContainer, td)
+	err := migratorWithMongo.commitMigration(mockContainer, &td)
 	assert.NoError(t, err)
 }
