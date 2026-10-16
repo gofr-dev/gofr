@@ -426,7 +426,7 @@ func TestRun_RBACRouteCheckFailExitsNonZero(t *testing.T) {
 		a.Run()
 	})
 
-	assert.Equal(t, []int{exitCodeStartupFailed}, codes)
+	assert.Equal(t, []int{exitCodeFailure}, codes)
 }
 
 // TestRun_RBACRouteCheckFailStopsBeforeServers checks that a failed route check is the last thing a
