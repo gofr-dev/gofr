@@ -336,6 +336,7 @@ func TestQuery_Failures(t *testing.T) {
 					EventhubName: "test-hub",
 				})
 				client.consumer = &azeventhubs.ConsumerClient{}
+
 				return client
 			},
 			query:         "",
@@ -348,6 +349,7 @@ func TestQuery_Failures(t *testing.T) {
 					EventhubName: "test-hub",
 				})
 				client.consumer = &azeventhubs.ConsumerClient{} // Just needs to be non-nil
+
 				return client
 			},
 			query:         "different-hub",

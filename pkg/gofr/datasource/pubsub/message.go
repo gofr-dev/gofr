@@ -10,6 +10,9 @@ import (
 
 var errNotPointer = errors.New("input should be a pointer to a variable")
 
+// topicParam is the parameter name under which a message exposes its topic.
+const topicParam = "topic"
+
 type Message struct {
 	ctx context.Context
 
@@ -33,7 +36,7 @@ func (m *Message) Context() context.Context {
 }
 
 func (m *Message) Param(p string) string {
-	if p == "topic" {
+	if p == topicParam {
 		return m.Topic
 	}
 

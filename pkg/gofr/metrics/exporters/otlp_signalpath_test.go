@@ -1,3 +1,5 @@
+//go:build !gofr_nootlp
+
 package exporters
 
 import (

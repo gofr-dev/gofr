@@ -129,7 +129,7 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
 		return errDestinationIsNotPointer
@@ -206,7 +206,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 	defer c.sendOperationStats(&QueryLog{Operation: "ExecCASWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
 		return false, errDestinationIsNotPointer
@@ -237,23 +237,38 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 }
 
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
-	switch batchType {
-	case LoggedBatch, UnloggedBatch, CounterBatch:
-		if len(c.cassandra.batches) == 0 {
-			c.cassandra.batches = make(map[string]batch)
-		}
-
-		c.cassandra.batches[name] = c.cassandra.session.newBatch(gocql.BatchType(batchType))
-
-		return nil
-	default:
+	gocqlBatchType, ok := toGocqlBatchType(batchType)
+	if !ok {
 		return errUnsupportedBatchType
+	}
+
+	if len(c.cassandra.batches) == 0 {
+		c.cassandra.batches = make(map[string]batch)
+	}
+
+	c.cassandra.batches[name] = c.cassandra.session.newBatch(gocqlBatchType)
+
+	return nil
+}
+
+// toGocqlBatchType maps one of the package's batch type constants to its gocql.BatchType,
+// reporting false for any other value.
+func toGocqlBatchType(batchType int) (gocql.BatchType, bool) {
+	switch batchType {
+	case LoggedBatch:
+		return gocql.LoggedBatch, true
+	case UnloggedBatch:
+		return gocql.UnloggedBatch, true
+	case CounterBatch:
+		return gocql.CounterBatch, true
+	default:
+		return 0, false
 	}
 }
 
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 
@@ -270,7 +285,7 @@ func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 
 func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 
@@ -337,7 +352,7 @@ func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 }
 
 func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
-	cols := make([]string, 0)
+	cols := make([]string, 0, len(columns))
 
 	for _, column := range columns {
 		cols = append(cols, column.Name)

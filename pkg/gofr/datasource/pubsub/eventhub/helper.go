@@ -29,6 +29,9 @@ func defaultStartPosition() azeventhubs.StartPosition {
 	return azeventhubs.StartPosition{Earliest: &earliest}
 }
 
+// startPositionLatest is the string argument that selects the latest event as the start position.
+const startPositionLatest = "latest"
+
 func parseStartPositionArg(arg any) azeventhubs.StartPosition {
 	switch v := arg.(type) {
 	case int64:
@@ -39,7 +42,7 @@ func parseStartPositionArg(arg any) azeventhubs.StartPosition {
 			}
 		}
 	case string:
-		if v == "latest" {
+		if v == startPositionLatest {
 			latest := true
 
 			return azeventhubs.StartPosition{
