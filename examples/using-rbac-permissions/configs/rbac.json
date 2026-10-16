@@ -1,0 +1,7 @@
+{
+  "permissionsClaimPath": "scope",
+  "endpoints": [
+    { "path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"] },
+    { "path": "/orders", "methods": ["POST"], "requiredPermissions": ["orders:write"] }
+  ]
+}
