@@ -10,6 +10,7 @@
 package cassandra
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gocql "github.com/gocql/gocql"
@@ -182,6 +183,20 @@ func (m *Mockquery) exec() error {
 func (mr *MockqueryMockRecorder) exec() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "exec", reflect.TypeOf((*Mockquery)(nil).exec))
+}
+
+// execWithCtx mocks base method.
+func (m *Mockquery) execWithCtx(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "execWithCtx", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// execWithCtx indicates an expected call of execWithCtx.
+func (mr *MockqueryMockRecorder) execWithCtx(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "execWithCtx", reflect.TypeOf((*Mockquery)(nil).execWithCtx), ctx)
 }
 
 // iter mocks base method.
