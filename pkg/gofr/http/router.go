@@ -240,11 +240,7 @@ func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *m
 		r = mux.SetURLVars(r, match.Vars)
 	}
 
-	if match.Route != nil {
-		if tmpl, err := match.Route.GetPathTemplate(); err == nil {
-			r = withRouteTemplate(r, tmpl)
-		}
-	}
+	r = withRoute(r, match.Route)
 
 	// mux builds its middleware chain inside Match, guarded by MatchErr == nil, so a route that
 	// matches while REPORTING an error is served WITHOUT the chain. A subrouter carrying its own
@@ -473,6 +469,12 @@ type staticFileConfig struct {
 }
 
 func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
+	// The route patterns below are built from endpoint verbatim, and ServeHTTP normalizes
+	// incoming paths with path.Clean — so an endpoint carrying a leading or trailing slash
+	// registers a pattern no request can ever match. Normalize here, where the patterns are
+	// built, so a direct caller cannot register a dead route either.
+	endpoint = "/" + strings.Trim(endpoint, "/")
+
 	// staticHandler resolves each request to an absolute, cleaned path and the containment check
 	// compares it against directoryName as a string, so the two have to be in the same form.
 	// Resolving once here covers a relative name and an absolute one carrying a trailing separator

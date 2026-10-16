@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -1207,7 +1208,7 @@ func TestAttemptReconnection(t *testing.T) {
 			database.stopSignal = tc.stopSignal()
 			tc.setupMock(mock)
 
-			got := attemptReconnection(database, time.Millisecond)
+			got := attemptReconnection(context.Background(), database, time.Millisecond)
 
 			assert.Equal(t, tc.expResult, got)
 			require.NoError(t, mock.ExpectationsWereMet())
@@ -1222,7 +1223,7 @@ func TestRetryConnection_StopsWhileWaiting(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		retryConnection(database)
+		retryConnection(context.Background(), database)
 		close(done)
 	}()
 

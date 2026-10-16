@@ -1,3 +1,5 @@
+//go:build !gofr_nographql
+
 package gofr
 
 import (
@@ -42,6 +44,9 @@ const (
 	graphqlSuccess  = "success"
 	graphqlError    = "error"
 	graphqlUnknown  = "unknown"
+
+	// graphqlErrorMessageKey is the key of the message in a GraphQL error object.
+	graphqlErrorMessageKey = "message"
 )
 
 // GraphQLLog represents a logged GraphQL resolver execution.
@@ -410,7 +415,7 @@ func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 
 func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Request) {
 	ct := r.Header.Get("Content-Type")
-	if ct != "" && !strings.HasPrefix(ct, "application/json") {
+	if ct != "" && !strings.HasPrefix(ct, contentTypeJSON) {
 		m.respondWithErrors(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 		return
 	}
@@ -453,7 +458,7 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 		Context:        ctx,
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", contentTypeJSON)
 
 	if len(result.Errors) > 0 {
 		m.container.Metrics().IncrementCounter(ctx, "app_graphql_error_total", "operation_name", opName, "type", opType)
@@ -510,16 +515,20 @@ func (*graphQLManager) parseOperation(query, operationName string) (opName, opTy
 	return opName, opType
 }
 
-func (*graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
+func (m *graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", contentTypeJSON)
 	w.WriteHeader(status)
 
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	err := json.NewEncoder(w).Encode(map[string]any{
 		"errors": []map[string]any{
-			{"message": message},
+			{graphqlErrorMessageKey: message},
 		},
 	})
+	if err != nil {
+		m.container.Errorf("error encoding GraphQL error response: %v", err)
+	}
 }
+
 func (m *graphQLManager) GetHandler() http.Handler {
 	return http.HandlerFunc(m.Handle)
 }
@@ -581,3 +590,15 @@ const graphiqlHTML = `<!DOCTYPE html>
     </script>
 </body>
 </html>`
+
+// noopResponder is used by GraphQL resolvers. GraphQL reuses *gofr.Context (which
+// requires a Responder) but handles its own response serialization — the resolver
+// result is collected by the GraphQL engine and written as part of the unified
+// GraphQL JSON response, not via the standard HTTP responder.
+//
+// It lives here rather than in responder.go because getResolver is its only user,
+// and responder.go cannot carry the build tag: it also holds the exported
+// Responder interface, which every build needs.
+type noopResponder struct{}
+
+func (noopResponder) Respond(_ any, _ error) {}

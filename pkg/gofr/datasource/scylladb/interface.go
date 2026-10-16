@@ -1,6 +1,8 @@
 package scylladb
 
 import (
+	"context"
+
 	"github.com/gocql/gocql"
 )
 
@@ -14,11 +16,16 @@ type iterator interface {
 	Columns() []gocql.ColumnInfo
 	Scan(dest ...any) bool
 	NumRows() int
+	// Close releases the iterator and returns the first error encountered
+	// while executing the query, if any. gocql only surfaces a failed
+	// query through Close, not through Scan or NumRows.
+	Close() error
 }
 
 // query defines methods for interacting with a ScyllaDB query.
 type query interface {
 	Exec() error
+	ExecWithCtx(ctx context.Context) error
 	Iter() iterator
 	MapScanCAS(dest map[string]any) (applied bool, err error)
 	ScanCAS(dest ...any) (applied bool, err error)

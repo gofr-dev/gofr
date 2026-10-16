@@ -7,6 +7,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -23,13 +24,12 @@ type mockDependencies struct {
 	mockBatch   *Mockbatch
 	mockIter    *Mockiterator
 	mockLogger  *MockLogger
+	ctrl        *gomock.Controller
 }
 
 func initTest(t *testing.T) (*Client, *mockDependencies) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
-
-	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -55,9 +55,10 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf("we did not get a pointer. data is not settable.").AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
-		mockIter: mockiter, mockLogger: mockLogger}
+		mockIter: mockiter, mockLogger: mockLogger, ctrl: ctrl}
 }
 
 func TestScyllaDB_Connect(t *testing.T) {
@@ -112,9 +113,6 @@ func TestScyllaDB_Connect(t *testing.T) {
 }
 
 func Test_Query(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	const query = "SELECT id, name FROM Users"
 
 	type Users struct {
@@ -126,6 +124,8 @@ func Test_Query(t *testing.T) {
 	mockIntSlice := make([]int, 0)
 	mockStruct := Users{}
 	mockInt := 0
+	mockErrSlice := make([]int, 0)
+	mockErrSliceAfterScan := make([]int, 0)
 
 	client, mockDeps := initTest(t)
 
@@ -139,45 +139,59 @@ func Test_Query(t *testing.T) {
 		{"success case: struct slice", &mockStructSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).AnyTimes()
-			mockDeps.mockIter.EXPECT().NumRows().Return(1).AnyTimes()
-			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).AnyTimes()
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
 			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockStructSlice, nil},
 		{"success case: int slice", &mockIntSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).AnyTimes()
-			mockDeps.mockIter.EXPECT().NumRows().Return(1).AnyTimes()
-			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockIntSlice, nil},
 		{"success case: struct", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).AnyTimes()
-			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).AnyTimes()
-			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
+			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
 		}, &mockStruct, nil},
 		{"failure case: dest is not pointer", mockStructSlice, func() {
+			mockDeps.mockLogger.EXPECT().Debug("we did not get a pointer. data is not settable.")
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-		}, mockStructSlice,
-			nil},
-		{"failure case: dest is int", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).AnyTimes()
-		}, &mockInt, nil},
+		}, mockStructSlice, errDestinationIsNotPointer},
 		{"failure case: dest is int", &mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
-		}, &mockInt, nil},
+			mockDeps.mockIter.EXPECT().Close().Return(nil).Times(1)
+		}, &mockInt, errUnexpectedPointer{target: "int"}},
+		{"failure case: query fails before any row is read", &mockErrSlice, func() {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(0).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(errMock).Times(1)
+		}, &mockErrSlice, errMock},
+		{"failure case: query fails after a row is read", &mockErrSliceAfterScan, func() {
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().Iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+			mockDeps.mockIter.EXPECT().Close().Return(errMock).Times(1)
+		}, &mockErrSliceAfterScan, errMock},
 	}
 
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		err := client.Query(&mockStructSlice, query)
+		err := client.Query(tc.dest, query)
 
 		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -268,14 +282,14 @@ func Test_HealthCheck(t *testing.T) {
 	}{
 		{"success case", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
+			mockDeps.mockQuery.EXPECT().ExecWithCtx(gomock.Any()).Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(errMock).Times(1)
+			mockDeps.mockQuery.EXPECT().ExecWithCtx(gomock.Any()).Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
@@ -283,9 +297,6 @@ func Test_HealthCheck(t *testing.T) {
 		}, errStatusDown},
 		{"failure case: ScyllaDB not initialized", func() {
 			client.scylla.session = nil
-
-			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
@@ -399,35 +410,32 @@ func Test_ExecCAS(t *testing.T) {
 		expErr     error
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).AnyTimes()
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).Times(1)
 		}, true, nil},
-
+		// This row asserts the current behavior for a non-struct, non-slice dest: ExecCAS
+		// reports applied=true without ever calling MapScanCAS. That is the bug tracked in
+		// #4364, not the intended behavior; it is pinned here as a regression guard.
 		{"success case: int dest, applied true", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(true, nil).AnyTimes()
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, true, nil},
-
 		{"failure case: struct dest, error", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).AnyTimes()
-		}, true, nil},
-		{"failure case: int dest, error", &mockInt, func() {
-			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(false, errMock).AnyTimes()
-		}, true, nil},
+			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).Times(1)
+		}, false, errMock},
 		{"failure case: dest is not pointer", mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 		}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]any{}, func() {
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedMap},
 	}
 
@@ -451,34 +459,34 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 	mockStructSlice := make([]testStruct, 0)
 
 	testCases := []struct {
-		desc      string
-		batchName string
-		dest      any
-		mockCall  func()
-		expRes    any
-		expErr    error
+		desc       string
+		batchName  string
+		dest       any
+		mockCall   func()
+		expApplied bool
+		expErr     error
 	}{
 		{
 			desc:      "success case: batch found and executed",
-			batchName: "test-batch",
+			batchName: mockBatchName,
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(nil).Times(1)
+				mockDeps.mockSession.EXPECT().executeBatchCAS(mockDeps.mockBatch, gomock.Any()).Return(true, nil).Times(1)
 			},
-			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialized,
+			expApplied: true,
+			expErr:     nil,
 		},
 		{
-			desc:      "failure case: executeBatch returns error",
-			batchName: "test-batch",
+			desc:      "failure case: executeBatchCAS returns error",
+			batchName: mockBatchName,
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(assert.AnError).Times(1)
+				mockDeps.mockSession.EXPECT().executeBatchCAS(mockDeps.mockBatch, gomock.Any()).Return(false, assert.AnError).Times(1)
 			},
-			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialized,
+			expApplied: false,
+			expErr:     assert.AnError,
 		},
 		{
 			desc:      "failure case: batch not initialized",
@@ -486,10 +494,11 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 			dest:      &mockStructSlice,
 			mockCall: func() {
 				mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 				client.scylla.batches = nil
 			},
-			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialized,
+			expApplied: false,
+			expErr:     errBatchNotInitialized,
 		},
 	}
 
@@ -497,9 +506,9 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 		tc.mockCall()
 
 		ctx := context.Background()
-		err := client.ExecuteBatchWithCtx(ctx, tc.batchName)
+		applied, err := client.ExecuteBatchCASWithCtx(ctx, tc.batchName, tc.dest)
 
-		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed: %s", i, tc.desc)
+		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed: %s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed: %s", i, tc.desc)
 	}
 }
@@ -533,4 +542,29 @@ func Test_ExecuteBatch(t *testing.T) {
 
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+// Test_HealthCheck_PropagatesContext asserts the context passed to HealthCheck is
+// forwarded to the health-check query, so a caller's deadline/cancellation applies.
+func Test_HealthCheck_PropagatesContext(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	type ctxKey string
+
+	const key ctxKey = "health-check"
+
+	ctx := context.WithValue(t.Context(), key, "yes")
+
+	mockDeps.mockSession.EXPECT().Query("SELECT now() FROM system.local").Return(mockDeps.mockQuery).Times(1)
+	mockDeps.mockQuery.EXPECT().
+		ExecWithCtx(gomock.Cond(func(x any) bool {
+			c, ok := x.(context.Context)
+			return ok && c.Value(key) == "yes"
+		})).
+		Return(nil).Times(1)
+
+	_, err := client.HealthCheck(ctx)
+
+	require.NoError(t, err)
+	require.True(t, mockDeps.ctrl.Satisfied(), "health-check query was not executed")
 }

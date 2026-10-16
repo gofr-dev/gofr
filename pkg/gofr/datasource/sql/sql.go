@@ -14,8 +14,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
-	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -32,6 +30,14 @@ const (
 	sslModeVerifyFull = "verify-full"
 	tlsCustom         = "tls=custom"
 	localhost         = "localhost"
+
+	// DB_SSL_MODE values that only MySQL understands.
+	sslModePreferred  = "preferred"
+	sslModeSkipVerify = "skip-verify"
+	// loopbackIPv4 is the IPv4 loopback address, served under the name localhost.
+	loopbackIPv4 = "127.0.0.1"
+	// dbStructTag is the struct tag naming the column a field is scanned from.
+	dbStructTag = "db"
 )
 
 var (
@@ -255,9 +261,13 @@ func finalizeConnection(database *DB) *DB {
 
 	database = pingToTestConnection(database)
 
-	go retryConnection(database)
+	// Close cancels ctx and waits on background, so no goroutine outlives the pool.
+	ctx, cancel := context.WithCancel(context.Background())
+	database.cancelBackground = cancel
 
-	go pushDBMetrics(database, database.metrics)
+	database.background.Go(func() { retryConnection(ctx, database) })
+
+	database.background.Go(func() { pushDBMetrics(database, database.metrics) })
 
 	return database
 }
@@ -287,7 +297,7 @@ func pingToTestConnection(database *DB) *DB {
 	return database
 }
 
-func retryConnection(database *DB) {
+func retryConnection(ctx context.Context, database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	retryDuration := connRetryFrequencyInSeconds * time.Second
@@ -299,10 +309,17 @@ func retryConnection(database *DB) {
 		default:
 		}
 
-		if database.DB.PingContext(context.Background()) != nil {
+		if database.DB.PingContext(ctx) != nil {
+			select {
+			case <-database.stopSignal:
+				// Close gave up waiting on this ping and closed the pool; exit quietly.
+				return
+			default:
+			}
+
 			database.logger.Info("retrying SQL database connection")
 
-			if !attemptReconnection(database, retryDuration) {
+			if !attemptReconnection(ctx, database, retryDuration) {
 				return
 			}
 		}
@@ -315,7 +332,7 @@ func retryConnection(database *DB) {
 	}
 }
 
-func attemptReconnection(database *DB, retryDuration time.Duration) bool {
+func attemptReconnection(ctx context.Context, database *DB, retryDuration time.Duration) bool {
 	for {
 		select {
 		case <-database.stopSignal:
@@ -323,7 +340,7 @@ func attemptReconnection(database *DB, retryDuration time.Duration) bool {
 		default:
 		}
 
-		err := database.DB.PingContext(context.Background())
+		err := database.DB.PingContext(ctx)
 		if err == nil {
 			printConnectionSuccessLog("connected", database.config, database.logger)
 
@@ -474,11 +491,11 @@ func getMySQLTLSParam(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case sslModeDisable, "false":
 		return "" // No TLS - insecure
-	case "preferred":
+	case sslModePreferred:
 		return "tls=preferred" // Try TLS, fallback to plain
 	case requireSSLMode, "true":
 		return tlsSkipVerify // TLS required but no cert validation
-	case "skip-verify":
+	case sslModeSkipVerify:
 		return tlsSkipVerify // Explicit skip verification
 	case sslModeVerifyCA, sslModeVerifyFull:
 		return tlsCustom // Use custom TLS config with CA verification
@@ -548,7 +565,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 
 func getServerName(hostname string) string {
 	// For localhost/127.0.0.1, use "localhost" explicitly
-	if hostname == "127.0.0.1" || hostname == "::1" {
+	if hostname == loopbackIPv4 || hostname == "::1" {
 		return localhost
 	}
 

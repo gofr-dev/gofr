@@ -33,6 +33,11 @@ func (s *scylladbIterator) NumRows() int {
 	return s.iter.NumRows()
 }
 
+// Close releases the iterator and returns any error the query failed with.
+func (s *scylladbIterator) Close() error {
+	return s.iter.Close()
+}
+
 // scylladbQuery implements query interface.
 type scylladbQuery struct {
 	query *gocql.Query
@@ -41,6 +46,12 @@ type scylladbQuery struct {
 // Exec performs a ScyllaDB Query Exec.
 func (s *scylladbQuery) Exec() error {
 	return s.query.Exec()
+}
+
+// ExecWithCtx performs a ScyllaDB Query Exec bound to ctx, so the caller's
+// deadline or cancellation applies to the query.
+func (s *scylladbQuery) ExecWithCtx(ctx context.Context) error {
+	return s.query.WithContext(ctx).Exec()
 }
 
 // Iter returns a ScyllaDB iterator.
@@ -169,7 +180,7 @@ func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span 
 
 // getColumnsFromColumnsInfo Extracts and returns a slice of column names from the provided gocql.ColumnInfo slice.
 func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
-	cols := make([]string, 0)
+	cols := make([]string, 0, len(columns))
 
 	for _, column := range columns {
 		cols = append(cols, column.Name)
@@ -181,7 +192,7 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 // rowsToStruct Scans the iterator row data and maps it to the fields of the provided struct.
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 
@@ -242,7 +253,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 // and returns if the update was applied.
 func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 
