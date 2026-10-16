@@ -218,6 +218,94 @@ func newPolicyService(t *testing.T, serverURL string, metrics Metrics, cfg *Retr
 	return svc, rec
 }
 
+// manualTimers replaces the provider's timers, so a test does not race the wall clock: a timer fires
+// only when the test fires it. onCreate, if set, runs with each new timer and its 0-based number.
+type manualTimers struct {
+	mu       sync.Mutex
+	timers   []*manualTimer
+	onCreate func(n int, t *manualTimer)
+}
+
+// install makes m the timers of svc.
+func (m *manualTimers) install(t *testing.T, svc HTTP) {
+	t.Helper()
+
+	rp, ok := svc.(*retryProvider)
+	require.True(t, ok, "RetryConfig must wrap the service in a retryProvider")
+
+	rp.afterFunc = m.afterFunc
+}
+
+func (m *manualTimers) afterFunc(_ time.Duration, f func()) stopper {
+	t := &manualTimer{f: f}
+
+	m.mu.Lock()
+	n := len(m.timers)
+	m.timers = append(m.timers, t)
+	onCreate := m.onCreate
+	m.mu.Unlock()
+
+	if onCreate != nil {
+		onCreate(n, t)
+	}
+
+	return t
+}
+
+// fire fires timer number n, and reports whether it ran: a stopped timer does not.
+func (m *manualTimers) fire(n int) bool {
+	m.mu.Lock()
+	t := m.timers[n]
+	m.mu.Unlock()
+
+	return t.fire()
+}
+
+func (m *manualTimers) count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return len(m.timers)
+}
+
+// manualTimer runs its callback at most once, and only if fired before it is stopped, as a real timer does.
+type manualTimer struct {
+	mu      sync.Mutex
+	f       func()
+	fired   bool
+	stopped bool
+}
+
+func (t *manualTimer) Stop() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.fired || t.stopped {
+		return false
+	}
+
+	t.stopped = true
+
+	return true
+}
+
+func (t *manualTimer) fire() bool {
+	t.mu.Lock()
+
+	if t.fired || t.stopped {
+		t.mu.Unlock()
+
+		return false
+	}
+
+	t.fired = true
+	t.mu.Unlock()
+
+	t.f()
+
+	return true
+}
+
 func readBody(t *testing.T, resp *http.Response) string {
 	t.Helper()
 
@@ -459,9 +547,10 @@ func TestRetryConfig_PerAttemptTimeout_TimeoutError(t *testing.T) {
 // TestRetryConfig_PerAttemptTimeout_NoRetryPossible covers attempts the per-attempt timer must leave
 // running: when it fires, no retry could follow, so cutting the attempt off would only turn the
 // upstream's answer into a timeout.
+//
+// The upstream answers only after the per-attempt timer has fired, and the timer is fired by the test, so
+// no case depends on how fast the machine is.
 func TestRetryConfig_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
-	const answerAfter = 250 * time.Millisecond
-
 	never := func(*http.Response, error) bool { return false }
 
 	tests := []struct {
@@ -469,30 +558,33 @@ func TestRetryConfig_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
 		cfg      RetryConfig
 		deadline time.Duration
 	}{
+		// What is left of the deadline when the timer fires is always under PerAttemptTimeout.
 		{desc: "the deadline leaves no room for another attempt",
-			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 150 * time.Millisecond,
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: time.Minute,
 				RetryOn: StandardRetryable, Methods: safeRetryMethods()},
-			deadline: 280 * time.Millisecond},
+			deadline: 30 * time.Second},
 		{desc: "the budget is spent",
-			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 100 * time.Millisecond, Budget: &RetryBudget{Ratio: 0.1},
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: time.Minute, Budget: &RetryBudget{Ratio: 0.1},
 				RetryOn: StandardRetryable, Methods: safeRetryMethods()}},
 		{desc: "RetryOn does not retry a timeout",
-			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: 100 * time.Millisecond, RetryOn: never, Methods: safeRetryMethods()}},
+			cfg: RetryConfig{MaxRetries: 2, PerAttemptTimeout: time.Minute, RetryOn: never, Methods: safeRetryMethods()}},
 	}
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, r *http.Request) {
-				select {
-				case <-r.Context().Done():
-					return
-				case <-time.After(answerAfter):
-				}
+			var fired atomic.Bool
+
+			timers := &manualTimers{}
+
+			server, hits := scriptedServer(t, func(_ int32, w http.ResponseWriter, _ *http.Request) {
+				// The attempt's timer is set before its request is sent, so it is there to fire.
+				fired.Store(timers.fire(0))
 
 				_, _ = io.WriteString(w, "done")
 			})
 
 			svc, _ := newPolicyService(t, server.URL, nil, &tc.cfg)
+			timers.install(t, svc)
 
 			ctx := t.Context()
 
@@ -506,6 +598,7 @@ func TestRetryConfig_PerAttemptTimeout_NoRetryPossible(t *testing.T) {
 			resp, err := svc.Get(ctx, "test", nil)
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.True(t, fired.Load(), "TEST[%d], the per-attempt timer must have fired during the attempt", i)
 			assert.Equal(t, "done", readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, int32(1), hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
@@ -562,6 +655,10 @@ func TestRetryConfig_HugeWaitDoesNotOverflowTheDeadlineCheck(t *testing.T) {
 
 // TestRetryConfig_PerAttemptTimeout_BoundsBodyRead covers a retryable response whose body stalls: the
 // read made before the retry must give up after PerAttemptTimeout instead of blocking the call.
+//
+// Timers are fired by the test: the first attempt's never fires, so its headers always count as on time,
+// and every body-read timer fires as soon as it is set. MaxRetries is 1, so the retry is the last attempt
+// and has no timer of its own.
 func TestRetryConfig_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
 	tests := []struct {
 		desc    string
@@ -573,6 +670,9 @@ func TestRetryConfig_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
+			// stallEnd reports how the stalled response ended: aborted by the client, or given up by the server.
+			stallEnd := make(chan string, 1)
+
 			server, hits := scriptedServer(t, func(n int32, w http.ResponseWriter, r *http.Request) {
 				if n > 1 {
 					_, _ = io.WriteString(w, "ok")
@@ -586,22 +686,30 @@ func TestRetryConfig_PerAttemptTimeout_BoundsBodyRead(t *testing.T) {
 
 				select {
 				case <-r.Context().Done():
-				case <-time.After(5 * time.Second):
+					stallEnd <- "aborted by the client"
+				case <-time.After(30 * time.Second):
+					stallEnd <- "given up by the server"
 				}
 			})
 
 			svc, _ := newPolicyService(t, server.URL, nil,
-				&RetryConfig{MaxRetries: 2, Backoff: tc.backoff, PerAttemptTimeout: 100 * time.Millisecond,
+				&RetryConfig{MaxRetries: 1, Backoff: tc.backoff, PerAttemptTimeout: time.Minute,
 					RetryOn: StandardRetryable, Methods: safeRetryMethods()})
 
-			start := time.Now()
+			timers := &manualTimers{onCreate: func(n int, timer *manualTimer) {
+				if n > 0 {
+					go timer.fire()
+				}
+			}}
+			timers.install(t, svc)
 
 			resp, err := svc.Get(context.Background(), "test", nil)
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, "ok", readBody(t, resp), "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, int32(2), hits.Load(), "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Less(t, time.Since(start), 2*time.Second, "TEST[%d], the stalled body must not block the retry", i)
+			assert.Greater(t, timers.count(), 1, "TEST[%d], the body read must have been bounded by a timer", i)
+			assert.Equal(t, "aborted by the client", <-stallEnd, "TEST[%d], the stalled body must not block the retry", i)
 		})
 	}
 }
