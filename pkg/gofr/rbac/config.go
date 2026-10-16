@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
@@ -46,6 +47,7 @@ const extractionFailuresMetric = "rbac_role_extraction_failures"
 
 // Modes reported in the startup line, naming where authorization reads from.
 const (
+	modeExtractor   = "extractor"
 	modePermissions = "permissions"
 	modeRoles       = "roles"
 	modeHeader      = "header"
@@ -155,6 +157,13 @@ type Config struct {
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
 	rules []endpointRule `json:"-" yaml:"-"`
+
+	// The application's extractor and what it runs with, set by WithExtractor. extractorSet tells a
+	// nil extractor, which is an error, from none.
+	extractorSet     bool                 `json:"-" yaml:"-"`
+	extractor        Extractor            `json:"-" yaml:"-"`
+	container        *container.Container `json:"-" yaml:"-"`
+	extractorTimeout time.Duration        `json:"-" yaml:"-"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -164,7 +173,9 @@ type Config struct {
 // It does not register the rbac_role_extraction_failures counter that Middleware increments;
 // App.EnableRBAC does. A caller that uses LoadPermissions and Middleware directly with metrics must
 // register that counter itself, or each failed extraction logs an error and is not counted.
-func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer) (*Config, error) {
+// opts are applied before the config is validated; see WithExtractor.
+func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer,
+	opts ...Option) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read RBAC config file %s: %w", path, err)
@@ -192,6 +203,10 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	config.Metrics = metrics
 	config.Tracer = tracer
 
+	for _, opt := range opts {
+		opt(&config)
+	}
+
 	// Validate config before processing
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("invalid RBAC config: %w", err)
@@ -209,7 +224,8 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	return &config, nil
 }
 
-// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+// logStartup logs the mode RBAC runs in, and warns about a roles section or a role header that
+// permissions and extractor modes never read.
 func (c *Config) logStartup(logger datasource.Logger) {
 	mode, source := c.mode()
 	logger.Infof("RBAC enabled: mode=%s, source=%s", mode, source)
@@ -222,11 +238,22 @@ func (c *Config) logStartup(logger datasource.Logger) {
 	if mode == modePermissions && c.RoleHeader != "" {
 		logger.Warnf("RBAC: permissionsClaimPath is set, so roleHeader is ignored")
 	}
+
+	if mode == modeExtractor && len(c.Roles) > 0 {
+		logger.Warnf("RBAC: an extractor is set, so the roles section is ignored; " +
+			"permissions are read from the extractor, not from roles")
+	}
+
+	if mode == modeExtractor && c.RoleHeader != "" {
+		logger.Warnf("RBAC: an extractor is set, so roleHeader is ignored")
+	}
 }
 
 // mode reports which source authorization reads from, and the claim path or header that names it.
 func (c *Config) mode() (mode, source string) {
 	switch {
+	case c.extractor != nil:
+		return modeExtractor, "application"
 	case c.PermissionsClaimPath != "":
 		return modePermissions, c.PermissionsClaimPath
 	case c.JWTClaimPath != "":
@@ -240,6 +267,10 @@ func (c *Config) mode() (mode, source string) {
 
 // validate validates the RBAC configuration.
 func (c *Config) validate() error {
+	if err := c.validateExtractor(); err != nil {
+		return err
+	}
+
 	if err := c.validateClaimModes(); err != nil {
 		return err
 	}
