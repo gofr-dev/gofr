@@ -1,6 +1,10 @@
 package ftp
 
 import (
+	"errors"
+	"fmt"
+	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -362,4 +366,101 @@ func TestFileSystem_Connect_Success(t *testing.T) {
 	fs.Connect()
 
 	assert.True(t, fs.(*fileSystem).CommonFileSystem.IsConnected())
+}
+
+func TestFileSystem_OpenFileDoesNotBlockOtherOperations(t *testing.T) {
+	server, dir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	createTestFile(t, dir, "a.txt", []byte("0123456789"))
+	createTestFile(t, dir, "b.txt", []byte("BBBBBBBB"))
+
+	fs := New(getTestConfig(server.Port)).(*fileSystem)
+	fs.Connect()
+	require.True(t, fs.IsConnected())
+
+	finishWithin(t, 5*time.Second, func(gt require.TestingT) {
+		f, err := fs.Open("a.txt")
+		require.NoError(gt, err)
+
+		info, err := fs.Stat("b.txt")
+		require.NoError(gt, err)
+		assert.Equal(gt, int64(8), info.Size())
+
+		buf := make([]byte, 3)
+		n, err := f.ReadAt(buf, 4)
+		require.NoError(gt, err)
+		assert.Equal(gt, "456", string(buf[:n]))
+
+		data, err := io.ReadAll(f)
+		require.NoError(gt, err)
+		assert.Equal(gt, "0123456789", string(data))
+		require.NoError(gt, f.Close())
+
+		_, err = fs.Stat("b.txt")
+		require.NoError(gt, err)
+	})
+}
+
+// readFTPFile opens name, reads it fully and closes it.
+func readFTPFile(fs file.FileSystem, name string) (string, error) {
+	f, err := fs.Open(name)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := io.ReadAll(f)
+
+	return string(data), errors.Join(err, f.Close())
+}
+
+func TestFileSystem_ConcurrentOperations(t *testing.T) {
+	server, dir, cleanup := setupTestFTPServer(t)
+	defer cleanup()
+
+	const workers = 20
+
+	for i := range workers {
+		createTestFile(t, dir, fmt.Sprintf("f%02d.txt", i), fmt.Appendf(nil, "content-%02d", i))
+	}
+
+	fs := New(getTestConfig(server.Port)).(*fileSystem)
+	fs.Connect()
+	require.True(t, fs.IsConnected())
+
+	type result struct {
+		data     string
+		readErr  error
+		info     file.FileInfo
+		statErr  error
+		entries  []file.FileInfo
+		entryErr error
+	}
+
+	results := make([]result, workers)
+
+	finishWithin(t, 20*time.Second, func(require.TestingT) {
+		var wg sync.WaitGroup
+
+		for i := range workers {
+			name := fmt.Sprintf("f%02d.txt", i)
+
+			wg.Go(func() { results[i].data, results[i].readErr = readFTPFile(fs, name) })
+			wg.Go(func() { results[i].info, results[i].statErr = fs.Stat(name) })
+			wg.Go(func() { results[i].entries, results[i].entryErr = fs.ReadDir(".") })
+		}
+
+		wg.Wait()
+	})
+
+	for i, res := range results {
+		require.NoError(t, res.readErr, "Open/ReadAll/Close f%02d.txt", i)
+		assert.Equal(t, fmt.Sprintf("content-%02d", i), res.data)
+
+		require.NoError(t, res.statErr, "Stat f%02d.txt", i)
+		assert.Equal(t, int64(10), res.info.Size())
+
+		require.NoError(t, res.entryErr, "ReadDir #%d", i)
+		assert.Len(t, res.entries, workers)
+	}
 }

@@ -23,6 +23,20 @@ The method accepts a function with the signature `func(ctx *gofr.Context) error`
 - The `*gofr.Context` passed to the hook is fully initialized and provides access to all dependency-injection-managed services (e.g., `ctx.Container.SQL`, `ctx.Container.Redis`).
 - If any `OnStart` hook returns an error, the application will log the error and refuse to start.
 
+### What "refuse to start" does
+
+A hook that returns an error abandons the run, and the process **exits with status 1**.
+
+1. The error is logged.
+2. Everything startup has already opened is released — the container's datasources are live by the time hooks run, so they are closed rather than left to process exit.
+3. No server is started, and `app.Run()` does not return.
+
+Two consequences worth planning for:
+
+- **Code after `app.Run()` in `main` does not execute** on this path. `Run` is meant to be the last call in `main`; anything you need to happen on a failed start belongs in the hook itself or in an `OnShutdown` hook.
+- **A test that calls `app.Run()` with a failing hook terminates the test binary.** Exercise the hook function directly rather than through `Run`.
+
+Exiting non-zero is deliberate: a Kubernetes `restartPolicy`, a `CrashLoopBackOff` and a systemd restart all need a non-zero status. A service that refused to start but reported success is the failure this avoids.
 
 ### Example: Warming up a Cache
 
