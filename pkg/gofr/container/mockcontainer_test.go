@@ -371,6 +371,50 @@ func (r *recordingReporter) Errorf(format string, args ...any) {
 	r.errs = append(r.errs, fmt.Sprintf(format, args...))
 }
 
+// fakeCleanupReporter records reported failures and registered cleanups, so testReporter can be driven
+// through a test's lifetime without running a real test.
+type fakeCleanupReporter struct {
+	recordingReporter
+	cleanups []func()
+}
+
+func (f *fakeCleanupReporter) Cleanup(fn func()) { f.cleanups = append(f.cleanups, fn) }
+
+func TestTestReporter_StopsReportingWhenTheTestEnds(t *testing.T) {
+	fake := &fakeCleanupReporter{}
+	r := newTestReporter(fake)
+
+	r.Errorf("while running: %d", 1)
+	require.Len(t, fake.cleanups, 1)
+
+	fake.cleanups[0]() // the test has ended
+	r.Errorf("after the test: %d", 2)
+
+	assert.Equal(t, []string{"while running: 1"}, fake.errs)
+}
+
+// A goroutine started by a test can call the mock after the test has returned. That call must not reach
+// t.Errorf, which panics once the test has completed and aborts every test in the binary.
+func TestNewMockContainer_SelectAfterTheTestEndsDoesNotPanic(t *testing.T) {
+	release, finished := make(chan struct{}), make(chan struct{})
+
+	t.Run("owner", func(t *testing.T) {
+		c, _ := NewMockContainer(t)
+
+		go func() {
+			defer close(finished)
+
+			<-release
+
+			var dest []string
+			c.SQL.Select(context.Background(), &dest, "SELECT 1") // no expectation: a mismatch
+		}()
+	})
+
+	close(release) // the owner subtest has completed
+	<-finished
+}
+
 const (
 	selectMockQuery       = "SELECT id FROM users WHERE id=?"
 	selectMockOtherQuery  = "SELECT name FROM users WHERE id=?"
@@ -502,7 +546,10 @@ func TestNewMockContainer_SQLReportsToTest(t *testing.T) {
 
 	db, ok := c.SQL.(*sqlMockDB)
 	require.True(t, ok)
-	assert.Same(t, t, db.reporter)
+
+	reporter, ok := db.reporter.(*testReporter)
+	require.True(t, ok, "mismatches must go through testReporter, which stops reporting once the test ends")
+	assert.Same(t, t, reporter.t)
 }
 
 func TestMockSQL_ExpectSelect_StoresOnlyPointers(t *testing.T) {

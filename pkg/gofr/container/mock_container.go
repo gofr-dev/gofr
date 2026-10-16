@@ -107,7 +107,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
 
-	sqlDB := &sqlMockDB{DB: mockDB, expectedQuery: &expectation, logger: logging.NewLogger(logging.DEBUG), reporter: t}
+	sqlDB := &sqlMockDB{DB: mockDB, expectedQuery: &expectation, logger: logging.NewLogger(logging.DEBUG), reporter: newTestReporter(t)}
 	sqlDB.finish(t)
 
 	container.SQL = sqlDB

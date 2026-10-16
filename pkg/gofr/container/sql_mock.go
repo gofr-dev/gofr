@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -42,6 +43,46 @@ type errorReporter interface {
 	Errorf(format string, args ...any)
 }
 
+// cleanupReporter is the part of testing.TB that testReporter needs.
+type cleanupReporter interface {
+	errorReporter
+	Cleanup(func())
+}
+
+// testReporter fails the owning test only while it is running. Calling t.Errorf after a test has completed
+// panics ("Fail in goroutine after ... has completed") and aborts the whole test binary, which a goroutine
+// that outlives the test can easily trigger. testing runs cleanups before it marks the test complete, and the
+// mutex makes the done check and the Errorf call one step, so a late mismatch is only logged.
+type testReporter struct {
+	mu   sync.Mutex
+	t    errorReporter
+	done bool
+}
+
+func newTestReporter(t cleanupReporter) *testReporter {
+	r := &testReporter{t: t}
+
+	t.Cleanup(func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		r.done = true
+	})
+
+	return r
+}
+
+func (r *testReporter) Errorf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.done {
+		return
+	}
+
+	r.t.Errorf(format, args...)
+}
+
 // sqlMockDB wraps the go-mock-sql DB connection and expectations.
 type sqlMockDB struct {
 	*gofrSQL.DB
@@ -50,7 +91,7 @@ type sqlMockDB struct {
 	reporter errorReporter
 }
 
-// reportf logs a mock mismatch and, when a reporter is set, fails the test.
+// reportf logs a mock mismatch and, when a reporter is set, fails the test while it is still running.
 func (m sqlMockDB) reportf(format string, args ...any) {
 	m.logger.Errorf(format, args...)
 
