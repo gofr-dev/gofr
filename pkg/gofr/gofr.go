@@ -66,6 +66,7 @@ type App struct {
 
 	grpcRegistered      bool
 	httpRegistered      bool
+	rbacEnabled         bool // set by the first EnableRBAC that installs a config; guards its metric registration
 	subscriptionManager SubscriptionManager
 	graphqlManager      graphQLRunner
 	onStartHooks        []func(ctx *Context) error

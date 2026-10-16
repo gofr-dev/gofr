@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,7 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/rbac"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -184,6 +187,80 @@ func TestEnableRBAC(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+// TestEnableRBAC_RegistersExtractionCounterOncePerApp pins that the counter the RBAC middleware
+// increments is registered by EnableRBAC, once for each app: a second registration with the same
+// manager logs a duplicate-metric error. The names are compared, not pinned, so renaming either side
+// alone fails here; a mismatch would make every rejected request log an error and count nothing.
+func TestEnableRBAC_RegistersExtractionCounterOncePerApp(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		apps  int
+		loads int // EnableRBAC calls on each app
+	}{
+		{desc: "one call registers the counter", apps: 1, loads: 1},
+		{desc: "a second call on the same app does not register it again", apps: 1, loads: 2},
+		{desc: "each app registers its own counter", apps: 2, loads: 2},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path := writeRBACConfig(t, t.TempDir(), "rbac.yaml", rbacGuardingRootYAML)
+
+			for range tc.apps {
+				a := newAuthTestApp(t)
+
+				var registered, incremented string
+
+				c, mocks := container.NewMockContainer(t)
+				mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).Times(1).
+					Do(func(name, _ string) { registered = name })
+				mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).
+					Do(func(_ context.Context, name string, _ ...string) { incremented = name })
+
+				a.container = c
+
+				for range tc.loads {
+					require.NoError(t, a.EnableRBAC(path), "TEST[%d], Failed.\n%s", i, tc.desc)
+				}
+
+				// a request with no role header is rejected and counted as an extraction failure
+				require.Equal(t, http.StatusUnauthorized, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Equal(t, registered, incremented, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+		})
+	}
+}
+
+func TestApp_loadRBACConfig(t *testing.T) {
+	tests := []struct {
+		desc   string
+		config string
+	}{
+		{"config that loads cleanly", rbacGuardingRoot},
+		{"config that loads with a logged error", rbacUnknownParentGuardingRoot},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			a := newAuthTestApp(t)
+			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
+
+			var (
+				config *rbac.Config
+				err    error
+			)
+
+			testutil.StderrOutputForFunc(func() {
+				config, err = a.loadRBACConfig(path)
+			})
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			// Only the load is counted: request-time logging must reach the app logger directly.
+			assert.Same(t, a.Logger(), config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
@@ -469,36 +546,6 @@ func TestRun_RBACRouteCheckFailStopsBeforeServers(t *testing.T) {
 			assert.Contains(t, stderr, routeCheckFailed, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.NotContains(t, stderr, "MCP server cannot start", "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.NotContains(t, stdout, "Registered HTTP server on port", "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
-func TestApp_loadRBACConfig(t *testing.T) {
-	tests := []struct {
-		desc   string
-		config string
-	}{
-		{"config that loads cleanly", rbacGuardingRoot},
-		{"config that loads with a logged error", rbacUnknownParentGuardingRoot},
-	}
-
-	for i, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			a := newAuthTestApp(t)
-			path := writeRBACConfig(t, t.TempDir(), "rbac.json", tc.config)
-
-			var (
-				config *rbac.Config
-				err    error
-			)
-
-			testutil.StderrOutputForFunc(func() {
-				config, err = a.loadRBACConfig(path)
-			})
-
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			// Only the load is counted: request-time logging must reach the app logger directly.
-			assert.Same(t, a.Logger(), config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
