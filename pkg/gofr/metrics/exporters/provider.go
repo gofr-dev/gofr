@@ -36,8 +36,14 @@ type ShutdownFunc func(ctx context.Context) error
 // Multiple readers share the same instruments with no double-counting, so the
 // Prometheus /metrics endpoint and an OTLP push exporter can run together.
 // Build never returns a nil ShutdownFunc; failures degrade to a working provider
-// (Prometheus-only, or no readers) rather than crashing app start.
+// (Prometheus-only, or no readers) rather than crashing app start. A nil logger is
+// substituted with noopLogger, so an external caller that passes nil gets no
+// diagnostics instead of a panic on the first log call.
 func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
+	if logger == nil {
+		logger = noopLogger{}
+	}
+
 	// Resolve the resource first and publish it on cfg: pushReader runs after this,
 	// and a builder needs to see the resource its backend will actually receive.
 	cfg.Resource = buildResource(ctx, cfg, logger)
@@ -72,11 +78,49 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metri
 	return shutdown, meter
 }
 
+// warnIfEnvServiceNameIgnored logs the one attribute OTEL_RESOURCE_ATTRIBUTES and
+// OTEL_SERVICE_NAME cannot set: service.name, which GoFr always takes from APP_NAME.
+// It mirrors traces/exporters.warnIfEnvServiceNameIgnored: an application with
+// tracing switched off never reaches that one, so without this a metrics-only app
+// would drop the operator's value silently.
+//
+// It reads env, the resource the SDK's environment detector resolved, rather than
+// the raw variables, so the warning also covers the service.name form embedded in
+// OTEL_RESOURCE_ATTRIBUTES.
+func warnIfEnvServiceNameIgnored(env *resource.Resource, appName string, logger Logger) {
+	for _, kv := range env.Attributes() {
+		// GoFr pins semconv v1.17.0 while the SDK's fromEnv detector pins a newer
+		// one; ServiceNameKey is the identical attribute.Key("service.name") in
+		// both, so comparing across the two versions is safe.
+		if kv.Key != semconv.ServiceNameKey || kv.Value.AsString() == appName {
+			continue
+		}
+
+		logger.Warnf("metrics: service.name=%q from the environment is ignored; "+
+			"GoFr sets it from APP_NAME (%q). Set APP_NAME to rename the service.",
+			kv.Value.AsString(), appName)
+
+		return
+	}
+}
+
 func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(cfg.AppName),
 		attribute.String("framework_version", version.Framework),
 	}
+
+	// Run the environment detector once and reuse its result for the warning and
+	// the resource. resource.Environment() would parse the variables a second time
+	// and hand a malformed OTEL_RESOURCE_ATTRIBUTES to otel.Handle on top of the
+	// warning below. The SDK still reports it on its own re-reads (resource.Default,
+	// metricSdk.WithResource); GoFr cannot stop those.
+	env, err := resource.New(ctx, resource.WithFromEnv())
+	if err != nil {
+		logger.Warnf("metrics: resource detection was incomplete: %v", err)
+	}
+
+	warnIfEnvServiceNameIgnored(env, cfg.AppName, logger)
 
 	opts := []resource.Option{
 		// OTEL_RESOURCE_ATTRIBUTES carries attributes a backend requires but the
@@ -87,7 +131,12 @@ func buildResource(ctx context.Context, cfg *Config, logger Logger) *resource.Re
 		// is not what makes the variable work. It is here so buildResource returns a
 		// complete resource on its own rather than one that is only correct once a
 		// particular consumer merges it.
-		resource.WithFromEnv(),
+		//
+		// The order stays the environment first: resource.New merges each later
+		// option as the winner, so attrs last is what keeps service.name and
+		// framework_version out of the environment's reach. Test_buildResource pins
+		// both, so a reshuffle of this slice fails.
+		resource.WithAttributes(env.Attributes()...),
 		resource.WithAttributes(attrs...),
 	}
 
