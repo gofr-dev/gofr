@@ -8,7 +8,44 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/container"
 )
+
+// TestLoadPermissions_RegistersNoMetric pins that loading a config registers nothing: EnableRBAC
+// registers the extraction counter once per app, and a load that registered it too would log a
+// duplicate-metric error on every second load.
+func TestLoadPermissions_RegistersNoMetric(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		content string
+	}{
+		{
+			desc: "roles mode",
+			content: `{"roleHeader": "X-User-Role", "roles": [{"name": "admin", "permissions": ["orders:read"]}], ` +
+				`"endpoints": [{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]}`,
+		},
+		{
+			desc: "permissions mode",
+			content: `{"permissionsClaimPath": "scope", "endpoints": ` +
+				`[{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]}`,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "rbac.json")
+			require.NoError(t, os.WriteFile(path, []byte(tc.content), 0600))
+
+			// No expectations: any registration fails the test.
+			metrics := container.NewMockMetrics(gomock.NewController(t))
+
+			_, err := LoadPermissions(path, &mockLogger{}, metrics, nil)
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
 
 func TestLoadPermissions_ValidConfigs(t *testing.T) {
 	t.Run("loads valid json config", func(t *testing.T) {
@@ -758,6 +795,101 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestLoadPermissions_ClaimModes(t *testing.T) {
+	const endpoints = `"endpoints": [{"path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"]}]`
+
+	testCases := []struct {
+		desc      string
+		file      string
+		content   string
+		wantErr   error
+		perms     string
+		startLine string
+		warn      string
+	}{
+		{
+			desc: "permissions mode from json", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`,
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+		},
+		{
+			desc: "permissions mode from yaml", file: "rbac.yaml",
+			content: "permissionsClaimPath: scope\nendpoints:\n" +
+				"  - path: /orders\n    methods: [GET]\n    requiredPermissions: [orders:read]\n",
+			perms: "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+		},
+		{
+			desc: "permissions mode with a nested path and an index loads", file: "rbac.json",
+			content: `{"permissionsClaimPath": "realm.access[0]", ` + endpoints + `}`,
+			perms:   "realm.access[0]", startLine: "RBAC enabled: mode=permissions, source=realm.access[0]",
+		},
+		{
+			desc: "roles mode keeps loading a claim path it cannot parse, as before", file: "rbac.json",
+			content:   `{"jwtClaimPath": "roles[x]", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=roles, source=roles[x]",
+		},
+		{
+			desc: "header mode", file: "rbac.json",
+			content:   `{"roleHeader": "X-User-Role", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=header, source=X-User-Role",
+		},
+		{
+			desc: "both claim paths are rejected", file: "rbac.json",
+			content: `{"jwtClaimPath": "roles", "permissionsClaimPath": "scope", ` + endpoints + `}`,
+			wantErr: errBothClaimPaths,
+		},
+		{
+			desc: "a permissions claim path that cannot be parsed is rejected", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope[x]", ` + endpoints + `}`,
+			wantErr: errInvalidPermissionsClaimPath,
+		},
+		{
+			desc: "roleHeader beside permissionsClaimPath warns that the header is ignored", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", "roleHeader": "X-User-Role", ` + endpoints + `}`,
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+			warn: "roleHeader is ignored",
+		},
+		{
+			desc: "permissions mode with a roles section warns that the roles are not consulted", file: "rbac.json",
+			content: `{"permissionsClaimPath": "scope", ` +
+				`"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			perms:     "scope",
+			startLine: "RBAC enabled: mode=permissions, source=scope",
+			warn:      "roles section is ignored",
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), tc.file)
+			require.NoError(t, os.WriteFile(path, []byte(tc.content), 0600))
+
+			ctrl := gomock.NewController(t)
+			metrics := container.NewMockMetrics(ctrl)
+			logger := &mockLogger{}
+
+			config, err := LoadPermissions(path, logger, metrics, nil)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+				return
+			}
+
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.perms, config.PermissionsClaimPath, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, logger.infoLogs, tc.startLine, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			if tc.warn == "" {
+				assert.Empty(t, logger.warnLogs, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.Len(t, logger.warnLogs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logger.warnLogs[0], tc.warn, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
