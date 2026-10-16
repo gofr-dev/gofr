@@ -9,6 +9,10 @@ import (
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/embedded"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 )
@@ -76,7 +80,7 @@ func Test_Query_Success(t *testing.T) {
 }
 
 func Test_Query_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	client.tracer = otel.GetTracerProvider().Tracer("gofr-dgraph")
 
@@ -84,6 +88,7 @@ func Test_Query_Error(t *testing.T) {
 	mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
 
 	mockTxn.EXPECT().Query(gomock.Any(), "my query").Return(nil, errQueryFailed)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_query_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph query failed: ", errQueryFailed)
@@ -118,7 +123,7 @@ func Test_QueryWithVars_Success(t *testing.T) {
 }
 
 func Test_QueryWithVars_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	mockTxn := NewMockTxn(mockDgraphClient.ctrl)
 	mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
@@ -127,6 +132,7 @@ func Test_QueryWithVars_Error(t *testing.T) {
 	vars := map[string]string{"$var": "value"}
 
 	mockTxn.EXPECT().QueryWithVars(gomock.Any(), query, vars).Return(nil, errQueryFailed)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_query_with_vars_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph queryWithVars failed: ", errQueryFailed)
@@ -184,7 +190,7 @@ func Test_Mutate_InvalidMutation(t *testing.T) {
 }
 
 func Test_Mutate_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	mockTxn := NewMockTxn(mockDgraphClient.ctrl)
 	mockDgraphClient.EXPECT().NewTxn().Return(mockTxn)
@@ -193,6 +199,7 @@ func Test_Mutate_Error(t *testing.T) {
 
 	mockTxn.EXPECT().Mutate(gomock.Any(), mutation).Return(nil, errMutationFailed)
 	mockTxn.EXPECT().Discard(gomock.Any()).Return(nil)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_mutate_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph mutation failed: ", errMutationFailed)
@@ -219,10 +226,11 @@ func Test_Alter_Success(t *testing.T) {
 }
 
 func Test_Alter_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	op := &api.Operation{}
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), op).Return(errAlterFailed)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph alter failed: ", errAlterFailed)
@@ -336,12 +344,13 @@ func Test_DropField_Success(t *testing.T) {
 }
 
 func Test_DropField_Error(t *testing.T) {
-	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	fieldName := "email"
 	expectedOp := &api.Operation{DropAttr: fieldName}
 
 	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(errAlterFailed)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockLogger.EXPECT().Error("dgraph alter failed: ", errAlterFailed)
@@ -515,6 +524,183 @@ func Test_mutationToString(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			require.Equal(t, tc.expected, mutationToString(tc.mutation))
+		})
+	}
+}
+
+// recordingTracer is a trace.Tracer that remembers every span it starts.
+type recordingTracer struct {
+	embedded.Tracer
+
+	spans []*recordingSpan
+}
+
+func (r *recordingTracer) Start(ctx context.Context, name string, _ ...trace.SpanStartOption) (context.Context, trace.Span) {
+	s := &recordingSpan{Span: noop.Span{}, name: name}
+	r.spans = append(r.spans, s)
+
+	return trace.ContextWithSpan(ctx, s), s
+}
+
+// recordingSpan counts End calls and captures the recorded error and status.
+type recordingSpan struct {
+	trace.Span
+
+	name   string
+	ended  int
+	errs   []error
+	status codes.Code
+}
+
+func (s *recordingSpan) End(...trace.SpanEndOption) { s.ended++ }
+
+func (s *recordingSpan) RecordError(err error, _ ...trace.EventOption) { s.errs = append(s.errs, err) }
+
+func (s *recordingSpan) SetStatus(code codes.Code, _ string) { s.status = code }
+
+type spanEndCase struct {
+	desc      string
+	setup     func(dg *MockDgraphClient, txn *MockTxn)
+	call      func(ctx context.Context, c *Client) error
+	expSpan   string
+	expMetric string
+	expHistos int
+	expErr    error
+	expErrs   []error
+	expStatus codes.Code
+}
+
+func spanEndCases() []spanEndCase {
+	mutation := &api.Mutation{CommitNow: true}
+	op := &api.Operation{Schema: "name: string ."}
+	vars := map[string]string{"$a": "x"}
+	okResp := &api.Response{Json: []byte(`{"q":[]}`)}
+
+	query := func(ctx context.Context, c *Client) error { _, err := c.Query(ctx, "q"); return err }
+	queryWithVars := func(ctx context.Context, c *Client) error { _, err := c.QueryWithVars(ctx, "q", vars); return err }
+	mutate := func(ctx context.Context, c *Client) error { _, err := c.Mutate(ctx, mutation); return err }
+	alter := func(ctx context.Context, c *Client) error { return c.Alter(ctx, op) }
+
+	return []spanEndCase{
+		{
+			desc: "query success",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().Query(gomock.Any(), "q").Return(okResp, nil)
+			},
+			call:    query,
+			expSpan: "dgraph-query", expMetric: "dgraph_query_duration", expHistos: 1, expStatus: codes.Unset,
+		},
+		{
+			desc: "query error",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().Query(gomock.Any(), "q").Return(nil, errQueryFailed)
+			},
+			call:    query,
+			expSpan: "dgraph-query", expMetric: "dgraph_query_duration", expHistos: 1,
+			expErr: errQueryFailed, expErrs: []error{errQueryFailed}, expStatus: codes.Error,
+		},
+		{
+			desc: "query with vars success",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().QueryWithVars(gomock.Any(), "q", vars).Return(okResp, nil)
+			},
+			call:    queryWithVars,
+			expSpan: "dgraph-query-with-vars", expMetric: "dgraph_query_with_vars_duration", expHistos: 1, expStatus: codes.Unset,
+		},
+		{
+			desc: "query with vars error",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().QueryWithVars(gomock.Any(), "q", vars).Return(nil, errQueryFailed)
+			},
+			call:    queryWithVars,
+			expSpan: "dgraph-query-with-vars", expMetric: "dgraph_query_with_vars_duration", expHistos: 1,
+			expErr: errQueryFailed, expErrs: []error{errQueryFailed}, expStatus: codes.Error,
+		},
+		{
+			desc: "mutate success",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().Mutate(gomock.Any(), mutation).Return(okResp, nil)
+				txn.EXPECT().Discard(gomock.Any()).Return(nil)
+			},
+			call:    mutate,
+			expSpan: "dgraph-mutate", expMetric: "dgraph_mutate_duration", expHistos: 1, expStatus: codes.Unset,
+		},
+		{
+			desc: "mutate error",
+			setup: func(dg *MockDgraphClient, txn *MockTxn) {
+				dg.EXPECT().NewTxn().Return(txn)
+				txn.EXPECT().Mutate(gomock.Any(), mutation).Return(nil, errMutationFailed)
+				txn.EXPECT().Discard(gomock.Any()).Return(nil)
+			},
+			call:    mutate,
+			expSpan: "dgraph-mutate", expMetric: "dgraph_mutate_duration", expHistos: 1,
+			expErr: errMutationFailed, expErrs: []error{errMutationFailed}, expStatus: codes.Error,
+		},
+		{
+			desc:    "mutate invalid type",
+			setup:   func(*MockDgraphClient, *MockTxn) {},
+			call:    func(ctx context.Context, c *Client) error { _, err := c.Mutate(ctx, "bad"); return err },
+			expSpan: "dgraph-mutate", expErr: errInvalidMutation, expErrs: []error{errInvalidMutation}, expStatus: codes.Error,
+		},
+		{
+			desc: "alter success",
+			setup: func(dg *MockDgraphClient, _ *MockTxn) {
+				dg.EXPECT().Alter(gomock.Any(), op).Return(nil)
+			},
+			call:    alter,
+			expSpan: "dgraph-alter", expMetric: "dgraph_alter_duration", expHistos: 1, expStatus: codes.Unset,
+		},
+		{
+			desc: "alter error",
+			setup: func(dg *MockDgraphClient, _ *MockTxn) {
+				dg.EXPECT().Alter(gomock.Any(), op).Return(errAlterFailed)
+			},
+			call:    alter,
+			expSpan: "dgraph-alter", expMetric: "dgraph_alter_duration", expHistos: 1,
+			expErr: errAlterFailed, expErrs: []error{errAlterFailed}, expStatus: codes.Error,
+		},
+		{
+			desc:    "alter invalid type",
+			setup:   func(*MockDgraphClient, *MockTxn) {},
+			call:    func(ctx context.Context, c *Client) error { return c.Alter(ctx, "bad") },
+			expSpan: "dgraph-alter", expErr: errInvalidOperation, expErrs: []error{errInvalidOperation}, expStatus: codes.Error,
+		},
+	}
+}
+
+func TestClient_SpanEndedOnEveryPath(t *testing.T) {
+	for _, tc := range spanEndCases() {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+			mockDgraph := NewMockDgraphClient(ctrl)
+			tracer := &recordingTracer{}
+
+			client := New(Config{})
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+			client.UseTracer(tracer)
+			client.client = mockDgraph
+
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Error(gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), tc.expMetric, gomock.Any()).Times(tc.expHistos)
+			tc.setup(mockDgraph, NewMockTxn(ctrl))
+
+			err := tc.call(t.Context(), client)
+
+			require.ErrorIs(t, err, tc.expErr)
+			require.Len(t, tracer.spans, 1)
+			require.Equal(t, tc.expSpan, tracer.spans[0].name)
+			require.Equal(t, 1, tracer.spans[0].ended, "span must be ended exactly once")
+			require.Equal(t, tc.expErrs, tracer.spans[0].errs)
+			require.Equal(t, tc.expStatus, tracer.spans[0].status)
 		})
 	}
 }
