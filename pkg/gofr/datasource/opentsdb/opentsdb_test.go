@@ -628,7 +628,11 @@ func TestHealthCheck_Success(t *testing.T) {
 
 	mockConn.EXPECT().Close()
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return mockConn, nil
 	}
 
@@ -643,7 +647,11 @@ func TestHealthCheck_Success(t *testing.T) {
 func TestHealthCheck_Failure(t *testing.T) {
 	client, _ := setOpenTSDBTest(t)
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return nil, errConnection
 	}
 
@@ -651,6 +659,33 @@ func TestHealthCheck_Failure(t *testing.T) {
 
 	require.Nil(t, resp, "Expected response to be nil")
 	require.EqualError(t, err, "connection error", "Expected error during health check")
+}
+
+func TestHealthCheck_ContextCanceled(t *testing.T) {
+	client, _ := setOpenTSDBTest(t)
+
+	// A listener that accepts connections, so only the canceled context can fail the dial. The
+	// mock HTTP client has no expectations: reaching the version request fails the test.
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	client.config.Host = ln.Addr().String()
+
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = (&net.Dialer{}).DialContext
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	resp, err := client.HealthCheck(ctx)
+
+	require.Nil(t, resp)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestConnect(t *testing.T) {
@@ -990,14 +1025,14 @@ func TestGetAggregators_Errors(t *testing.T) {
 func TestHealthCheck_VersionFailure(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
-	originalDial := dialTimeout
+	originalDial := dialContext
 
-	t.Cleanup(func() { dialTimeout = originalDial })
+	t.Cleanup(func() { dialContext = originalDial })
 
 	mockConn := NewMockconnection(gomock.NewController(t))
 	mockConn.EXPECT().Close().Return(nil).Times(1)
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return mockConn, nil
 	}
 
