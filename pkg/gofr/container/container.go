@@ -150,7 +150,10 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
-	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *sql.DB: storing a nil pointer in the DB interface makes c.SQL == nil false.
+	if db := sql.NewSQL(conf, c.Logger, c.metricsManager); db != nil {
+		c.SQL = db
+	}
 
 	c.createPubSub(conf)
 
