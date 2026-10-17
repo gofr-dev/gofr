@@ -1058,3 +1058,28 @@ func TestContainer_createKafkaPubSub_InvalidConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestContainer_RemoteLogFetchIntervalValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval string
+	}{
+		{"zero interval", "0"},
+		{"negative interval", "-10"},
+		{"invalid string", "invalid"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.NewMockConfig(map[string]string{
+				"REMOTE_LOG_URL":            "http://127.0.0.1:8080/logs",
+				"REMOTE_LOG_FETCH_INTERVAL": tt.interval,
+			})
+
+			assert.NotPanics(t, func() {
+				c := NewContainer(cfg)
+				assert.NotNil(t, c.Logger)
+			})
+		})
+	}
+}
