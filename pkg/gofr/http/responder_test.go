@@ -137,6 +137,18 @@ func TestResponder_getStatusCode(t *testing.T) {
 			map[string]any{"message": ErrorClientClosedRequest{}.Error()}},
 		{"server timeout error", http.MethodGet, nil, ErrorRequestTimeout{}, http.StatusRequestTimeout,
 			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
+		{"nil map with status-coded error", http.MethodGet, map[string]any(nil), ErrorEntityAlreadyExist{},
+			http.StatusConflict, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
+		{"nil slice with status-coded error", http.MethodGet, []any(nil), ErrorEntityAlreadyExist{},
+			http.StatusConflict, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
+		{"nil map with plain error", http.MethodGet, map[string]any(nil), errTest,
+			http.StatusInternalServerError, map[string]any{"message": errTest.Error()}},
+		{"nil slice with plain error", http.MethodGet, []any(nil), errTest,
+			http.StatusInternalServerError, map[string]any{"message": errTest.Error()}},
+		{"empty non-nil map with error", http.MethodGet, map[string]any{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
+		{"empty non-nil slice with error", http.MethodGet, []any{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
 	}
 
 	for i, tc := range tests {
@@ -1300,6 +1312,24 @@ func TestResponder_Char_ErrorEnvelopeEdges(t *testing.T) {
 		{
 			"typed-nil-data-plus-error-uses-error-status", http.MethodGet, newNilTemp(), ErrorEntityNotFound{},
 			http.StatusNotFound, "application/json", "{\"error\":{\"message\":\"No entity found with : \"}}\n",
+		},
+		{
+			"nil-map-plus-error-uses-error-status", http.MethodGet, map[string]string(nil), ErrorEntityAlreadyExist{},
+			http.StatusConflict, "application/json", "{\"error\":{\"message\":\"entity already exists\"}}\n",
+		},
+		{
+			"nil-slice-plus-error-uses-error-status", http.MethodGet, []string(nil), ErrorEntityAlreadyExist{},
+			http.StatusConflict, "application/json", "{\"error\":{\"message\":\"entity already exists\"}}\n",
+		},
+		{
+			"empty-map-plus-error-remains-partial-data", http.MethodGet, map[string]string{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"entity already exists\"},\"data\":{}}\n",
+		},
+		{
+			"empty-slice-plus-error-remains-partial-data", http.MethodGet, []string{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"entity already exists\"},\"data\":[]}\n",
 		},
 
 		// --- empty-struct short circuit ---------------------------------------

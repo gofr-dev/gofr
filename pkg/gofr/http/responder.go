@@ -127,7 +127,7 @@ func (r Responder) Respond(data any, err error) {
 		resp = &re.resp
 	default:
 		// handling where an interface contains a nullable type with a nil value.
-		if isNil(data) {
+		if isNil(data) || (err != nil && isNilErrorData(data)) {
 			data = nil
 		}
 
@@ -353,7 +353,7 @@ func getStatusCode(method string, data any, err error) (statusCode int, errResp 
 		return handleSuccess(method, data)
 	}
 
-	if !isNil(data) {
+	if !isNilErrorData(data) {
 		return http.StatusPartialContent, createErrorResponse(err)
 	}
 
@@ -425,4 +425,16 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Pointer && v.IsNil()
+}
+
+// isNilErrorData reports whether error response data is effectively absent.
+// Nil maps and slices are treated like untyped nil, while empty non-nil collections remain partial data.
+func isNilErrorData(data any) bool {
+	if isNil(data) {
+		return true
+	}
+
+	v := reflect.ValueOf(data)
+
+	return (v.Kind() == reflect.Map || v.Kind() == reflect.Slice) && v.IsNil()
 }
