@@ -133,9 +133,8 @@ var errFrameworkChecks = errors.New("framework dependency checks")
 
 // healthHandler serves the public, unauthenticated /.well-known/health endpoint. It reports only
 // the application name and aggregate status — no hosts, ports, credentials, or connection stats.
-// No HTTP route serves the full detailed map; Container.Health still computes it for in-process ops
-// tooling, and #3806 tracks exposing it on the metrics server (METRICS_PORT), behind the same
-// network boundary as /metrics and /debug/pprof.
+// The full detailed map is served instead at GET /health on the metrics server (METRICS_PORT),
+// behind the same network boundary as /metrics and /debug/pprof; see newMetricsMux.
 func (a *App) healthHandler(c *Context) (any, error) {
 	a.mu.Lock()
 	checks := a.readinessChecks
