@@ -37,6 +37,9 @@ type CircuitBreakerConfig struct {
 }
 
 // circuitBreaker represents a circuit breaker implementation.
+// defaultCircuitBreakerInterval is used when CircuitBreakerConfig.Interval is not set or is non-positive.
+const defaultCircuitBreakerInterval = 5 * time.Second
+
 type circuitBreaker struct {
 	mu           sync.RWMutex
 	state        int // ClosedState or OpenState
@@ -54,6 +57,11 @@ type circuitBreaker struct {
 //
 //nolint:revive // Allow returning unexported types as intended.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
+	// time.NewTicker panics on a non-positive interval, so fall back to a default.
+	if config.Interval <= 0 {
+		config.Interval = defaultCircuitBreakerInterval
+	}
+
 	cb := &circuitBreaker{
 		state:     ClosedState,
 		threshold: config.Threshold,
