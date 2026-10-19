@@ -286,6 +286,44 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 	require.ErrorIs(t, err, errToken)
 }
 
+func TestMQTT_SubscribeUnsubscribedWhileWaiting(t *testing.T) {
+	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
+	mockClient.EXPECT().IsConnected().Return(true)
+	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
+	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
+
+	mockToken.EXPECT().Wait().Return(true).Times(2)
+	mockToken.EXPECT().Error().Return(nil).Times(2)
+
+	// Unsubscribe only once Subscribe has registered the topic and is blocked on its channel.
+	go func() {
+		for {
+			client.mu.RLock()
+			_, ok := client.subscriptions["test/topic"]
+			client.mu.RUnlock()
+
+			if ok {
+				_ = client.Unsubscribe("test/topic")
+
+				return
+			}
+
+			runtime.Gosched()
+		}
+	}()
+
+	m, err := client.Subscribe(ctx, "test/topic")
+
+	assert.Nil(t, m)
+	require.NoError(t, err)
+}
+
 func TestMQTT_SubscribeWithFunc(t *testing.T) {
 	ctrl, client, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()

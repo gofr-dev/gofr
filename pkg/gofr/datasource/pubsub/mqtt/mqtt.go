@@ -137,7 +137,11 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 	select {
 	// blocks if there are no messages in the channel
-	case msg := <-subs.msgs:
+	case msg, ok := <-subs.msgs:
+		if !ok {
+			return nil, nil
+		}
+
 		spanCtx, span := startSubscribeSpan(ctx, topic)
 		defer span.End()
 
