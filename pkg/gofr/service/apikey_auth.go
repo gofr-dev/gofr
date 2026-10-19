@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"strings"
 )
 
@@ -32,12 +31,10 @@ func NewAPIKeyConfig(apiKey string) (Options, error) {
 }
 
 func (a *APIKeyConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
-	if value, exists := headers[xAPIKeyHeader]; exists {
-		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, xAPIKeyHeader)}
+	if _, exists := headers[xAPIKeyHeader]; exists {
+		return headers, AuthErr{Message: headerExistsMessage(xAPIKeyHeader)}
 	}
 
 	headers[xAPIKeyHeader] = a.APIKey

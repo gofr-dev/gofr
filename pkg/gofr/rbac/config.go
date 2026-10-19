@@ -31,6 +31,25 @@ var (
 
 	// errRegexIndicatorNotSupported is returned when regex indicators are used outside variable constraints.
 	errRegexIndicatorNotSupported = errors.New("regex pattern is not supported, use mux patterns instead")
+
+	// errBothClaimPaths is returned when both jwtClaimPath and permissionsClaimPath are set.
+	errBothClaimPaths = errors.New("jwtClaimPath and permissionsClaimPath cannot both be set")
+
+	// errInvalidPermissionsClaimPath is returned when permissionsClaimPath cannot be parsed, which would
+	// otherwise deny every request without a word.
+	errInvalidPermissionsClaimPath = errors.New("permissionsClaimPath cannot be parsed")
+)
+
+// extractionFailuresMetric counts requests whose role or permissions could not be read. App.EnableRBAC
+// registers it, once per app.
+const extractionFailuresMetric = "rbac_role_extraction_failures"
+
+// Modes reported in the startup line, naming where authorization reads from.
+const (
+	modePermissions = "permissions"
+	modeRoles       = "roles"
+	modeHeader      = "header"
+	modeNone        = "none"
 )
 
 // RoleDefinition defines a role with its permissions and inheritance.
@@ -96,9 +115,17 @@ type Config struct {
 	RoleHeader string `json:"roleHeader,omitempty" yaml:"roleHeader,omitempty"`
 
 	// JWTClaimPath specifies the JWT claim path for JWT-based role extraction
-	// Examples: "role", "roles[0]", "permissions.role"
-	// If set, role is extracted from JWT claims in request context
+	// Examples: "role", "roles", "roles[0]", "permissions.role"
+	// If set, role is extracted from JWT claims in request context. A string claim is one role; an
+	// array claim holds every role in it.
 	JWTClaimPath string `json:"jwtClaimPath,omitempty" yaml:"jwtClaimPath,omitempty"`
+
+	// PermissionsClaimPath specifies the JWT claim that holds the permissions themselves.
+	// Example: "scope" for {"scope": "orders:read orders:write"}
+	// If set, Roles are not consulted: a string claim is split on spaces, an array claim is held entry
+	// by entry. Cannot be combined with JWTClaimPath. RBAC does not validate the token: set the audience
+	// and expiry checks on EnableOAuth with jwt.WithAudience and jwt.WithExpirationRequired.
+	PermissionsClaimPath string `json:"permissionsClaimPath,omitempty" yaml:"permissionsClaimPath,omitempty"`
 
 	// ErrorHandler is called when authorization fails
 	// If nil, default error response is sent
@@ -119,10 +146,11 @@ type Config struct {
 
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
-	rolePermissionsMap    map[string][]string         `json:"-" yaml:"-"`
-	endpointPermissionMap map[string][]string         `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
-	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
-	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
+	rolePermissionsMap    map[string][]string            `json:"-" yaml:"-"`
+	rolePermissionSet     map[string]map[string]struct{} `json:"-" yaml:"-"` // Key: role, Value: set of its permissions
+	endpointPermissionMap map[string][]string            `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool                `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	endpointMap           map[string]*EndpointMapping    `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
 
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
@@ -133,6 +161,9 @@ type Config struct {
 // The file format is automatically detected based on the file extension.
 // Supported formats: .json, .yaml, .yml.
 // Dependencies (logger, metrics, tracer) are optional and can be set after loading.
+// It does not register the rbac_role_extraction_failures counter that Middleware increments;
+// App.EnableRBAC does. A caller that uses LoadPermissions and Middleware directly with metrics must
+// register that counter itself, or each failed extraction logs an error and is not counted.
 func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -171,11 +202,48 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 		return nil, fmt.Errorf("failed to process unified config: %w", err)
 	}
 
+	if logger != nil {
+		config.logStartup(logger)
+	}
+
 	return &config, nil
+}
+
+// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+func (c *Config) logStartup(logger datasource.Logger) {
+	mode, source := c.mode()
+	logger.Infof("RBAC enabled: mode=%s, source=%s", mode, source)
+
+	if mode == modePermissions && len(c.Roles) > 0 {
+		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
+			"permissions are read from the token, not from roles")
+	}
+
+	if mode == modePermissions && c.RoleHeader != "" {
+		logger.Warnf("RBAC: permissionsClaimPath is set, so roleHeader is ignored")
+	}
+}
+
+// mode reports which source authorization reads from, and the claim path or header that names it.
+func (c *Config) mode() (mode, source string) {
+	switch {
+	case c.PermissionsClaimPath != "":
+		return modePermissions, c.PermissionsClaimPath
+	case c.JWTClaimPath != "":
+		return modeRoles, c.JWTClaimPath
+	case c.RoleHeader != "":
+		return modeHeader, c.RoleHeader
+	default:
+		return modeNone, ""
+	}
 }
 
 // validate validates the RBAC configuration.
 func (c *Config) validate() error {
+	if err := c.validateClaimModes(); err != nil {
+		return err
+	}
+
 	// Validate endpoints: non-public endpoints must have RequiredPermissions
 	// Also validate that paths use mux patterns only (no wildcards or old regex)
 	for i, endpoint := range c.Endpoints {
@@ -187,6 +255,21 @@ func (c *Config) validate() error {
 		if err := c.validateEndpointPath(endpoint.Path, i); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// validateClaimModes rejects claim settings that would otherwise be ambiguous or silently ignored.
+func (c *Config) validateClaimModes() error {
+	if c.JWTClaimPath != "" && c.PermissionsClaimPath != "" {
+		return errBothClaimPaths
+	}
+
+	// Only permissionsClaimPath is checked: a jwtClaimPath that cannot be parsed has always loaded, and
+	// rejecting it now would stop an existing service from starting.
+	if err := validateClaimPath(c.PermissionsClaimPath); err != nil {
+		return fmt.Errorf("%w: %w", errInvalidPermissionsClaimPath, err)
 	}
 
 	return nil
@@ -273,6 +356,7 @@ func (c *Config) processUnifiedConfig() error {
 // initializeMaps initializes internal maps.
 func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
+	c.rolePermissionSet = make(map[string]map[string]struct{})
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 	c.endpointMap = make(map[string]*EndpointMapping)
@@ -285,6 +369,47 @@ func (c *Config) buildRolePermissionsMap() {
 		// Use getEffectivePermissions() for consistent inheritance handling
 		permissions := c.getEffectivePermissions(roleDef.Name)
 		c.rolePermissionsMap[roleDef.Name] = permissions
+
+		set := make(map[string]struct{}, len(permissions))
+		for _, p := range permissions {
+			set[p] = struct{}{}
+		}
+
+		c.rolePermissionSet[roleDef.Name] = set
+	}
+
+	c.logUnknownInheritedRoles()
+}
+
+// logUnknownInheritedRoles logs each inheritsFrom name that matches no defined role, once per role. Such a
+// role still loads with its own permissions, so without this log a misspelled parent silently grants less.
+func (c *Config) logUnknownInheritedRoles() {
+	if c.Logger == nil {
+		return
+	}
+
+	checked := make(map[string]bool, len(c.Roles))
+
+	for _, roleDef := range c.Roles {
+		// getEffectivePermissions reads only the first definition of a name, so a repeated one is skipped.
+		if checked[roleDef.Name] {
+			continue
+		}
+
+		checked[roleDef.Name] = true
+
+		logged := make(map[string]bool)
+
+		for _, inheritedName := range roleDef.InheritsFrom {
+			if _, ok := c.rolePermissionsMap[inheritedName]; ok || logged[inheritedName] {
+				continue
+			}
+
+			logged[inheritedName] = true
+
+			c.Logger.Errorf("RBAC: role %q inherits from unknown role %q; no permissions are inherited from it",
+				roleDef.Name, inheritedName)
+		}
 	}
 }
 
