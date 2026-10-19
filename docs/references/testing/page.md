@@ -14,6 +14,21 @@ Testing REST APIs ensures that your endpoints function correctly under various c
 
 Mocking databases allows for isolated testing by simulating various scenarios. GoFr's built-in mock container supports, not only SQL databases, but also extends to other data stores, including Redis, Cassandra, Key-Value stores, MongoDB, and ClickHouse.
 
+### Mocking `Select` Queries
+
+`Select` reads rows into a destination, so its mock takes the response you want written into that destination. Pass a pointer of the destination's type to `ExpectSelect`, along with the exact query text and arguments your handler uses, then set the rows with `ReturnsResponse`:
+
+```go
+var users []User
+
+mock.SQL.ExpectSelect(ctx, &users, "SELECT id, name FROM users WHERE status = ?", "active").
+	ReturnsResponse([]User{{ID: 1, Name: "John"}})
+```
+
+When the handler calls `ctx.SQL.Select(ctx, &dest, "SELECT id, name FROM users WHERE status = ?", "active")`, `dest` is set to the response.
+
+The query text must match exactly, and the arguments must have the same count, values and types (compared with `reflect.DeepEqual`, so slices such as `IN` lists are supported). If the query or arguments do not match, the destination is left untouched and the test fails with a message showing the expected and actual values.
+
 ## Example of Unit Testing a REST API Using GoFr
 
 Below is an example of how to test, say the `Add` method of a handler that interacts with a SQL database.

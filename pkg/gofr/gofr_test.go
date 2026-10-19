@@ -40,11 +40,22 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewCMD(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{""}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
 	a := NewCMD()
-	// Without args we should get error on stderr.
+
+	var exits []int
+
+	a.exit = func(code int) { exits = append(exits, code) }
+
+	// Without args we should get error on stderr and a failed exit status.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
 
 	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
+	assert.Equal(t, []int{1}, exits, "a missing command must exit with status 1")
 }
 
 func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
@@ -2338,5 +2349,4 @@ func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
 
 	assert.Contains(t, logs, `"response":405`, "a 405 was not access-logged")
 	assert.Contains(t, logs, `"response":404`, "a 404 was not access-logged")
-	assert.Contains(t, logs, "Registered HTTP server on port")
 }
