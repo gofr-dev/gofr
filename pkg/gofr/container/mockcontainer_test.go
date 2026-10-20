@@ -260,11 +260,11 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	expectation := expectedQuery{}
 	mockLogger := NewMockLogger(ctrl)
 	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
-	sqlDB := &sqlMockDB{mockDB, &expectation, mockLogger}
+	sqlDB := &sqlMockDB{DB: mockDB, expectedQuery: &expectation, logger: mockLogger}
 	sqlDB.finish(t)
 
 	t.Run("NonPointer_Value_In_ExpectSelect", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+		mockLogger.EXPECT().Errorf("received different expectations: %q", "SELECT * FROM test WHERE id=?")
 
 		var uninitializedVal, resultVal int
 
@@ -277,7 +277,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("PointerValue_In_ReturnsResponse", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf("received different expectations: %q", gomock.Any())
+		mockLogger.EXPECT().Errorf("received different expectations: %q", "SELECT * FROM test WHERE id=?")
 
 		var uninitializedVal, resultVal int
 
@@ -290,7 +290,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("Type_Mismatch_Between_Expect_And_Response", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf("received different expectations: %q", gomock.Any())
+		mockLogger.EXPECT().Errorf("received different expectations: %q", "SELECT * FROM test WHERE id=?")
 
 		var expectedVal, resultVal []string
 
@@ -301,7 +301,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("Select_Called_Without_Expectations", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf("did not expect any calls for Select with query: %q", gomock.Any())
+		mockLogger.EXPECT().Errorf("did not expect any calls for Select with query: %q", "SELECT * FROM test WHERE id=?")
 
 		var val []string
 
@@ -340,7 +340,7 @@ func TestExpectSelect_ArgCountMismatch(t *testing.T) {
 	expectation := expectedQuery{}
 	mockLogger := NewMockLogger(ctrl)
 	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
-	sqlDB := &sqlMockDB{mockDB, &expectation, mockLogger}
+	sqlDB := &sqlMockDB{DB: mockDB, expectedQuery: &expectation, logger: mockLogger}
 
 	mockLogger.EXPECT().Errorf("expected %d args, actual %d", 1, 2)
 
@@ -349,6 +349,232 @@ func TestExpectSelect_ArgCountMismatch(t *testing.T) {
 	sqlMockWrapper.ExpectSelect(t.Context(), &passed, "SELECT id FROM users WHERE id=?", 1).ReturnsResponse([]string{"1"})
 
 	sqlDB.Select(t.Context(), &actual, "SELECT id FROM users WHERE id=?", 1, 2)
+}
+
+type sqlMockSelectCase struct {
+	desc         string
+	expectations []queryWithArgs
+	dest         any
+	query        string
+	args         []any
+	logFormat    string
+	logArgs      []any
+	logTimes     int
+	expErrs      []string
+	expDest      any
+}
+
+// recordingReporter collects the messages the SQL mock reports as test failures.
+type recordingReporter struct{ errs []string }
+
+func (r *recordingReporter) Errorf(format string, args ...any) {
+	r.errs = append(r.errs, fmt.Sprintf(format, args...))
+}
+
+// fakeCleanupReporter records reported failures and registered cleanups, so testReporter can be driven
+// through a test's lifetime without running a real test.
+type fakeCleanupReporter struct {
+	recordingReporter
+	cleanups []func()
+}
+
+func (f *fakeCleanupReporter) Cleanup(fn func()) { f.cleanups = append(f.cleanups, fn) }
+
+func TestTestReporter_StopsReportingWhenTheTestEnds(t *testing.T) {
+	fake := &fakeCleanupReporter{}
+	r := newTestReporter(fake)
+
+	r.Errorf("while running: %d", 1)
+	require.Len(t, fake.cleanups, 1)
+
+	fake.cleanups[0]() // the test has ended
+	r.Errorf("after the test: %d", 2)
+
+	assert.Equal(t, []string{"while running: 1"}, fake.errs)
+}
+
+// A goroutine started by a test can call the mock after the test has returned. That call must not reach
+// t.Errorf, which panics once the test has completed and aborts every test in the binary.
+func TestNewMockContainer_SelectAfterTheTestEndsDoesNotPanic(t *testing.T) {
+	release, finished := make(chan struct{}), make(chan struct{})
+
+	t.Run("owner", func(t *testing.T) {
+		c, _ := NewMockContainer(t)
+
+		go func() {
+			defer close(finished)
+
+			<-release
+
+			var dest []string
+			c.SQL.Select(context.Background(), &dest, "SELECT 1") // no expectation: a mismatch
+		}()
+	})
+
+	close(release) // the owner subtest has completed
+	<-finished
+}
+
+const (
+	selectMockQuery       = "SELECT id FROM users WHERE id=?"
+	selectMockOtherQuery  = "SELECT name FROM users WHERE id=?"
+	selectMockArgMismatch = "expected arg %d: %v (%T), actual: %v (%T)"
+	selectMockBadDest     = "expected a non-nil pointer, actual %T"
+	selectMockBadResponse = "cannot assign response of type %T to destination of type %T"
+)
+
+func sqlMockSelectCases() []sqlMockSelectCase {
+	exp := queryWithArgs{queryText: selectMockQuery, arguments: []any{"u1"}, value: []string{"1"}}
+
+	return []sqlMockSelectCase{
+		{
+			desc: "matching call fills dest", expectations: []queryWithArgs{exp},
+			dest: new([]string), query: selectMockQuery, args: []any{"u1"},
+			expDest: &[]string{"1"},
+		},
+		{
+			desc:         "matching slice arg fills dest",
+			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{[]int{1, 2}}, value: []string{"1"}}},
+			dest:         new([]string), query: selectMockQuery, args: []any{[]int{1, 2}},
+			expDest: &[]string{"1"},
+		},
+		{
+			desc: "query mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			dest: new([]string), query: selectMockOtherQuery, args: []any{"u1"},
+			logFormat: "expected query: %q, actual query: %q", logArgs: []any{selectMockQuery, selectMockOtherQuery}, logTimes: 1,
+			expErrs: []string{`expected query: "SELECT id FROM users WHERE id=?", actual query: "SELECT name FROM users WHERE id=?"`},
+			expDest: new([]string),
+		},
+		{
+			desc: "arg count mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			dest: new([]string), query: selectMockQuery, args: []any{"u1", "u2"},
+			logFormat: "expected %d args, actual %d", logArgs: []any{1, 2}, logTimes: 1,
+			expErrs: []string{"expected 1 args, actual 2"},
+			expDest: new([]string),
+		},
+		{
+			desc: "arg value mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			dest: new([]string), query: selectMockQuery, args: []any{"u2"},
+			logFormat: selectMockArgMismatch, logArgs: []any{0, "u1", "u1", "u2", "u2"}, logTimes: 1,
+			expErrs: []string{"expected arg 0: u1 (string), actual: u2 (string)"},
+			expDest: new([]string),
+		},
+		{
+			desc:         "same arg value with different type",
+			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{1}, value: []string{"1"}}},
+			dest:         new([]string), query: selectMockQuery, args: []any{int64(1)},
+			logFormat: selectMockArgMismatch, logArgs: []any{0, 1, 1, int64(1), int64(1)}, logTimes: 1,
+			expErrs: []string{"expected arg 0: 1 (int), actual: 1 (int64)"},
+			expDest: new([]string),
+		},
+		{
+			desc: "non-pointer dest", expectations: []queryWithArgs{exp},
+			dest: []string(nil), query: selectMockQuery, args: []any{"u1"},
+			logFormat: selectMockBadDest, logArgs: []any{[]string(nil)}, logTimes: 1,
+			expErrs: []string{"expected a non-nil pointer, actual []string"},
+			expDest: []string(nil),
+		},
+		{
+			desc: "nil dest", expectations: []queryWithArgs{exp},
+			dest: nil, query: selectMockQuery, args: []any{"u1"},
+			logFormat: selectMockBadDest, logArgs: []any{nil}, logTimes: 1,
+			expErrs: []string{"expected a non-nil pointer, actual <nil>"},
+			expDest: nil,
+		},
+		{
+			desc: "typed nil pointer dest", expectations: []queryWithArgs{exp},
+			dest: (*[]string)(nil), query: selectMockQuery, args: []any{"u1"},
+			logFormat: selectMockBadDest, logArgs: []any{(*[]string)(nil)}, logTimes: 1,
+			expErrs: []string{"expected a non-nil pointer, actual *[]string"},
+			expDest: (*[]string)(nil),
+		},
+		{
+			desc: "response type does not match dest", expectations: []queryWithArgs{exp},
+			dest: new([]int), query: selectMockQuery, args: []any{"u1"},
+			logFormat: selectMockBadResponse, logArgs: []any{[]string{"1"}, new([]int)}, logTimes: 1,
+			expErrs: []string{"cannot assign response of type []string to destination of type *[]int"},
+			expDest: new([]int),
+		},
+		{
+			desc:         "ReturnsResponse never called",
+			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}, value: new([]string)}},
+			dest:         new([]string), query: selectMockQuery, args: []any{"u1"},
+			logFormat: selectMockBadResponse, logArgs: []any{new([]string), new([]string)}, logTimes: 1,
+			expErrs: []string{"cannot assign response of type *[]string to destination of type *[]string"},
+			expDest: new([]string),
+		},
+		{
+			desc:         "nil response",
+			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}}},
+			dest:         new([]string), query: selectMockQuery, args: []any{"u1"},
+			logFormat: "received different expectations: %q", logArgs: []any{selectMockQuery}, logTimes: 1,
+			expErrs: []string{`received different expectations: "SELECT id FROM users WHERE id=?"`},
+			expDest: new([]string),
+		},
+		{
+			desc: "no expectation",
+			dest: new([]string), query: selectMockQuery, args: []any{"u1"},
+			logFormat: "did not expect any calls for Select with query: %q", logArgs: []any{selectMockQuery}, logTimes: 1,
+			expErrs: []string{`did not expect any calls for Select with query: "SELECT id FROM users WHERE id=?"`},
+			expDest: new([]string),
+		},
+	}
+}
+
+func TestSQLMockDB_Select(t *testing.T) {
+	for _, tc := range sqlMockSelectCases() {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockDB, _, _ := sql.NewSQLMocks(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockLogger.EXPECT().Errorf(tc.logFormat, tc.logArgs...).Times(tc.logTimes)
+
+			rec := &recordingReporter{}
+			db := &sqlMockDB{DB: mockDB, expectedQuery: &expectedQuery{queryWithArgs: tc.expectations}, logger: mockLogger, reporter: rec}
+
+			db.Select(t.Context(), tc.dest, tc.query, tc.args...)
+
+			assert.Equal(t, tc.expErrs, rec.errs)
+			assert.Equal(t, tc.expDest, tc.dest)
+			assert.Empty(t, db.queryWithArgs)
+		})
+	}
+}
+
+func TestNewMockContainer_SQLReportsToTest(t *testing.T) {
+	c, _ := NewMockContainer(t)
+
+	db, ok := c.SQL.(*sqlMockDB)
+	require.True(t, ok)
+
+	reporter, ok := db.reporter.(*testReporter)
+	require.True(t, ok, "mismatches must go through testReporter, which stops reporting once the test ends")
+	assert.Same(t, t, reporter.t)
+}
+
+func TestMockSQL_ExpectSelect_StoresOnlyPointers(t *testing.T) {
+	dest := &[]string{}
+
+	tests := []struct {
+		desc     string
+		value    any
+		expValue any
+	}{
+		{desc: "pointer is stored", value: dest, expValue: dest},
+		{desc: "non-pointer is not stored", value: 5, expValue: nil},
+		{desc: "nil is not stored", value: nil, expValue: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := &mockSQL{expectedQuery: &expectedQuery{}}
+
+			m.ExpectSelect(t.Context(), tc.value, "SELECT id FROM users")
+
+			require.Len(t, m.queryWithArgs, 1)
+			assert.Equal(t, tc.expValue, m.queryWithArgs[0].value)
+		})
+	}
 }
 
 func TestMockSQL_NoExpectations(t *testing.T) {
@@ -377,7 +603,7 @@ func TestMockSQL_NoExpectations(t *testing.T) {
 			mockDB, _, _ := sql.NewSQLMocks(t)
 			ctrl := gomock.NewController(t)
 			mockLogger := NewMockLogger(ctrl)
-			sqlDB := &sqlMockDB{mockDB, &expectedQuery{}, mockLogger}
+			sqlDB := &sqlMockDB{DB: mockDB, expectedQuery: &expectedQuery{}, logger: mockLogger}
 
 			mockLogger.EXPECT().Error(tc.expLog)
 
