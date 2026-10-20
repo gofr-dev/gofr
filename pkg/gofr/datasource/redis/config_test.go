@@ -11,6 +11,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func testGetRedisConfig(t *testing.T, configMap map[string]string) *Config {
@@ -215,4 +216,40 @@ func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
 
 	assert.Equal(t, "streams", conf.PubSubMode)
 	require.NotNil(t, conf.PubSubStreamsConfig)
+}
+
+func TestGetRedisConfig_RecordArgs(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		recordArgs   string
+		wantHideArgs bool
+		wantWarn     bool
+	}{
+		{desc: "unset shows args", recordArgs: "", wantHideArgs: false},
+		{desc: "true shows args", recordArgs: "true", wantHideArgs: false},
+		{desc: "false hides args", recordArgs: "false", wantHideArgs: true},
+		{desc: "0 hides args", recordArgs: "0", wantHideArgs: true},
+		{desc: "invalid value shows args and warns", recordArgs: "maybe", wantHideArgs: false, wantWarn: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var conf *Config
+
+			out := testutil.StdoutOutputForFunc(func() {
+				conf = getRedisConfig(config.NewMockConfig(map[string]string{
+					"REDIS_HOST":        "localhost",
+					"REDIS_RECORD_ARGS": tc.recordArgs,
+				}), logging.NewMockLogger(logging.WARN))
+			})
+
+			assert.Equal(t, tc.wantHideArgs, conf.hideArgs)
+
+			if tc.wantWarn {
+				assert.Contains(t, out, `invalid REDIS_RECORD_ARGS "maybe"`)
+			} else {
+				assert.Empty(t, out)
+			}
+		})
+	}
 }

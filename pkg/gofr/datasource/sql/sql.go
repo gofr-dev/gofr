@@ -58,11 +58,20 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
+
+	// hideArgs masks query arguments in the debug query log (DB_RECORD_ARGS=false).
+	// The zero value shows them, so a DBConfig built outside getDBConfig keeps the
+	// existing behavior.
+	hideArgs bool
 }
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
-// a DBConfig is stringified, so the raw secret is never printed.
+// a DBConfig is stringified, so the raw secret is never printed. It also stands in
+// for each query argument when DB_RECORD_ARGS is false.
 const redactedPassword = "*****"
+
+// recordArgsKey names the config that, set to false, masks query arguments.
+const recordArgsKey = "DB_RECORD_ARGS"
 
 // String implements fmt.Stringer so that logging a DBConfig — directly or as part
 // of a larger struct, with %v or %+v — never leaks the raw password. The Password
@@ -130,6 +139,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	if dbConfig.Dialect == "" {
 		return nil
 	}
+
+	warnInvalidRecordArgs(configs, logger)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
@@ -228,6 +239,7 @@ func NewSQLFromConnector(connector driver.Connector, conf config.Config,
 	}
 
 	dbConfig := getDBConfig(conf)
+	warnInvalidRecordArgs(conf, logger)
 
 	// The connector owns routing (host/port/TLS), so a port label is meaningless on
 	// this path; clear it so connection logs don't print a dangling ':' after the host.
@@ -388,8 +400,31 @@ func getDBConfig(configs config.Config) *DBConfig {
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
 		// Supported for postgres, supabase, cockroachdb, and mysql
-		SSLMode: configs.GetOrDefault("DB_SSL_MODE", sslModeDisable),
-		Charset: configs.Get("DB_CHARSET"),
+		SSLMode:  configs.GetOrDefault("DB_SSL_MODE", sslModeDisable),
+		Charset:  configs.Get("DB_CHARSET"),
+		hideArgs: hideArgs(configs.Get(recordArgsKey)),
+	}
+}
+
+// hideArgs reports whether a DB_RECORD_ARGS value asks for query arguments to be
+// masked. Only a value that parses as boolean false hides them; an empty or
+// unparsable value keeps them visible (see warnInvalidRecordArgs).
+func hideArgs(recordArgs string) bool {
+	record, err := strconv.ParseBool(recordArgs)
+
+	return err == nil && !record
+}
+
+// warnInvalidRecordArgs warns when DB_RECORD_ARGS is set to a value that is not a
+// boolean, since getDBConfig then keeps showing query arguments.
+func warnInvalidRecordArgs(configs config.Config, logger datasource.Logger) {
+	recordArgs := configs.Get(recordArgsKey)
+	if recordArgs == "" {
+		return
+	}
+
+	if _, err := strconv.ParseBool(recordArgs); err != nil {
+		logger.Warnf("invalid %s %q, expected true or false; query arguments will be logged", recordArgsKey, recordArgs)
 	}
 }
 
