@@ -46,6 +46,64 @@ DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
 > ##### Check out the example on how to add configuration for SQL in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)
 
+## Transactions
+
+`ctx.SQL.Begin()` starts a transaction. Every statement run on the returned transaction is logged and
+recorded in the `app_sql_stats` metric, the same as a statement run on `ctx.SQL` directly. Besides
+`Exec`, `Query`, `QueryRow` and `Prepare`, the transaction has context-aware variants
+(`ExecContext`, `QueryContext`, `QueryRowContext`, `PrepareContext`) and a `Select` that binds rows
+into a slice or struct exactly like `ctx.SQL.Select`.
+
+```go
+func Transfer(ctx *gofr.Context) (any, error) {
+	tx, err := ctx.SQL.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback() // no-op once Commit has succeeded
+
+	if _, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance - ? WHERE id = ?", 100, 1); err != nil {
+		return nil, err
+	}
+
+	if _, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance + ? WHERE id = ?", 100, 2); err != nil {
+		return nil, err
+	}
+
+	var balances []int
+
+	tx.Select(ctx, &balances, "SELECT balance FROM accounts WHERE id IN (?, ?)", 1, 2)
+
+	return balances, tx.Commit()
+}
+```
+
+`Begin` starts the transaction with `context.Background()`, so the request's deadline does not end
+the transaction itself; only the statements given `ctx` are bound to it. To tie the whole
+transaction to the request, or to set the isolation level or a read-only transaction, use `BeginTx`
+on the SQL datasource. If the request context is canceled before `Commit`, the driver rolls the
+transaction back.
+
+```go
+import (
+	"database/sql"
+
+	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
+)
+
+db, ok := ctx.SQL.(*gofrSQL.DB)
+if !ok {
+	return nil, errors.New("BeginTx needs the built-in SQL datasource")
+}
+
+tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+```
+
+The type assertion works when `ctx.SQL` is the built-in SQL datasource. It fails when the
+datasource is wrapped, for example by the [DBResolver](/docs/quick-start/connecting-mysql), and with
+`container.NewMockContainer` in tests.
+
 ## Related production guides
 
 - **Connection Pooling**: [Tune `DB_MAX_OPEN_CONNECTION` and friends for production load](/docs/guides/connection-pooling) — sizing pools to match traffic and DB capacity.
