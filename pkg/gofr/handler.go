@@ -44,6 +44,10 @@ type handler struct {
 	function       Handler
 	container      *container.Container
 	requestTimeout time.Duration
+
+	// hideInternalErrors replaces the message of a 500 or unclassified error with a generic one
+	// before it is written to the client. Set from HTTP_HIDE_INTERNAL_ERRORS; see hidesMessage.
+	hideInternalErrors bool
 }
 
 // handlerOutcome carries the (result, error) pair from the per-request
@@ -106,6 +110,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if resp != nil {
 			resp.SetCustomHeaders(w)
 		}
+	}
+
+	// The original error was already logged with the trace ID above; only what the client sees changes.
+	if h.hideInternalErrors && hidesMessage(err) {
+		err = newInternalError(err)
 	}
 
 	c.responder.Respond(result, err)
