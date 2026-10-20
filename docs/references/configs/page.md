@@ -529,7 +529,45 @@ This document lists all the configuration options supported by the GoFr framewor
 - Path to the TLS key file for Redis (or PEM-encoded string).
 -  ""
 
+---
+
+- REDIS_URL
+- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL logs an error and Redis is not connected. `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
+-  ""
+
+---
+
+- REDIS_POOL_SIZE
+- Maximum number of connections in the Redis pool. Overrides a `pool_size` parameter in `REDIS_URL`.
+-  10 per CPU
+
+---
+
+- REDIS_MIN_IDLE_CONNS
+- Minimum number of idle connections kept in the Redis pool. Overrides a `min_idle_conns` parameter in `REDIS_URL`.
+-  0
+
+---
+
+- REDIS_DIAL_TIMEOUT
+- Timeout for opening a new Redis connection, as a duration (`500ms`). Overrides a `dial_timeout` parameter in `REDIS_URL`.
+-  5s
+
+---
+
+- REDIS_READ_TIMEOUT
+- Timeout for reading a Redis reply, as a duration (`500ms`). Overrides a `read_timeout` parameter in `REDIS_URL`.
+-  5s
+
+---
+
+- REDIS_WRITE_TIMEOUT
+- Timeout for writing a Redis command, as a duration (`500ms`). Overrides a `write_timeout` parameter in `REDIS_URL`.
+-  Same as `REDIS_READ_TIMEOUT`
+
 {% /table %}
+
+> **Note**: An invalid or negative value for `REDIS_POOL_SIZE`, `REDIS_MIN_IDLE_CONNS` or one of the `REDIS_*_TIMEOUT` variables logs a warning and keeps the default.
 
 **Redis PubSub Configuration:**
 
