@@ -33,6 +33,8 @@ docker exec gofr-redis redis-cli -a password SET greeting "Hello from Redis."
 GoFr applications rely on environment variables to configure and connect to a Redis server.  
 These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
+If `REDIS_HOST` is not set, GoFr does not initialize Redis and `ctx.Redis` is nil, so an app can guard on `ctx.Redis == nil`.
+
 ### Required Environment Variables:
 
 {% table %}
