@@ -295,8 +295,17 @@ func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic str
 		return nil, nil
 	}
 
-	// Create message from the first event
-	msg := pubsub.NewMessage(ctx)
+	// Extract event properties and start subscribe span with OTel links
+	var props map[string]any
+	if events[0] != nil {
+		props = events[0].Properties
+	}
+
+	subCtx, span := startSubscribeSpan(ctx, topic, props)
+	defer span.End()
+
+	// Create message from the first event using tracing context subCtx
+	msg := pubsub.NewMessage(subCtx)
 	msg.Value = events[0].Body
 	msg.Committer = &Message{
 		event:     events[0],
@@ -316,7 +325,7 @@ func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic str
 		Time:          end.Microseconds(),
 	})
 
-	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+	c.metrics.IncrementCounter(subCtx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
 
 	return msg, nil
 }
@@ -379,8 +388,17 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 		return nil, nil // No message available in this partition
 	}
 
-	// Create message from event
-	msg := pubsub.NewMessage(ctx)
+	// Extract event properties and start subscribe span with OTel links
+	var props map[string]any
+	if events[0] != nil {
+		props = events[0].Properties
+	}
+
+	subCtx, span := startSubscribeSpan(ctx, topic, props)
+	defer span.End()
+
+	// Create message from event using the tracing context subCtx
+	msg := pubsub.NewMessage(subCtx)
 
 	msg.Value = events[0].Body
 	msg.Committer = &Message{
@@ -401,7 +419,7 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 		Time:          end.Microseconds(),
 	})
 
-	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionID)
+	c.metrics.IncrementCounter(subCtx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionID)
 
 	return msg, nil
 }
