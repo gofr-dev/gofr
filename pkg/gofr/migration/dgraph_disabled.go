@@ -60,10 +60,10 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 	return dm.migrator.beginTransaction(c)
 }
 
-func (dgraphMigrator) commitMigration(*container.Container, transactionData) error {
+func (dgraphMigrator) commitMigration(*container.Container, *transactionData) error {
 	return errDgraphMigratorOmitted
 }
 
-func (dgraphMigrator) rollback(*container.Container, transactionData) {}
+func (dgraphMigrator) rollback(*container.Container, *transactionData) {}
 
 func (dgraphMigrator) name() string { return "DGraph (omitted)" }

@@ -37,6 +37,9 @@ const (
 	// healthProbeKey names the single in-flight probe. There is only ever one per client, so the
 	// key is constant; it exists only because singleflight is keyed by design.
 	healthProbeKey = "probe"
+
+	// backendName identifies Event Hub in query logs.
+	backendName = "EVHUB"
 )
 
 type Config struct {
@@ -309,7 +312,7 @@ func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic str
 		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 
@@ -394,7 +397,7 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID,
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 
@@ -480,7 +483,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 		Topic:         topic,
 		Host:          c.cfg.EventhubName,
-		PubSubBackend: "EVHUB",
+		PubSubBackend: backendName,
 		Time:          end.Microseconds(),
 	})
 

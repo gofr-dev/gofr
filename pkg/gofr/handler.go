@@ -22,6 +22,9 @@ import (
 
 const colorCodeError = 202 // 202 is red color code
 
+// faviconContentType is the media type of the favicon served at /favicon.ico.
+const faviconContentType = "image/x-icon"
+
 type Handler func(c *Context) (any, error)
 
 /*
@@ -237,7 +240,7 @@ func faviconHandler(*Context) (any, error) {
 
 	return response.File{
 		Content:     data,
-		ContentType: "image/x-icon",
+		ContentType: faviconContentType,
 	}, err
 }
 

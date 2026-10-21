@@ -35,7 +35,7 @@ func TestRouter(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -67,7 +67,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -115,7 +115,7 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -215,7 +215,7 @@ func TestRouter_PathNormalization(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tc.input, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.input, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -263,7 +263,7 @@ func TestRouter_DoubleSlashPath_POST(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodPost, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -925,7 +925,7 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 			router := NewRouter()
 			router.AddStaticFiles(logger, tc.staticServerPath, tempDir)
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)

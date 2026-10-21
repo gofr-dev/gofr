@@ -22,7 +22,7 @@ func TestDgraphMigratorOmitted_RefusesToMigrate(t *testing.T) {
 	_, err := dm.getLastMigration(nil)
 	require.ErrorIs(t, err, errDgraphMigratorOmitted)
 
-	require.ErrorIs(t, dm.commitMigration(nil, transactionData{}), errDgraphMigratorOmitted)
+	require.ErrorIs(t, dm.commitMigration(nil, &transactionData{}), errDgraphMigratorOmitted)
 }
 
 func TestDgraphMigratorOmitted_DataSourceMethodsError(t *testing.T) {

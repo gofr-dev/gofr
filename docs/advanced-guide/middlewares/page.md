@@ -43,6 +43,16 @@ Configuration is read only under the exact names listed above (plus
   overridden by another entry. This keeps a stray key from replacing an origin that was
   correctly negotiated against `ACCESS_CONTROL_ALLOW_ORIGIN`.
 
+> Note: these values are validated as the configuration is read. `ACCESS_CONTROL_MAX_AGE` must be a whole number
+> of seconds, and `ACCESS_CONTROL_ALLOW_CREDENTIALS` must be exactly `true` or `false` — a browser honors the credentials
+> header only for the literal `true`. An invalid value is reported as a warning at startup and the header is omitted,
+> instead of being sent in a form the browser would discard. Setting `ACCESS_CONTROL_ALLOW_CREDENTIALS` to `false` omits
+> the header, which is what it means anyway.
+>
+> Use `ACCESS_CONTROL_MAX_AGE=0` to stop browsers caching the preflight response. A negative value such as `-1` means the
+> same thing to a browser, so it is sent as `0`; likewise `+600` and `0600` are sent as `600`. Each of these rewrites is
+> reported as a warning at startup.
+
 If you construct the middleware yourself with `middleware.CORS(map[string]string{...}, ...)`,
 entries are matched by canonical HTTP header name — so the spelling you use there does not change
 which header an entry controls — and any additional entry is sent as a response header as-is.
@@ -125,8 +135,10 @@ func main() {
 		PerIP:             true, // Enable per-IP limiting
 	}
 
-	// Add rate limiter middleware
-	app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics()))
+	// Add rate limiter middleware. WithRateLimiterLogger is optional; it reports an
+	// invalid config through the app's logger instead of the default stderr logger.
+	app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics(),
+		middleware.WithRateLimiterLogger(app.Logger())))
 
 	app.GET("/api/resource", handler)
 	app.Run()
@@ -139,6 +151,18 @@ func main() {
 - `Burst`: Maximum number of requests that can be made in a burst (allows temporary spikes)
 - `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for global rate limit across all clients
 - `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` headers for IP extraction. Only enable when behind a trusted reverse proxy.
+
+> **Invalid configuration**: `RequestsPerSecond` and `Burst` must both be greater than zero (a `NaN` rate is also
+> rejected). If the config is invalid, GoFr logs the error at `ERROR` level and the middleware passes every request
+> through **without rate limiting** (the app does not crash). To fail fast at startup instead, call
+> `rateLimiterConfig.Validate()` and handle the returned error yourself.
+>
+> `MaxKeys` of `0` selects the default of 100000 keys. A negative `MaxKeys` does not disable the limiter: when GoFr
+> builds the default in-memory store it falls back to the same default of 100000 and logs the correction at `ERROR`
+> level. A custom `Store` is responsible for its own bound.
+>
+> A disabled limiter is only reported once, at startup. A zero `app_http_rate_limit_exceeded_total` therefore does not
+> prove the limiter is active: check the startup logs, or call `Validate()` so a bad config never reaches production.
 
 > **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.). 
 > Without a trusted proxy, clients can spoof headers to bypass rate limits.

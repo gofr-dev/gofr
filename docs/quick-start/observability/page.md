@@ -230,6 +230,18 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
+- app_http_retry_wait_seconds
+- histogram
+- Time waited before each retry of an HTTP service call made with a `RetryConfig` that sets more than `MaxRetries`, in seconds
+
+---
+
+- app_http_retry_budget_exhausted_total
+- counter
+- Number of retries skipped because the HTTP service's retry budget was spent
+
+---
+
 - app_http_circuit_breaker_state
 - gauge
 - Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.

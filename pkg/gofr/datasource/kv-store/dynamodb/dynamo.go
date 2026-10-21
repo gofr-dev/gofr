@@ -59,9 +59,16 @@ type Client struct {
 	connected bool
 }
 
+const (
+	// defaultPartitionKeyName is the partition key attribute used when Configs.PartitionKeyName is empty.
+	defaultPartitionKeyName = "pk"
+	// valueAttribute is the item attribute that holds the stored value.
+	valueAttribute = "value"
+)
+
 func New(configs Configs) *Client {
 	if configs.PartitionKeyName == "" {
-		configs.PartitionKeyName = "pk"
+		configs.PartitionKeyName = defaultPartitionKeyName
 	}
 
 	return &Client{configs: &configs, connected: false}
@@ -164,7 +171,7 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	// Look for a "value" field that contains the JSON string
-	if valueField, exists := out.Item["value"]; exists {
+	if valueField, exists := out.Item[valueAttribute]; exists {
 		if stringValue, ok := valueField.(*types.AttributeValueMemberS); ok {
 			return stringValue.Value, nil
 		}
@@ -185,7 +192,7 @@ func (c *Client) Set(ctx context.Context, key, value string) error {
 	// Store the value as a string in the "value" field
 	item := map[string]types.AttributeValue{
 		c.configs.PartitionKeyName: &types.AttributeValueMemberS{Value: key},
-		"value":                    &types.AttributeValueMemberS{Value: value},
+		valueAttribute:             &types.AttributeValueMemberS{Value: value},
 	}
 
 	input := &dynamodb.PutItemInput{
