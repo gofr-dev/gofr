@@ -240,11 +240,7 @@ func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *m
 		r = mux.SetURLVars(r, match.Vars)
 	}
 
-	if match.Route != nil {
-		if tmpl, err := match.Route.GetPathTemplate(); err == nil {
-			r = withRouteTemplate(r, tmpl)
-		}
-	}
+	r = withRoute(r, match.Route)
 
 	// mux builds its middleware chain inside Match, guarded by MatchErr == nil, so a route that
 	// matches while REPORTING an error is served WITHOUT the chain. A subrouter carrying its own

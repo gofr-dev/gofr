@@ -354,6 +354,12 @@ func (c *Container) registerFrameworkMetrics() {
 		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
 		c.Metrics().NewCounter("app_http_retry_count", "Total number of retry events")
+
+		retryWaitBuckets := []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_retry_wait_seconds", "Time waited before each HTTP service retry in seconds.",
+			retryWaitBuckets...)
+		c.Metrics().NewCounter("app_http_retry_budget_exhausted_total",
+			"Total number of HTTP service retries skipped because the retry budget was spent.")
 		c.Metrics().NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
 		c.Metrics().NewCounter("app_circuit_open_count", "Total number of times a service circuit breaker has opened.")
 	}
