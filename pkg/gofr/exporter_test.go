@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_ExportSpans(t *testing.T) {
@@ -49,6 +51,61 @@ func Test_ExportSpansError(t *testing.T) {
 
 	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
 	require.Error(t, err, "Expected error for failed request")
+}
+
+// TRACER_URL can carry credentials in its userinfo or query; a failed export must not write them to the log
+// or put them in the returned error.
+func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
+	rejecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer rejecting.Close()
+
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closed.Close()
+
+	withCredentials := func(serverURL string) string {
+		return strings.Replace(serverURL, "http://", "http://bob:S3CRETPASS@", 1) + "/api/spans?api_key=TOPSECRETKEY"
+	}
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tests := []struct {
+		desc     string
+		endpoint string
+		ctx      context.Context
+		expErrs  []error
+	}{
+		{desc: "collector rejects the export", endpoint: withCredentials(rejecting.URL), ctx: t.Context(),
+			expErrs: []error{errUnexpectedStatusCode}},
+		{desc: "collector unreachable", endpoint: withCredentials(closed.URL), ctx: t.Context(),
+			expErrs: []error{errFailedToPostSpans}},
+		{desc: "context canceled", endpoint: withCredentials(rejecting.URL), ctx: canceled,
+			expErrs: []error{errFailedToPostSpans, context.Canceled}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var err error
+
+			logs := testutil.StderrOutputForFunc(func() {
+				exporter := NewExporter(tc.endpoint, logging.NewLogger(logging.INFO))
+				err = exporter.ExportSpans(tc.ctx, provideSampleSpan(t))
+			})
+
+			for _, expErr := range tc.expErrs {
+				require.ErrorIs(t, err, expErr)
+			}
+
+			for _, secret := range []string{"S3CRETPASS", "TOPSECRETKEY", "bob"} {
+				assert.NotContains(t, logs, secret)
+				assert.NotContains(t, err.Error(), secret)
+			}
+
+			assert.Contains(t, logs, "REDACTED")
+		})
+	}
 }
 
 // Any 2xx is a successful export (Zipkin-compatible collectors return 202); non-2xx is an error.

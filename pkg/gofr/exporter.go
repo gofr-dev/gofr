@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -14,10 +15,15 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/traces/exporters"
 )
 
-// errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
-var errUnexpectedStatusCode = errors.New("unexpected response status code")
+var (
+	// errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
+	errUnexpectedStatusCode = errors.New("unexpected response status code")
+	// errFailedToPostSpans is returned when the request to the remote endpoint fails.
+	errFailedToPostSpans = errors.New("failed to post spans")
+)
 
 // emptyAttributeValue is the value exported for an attribute that carries no data.
 const emptyAttributeValue = "invalid"
@@ -82,7 +88,9 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Errorf("failed to create spans, error: %v", err)
+		err = redactRequestError(err, e.endpoint)
+		logger.Errorf("%v", err)
+
 		return err
 	}
 	defer resp.Body.Close()
@@ -92,13 +100,27 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		// Log as well as return: the batch processor swallows the returned error, so without this a
 		// misconfigured or rejecting endpoint drops every trace with no signal to the operator.
-		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
+		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", exporters.RedactURL(e.endpoint), errUnexpectedStatusCode, resp.StatusCode)
 		logger.Errorf("%v", err)
 
 		return err
 	}
 
 	return nil
+}
+
+// redactRequestError returns a failed request's error without the endpoint's credentials. TRACER_URL can carry
+// them in its userinfo or query, and the *url.Error that http.Client returns names the request URL with only the
+// password masked, so its text is never reused: the message is rebuilt from the redacted endpoint and only the
+// underlying cause is wrapped, which keeps errors.Is working for context.Canceled, DeadlineExceeded and the like.
+func redactRequestError(err error, endpoint string) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return fmt.Errorf("%w on '%s': %w", errFailedToPostSpans, exporters.RedactURL(endpoint), urlErr.Err)
+	}
+
+	return fmt.Errorf("%w on '%s': %s", errFailedToPostSpans, exporters.RedactURL(endpoint),
+		exporters.RedactMessage(err.Error(), endpoint))
 }
 
 // convertSpans converts OpenTelemetry spans to the format expected by the exporter.
