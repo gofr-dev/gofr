@@ -57,6 +57,11 @@ func TestEnableBasicAuth_Errors(t *testing.T) {
 		{desc: "no credentials", args: nil, wantErr: "no credentials provided", wantStatus: http.StatusOK},
 		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"},
 			wantErr: "invalid number of arguments", wantStatus: http.StatusOK},
+		{desc: "empty username", args: []string{"", "pass"}, wantErr: "empty username or password", wantStatus: http.StatusOK},
+		{desc: "empty password", args: []string{"user", ""}, wantErr: "empty username or password", wantStatus: http.StatusOK},
+		{desc: "empty username and password", args: []string{"", ""}, wantErr: "empty username or password", wantStatus: http.StatusOK},
+		{desc: "empty credentials in a later pair", args: []string{"user", "pass", "", ""},
+			wantErr: "empty username or password", wantStatus: http.StatusOK},
 	}
 
 	for i, tc := range tests {

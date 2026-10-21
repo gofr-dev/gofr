@@ -16,7 +16,7 @@ GoFr supports Basic Auth, API key auth, and OAuth 2.0 JWT validation against a J
 
 Three authentication categories are exposed on the App, all verified in `pkg/gofr/auth.go` — Basic auth, API-key auth, and OAuth/JWT — each with a static-credentials variant and a custom-validator variant:
 
-- `EnableBasicAuth(credentials...)` — pairs of username/password; returns an error (and installs nothing) on zero or an odd number of arguments.
+- `EnableBasicAuth(credentials...)` — pairs of username/password; returns an error (and installs nothing) on zero or an odd number of arguments, or an empty username or password.
 - `EnableBasicAuthWithValidator(fn)` — custom validator with access to the container.
 - `EnableAPIKeyAuth(keys...)` — `X-Api-Key` header check.
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.

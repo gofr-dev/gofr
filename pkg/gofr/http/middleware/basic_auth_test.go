@@ -201,6 +201,18 @@ func TestBasicAuthMiddleware_validateCredentials(t *testing.T) {
 			users:    users,
 			success:  false,
 		},
+		{
+			username: "",
+			password: "",
+			users:    map[string]string{"": ""},
+			success:  false,
+		},
+		{
+			username: "",
+			password: "storedPass",
+			users:    map[string]string{"": "storedPass"},
+			success:  false,
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
@@ -251,4 +263,20 @@ func TestBasicAuthMiddleware(t *testing.T) {
 			assert.Equal(t, tc.expValue, gotValue)
 		})
 	}
+}
+
+func TestBasicAuthMiddleware_EmptyUsernameRejected(t *testing.T) {
+	handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"": ""}})(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+	// "Og==" is base64 of ":", an empty username and password.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set(headerAuthorization, "Basic Og==")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
