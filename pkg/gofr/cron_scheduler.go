@@ -10,7 +10,7 @@ import (
 // this will compile the regex once instead of compiling it each time when it is being called.
 var (
 	matchSpaces = regexp.MustCompile(`\s+`)
-	matchN      = regexp.MustCompile(`(.*)/(\d+)`)
+	matchN      = regexp.MustCompile(`^(.*)/(\d+)$`)
 	matchRange  = regexp.MustCompile(`^(\d+)-(\d+)$`)
 )
 
@@ -87,36 +87,41 @@ func parsePart(s string, minValue, maxValue int) (map[int]struct{}, error) {
 		return getDefaultJobField(minValue, maxValue, 1), nil
 	}
 
-	// */2 1-59/5 pattern
-	if matches := matchN.FindStringSubmatch(s); matches != nil {
-		return parseSteps(s, matches[1], matches[2], minValue, maxValue)
-	}
-
-	// 1,2,4 or 1,2,10-15,20,30-45 pattern
+	// 1,2,4 or 1,2,10-15,20,30-45 or */2,45 or 1-59/5,30 pattern
 	return parseRange(s, minValue, maxValue)
 }
 
-func parseSteps(s, match1, match2 string, minValue, maxValue int) (map[int]struct{}, error) {
+// parseSteps parses a */N or A-B/N part and adds every Nth value of the range to r.
+// A step of zero would never advance and a reversed range would select nothing,
+// so both are reported as parsing errors instead of being accepted silently.
+func parseSteps(s, match1, match2 string, minValue, maxValue int, r map[int]struct{}) error {
 	localMin := minValue
 	localMax := maxValue
 
 	if match1 != "" && match1 != "*" {
 		rng := matchRange.FindStringSubmatch(match1)
 		if rng == nil {
-			return nil, errParsing{match1, s}
+			return errParsing{match1, s}
 		}
 
 		localMin, _ = strconv.Atoi(rng[1])
 		localMax, _ = strconv.Atoi(rng[2])
 
-		if localMin < minValue || localMax > maxValue {
-			return nil, errOutOfRange{rng[1], s, minValue, maxValue}
+		if err := validateRange(localMin, localMax, minValue, maxValue, match1, s); err != nil {
+			return err
 		}
 	}
 
 	n, _ := strconv.Atoi(match2)
+	if n <= 0 {
+		return errParsing{match2, s}
+	}
 
-	return getDefaultJobField(localMin, localMax, n), nil
+	for i := localMin; i <= localMax; i += n {
+		r[i] = struct{}{}
+	}
+
+	return nil
 }
 
 func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
@@ -124,6 +129,15 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	parts := strings.Split(s, ",")
 
 	for _, part := range parts {
+		// */2 or 1-59/5 pattern inside a comma separated list
+		if matches := matchN.FindStringSubmatch(part); matches != nil {
+			if err := parseSteps(part, matches[1], matches[2], minValue, maxValue, r); err != nil {
+				return nil, err
+			}
+
+			continue
+		}
+
 		if err := parseSingleOrRange(part, minValue, maxValue, r); err != nil {
 			return nil, err
 		}
@@ -141,8 +155,8 @@ func parseSingleOrRange(part string, minValue, maxValue int, r map[int]struct{})
 		localMin, _ := strconv.Atoi(rng[1])
 		localMax, _ := strconv.Atoi(rng[2])
 
-		if localMin < minValue || localMax > maxValue {
-			return errOutOfRange{part, part, minValue, maxValue}
+		if err := validateRange(localMin, localMax, minValue, maxValue, part, part); err != nil {
+			return err
 		}
 
 		for i := localMin; i <= localMax; i++ {
@@ -159,6 +173,20 @@ func parseSingleOrRange(part string, minValue, maxValue int, r map[int]struct{})
 		}
 
 		r[i] = struct{}{}
+	}
+
+	return nil
+}
+
+// validateRange reports a range that lies outside the allowed values, or whose start is
+// greater than its end, as the latter would silently select nothing.
+func validateRange(localMin, localMax, minValue, maxValue int, rangeVal, input string) error {
+	if localMin < minValue || localMax > maxValue {
+		return errOutOfRange{rangeVal, input, minValue, maxValue}
+	}
+
+	if localMin > localMax {
+		return errParsing{rangeVal, input}
 	}
 
 	return nil

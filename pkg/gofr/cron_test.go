@@ -144,8 +144,24 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 			schedules: []string{
 				"* * ab/2 * *",
 				"* 1,2/10 * * *",
-				"* * 1,2,3,1-15/10 * *",
 				"a b c d e",
+			},
+			expErrString: "unable to parse",
+		},
+		{
+			desc: "zero step",
+			schedules: []string{
+				"*/0 * * * *",
+				"* 1-10/0 * * *",
+				"* * 1,*/0 * *",
+			},
+			expErrString: "unable to parse 0",
+		},
+		{
+			desc: "reversed range",
+			schedules: []string{
+				"10-5/2 * * * *",
+				"* 10-5 * * *",
 			},
 			expErrString: "unable to parse",
 		},
@@ -159,6 +175,46 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				assert.Nil(t, j)
 				require.ErrorContains(t, err, tc.expErrString)
 			}
+		})
+	}
+}
+
+func TestCron_parseSchedule_StepInCommaList(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		schedule string
+		expJob   *job
+	}{
+		{
+			desc:     "step inside a comma list",
+			schedule: "*/30,45 * * * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 30: {}, 45: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       getDefaultJobField(1, 31, 1),
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: getDefaultJobField(0, 6, 1),
+			},
+		},
+		{
+			desc:     "range with step inside a comma list",
+			schedule: "0-10/5,30 * 1,2,3,1-15/10 * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 5: {}, 10: {}, 30: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       map[int]struct{}{1: {}, 2: {}, 3: {}, 11: {}},
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: map[int]struct{}{},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			j, err := parseSchedule(tc.schedule)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expJob, j)
 		})
 	}
 }
