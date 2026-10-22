@@ -127,7 +127,7 @@ func (r Responder) Respond(data any, err error) {
 		resp = &re.resp
 	default:
 		// handling where an interface contains a nullable type with a nil value.
-		if isNil(data) {
+		if isNil(data) || (err != nil && isNilErrorData(data)) {
 			data = nil
 		}
 
@@ -273,8 +273,8 @@ func (r Responder) handleRedirect(v resTypes.Redirect) {
 }
 
 // getStatusCodeForSpecialResponse returns the appropriate status code for special response types.
-// Unlike regular responses, special types (XML/File/Template) should use error status codes
-// directly instead of returning 206 (Partial Content) when both data and error are present.
+// Special types (XML/File/Template) use 500 for errors without a status code,
+// even when data is present.
 func (r Responder) getStatusCodeForSpecialResponse(data any, err error) int {
 	if err == nil {
 		return handleSuccessStatusCode(r.method, data)
@@ -305,8 +305,9 @@ func handleSuccessStatusCode(method string, data any) int {
 }
 
 func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
-	// Handle empty struct case first
-	if err != nil && isEmptyStruct(data) {
+	// An empty struct must not override an explicitly classified error.
+	_, hasStatusCode := err.(StatusCodeResponder)
+	if err != nil && !hasStatusCode && isEmptyStruct(data) {
 		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
 	}
 
@@ -347,18 +348,18 @@ func isEmptyStruct(data any) bool {
 	return reflect.DeepEqual(data, zero)
 }
 
-// getStatusCode returns corresponding HTTP status codes.
+// getStatusCode prioritizes explicit error status codes over partial content.
 func getStatusCode(method string, data any, err error) (statusCode int, errResp any) {
 	if err == nil {
 		return handleSuccess(method, data)
 	}
 
-	if !isNil(data) {
-		return http.StatusPartialContent, createErrorResponse(err)
-	}
-
 	if e, ok := err.(StatusCodeResponder); ok {
 		return e.StatusCode(), createErrorResponse(err)
+	}
+
+	if !isNilErrorData(data) {
+		return http.StatusPartialContent, createErrorResponse(err)
 	}
 
 	return http.StatusInternalServerError, createErrorResponse(err)
@@ -425,4 +426,16 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Pointer && v.IsNil()
+}
+
+// isNilErrorData reports whether error response data is effectively absent.
+// Nil maps and slices are treated like untyped nil, while empty non-nil collections remain partial data.
+func isNilErrorData(data any) bool {
+	if isNil(data) {
+		return true
+	}
+
+	v := reflect.ValueOf(data)
+
+	return (v.Kind() == reflect.Map || v.Kind() == reflect.Slice) && v.IsNil()
 }
