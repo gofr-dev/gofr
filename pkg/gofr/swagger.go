@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"embed"
+	"errors"
 	"mime"
 	"net/http"
 	"os"
@@ -51,6 +52,10 @@ func SwaggerUIHandler(c *Context) (any, error) {
 
 	data, err := fs.ReadFile("static/" + fileName)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, gofrHTTP.ErrorEntityNotFound{Name: "file", Value: fileName}
+		}
+
 		c.Errorf("Failed to read Swagger UI file %s from embedded file system: %v", fileName, err)
 		return nil, err
 	}
