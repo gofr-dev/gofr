@@ -49,8 +49,8 @@ func (s surrealDS) apply(m migrator) migrator {
 }
 
 const (
-	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
-	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
+	getSurrealDBGoFrMigrationVersions = `SELECT version FROM gofr_migrations;`
+	insertSurrealDBGoFrMigrationRow   = `CREATE gofr_migrations SET version = $version, method = $method, ` +
 		`start_time = $start_time, duration = $duration;`
 )
 
@@ -100,28 +100,26 @@ func surrealVersionToInt64(v any) int64 {
 	}
 }
 
-func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
-	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
+func (s surrealMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	result, err := s.SurrealDB.Query(context.Background(), getSurrealDBGoFrMigrationVersions, nil)
 	if err != nil {
-		return -1, fmt.Errorf("surrealdb: %w", err)
+		return nil, fmt.Errorf("surrealdb: %w", err)
 	}
 
-	if len(result) > 0 {
-		if row, ok := result[0].(map[string]any); ok {
-			lastMigration = surrealVersionToInt64(row[migrationFieldVersion])
+	c.Debugf("surrealDB applied migrations fetched: %v", len(result))
+
+	applied, err := s.migrator.getAppliedMigrations(c)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range result {
+		if row, ok := r.(map[string]any); ok {
+			applied[surrealVersionToInt64(row[migrationFieldVersion])] = struct{}{}
 		}
 	}
 
-	c.Debugf("surrealDB last migration fetched value is: %v", lastMigration)
-
-	lm2, err := s.migrator.getLastMigration(c)
-	if err != nil {
-		return -1, err
-	}
-
-	return max(lastMigration, lm2), nil
+	return applied, nil
 }
 
 func (s surrealMigrator) beginTransaction(c *container.Container) transactionData {

@@ -48,8 +48,8 @@ func (*Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (*Datasource) getLastMigration(*container.Container) (int64, error) {
-	return 0, nil
+func (*Datasource) getAppliedMigrations(*container.Container) (map[int64]struct{}, error) {
+	return map[int64]struct{}{}, nil
 }
 
 func (*Datasource) beginTransaction(*container.Container) transactionData {

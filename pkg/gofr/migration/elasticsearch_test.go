@@ -82,7 +82,7 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 
 		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
+			getElasticsearchMigrationVersionsQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
@@ -131,7 +131,7 @@ func TestMigrationRunElasticsearchMigrationFailure(t *testing.T) {
 
 		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
+			getElasticsearchMigrationVersionsQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
@@ -192,7 +192,7 @@ func TestMigrationRunElasticsearchCurrentMigrationEqualLastMigration(t *testing.
 
 		// Mock the last migration query (migration 1 already exists)
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
+			getElasticsearchMigrationVersionsQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{
@@ -236,7 +236,7 @@ func TestMigrationRunElasticsearchCommitError(t *testing.T) {
 
 		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
+			getElasticsearchMigrationVersionsQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
@@ -277,50 +277,76 @@ func TestElasticsearchMigrator_checkAndCreateMigrationTable_IndexExists(t *testi
 	assert.NoError(t, err)
 }
 
-func TestElasticsearchMigrator_getLastMigration_WithMigrations(t *testing.T) {
-	mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
+func TestElasticsearchMigrator_getAppliedMigrations(t *testing.T) {
+	hit := func(v float64) any {
+		return map[string]any{"_source": map[string]any{"version": v}}
+	}
 
-	// Mock successful search with existing migrations
-	mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-		getLastElasticsearchMigrationQuery()).
-		Return(map[string]any{
-			"hits": map[string]any{
-				"hits": []any{
-					map[string]any{
-						"_source": map[string]any{
-							"version": float64(5),
-						},
-					},
-				},
-			},
-		}, nil)
+	testCases := []struct {
+		desc      string
+		result    map[string]any
+		searchErr error
+		skipInner bool
+		inner     map[int64]struct{}
+		innerErr  error
+		expected  map[int64]struct{}
+		expErr    error
+	}{
+		{
+			desc:     "backend versions merged with inner versions",
+			result:   map[string]any{"hits": map[string]any{"hits": []any{hit(4), hit(3), hit(1)}}},
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc:     "no hits returns only inner set",
+			result:   map[string]any{"hits": map[string]any{"hits": []any{}}},
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
+		},
+		{
+			desc:      "search error",
+			result:    map[string]any{},
+			searchErr: assert.AnError,
+			skipInner: true,
+			expErr:    assert.AnError,
+		},
+		{
+			desc:     "inner migrator error",
+			result:   map[string]any{"hits": map[string]any{"hits": []any{hit(1)}}},
+			innerErr: assert.AnError,
+			expErr:   assert.AnError,
+		},
+	}
 
-	ds := elasticsearchDS{client: mockElasticsearch}
-	mg := elasticsearchMigrator{elasticsearchDS: ds, migrator: &Datasource{}}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-	lastMigration, err := mg.getLastMigration(mockContainer)
-	require.NoError(t, err)
-	assert.Equal(t, int64(5), lastMigration)
-}
+			mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+				getElasticsearchMigrationVersionsQuery()).Return(tc.result, tc.searchErr)
 
-func TestElasticsearchMigrator_getLastMigration_NoMigrations(t *testing.T) {
-	mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
+			if !tc.skipInner {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.inner, tc.innerErr)
+			}
 
-	// Mock successful search with no migrations
-	mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-		getLastElasticsearchMigrationQuery()).
-		Return(map[string]any{
-			"hits": map[string]any{
-				"hits": []any{},
-			},
-		}, nil)
+			mg := elasticsearchMigrator{elasticsearchDS: elasticsearchDS{client: mockElasticsearch}, migrator: mockMigrator}
 
-	ds := elasticsearchDS{client: mockElasticsearch}
-	mg := elasticsearchMigrator{elasticsearchDS: ds, migrator: &Datasource{}}
+			applied, err := mg.getAppliedMigrations(mockContainer)
 
-	lastMigration, err := mg.getLastMigration(mockContainer)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), lastMigration)
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+				assert.Nil(t, applied)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, applied)
+		})
+	}
 }
 
 func TestElasticsearchMigrator_commitMigration_Success(t *testing.T) {
@@ -390,84 +416,41 @@ func TestElasticsearchMigrator_commitMigration_SkipsWhenNotUsed(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestExtractLastMigrationVersion(t *testing.T) {
+func TestExtractMigrationVersions(t *testing.T) {
 	testCases := []struct {
-		desc   string
-		result map[string]any
-		expVer int64
+		desc      string
+		result    map[string]any
+		expOutput []int64
 	}{
-		{desc: "missing hits", result: map[string]any{}, expVer: 0},
-		{desc: "hits list not a slice", result: map[string]any{"hits": map[string]any{"hits": "bad"}}, expVer: 0},
-		{desc: "first hit not a map", result: map[string]any{"hits": map[string]any{"hits": []any{"bad"}}}, expVer: 0},
+		{desc: "missing hits", result: map[string]any{}, expOutput: nil},
+		{desc: "hits list not a slice", result: map[string]any{"hits": map[string]any{"hits": "bad"}}, expOutput: nil},
+		{desc: "hit not a map is skipped", result: map[string]any{"hits": map[string]any{"hits": []any{"bad"}}}, expOutput: []int64{}},
 		{
-			desc:   "source not a map",
-			result: map[string]any{"hits": map[string]any{"hits": []any{map[string]any{"_source": "bad"}}}},
-			expVer: 0,
+			desc:      "source not a map is skipped",
+			result:    map[string]any{"hits": map[string]any{"hits": []any{map[string]any{"_source": "bad"}}}},
+			expOutput: []int64{},
 		},
 		{
-			desc: "version not a number",
+			desc: "version not a number is skipped",
 			result: map[string]any{"hits": map[string]any{"hits": []any{
 				map[string]any{"_source": map[string]any{"version": "5"}},
 			}}},
-			expVer: 0,
+			expOutput: []int64{},
 		},
 		{
-			desc: "valid version",
+			desc: "valid versions are all returned, bad hits skipped",
 			result: map[string]any{"hits": map[string]any{"hits": []any{
 				map[string]any{"_source": map[string]any{"version": float64(12)}},
+				"bad",
+				map[string]any{"_source": map[string]any{"version": float64(7)}},
 			}}},
-			expVer: 12,
+			expOutput: []int64{12, 7},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			assert.Equal(t, tc.expVer, extractLastMigrationVersion(tc.result))
-		})
-	}
-}
-
-func TestElasticsearchMigrator_getLastMigration_Errors(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		searchErr  error
-		setupMocks func(m *Mockmigrator, c *container.Container)
-		expVersion int64
-		expErr     error
-	}{
-		{
-			desc:       "search error",
-			searchErr:  assert.AnError,
-			setupMocks: func(*Mockmigrator, *container.Container) {},
-			expVersion: -1,
-			expErr:     assert.AnError,
-		},
-		{
-			desc: "base migrator error",
-			setupMocks: func(m *Mockmigrator, c *container.Container) {
-				m.EXPECT().getLastMigration(c).Return(int64(0), assert.AnError)
-			},
-			expVersion: -1,
-			expErr:     assert.AnError,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-				getLastElasticsearchMigrationQuery()).Return(map[string]any{}, tc.searchErr)
-			tc.setupMocks(mockMigrator, mockContainer)
-
-			mg := elasticsearchMigrator{elasticsearchDS: elasticsearchDS{client: mockElasticsearch}, migrator: mockMigrator}
-
-			lastMigration, err := mg.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, lastMigration)
-			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expOutput, extractMigrationVersions(tc.result))
 		})
 	}
 }

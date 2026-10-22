@@ -48,8 +48,8 @@ EXCEPTION
         IF SQLCODE != -955 THEN RAISE; END IF;
 END;
 `
-	getLastOracleGoFrMigration = `
-SELECT NVL(MAX(version), 0) AS last_migration
+	getOracleGoFrMigrationVersions = `
+SELECT DISTINCT version
 FROM gofr_migrations
 `
 	insertOracleGoFrMigrationRow = `
@@ -103,44 +103,30 @@ func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return om.migrator.checkAndCreateMigrationTable(c)
 }
 
-// Get the last applied migration version.
-func (om oracleMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		results             []map[string]any
-		oracleLastMigration int64
-	)
+// Get the versions of every applied migration.
+func (om oracleMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var results []map[string]any
 
-	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
+	err := om.Oracle.Select(context.Background(), &results, getOracleGoFrMigrationVersions)
 	if err != nil {
-		return -1, fmt.Errorf("oracle: %w", err)
+		return nil, fmt.Errorf("oracle: %w", err)
 	}
 
-	if len(results) != 0 {
-		oracleLastMigration = om.extractLastMigrationFromResults(results)
-	}
+	c.Debugf("Oracle applied migrations fetched: %v", len(results))
 
-	c.Debugf("Oracle last migration fetched value is: %v", oracleLastMigration)
-
-	baseLastMigration, err := om.migrator.getLastMigration(c)
+	applied, err := om.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(baseLastMigration, oracleLastMigration), nil
-}
-
-// extractLastMigrationFromResults handles Oracle number type conversion.
-func (om oracleMigrator) extractLastMigrationFromResults(results []map[string]any) int64 {
-	if len(results) == 0 {
-		return 0
+	for _, row := range results {
+		// Oracle returns unquoted column names in upper case.
+		if v, ok := row["VERSION"]; ok {
+			applied[om.convertToInt64(v)] = struct{}{}
+		}
 	}
 
-	lastMigVal, exists := results[0]["LAST_MIGRATION"]
-	if !exists {
-		return 0
-	}
-
-	return om.convertToInt64(lastMigVal)
+	return applied, nil
 }
 
 // convertToInt64 converts various Oracle number types to int64.
