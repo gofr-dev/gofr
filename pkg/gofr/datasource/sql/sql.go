@@ -416,7 +416,9 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
+			quotePGValue(dbConfig.HostName), quotePGValue(dbConfig.Port), quotePGValue(dbConfig.User),
+			quotePGValue(dbConfig.Password), quotePGValue(dbConfig.Database),
+			quotePGValue(dbConfig.SSLMode)), nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
@@ -424,6 +426,32 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	default:
 		return "", errUnsupportedDialect
 	}
+}
+
+// quotePGValue renders a value for a libpq key/value connection string. A value holding a
+// space, a single quote or a backslash is single quoted, with backslashes and single quotes
+// inside it escaped, otherwise libpq ends the value at the space and reads the backslash as
+// an escape. Any other value, an empty one included, is returned as it is.
+func quotePGValue(value string) string {
+	if !strings.ContainsAny(value, " '\\") {
+		return value
+	}
+
+	var b strings.Builder
+
+	b.WriteByte('\'')
+
+	for _, r := range value {
+		if r == '\\' || r == '\'' {
+			b.WriteByte('\\')
+		}
+
+		b.WriteRune(r)
+	}
+
+	b.WriteByte('\'')
+
+	return b.String()
 }
 
 func pushDBMetrics(database *DB, metrics Metrics) {
