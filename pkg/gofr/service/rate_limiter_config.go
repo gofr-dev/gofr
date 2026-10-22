@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 )
@@ -56,15 +57,25 @@ func defaultKeyFunc(req *http.Request) string {
 	return scheme + "://" + host
 }
 
-// Validate checks if the configuration is valid.
-// Validate checks if the configuration is valid and sets defaults.
+// maxRequests is the exclusive upper bound on Requests: Validate may copy Requests into the int Burst, and a
+// float64 at or above this bound has no defined int conversion.
+const maxRequests float64 = math.MaxInt
+
+// isValidRequests reports whether requests is positive, finite and below maxRequests. NaN is not valid.
+func isValidRequests(requests float64) bool {
+	return requests > 0 && requests < maxRequests
+}
+
+// Validate checks if the configuration is valid and sets defaults. A non-positive, NaN, +Inf or too large
+// (at least math.MaxInt) Requests falls back to the default rate. Every problem found is reported, joined with
+// errors.Join, so errors.Is matches each of them.
 func (config *RateLimiterConfig) Validate() error {
-	var validationError error
+	var errs []error
 
-	if config.Requests <= 0 {
-		validationError = fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
+	if !isValidRequests(config.Requests) {
+		errs = append(errs, fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests))
 
-		config.Requests = 60 // Default: 60 requests per minute
+		config.Requests = defaultRequestsPerMinute // Default: 60 requests per window
 	}
 
 	if config.Window <= 0 {
@@ -76,9 +87,9 @@ func (config *RateLimiterConfig) Validate() error {
 	}
 
 	if float64(config.Burst) < config.Requests {
-		validationError = fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests)
+		errs = append(errs, fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests))
 
-		config.Burst = int(config.Requests)
+		config.Burst = int(config.Requests) // In range: Requests is below maxRequests
 	}
 
 	// Set default key function if not provided
@@ -86,7 +97,7 @@ func (config *RateLimiterConfig) Validate() error {
 		config.KeyFunc = defaultKeyFunc
 	}
 
-	return validationError
+	return errors.Join(errs...)
 }
 
 // RequestsPerSecond converts the configured rate to requests per second.
