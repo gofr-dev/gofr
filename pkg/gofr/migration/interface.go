@@ -191,7 +191,8 @@ type Elasticsearch interface {
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
 	checkAndCreateMigrationTable(c *container.Container) error
-	getLastMigration(c *container.Container) (int64, error)
+	// getAppliedMigrations returns the versions of every migration recorded as applied, across the whole chain.
+	getAppliedMigrations(c *container.Container) (map[int64]struct{}, error)
 
 	beginTransaction(c *container.Container) transactionData
 

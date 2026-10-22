@@ -41,10 +41,10 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pm pubsubMigrator) getLastMigration(c *container.Container) (int64, error) {
+func (pm pubsubMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	// PubSub no longer participates in version tracking.
 	// We delegate directly to the next migrator in the chain (SQL, Redis, etc.).
-	return pm.migrator.getLastMigration(c)
+	return pm.migrator.getAppliedMigrations(c)
 }
 
 func (pm pubsubMigrator) beginTransaction(c *container.Container) transactionData {

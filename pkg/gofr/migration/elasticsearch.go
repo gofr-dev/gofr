@@ -27,12 +27,16 @@ const (
 	elasticsearchSourceField = "_source"
 	// elasticsearchMappingType is the key naming a field's type in an index mapping.
 	elasticsearchMappingType = "type"
+
+	// elasticsearchMaxMigrationHits is Elasticsearch's default index.max_result_window, the most hits one search returns.
+	elasticsearchMaxMigrationHits = 10000
 )
 
-// getLastElasticsearchMigrationQuery fetches the most recent migration version.
-func getLastElasticsearchMigrationQuery() map[string]any {
+// getElasticsearchMigrationVersionsQuery fetches applied migration versions, highest first, so the
+// last applied version is always included even if the index holds more records than one search returns.
+func getElasticsearchMigrationVersionsQuery() map[string]any {
 	return map[string]any{
-		"size": 1,
+		"size": elasticsearchMaxMigrationHits,
 		"sort": []map[string]any{
 			{migrationFieldVersion: map[string]any{"order": "desc"}},
 		},
@@ -96,54 +100,63 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 	return em.migrator.checkAndCreateMigrationTable(c)
 }
 
-// getLastMigration retrieves the latest migration version from Elasticsearch.
-func (em elasticsearchMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
-	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
+// getAppliedMigrations retrieves the applied migration versions from Elasticsearch.
+func (em elasticsearchMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex},
+		getElasticsearchMigrationVersionsQuery())
 	if err != nil {
-		return -1, fmt.Errorf("elasticsearch: %w", err)
+		return nil, fmt.Errorf("elasticsearch: %w", err)
 	}
 
-	lastMigration = extractLastMigrationVersion(result)
-	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
+	versions := extractMigrationVersions(result)
+	c.Debugf("Elasticsearch applied migrations fetched: %v", versions)
 
-	lm2, err := em.migrator.getLastMigration(c)
+	applied, err := em.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
 }
 
-// extractLastMigrationVersion extracts the latest migration version from the Elasticsearch search result.
-func extractLastMigrationVersion(result map[string]any) int64 {
+// extractMigrationVersions extracts the migration versions from the Elasticsearch search result.
+func extractMigrationVersions(result map[string]any) []int64 {
 	hits, ok := result["hits"].(map[string]any)
 	if !ok {
-		return 0
+		return nil
 	}
 
 	hitsList, ok := hits["hits"].([]any)
-	if !ok || len(hitsList) == 0 {
-		return 0
-	}
-
-	firstHit, ok := hitsList[0].(map[string]any)
 	if !ok {
-		return 0
+		return nil
 	}
 
-	source, ok := firstHit[elasticsearchSourceField].(map[string]any)
-	if !ok {
-		return 0
+	versions := make([]int64, 0, len(hitsList))
+
+	for _, h := range hitsList {
+		hit, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		source, ok := hit[elasticsearchSourceField].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		version, ok := source[migrationFieldVersion].(float64)
+		if !ok {
+			continue
+		}
+
+		versions = append(versions, int64(version))
 	}
 
-	version, ok := source[migrationFieldVersion].(float64)
-	if !ok {
-		return 0
-	}
-
-	return int64(version)
+	return versions
 }
 
 // beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).

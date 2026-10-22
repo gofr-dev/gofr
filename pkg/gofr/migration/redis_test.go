@@ -2,7 +2,6 @@ package migration
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -74,79 +73,87 @@ func TestRedis_Rename(t *testing.T) {
 	require.NoError(t, err, "TEST Failed.\n")
 }
 
-func TestRedisMigrator_GetLastMigration(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	c, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockmigrator(ctrl)
-
-	m := redisMigrator{
-		Redis:    mocks.Redis,
-		migrator: mockMigrator,
-	}
+func TestRedisMigrator_getAppliedMigrations(t *testing.T) {
+	const rec = `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`
 
 	tests := []struct {
-		desc                  string
-		mockedData            map[string]string
-		redisErr              error
-		migratorLastMigration int64
-		migratorErr           error
-		expectedLastMigration int64
-		expectedErr           error
+		desc         string
+		mockedData   map[string]string
+		redisErr     error
+		callInner    bool
+		innerApplied map[int64]struct{}
+		innerErr     error
+		expected     map[int64]struct{}
+		expectErr    bool
+		expectedErr  error
 	}{
 		{
-			desc: "Successful",
-			mockedData: map[string]string{
-				"1": `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`,
-				"2": `{"method":"UP","startTime":"2024-01-02T00:00:00Z","duration":2000}`,
-			},
-			migratorLastMigration: 3,
-			expectedLastMigration: 3,
+			desc:         "unions redis versions with inner migrator versions",
+			mockedData:   map[string]string{"1": rec, "3": rec, "4": rec},
+			callInner:    true,
+			innerApplied: map[int64]struct{}{2: {}},
+			expected:     map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
 		},
 		{
-			desc:                  "ErrorFromHGetAll",
-			redisErr:              goRedis.ErrClosed,
-			expectedLastMigration: -1,
-			expectedErr:           goRedis.ErrClosed,
+			desc:         "empty table returns only the inner set",
+			mockedData:   map[string]string{},
+			callInner:    true,
+			innerApplied: map[int64]struct{}{5: {}},
+			expected:     map[int64]struct{}{5: {}},
 		},
 		{
-			desc: "UnmarshalError",
-			mockedData: map[string]string{
-				"1": `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`,
-				"2": "invalid JSON data",
-			},
-			expectedLastMigration: -1,
-			expectedErr:           &json.SyntaxError{},
+			desc:        "error from HGetAll",
+			redisErr:    goRedis.ErrClosed,
+			expectErr:   true,
+			expectedErr: goRedis.ErrClosed,
 		},
 		{
-			desc: "lm2IsLessThanLastMigration",
-			mockedData: map[string]string{
-				"1": `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`,
-				"2": `{"method":"UP","startTime":"2024-01-02T00:00:00Z","duration":2000}`,
-			},
-			migratorLastMigration: 1,
-			expectedLastMigration: 3,
+			desc:       "unmarshal error",
+			mockedData: map[string]string{"1": rec, "2": "invalid JSON data"},
+			expectErr:  true,
+		},
+		{
+			desc:        "inner migrator error",
+			mockedData:  map[string]string{"1": rec},
+			callInner:   true,
+			innerErr:    errRedis,
+			expectErr:   true,
+			expectedErr: errRedis,
 		},
 	}
 
-	for i, tc := range tests {
-		mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
-			goRedis.NewMapStringStringResult(tc.mockedData, tc.redisErr))
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 
-		if tc.redisErr == nil && tc.desc != "UnmarshalError" {
-			mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration, tc.migratorErr).MaxTimes(2)
-		}
+			c, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-		lastMigration, err := m.getLastMigration(c)
+			m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-		assert.Equal(t, tc.expectedLastMigration, lastMigration, "TEST[%d], Failed.\n%s", i, tc.desc)
+			mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
+				goRedis.NewMapStringStringResult(tc.mockedData, tc.redisErr))
 
-		if tc.expectedErr != nil {
-			assert.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-		}
+			if tc.callInner {
+				mockMigrator.EXPECT().getAppliedMigrations(gomock.Any()).Return(tc.innerApplied, tc.innerErr)
+			}
+
+			applied, err := m.getAppliedMigrations(c)
+
+			if tc.expectErr {
+				require.Error(t, err)
+				assert.Nil(t, applied)
+
+				if tc.expectedErr != nil {
+					require.ErrorIs(t, err, tc.expectedErr)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, applied)
+		})
 	}
 }
 
@@ -440,23 +447,6 @@ func TestRedisMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 
 	val := s.HGet("gofr_migrations", "1")
 	assert.Empty(t, val, "no migration record should be written when Redis was not used")
-}
-
-func TestRedisMigrator_GetLastMigration_BaseMigratorError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	c, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockmigrator(ctrl)
-	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
-
-	mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
-		goRedis.NewMapStringStringResult(map[string]string{"1": `{"method":"UP"}`}, nil))
-	mockMigrator.EXPECT().getLastMigration(c).Return(int64(0), errRedis)
-
-	lastMigration, err := m.getLastMigration(c)
-
-	assert.Equal(t, int64(-1), lastMigration)
-	require.ErrorIs(t, err, errRedis)
 }
 
 func TestRedisMigrator_Lock_ContextCanceledWhileRetrying(t *testing.T) {

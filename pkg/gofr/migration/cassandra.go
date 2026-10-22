@@ -29,7 +29,7 @@ const (
 	checkAndCreateCassandraMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (version bigint,
     method text, start_time timestamp, duration bigint, PRIMARY KEY (version, method));`
 
-	getLastCassandraGoFrMigration = `SELECT version FROM gofr_migrations`
+	getCassandraGoFrMigrationVersions = `SELECT version FROM gofr_migrations`
 
 	insertCassandraGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
@@ -42,31 +42,26 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 	return cs.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (cs cassandraMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		lastMigration  int64
-		lastMigrations []int64
-	)
+func (cs cassandraMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var versions []int64
 
-	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
+	err := c.Cassandra.QueryWithCtx(context.Background(), &versions, getCassandraGoFrMigrationVersions)
 	if err != nil {
-		return -1, fmt.Errorf("cassandra: %w", err)
+		return nil, fmt.Errorf("cassandra: %w", err)
 	}
 
-	for _, version := range lastMigrations {
-		if version > lastMigration {
-			lastMigration = version
-		}
-	}
+	c.Debugf("cassandra applied migrations fetched: %v", versions)
 
-	c.Debugf("cassandra last migration fetched value is: %v", lastMigration)
-
-	lm2, err := cs.migrator.getLastMigration(c)
+	applied, err := cs.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {

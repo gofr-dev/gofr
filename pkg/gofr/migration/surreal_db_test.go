@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errSurrealInner = errors.New("surreal inner migrator error")
 
 func surrealSetup(t *testing.T) (migrator, *container.MockSurrealDB, *container.Container) {
 	t.Helper()
@@ -51,38 +54,84 @@ func Test_SurrealCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_SurrealGetLastMigration(t *testing.T) {
-	migratorWithSurreal, mockSurreal, mockContainer := surrealSetup(t)
-
+func Test_SurrealGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc    string
-		version any
-		err     error
-		resp    int64
+		desc        string
+		result      []any
+		queryErr    error
+		baseApplied map[int64]struct{}
+		baseErr     error
+		expApplied  map[int64]struct{}
+		expErr      error
 	}{
+		{
+			desc: "surreal versions are unioned with inner migrator versions",
+			result: []any{
+				map[string]any{"version": int64(1)},
+				map[string]any{"version": int64(3)},
+				map[string]any{"version": int64(4)},
+			},
+			baseApplied: map[int64]struct{}{2: {}},
+			expApplied:  map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
 		// The SurrealDB driver decodes a `number` column as int for real connections,
 		// but may yield int64/float64 depending on value and driver version.
-		{"int version", int(2147483600), nil, 2147483600},
-		{"int64 version", int64(20260717211450), nil, 20260717211450},
-		{"uint64 version", uint64(20260717211450), nil, 20260717211450},
-		{"float64 version", float64(1), nil, 1},
-		{"query failed", nil, context.DeadlineExceeded, -1},
+		{
+			desc: "version types are normalized",
+			result: []any{
+				map[string]any{"version": int(2147483600)},
+				map[string]any{"version": int64(20260717211450)},
+				map[string]any{"version": uint64(20260717211451)},
+				map[string]any{"version": float64(1)},
+			},
+			baseApplied: map[int64]struct{}{},
+			expApplied:  map[int64]struct{}{2147483600: {}, 20260717211450: {}, 20260717211451: {}, 1: {}},
+		},
+		{
+			desc:        "non map row is ignored",
+			result:      []any{"bad"},
+			baseApplied: map[int64]struct{}{3: {}},
+			expApplied:  map[int64]struct{}{3: {}},
+		},
+		{
+			desc:        "empty result returns only inner versions",
+			result:      []any{},
+			baseApplied: map[int64]struct{}{5: {}},
+			expApplied:  map[int64]struct{}{5: {}},
+		},
+		{desc: "surreal query error", queryErr: context.DeadlineExceeded, expErr: context.DeadlineExceeded},
+		{
+			desc:    "inner migrator error",
+			result:  []any{map[string]any{"version": int64(2)}},
+			baseErr: errSurrealInner,
+			expErr:  errSurrealInner,
+		},
 	}
 
-	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(gomock.Any(), getLastSurrealDBGoFrMigration, nil).Return([]any{
-			map[string]any{"version": tc.version},
-		}, tc.err)
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-		resp, err := migratorWithSurreal.getLastMigration(mockContainer)
+			m := surrealMigrator{SurrealDB: surrealDS{client: mocks.SurrealDB}, migrator: mockMigrator}
 
-		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+			mocks.SurrealDB.EXPECT().Query(gomock.Any(), getSurrealDBGoFrMigrationVersions, nil).Return(tc.result, tc.queryErr)
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		}
+			if tc.queryErr == nil {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.baseApplied, tc.baseErr)
+			}
+
+			applied, err := m.getAppliedMigrations(mockContainer)
+
+			assert.Equal(t, tc.expApplied, applied)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
@@ -250,45 +299,6 @@ func Test_SurrealVersionToInt64(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			assert.Equal(t, tc.exp, surrealVersionToInt64(tc.version))
-		})
-	}
-}
-
-func Test_SurrealGetLastMigration_BaseMigrator(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		result     []any
-		baseResp   int64
-		baseErr    error
-		expVersion int64
-		expErr     error
-	}{
-		{desc: "non map row is ignored", result: []any{"bad"}, baseResp: 3, expVersion: 3},
-		{desc: "empty result", result: []any{}, baseResp: 0, expVersion: 0},
-		{
-			desc:       "base migrator error",
-			result:     []any{map[string]any{"version": int64(2)}},
-			baseErr:    context.DeadlineExceeded,
-			expVersion: -1,
-			expErr:     context.DeadlineExceeded,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			m := surrealMigrator{SurrealDB: surrealDS{client: mocks.SurrealDB}, migrator: mockMigrator}
-
-			mocks.SurrealDB.EXPECT().Query(gomock.Any(), getLastSurrealDBGoFrMigration, nil).Return(tc.result, nil)
-			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
-
-			resp, err := m.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, resp)
-			assert.Equal(t, tc.expErr, err)
 		})
 	}
 }
