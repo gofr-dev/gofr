@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -116,6 +117,11 @@ func validateTokenURL(tokenURL string) error {
 type oauthTokenProvider struct {
 	tokenSource oauth2.TokenSource
 	group       singleflight.Group
+
+	// last holds the most recently fetched token for a lock-free fast path. A still-valid token is
+	// returned without entering singleflight or spawning a goroutine. The zero value is a nil
+	// pointer; oauth2.Token.Valid is nil-safe, so it simply falls through to the fetch path.
+	last atomic.Pointer[oauth2.Token]
 }
 
 // newTokenProvider builds the caching token source for a config. Like the other options in this
@@ -130,7 +136,36 @@ func (c *OAuthConfig) newTokenProvider() *oauthTokenProvider {
 		AuthStyle:      c.AuthStyle,
 	}
 
-	return &oauthTokenProvider{tokenSource: clientCredentials.TokenSource(tokenFetchContext())}
+	source := &clientCredentialsTokenSource{config: clientCredentials, ctx: tokenFetchContext()}
+
+	return &oauthTokenProvider{tokenSource: oauth2.ReuseTokenSource(nil, source)}
+}
+
+// clientCredentialsTokenSource mints an access token with the client-credentials grant and lets the
+// surrounding ReuseTokenSource cache it until it is close to expiring.
+//
+// expires_in is RECOMMENDED, not required (RFC 6749 §5.1). A grant that omits it leaves Token.Expiry
+// zero, which oauth2 treats as never expiring, so the caching source would pin that one token for
+// the life of the process; if the server later revoked it, every call would fail at the auth step
+// until a restart. Marking a zero-expiry token already expired keeps it out of the cache, so a
+// server that omits expires_in gets a fresh grant per call — the behavior before this caching was
+// added. A server that sends expires_in is unaffected.
+type clientCredentialsTokenSource struct {
+	config clientcredentials.Config
+	ctx    context.Context
+}
+
+func (s *clientCredentialsTokenSource) Token() (*oauth2.Token, error) {
+	token, err := s.config.Token(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if token.Expiry.IsZero() {
+		token.Expiry = time.Now().Add(-time.Second)
+	}
+
+	return token, nil
 }
 
 // tokenFetchContext returns the context the token source uses to reach the authorization server.
@@ -175,9 +210,13 @@ const tokenSingleflightKey = "token"
 // early, and still populates the cache for whoever calls next. A failed fetch is not cached, so a
 // transient authorization-server failure is retried on the next call rather than remembered.
 func (p *oauthTokenProvider) token(ctx context.Context) (*oauth2.Token, error) {
-	ch := p.group.DoChan(tokenSingleflightKey, func() (any, error) {
-		return p.tokenSource.Token()
-	})
+	// Fast path: a still-valid token is returned without singleflight or a goroutine. Token.Valid is
+	// nil-safe, so the zero value (no token fetched yet) and an expired token both fall through.
+	if last := p.last.Load(); last.Valid() {
+		return last, nil
+	}
+
+	ch := p.group.DoChan(tokenSingleflightKey, p.fetch)
 
 	select {
 	case res := <-ch:
@@ -191,4 +230,25 @@ func (p *oauthTokenProvider) token(ctx context.Context) (*oauth2.Token, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// fetch mints a token through the shared source and publishes it for the fast path. A panic in the
+// source would otherwise be re-raised by singleflight in a fresh goroutine (go panic(e) at
+// singleflight v0.23.0), past any request's recover, taking the whole process down. Recovering here
+// turns it into an error the caller handles instead.
+func (p *oauthTokenProvider) fetch() (val any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			val, err = nil, AuthErr{Message: fmt.Sprintf("panic while fetching token: %v", r)}
+		}
+	}()
+
+	token, err := p.tokenSource.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	p.last.Store(token)
+
+	return token, nil
 }

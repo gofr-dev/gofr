@@ -202,6 +202,10 @@ const tokenLifetime = 3600
 // shortTokenLifetime sits inside that window, so such a token is never served from cache.
 const shortTokenLifetime = 1
 
+// omitExpiresIn tells newCountingTokenServer to leave expires_in out of the grant entirely, the way
+// an authorization server that does not send the RECOMMENDED field (RFC 6749 §5.1) behaves.
+const omitExpiresIn = -1
+
 // countingTokenServer is a client_credentials token endpoint that counts the grants it issues and
 // returns a distinct access token for each, so a test can tell a cached token from a new one.
 type countingTokenServer struct {
@@ -229,11 +233,16 @@ func newCountingTokenServer(t *testing.T, expiresIn int) *countingTokenServer {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		body := map[string]any{
 			"access_token": fmt.Sprintf("token-%d", grant),
 			"token_type":   "Bearer",
-			"expires_in":   ts.expiresIn,
-		})
+		}
+
+		if ts.expiresIn != omitExpiresIn {
+			body["expires_in"] = ts.expiresIn
+		}
+
+		_ = json.NewEncoder(w).Encode(body)
 	}))
 
 	t.Cleanup(ts.Close)
@@ -359,6 +368,68 @@ func TestOAuth_ExpiredTokenIsRefetched(t *testing.T) {
 	for i := range calls {
 		assert.Equal(t, fmt.Sprintf("Bearer token-%d", i+1), <-seen)
 	}
+}
+
+// TestOAuth_TokenWithoutExpiryIsNotCached tests that a token the server grants without expires_in is
+// re-fetched on each call rather than cached for the life of the process. RFC 6749 §5.1 makes
+// expires_in RECOMMENDED, not required; a missing one leaves Token.Expiry zero, which oauth2 treats
+// as never expiring. Caching it would pin a possibly-revoked token until the process restarts, so
+// such a token keeps the pre-cache behavior of a fresh grant per call.
+func TestOAuth_TokenWithoutExpiryIsNotCached(t *testing.T) {
+	const calls = 3
+
+	tokenServer := newCountingTokenServer(t, omitExpiresIn)
+	upstream, seen := recordingUpstream(t, calls)
+
+	svc := NewHTTPService(upstream.URL, logging.NewMockLogger(logging.INFO), nil, tokenServer.oAuthConfig())
+
+	for i := range calls {
+		resp, err := svc.Get(t.Context(), "test", nil)
+		require.NoErrorf(t, err, "call %d", i)
+		require.NoError(t, resp.Body.Close())
+	}
+
+	assert.Equal(t, int64(calls), tokenServer.grants.Load(),
+		"a token with no expiry must not be cached; each call re-fetches")
+
+	for i := range calls {
+		assert.Equal(t, fmt.Sprintf("Bearer token-%d", i+1), <-seen)
+	}
+}
+
+// panickingTokenSource panics when asked for a token, standing in for a token source that fails in
+// an unexpected way.
+type panickingTokenSource struct{}
+
+func (panickingTokenSource) Token() (*oauth2.Token, error) { panic("boom") }
+
+// TestOAuth_PanicInTokenFetchBecomesError tests that a panic from the token source is returned as an
+// error rather than crashing the process. The fetch runs inside singleflight's DoChan goroutine,
+// which re-raises an escaping panic with go panic(e), past the request's recover; the provider must
+// contain it.
+func TestOAuth_PanicInTokenFetchBecomesError(t *testing.T) {
+	p := &oauthTokenProvider{tokenSource: panickingTokenSource{}}
+
+	_, err := p.token(t.Context())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "panic while fetching token")
+}
+
+// TestOAuth_AddAuthorizationHeaderDoesNotMutateCaller tests that the caller's header map is left
+// unchanged (#4455): the provider works on a clone, so the Authorization header it adds does not
+// leak back into the map the caller passed.
+func TestOAuth_AddAuthorizationHeaderDoesNotMutateCaller(t *testing.T) {
+	tokenServer := newCountingTokenServer(t, tokenLifetime)
+
+	caller := map[string]string{"Content-Type": "application/json"}
+
+	returned, err := tokenServer.oAuthConfig().newTokenProvider().addAuthorizationHeader(t.Context(), caller)
+	require.NoError(t, err)
+
+	assert.NotContains(t, caller, AuthHeader, "caller's map must not gain the Authorization header")
+	assert.Contains(t, returned, AuthHeader, "returned map should carry the token")
+	assert.Equal(t, map[string]string{"Content-Type": "application/json"}, caller, "caller's map must be unchanged")
 }
 
 // TestOAuth_ConcurrentRequestsShareOneTokenGrant tests that a burst of callers arriving with no
