@@ -446,6 +446,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- DB_RECORD_ARGS
+- Set to `false` to hide query arguments: each value in the debug query log becomes `*****`, so only the count stays visible. Covers queries on the DB and inside transactions.
+- true
+
+---
+
 - SUPABASE_CONNECTION_TYPE 
 - Connection type to Supabase. Supported values: direct, session, transaction 
 - direct
@@ -504,6 +510,12 @@ This document lists all the configuration options supported by the GoFr framewor
 - REDIS_DB
 - Database number to use for the Redis server.
 -  0
+
+---
+
+- REDIS_RECORD_ARGS
+- Set to `false` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command.
+-  true
 
 ---
 

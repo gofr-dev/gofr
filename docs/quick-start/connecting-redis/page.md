@@ -98,6 +98,16 @@ These variables are stored in a `.env` file located within the `configs` directo
 ---
 {% /table %}
 
+## Keeping query arguments out of logs and traces
+
+At `LOG_LEVEL=DEBUG`, GoFr logs every Redis command together with its keys and values, and trace spans record the
+full command in the `db.statement` attribute. Set `REDIS_RECORD_ARGS=false` to hide them: each argument in the log
+becomes `*****`, and spans drop `db.statement` but are still named after the command (for example `set`).
+
+```env
+REDIS_RECORD_ARGS=false
+```
+
 ## Example `.env` File
 
 ```env

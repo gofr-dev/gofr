@@ -186,6 +186,56 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 }
 
+func TestGetDBConfig_RecordArgs(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		recordArgs   string
+		wantHideArgs bool
+	}{
+		{desc: "unset shows args", recordArgs: "", wantHideArgs: false},
+		{desc: "TRUE shows args", recordArgs: "TRUE", wantHideArgs: false},
+		{desc: "FALSE hides args", recordArgs: "FALSE", wantHideArgs: true},
+		{desc: "0 hides args", recordArgs: "0", wantHideArgs: true},
+		{desc: "invalid value shows args", recordArgs: "maybe", wantHideArgs: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{"DB_RECORD_ARGS": tc.recordArgs})
+
+			assert.Equal(t, tc.wantHideArgs, getDBConfig(mockConfig).hideArgs)
+		})
+	}
+}
+
+func TestWarnInvalidRecordArgs(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		recordArgs string
+		wantWarn   bool
+	}{
+		{desc: "unset", recordArgs: "", wantWarn: false},
+		{desc: "valid boolean", recordArgs: "False", wantWarn: false},
+		{desc: "invalid value", recordArgs: "maybe", wantWarn: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				mockConfig := config.NewMockConfig(map[string]string{"DB_RECORD_ARGS": tc.recordArgs})
+
+				warnInvalidRecordArgs(mockConfig, logging.NewMockLogger(logging.WARN))
+			})
+
+			if tc.wantWarn {
+				assert.Contains(t, out, `invalid DB_RECORD_ARGS "maybe"`)
+			} else {
+				assert.Empty(t, out)
+			}
+		})
+	}
+}
+
 func TestSQL_getDBConnectionString(t *testing.T) {
 	testCases := []struct {
 		desc    string
