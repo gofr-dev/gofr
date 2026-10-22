@@ -2268,18 +2268,19 @@ func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
 // they are what a 404 or 405 served outside the middleware chain loses: answered from mux's
 // NotFoundHandler/MethodNotAllowedHandler, the CORS preflight to a GET-only path became a 405 with
 // no CORS headers, and neither response was logged, traced or measured.
-func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
-	t.Helper()
-	t.Setenv("GOFR_ROUTER", matcherEnv)
+type methodNotAllowedCase struct {
+	name          string
+	method        string
+	path          string
+	expectedCode  int
+	expectedAllow string
+	expectedBody  string
+}
 
-	tests := []struct {
-		name          string
-		method        string
-		path          string
-		expectedCode  int
-		expectedAllow string
-		expectedBody  string
-	}{
+// methodNotAllowedCases is the request matrix assertMethodNotAllowedMatrix drives through the real
+// router. The app it runs against registers GET /thing, POST+PUT /multi, and DELETE /items/{id}.
+func methodNotAllowedCases() []methodNotAllowedCase {
+	return []methodNotAllowedCase{
 		{"GET registered route returns 200", http.MethodGet, "/thing", http.StatusOK, "", `{"data":"ok"}`},
 		{
 			"POST on GET-only route returns 405 with Allow header", http.MethodPost, "/thing",
@@ -2287,6 +2288,12 @@ func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
 		},
 		{
 			"DELETE on GET-only route returns 405 with Allow header", http.MethodDelete, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			// A GET route does not imply HEAD here; a HEAD request to a GET-only path answers 405
+			// naming GET, not 404, and not 200. Health probes that send HEAD see this.
+			"HEAD on GET-only route returns 405 with Allow header", http.MethodHead, "/thing",
 			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
@@ -2312,6 +2319,13 @@ func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
 			http.StatusOK, "", "",
 		},
 	}
+}
+
+func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
+	t.Helper()
+	t.Setenv("GOFR_ROUTER", matcherEnv)
+
+	tests := methodNotAllowedCases()
 
 	type result struct {
 		code          int

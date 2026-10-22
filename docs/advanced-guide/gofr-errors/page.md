@@ -77,6 +77,10 @@ A request for a path that is registered, but not for the method used, is answere
 `ErrorMethodNotAllowed`: a 405 whose `Allow` header lists the methods the path accepts. A path that is
 not registered for any method is answered with `ErrorInvalidRoute`.
 
+This includes `HEAD`: a `HEAD` request to a path registered only for `GET` is answered with 405, not
+404, and its `Allow` header names `GET`. Register `HEAD` on the path if it should accept it. A health
+probe that sends `HEAD` sees this.
+
 #### Usage:
 To use the predefined HTTP errors, users need to import the GoFr http package and can simply call them:
 ```go
