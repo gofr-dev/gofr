@@ -145,12 +145,10 @@ func tokenFetchContext() context.Context {
 // still valid. If a fetch is needed and ctx is done first, the caller leaves with ctx.Err() rather
 // than waiting for the fetch to finish; see token.
 func (p *oauthTokenProvider) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
-	if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
-		return nil, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
+	if headers[AuthHeader] != "" {
+		return nil, AuthErr{Message: headerExistsMessage(AuthHeader)}
 	}
 
 	token, err := p.token(ctx)

@@ -351,3 +351,60 @@ func Test_Run_handler_help(t *testing.T) {
 	// check that only help for the hello subcommand is printed
 	assert.Equal(t, "this a helper string for hello sub command\n", out)
 }
+
+// Test_Run_ReturnsErroredTrueOnHandlerError asserts cmd.Run reports failure when the
+// handler returns an error, which is what App.runCMD uses to set a non-zero exit code.
+func Test_Run_ReturnsErroredTrueOnHandlerError(t *testing.T) {
+	os.Args = []string{"", "fail"}
+
+	c := cmd{}
+	c.addRoute("fail", func(*Context) (any, error) {
+		return nil, errTest
+	})
+
+	var failed bool
+
+	_ = testutil.StderrOutputForFunc(func() {
+		failed = c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	})
+
+	assert.True(t, failed, "cmd.Run should report failure when the handler returns an error")
+}
+
+// Test_Run_ReturnsErroredFalseOnSuccess asserts cmd.Run reports success when the
+// handler returns no error.
+func Test_Run_ReturnsErroredFalseOnSuccess(t *testing.T) {
+	os.Args = []string{"", "ok"}
+
+	c := cmd{}
+	c.addRoute("ok", func(*Context) (any, error) {
+		return "done", nil
+	})
+
+	var failed bool
+
+	_ = testutil.StdoutOutputForFunc(func() {
+		failed = c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	})
+
+	assert.False(t, failed, "cmd.Run should report success when the handler returns no error")
+}
+
+// Test_Run_ReturnsErroredTrueOnUnknownCommand asserts cmd.Run reports failure when the
+// requested subcommand does not exist.
+func Test_Run_ReturnsErroredTrueOnUnknownCommand(t *testing.T) {
+	os.Args = []string{"", "does-not-exist"}
+
+	c := cmd{}
+	c.addRoute("ok", func(*Context) (any, error) {
+		return "done", nil
+	})
+
+	var failed bool
+
+	_ = testutil.StderrOutputForFunc(func() {
+		failed = c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	})
+
+	assert.True(t, failed, "cmd.Run should report failure for an unknown command")
+}
