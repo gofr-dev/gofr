@@ -2241,15 +2241,36 @@ func Test_HTTPMethodNotAllowed_OptionsListedOnce(t *testing.T) {
 }
 
 // Test_HTTPMethodNotAllowed_And_NotFound covers #3853 through the app's real router, middleware
-// chain included. A wrong method on a registered path is a 405 naming the methods the path takes;
-// an unregistered path stays a 404.
+// chain included. Both matchers reach the catch-all for a 404/405, so both must answer identically.
+// The default mux matcher builds its route index on the first unmatched request; GOFR_ROUTER=trie
+// builds it up front. An earlier revision diverged here, so each matcher is driven end to end.
+func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	for _, matcher := range []struct {
+		name string
+		env  string
+	}{
+		{"default mux matcher", ""},
+		{"trie matcher", "trie"},
+	} {
+		t.Run(matcher.name, func(t *testing.T) {
+			assertMethodNotAllowedMatrix(t, matcher.env)
+		})
+	}
+}
+
+// assertMethodNotAllowedMatrix drives the #3853 behavior end to end under one route matcher: a wrong
+// method on a registered path is a 405 naming the methods the path takes; an unregistered path stays
+// a 404.
 //
 // The CORS and X-Correlation-ID headers and the request-log line are asserted on every row because
 // they are what a 404 or 405 served outside the middleware chain loses: answered from mux's
 // NotFoundHandler/MethodNotAllowedHandler, the CORS preflight to a GET-only path became a 405 with
 // no CORS headers, and neither response was logged, traced or measured.
-func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
-	testutil.NewServerConfigs(t)
+func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
+	t.Helper()
+	t.Setenv("GOFR_ROUTER", matcherEnv)
 
 	tests := []struct {
 		name          string
@@ -2269,8 +2290,8 @@ func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
 			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
-			"GET on multi-method route returns 405 with the methods sorted and OPTIONS last", http.MethodGet, "/multi",
-			http.StatusMethodNotAllowed, "POST, PUT, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+			"GET on multi-method route returns 405 with the methods sorted", http.MethodGet, "/multi",
+			http.StatusMethodNotAllowed, "OPTIONS, POST, PUT", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
 			"path parameter route returns 405 for its concrete path", http.MethodGet, "/items/42",
@@ -2349,4 +2370,65 @@ func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
 
 	assert.Contains(t, logs, `"response":405`, "a 405 was not access-logged")
 	assert.Contains(t, logs, `"response":404`, "a 404 was not access-logged")
+}
+
+// rbacGuardingAdmin guards GET /admin with a permission and configures no other method on it, so a
+// wrong method is a (method, path) pair RBAC does not enforce.
+const rbacGuardingAdmin = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/admin","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
+
+// Test_HTTPMethodNotAllowed_UnderRBAC pins the by-design interaction between RBAC and the 405
+// catch-all. RBAC enforces only the (method, path) pairs it is configured for; a request whose
+// method it does not configure passes through to route matching, by design. So a wrong method on an
+// RBAC-guarded path is answered by the catch-all exactly as on any other registered path: 405 with
+// an Allow header. RBAC governs authorization, not path concealment -- a caller refused the guarded
+// method already learns the path exists from the 401, and the 405 adds no authorization bypass.
+func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	path := writeRBACConfig(t, t.TempDir(), "rbac.json", rbacGuardingAdmin)
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedAllow string
+	}{
+		{"the guarded method unauthenticated is denied", http.MethodGet, "/admin", http.StatusUnauthorized, ""},
+		{"a wrong method on the guarded path is 405 with Allow", http.MethodPost, "/admin", http.StatusMethodNotAllowed, "GET, OPTIONS"},
+		{"an unregistered path is 404", http.MethodPost, "/nope", http.StatusNotFound, ""},
+	}
+
+	type result struct {
+		code  int
+		allow string
+	}
+
+	results := make([]result, len(tests))
+
+	// The logger captures os.Stdout when it is created, so the app is built inside the capture.
+	testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.GET("/admin", func(*Context) (any, error) { return "secret", nil })
+		require.NoError(t, app.EnableRBAC(path))
+
+		app.httpServerSetup()
+
+		for i, tc := range tests {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			w := httptest.NewRecorder()
+			app.httpServer.router.ServeHTTP(w, req)
+
+			results[i] = result{code: w.Code, allow: w.Header().Get("Allow")}
+		}
+	})
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedCode, results[i].code)
+			assert.Equal(t, tc.expectedAllow, results[i].allow)
+		})
+	}
 }

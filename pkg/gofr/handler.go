@@ -284,6 +284,10 @@ func (a *App) catchAll() http.Handler {
 			methods = append(methods, http.MethodOptions)
 		}
 
+		// Sort after adding OPTIONS so the header is fully ordered, not "registered methods first,
+		// OPTIONS last". RFC 9110 treats Allow as an unordered set, so order is for readability only.
+		slices.Sort(methods)
+
 		w.Header().Set("Allow", strings.Join(methods, ", "))
 		methodNotAllowed.ServeHTTP(w, r)
 	})

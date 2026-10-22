@@ -58,9 +58,9 @@ type Router struct {
 	// trie index — a deliberate trade for a lock-free steady state, matching
 	// GoFr's static-routing model. buildIdx guards that one-time build.
 	//
-	// AllowedMethods reads the same index in either mode, so with the mux matcher
-	// it is built on the first request no route matched rather than the first
-	// request. Matching itself stays mux's linear scan there.
+	// AllowedMethods reads the same index in either mode. With the mux matcher the index is built
+	// lazily, on the first request that no route matched, rather than up front; matching itself
+	// still uses mux's own linear scan there.
 	idx      *routeIndex
 	buildIdx sync.Once
 	// mws mirrors the middleware chain registered via Use, so the trie matcher
