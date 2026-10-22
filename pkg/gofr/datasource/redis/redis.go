@@ -138,7 +138,8 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
-	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	// No caller context exists at construction time; the ping is bounded by redisPingTimeout.
+	ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
 	defer cancel()
 
 	stopSignal := make(chan struct{})
@@ -230,7 +231,8 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 
 	ps := newPubSub(rc, redisConfig, logger, metrics)
 
-	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	// Tie the initial ping to the PubSub lifecycle, like the retry loop below.
+	ctx, cancel := context.WithTimeout(ps.ctx, redisPingTimeout)
 	defer cancel()
 
 	if err := rc.Ping(ctx).Err(); err == nil {
