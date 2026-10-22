@@ -233,9 +233,9 @@ func (p *oauthTokenProvider) token(ctx context.Context) (*oauth2.Token, error) {
 }
 
 // fetch mints a token through the shared source and publishes it for the fast path. A panic in the
-// source would otherwise be re-raised by singleflight in a fresh goroutine (go panic(e) at
-// singleflight v0.23.0), past any request's recover, taking the whole process down. Recovering here
-// turns it into an error the caller handles instead.
+// source would otherwise be re-raised by singleflight in a fresh goroutine (it runs the work in a
+// goroutine and re-panics an escaping panic), past any request's recover, taking the whole process
+// down. Recovering here turns it into an error the caller handles instead.
 func (p *oauthTokenProvider) fetch() (val any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
