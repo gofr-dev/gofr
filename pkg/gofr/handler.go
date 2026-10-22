@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -21,6 +23,9 @@ import (
 )
 
 const colorCodeError = 202 // 202 is red color code
+
+// faviconContentType is the media type of the favicon served at /favicon.ico.
+const faviconContentType = "image/x-icon"
 
 type Handler func(c *Context) (any, error)
 
@@ -167,13 +172,28 @@ func (h handler) serveInline(c *Context, spanCtx trace.SpanContext) (result any,
 // after the handler hijacks the connection).
 //
 // The handler outcome is sent through a buffered channel rather than to
-// shared variables, so the goroutine never writes a memory location the
-// main goroutine reads — `go test -race` stays clean. Buffer size 1 lets
-// the handler goroutine finish writing and exit even after the main
-// goroutine has already taken the ctx.Done or panicked branch.
+// shared variables, so its (result, err) pair never becomes a location
+// both goroutines touch. Buffer size 1 lets the handler goroutine finish
+// writing and exit even after the main goroutine has already taken the
+// ctx.Done or panicked branch.
+//
+// c.Context is a location both goroutines DO touch: h.function runs in the
+// spawned goroutine and is free to reassign it (App.WebSocket does, to
+// thread the connection through it), while this goroutine's select used to
+// read c.Context.Done() directly — a data race, since nothing ordered the
+// two accesses. See the watchCtx snapshot below, taken before the goroutine
+// is spawned, for the fix.
 func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *http.Request) (result any, err error) {
 	done := make(chan handlerOutcome, 1)
 	panicked := make(chan struct{})
+
+	// Snapshot the context to watch for cancellation before spawning the
+	// handler goroutine below. h.function may reassign c.Context while it
+	// runs (App.WebSocket does, to thread the connection through it) —
+	// reading c.Context in the select instead of here would race that
+	// write. watchCtx is a local copy this goroutine alone reads, so the
+	// write in the spawned goroutine and this read never overlap.
+	watchCtx := c.Context
 
 	go func() {
 		defer func() {
@@ -187,13 +207,13 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	}()
 
 	select {
-	case <-c.Context.Done():
+	case <-watchCtx.Done():
 		// Server-side timeout or client cancellation. Map to the matching
 		// gofrHTTP error so Respond emits 408 (timeout) or 499 (client
 		// closed).
 		err = gofrHTTP.ErrorRequestTimeout{}
 
-		if errors.Is(c.Context.Err(), context.Canceled) {
+		if errors.Is(watchCtx.Err(), context.Canceled) {
 			err = gofrHTTP.ErrorClientClosedRequest{}
 		}
 	case out := <-done:
@@ -222,12 +242,55 @@ func faviconHandler(*Context) (any, error) {
 
 	return response.File{
 		Content:     data,
-		ContentType: "image/x-icon",
+		ContentType: faviconContentType,
 	}, err
 }
 
 func catchAllHandler(*Context) (any, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
+}
+
+func methodNotAllowedHandler(*Context) (any, error) {
+	return nil, gofrHTTP.ErrorMethodNotAllowed{}
+}
+
+// catchAll answers every request no registered route matched: 405 when the path is registered for
+// other methods, 404 when it is not registered at all.
+//
+// It is installed as a real PathPrefix("/") route rather than as mux's NotFoundHandler and
+// MethodNotAllowedHandler because mux applies the middleware chain only to a matched route
+// (gorilla/mux mux.go, guarded by MatchErr == nil). Served from those two fields, a 404 or 405
+// skips Tracer, Logging, Metrics and CORS — the CORS preflight to a GET-only path is answered 405
+// with no CORS headers, and every unknown path disappears from logs and metrics. As a route it
+// always matches, mux clears the method mismatch left by the routes before it (route.go, the else
+// arm of the matcher loop), and the whole chain runs.
+func (a *App) catchAll() http.Handler {
+	router := a.httpServer.router
+	notFound := handler{function: catchAllHandler, container: a.container}
+	methodNotAllowed := handler{function: methodNotAllowedHandler, container: a.container}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := router.AllowedMethods(r)
+		if len(methods) == 0 {
+			notFound.ServeHTTP(w, r)
+
+			return
+		}
+
+		// OPTIONS is listed because the CORS middleware answers it for every path before any route
+		// handler runs, so the resource does support it; RFC 9110 §10.2.1 has Allow list exactly that.
+		// A route registered for OPTIONS on the router itself has already put it in the list.
+		if !slices.Contains(methods, http.MethodOptions) {
+			methods = append(methods, http.MethodOptions)
+		}
+
+		// Sort after adding OPTIONS so the header is fully ordered, not "registered methods first,
+		// OPTIONS last". RFC 9110 treats Allow as an unordered set, so order is for readability only.
+		slices.Sort(methods)
+
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		methodNotAllowed.ServeHTTP(w, r)
+	})
 }
 
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {

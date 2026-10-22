@@ -87,6 +87,10 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 }
 
 func TestContainer_MQTTInitialization_Default(t *testing.T) {
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the MQTT client is not linked")
+	}
+
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",
 	}
@@ -190,7 +194,7 @@ func TestContainer_Close(t *testing.T) {
 	sqlMock.ExpectClose()
 
 	c := NewContainer(config.NewMockConfig(nil))
-	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.SQL = &sqlMockDB{DB: mockDB, expectedQuery: &expectedQuery{}, logger: logging.NewLogger(logging.DEBUG)}
 	c.Redis = mockRedis
 	c.PubSub = mockPubSub
 
@@ -407,7 +411,14 @@ func TestWarnRedisPubSubSharedDB_NoWarnWhenPubSubDBDiffers(t *testing.T) {
 }
 
 func TestCreatePubSub_DispatchBranches(t *testing.T) {
+	// The skips below are per-subtest rather than on the parent: createRedisPubSub
+	// is NOT behind gofr_nopubsub, so skipping the whole function would drop
+	// coverage of a backend the tagged build still links.
 	t.Run("kafka branch with empty broker does nothing", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -417,6 +428,10 @@ func TestCreatePubSub_DispatchBranches(t *testing.T) {
 	})
 
 	t.Run("google branch with missing configs returns nil client", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Google Pub/Sub client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -500,6 +515,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_pubsub_subscribe_total_count",
 		"app_pubsub_subscribe_success_count",
 		"app_http_retry_count",
+		"app_http_retry_budget_exhausted_total",
 		"app_circuit_open_count",
 	}
 	for _, counter := range counters {
@@ -516,6 +532,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 	}{
 		{name: "app_http_response", buckets: httpBuckets},
 		{name: "app_http_service_response", buckets: httpBuckets},
+		{name: "app_http_retry_wait_seconds", buckets: []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30}},
 		{name: "app_redis_stats", buckets: dsMicrosecondBuckets},
 		{name: "app_sql_stats", buckets: dsBuckets},
 	}
@@ -698,6 +715,7 @@ func newSnapshotContainer(t *testing.T) (*Container, *prometheus.Registry) {
 func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 	counters := []string{
 		"app_http_retry_count",
+		"app_http_retry_budget_exhausted_total",
 		"app_pubsub_publish_total_count",
 		"app_pubsub_publish_success_count",
 		"app_pubsub_subscribe_total_count",
@@ -710,6 +728,7 @@ func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 	histograms := []string{
 		"app_http_response",
 		"app_http_service_response",
+		"app_http_retry_wait_seconds",
 		"app_redis_stats",
 		"app_sql_stats",
 	}
@@ -781,24 +800,26 @@ func scrapeMetricsContract(t *testing.T, reg *prometheus.Registry) map[string]me
 // reviewer must acknowledge in the PR description.
 func frameworkMetricContract() map[string]metricContract {
 	return map[string]metricContract{
-		"app_info":                           {"Info for app_name, app_version and framework_version.", "gauge"},
-		"app_go_routines":                    {"Number of Go routines running.", "gauge"},
-		"app_sys_memory_alloc":               {"Number of bytes allocated for heap objects.", "gauge"},
-		"app_sys_total_alloc":                {"Number of cumulative bytes allocated for heap objects.", "gauge"},
-		"app_go_numGC":                       {"Number of completed Garbage Collector cycles.", "gauge"},
-		"app_go_sys":                         {"Number of total bytes of memory.", "gauge"},
-		"app_http_response":                  {"Response time of HTTP requests in seconds.", "histogram"},
-		"app_http_service_response":          {"Response time of HTTP service requests in seconds.", "histogram"},
-		"app_http_retry_count":               {"Total number of retry events", "counter"},
-		"app_http_circuit_breaker_state":     {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
-		"app_redis_stats":                    {"Response time of Redis commands in microseconds.", "histogram"},
-		"app_sql_stats":                      {"Response time of SQL queries in milliseconds.", "histogram"},
-		"app_sql_open_connections":           {"Number of open SQL connections.", "gauge"},
-		"app_sql_inUse_connections":          {"Number of inUse SQL connections.", "gauge"},
-		"app_pubsub_publish_total_count":     {"Number of total publish operations.", "counter"},
-		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
-		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
-		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
+		"app_info":                              {"Info for app_name, app_version and framework_version.", "gauge"},
+		"app_go_routines":                       {"Number of Go routines running.", "gauge"},
+		"app_sys_memory_alloc":                  {"Number of bytes allocated for heap objects.", "gauge"},
+		"app_sys_total_alloc":                   {"Number of cumulative bytes allocated for heap objects.", "gauge"},
+		"app_go_numGC":                          {"Number of completed Garbage Collector cycles.", "gauge"},
+		"app_go_sys":                            {"Number of total bytes of memory.", "gauge"},
+		"app_http_response":                     {"Response time of HTTP requests in seconds.", "histogram"},
+		"app_http_service_response":             {"Response time of HTTP service requests in seconds.", "histogram"},
+		"app_http_retry_count":                  {"Total number of retry events", "counter"},
+		"app_http_retry_wait_seconds":           {"Time waited before each HTTP service retry in seconds.", "histogram"},
+		"app_http_retry_budget_exhausted_total": {"Total number of HTTP service retries skipped because the retry budget was spent.", "counter"},
+		"app_http_circuit_breaker_state":        {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
+		"app_redis_stats":                       {"Response time of Redis commands in microseconds.", "histogram"},
+		"app_sql_stats":                         {"Response time of SQL queries in milliseconds.", "histogram"},
+		"app_sql_open_connections":              {"Number of open SQL connections.", "gauge"},
+		"app_sql_inUse_connections":             {"Number of inUse SQL connections.", "gauge"},
+		"app_pubsub_publish_total_count":        {"Number of total publish operations.", "counter"},
+		"app_pubsub_publish_success_count":      {"Number of successful publish operations.", "counter"},
+		"app_pubsub_subscribe_total_count":      {"Number of total subscribe operations.", "counter"},
+		"app_pubsub_subscribe_success_count":    {"Number of successful subscribe operations.", "counter"},
 	}
 }
 
@@ -989,6 +1010,13 @@ func TestContainer_LLMToolsLazyResolution(t *testing.T) {
 }
 
 func TestContainer_createKafkaPubSub_InvalidConfigs(t *testing.T) {
+	// The assertions are on what kafka.New's own validation logs. Under gofr_nopubsub there is no
+	// kafka.New to validate anything -- the stub logs the one message naming the tag and returns --
+	// so there is nothing here for this test to be about.
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+	}
+
 	tests := []struct {
 		desc    string
 		configs map[string]string

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 type rateLimiterMockMetrics struct {
@@ -66,14 +69,14 @@ func TestRateLimiter_GlobalLimit(t *testing.T) {
 
 	// First 2 requests should succeed (burst)
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code, "Request %d should succeed", i+1)
 	}
 
 	// 3rd request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Request should be rate limited")
@@ -96,7 +99,7 @@ func TestRateLimiter_PerIPLimit(t *testing.T) {
 
 	// IP1: First 2 requests should succeed
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -104,14 +107,14 @@ func TestRateLimiter_PerIPLimit(t *testing.T) {
 	}
 
 	// IP1: 3rd request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
 
 	// IP2: Should still be able to make requests (different limiter)
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.2:54321"
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -135,7 +138,7 @@ func TestRateLimiter_SkipHealthEndpoints(t *testing.T) {
 
 	for _, path := range healthPaths {
 		for i := 0; i < 5; i++ {
-			req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code, "Health endpoint %s should not be rate limited", path)
@@ -203,7 +206,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 			req.RemoteAddr = "192.168.1.1:12345"
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
@@ -248,14 +251,14 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 
 	// Use up burst
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 	}
 
 	// Next request should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
@@ -264,14 +267,14 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 	time.Sleep(220 * time.Millisecond)
 
 	// Should succeed now
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestGetIP_XForwardedFor(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Forwarded-For", "203.0.113.1, 198.51.100.1")
 	req.RemoteAddr = "192.168.1.1:12345"
 
@@ -284,7 +287,7 @@ func TestGetIP_XForwardedFor(t *testing.T) {
 }
 
 func TestGetIP_XRealIP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Real-IP", "203.0.113.5")
 	req.RemoteAddr = "192.168.1.1:12345"
 
@@ -297,7 +300,7 @@ func TestGetIP_XRealIP(t *testing.T) {
 }
 
 func TestGetIP_RemoteAddr(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.1:12345"
 
 	ip := getIP(req, false)
@@ -305,7 +308,7 @@ func TestGetIP_RemoteAddr(t *testing.T) {
 }
 
 func TestGetIP_Priority(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 	req.Header.Set("X-Real-IP", "203.0.113.2")
 	req.RemoteAddr = "192.168.1.1:12345"
@@ -327,13 +330,13 @@ func TestRateLimiter_RetryAfterHeader(t *testing.T) {
 	}))
 
 	// First request should succeed
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	// Second request should be rate limited and include Retry-After header
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
@@ -342,65 +345,24 @@ func TestRateLimiter_RetryAfterHeader(t *testing.T) {
 
 func TestRateLimiterConfig_Validate(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  RateLimiterConfig
-		wantErr bool
+		name   string
+		config RateLimiterConfig
+		expErr error
 	}{
-		{
-			name: "valid config",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "zero RequestsPerSecond",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 0,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative RequestsPerSecond",
-			config: RateLimiterConfig{
-				RequestsPerSecond: -5,
-				Burst:             20,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "zero Burst",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             0,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative Burst",
-			config: RateLimiterConfig{
-				RequestsPerSecond: 10,
-				Burst:             -5,
-				PerIP:             true,
-			},
-			wantErr: true,
-		},
+		{"valid config", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, PerIP: true}, nil},
+		{"infinite RequestsPerSecond is unlimited", RateLimiterConfig{RequestsPerSecond: math.Inf(1), Burst: 1}, nil},
+		{"zero MaxKeys selects the default", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: 0}, nil},
+		{"zero RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: 0, Burst: 20, PerIP: true}, errInvalidRequestsPerSecond},
+		{"negative RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: -5, Burst: 20, PerIP: true}, errInvalidRequestsPerSecond},
+		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 20}, errInvalidRequestsPerSecond},
+		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0, PerIP: true}, errInvalidBurst},
+		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -5, PerIP: true}, errInvalidBurst},
+		{"negative MaxKeys", RateLimiterConfig{RequestsPerSecond: 10, Burst: 20, MaxKeys: -1}, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			require.ErrorIs(t, tt.config.Validate(), tt.expErr)
 		})
 	}
 }
@@ -493,7 +455,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 
 	// Send 2 requests from same X-Forwarded-For IP
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"               // Proxy IP
 		req.Header.Set("X-Forwarded-For", "203.0.113.1") // Client IP
 
@@ -503,7 +465,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 	}
 
 	// 3rd request from same X-Forwarded-For IP should be rate limited
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 
@@ -512,7 +474,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on X-Forwarded-For IP")
 
 	// Different X-Forwarded-For IP should have separate limit
-	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"               // Same proxy
 	req.Header.Set("X-Forwarded-For", "203.0.113.2") // Different client IP
 
@@ -536,7 +498,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 
 	// Send 2 requests with same RemoteAddr but different X-Forwarded-For
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1)) // Different spoofed IPs
 
@@ -545,7 +507,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	}
 	// 3rd request should be rate limited based on RemoteAddr, ignoring X-Forwarded-For
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Different spoofed IP
 
@@ -556,7 +518,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 
 // TestGetIP_EmptyFallback tests that empty IP should fallback to "unknown".
 func TestGetIP_EmptyFallback(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	// Set RemoteAddr to empty (malformed)
 	req.RemoteAddr = ""
 
@@ -583,7 +545,7 @@ func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 
 	// Send requests with empty RemoteAddr - should be grouped under "unknown"
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = ""
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -591,7 +553,7 @@ func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 	}
 
 	// 3rd request with empty RemoteAddr should be rate limited under "unknown" key
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = ""
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -769,4 +731,208 @@ func TestMemoryRateLimiterStore_CleanupDecrementsKeyCount(t *testing.T) {
 
 	// Verify key count is decremented
 	assert.Equal(t, int64(0), atomic.LoadInt64(&store.keyCount), "Key count should be 0 after cleanup")
+}
+
+// errorfRecorder captures Errorf calls for asserting RateLimiter's invalid-config log.
+type errorfRecorder struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (r *errorfRecorder) Errorf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.logs = append(r.logs, fmt.Sprintf(format, args...))
+}
+
+func (r *errorfRecorder) entries() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return append([]string(nil), r.logs...)
+}
+
+func TestRateLimiter_InvalidConfigPassesThrough(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  RateLimiterConfig
+		wantErr error
+	}{
+		{"zero values", RateLimiterConfig{}, errInvalidRequestsPerSecond},
+		{"negative RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: -1, Burst: 5}, errInvalidRequestsPerSecond},
+		{"zero Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: 0}, errInvalidBurst},
+		{"negative Burst", RateLimiterConfig{RequestsPerSecond: 10, Burst: -1}, errInvalidBurst},
+		{"NaN RequestsPerSecond", RateLimiterConfig{RequestsPerSecond: math.NaN(), Burst: 5}, errInvalidRequestsPerSecond},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &errorfRecorder{}
+			metrics := newRateLimiterMockMetrics()
+
+			var mw func(http.Handler) http.Handler
+
+			require.NotPanics(t, func() {
+				mw = RateLimiter(tc.config, metrics, WithRateLimiterLogger(logger))
+			})
+
+			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			for i := 0; i < 10; i++ {
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+				assert.Equal(t, http.StatusOK, rr.Code, "request %d should pass through", i+1)
+			}
+
+			assert.Zero(t, metrics.GetCounter("app_http_rate_limit_exceeded_total"))
+
+			logs := logger.entries()
+			require.Len(t, logs, 1)
+			assert.Contains(t, logs[0], "invalid rate limiter config")
+			assert.Contains(t, logs[0], tc.wantErr.Error())
+			assert.Contains(t, logs[0], "rate limiting is disabled")
+		})
+	}
+}
+
+func TestRateLimiter_InvalidConfigWithoutLoggerLogsToStderr(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []RateLimiterOption
+	}{
+		{"no option", nil},
+		{"nil logger option", []RateLimiterOption{WithRateLimiterLogger(nil)}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var mw func(http.Handler) http.Handler
+
+			logs := testutil.StderrOutputForFunc(func() {
+				mw = RateLimiter(RateLimiterConfig{}, nil, tc.opts...)
+			})
+
+			assert.Contains(t, logs, "invalid rate limiter config")
+			assert.Contains(t, logs, errInvalidRequestsPerSecond.Error())
+
+			rr := httptest.NewRecorder()
+			mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+			assert.Equal(t, http.StatusOK, rr.Code)
+		})
+	}
+}
+
+func TestRateLimiter_ValidConfigWithLoggerStillLimits(t *testing.T) {
+	logger := &errorfRecorder{}
+	config := RateLimiterConfig{RequestsPerSecond: 1, Burst: 1}
+	config.Store = NewMemoryRateLimiterStore(config)
+
+	t.Cleanup(config.Store.StopCleanup)
+
+	handler := RateLimiter(config, nil, WithRateLimiterLogger(logger))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	codes := make([]int, 0, 2)
+
+	for i := 0; i < 2; i++ {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+		codes = append(codes, rr.Code)
+	}
+
+	assert.Equal(t, []int{http.StatusOK, http.StatusTooManyRequests}, codes)
+	assert.Empty(t, logger.entries())
+}
+
+// countingStore records calls so tests can assert a store is left untouched.
+type countingStore struct {
+	allowCalls   atomic.Int32
+	cleanupCalls atomic.Int32
+}
+
+func (s *countingStore) Allow(context.Context, string, RateLimiterConfig) (bool, time.Duration, error) {
+	s.allowCalls.Add(1)
+
+	return true, 0, nil
+}
+
+func (s *countingStore) StartCleanup(context.Context) { s.cleanupCalls.Add(1) }
+
+func (*countingStore) StopCleanup() {}
+
+func TestRateLimiter_InvalidConfigLeavesStoreUntouched(t *testing.T) {
+	store := &countingStore{}
+	config := RateLimiterConfig{RequestsPerSecond: 10, Burst: 0, Store: store}
+
+	handler := RateLimiter(config, nil, WithRateLimiterLogger(&errorfRecorder{}))(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Zero(t, store.cleanupCalls.Load(), "cleanup must not start for an invalid config")
+	assert.Zero(t, store.allowCalls.Load(), "store must not be consulted for an invalid config")
+}
+
+func TestRateLimiter_NegativeMaxKeysStillLimits(t *testing.T) {
+	const correction = "invalid rate limiter MaxKeys -1; falling back to the default key limit"
+
+	tests := []struct {
+		name    string
+		store   RateLimiterStore
+		expLogs []string
+	}{
+		{"default store logs the correction", nil, []string{correction}},
+		{"caller-supplied store owns its bound", NewMemoryRateLimiterStore(RateLimiterConfig{RequestsPerSecond: 1, Burst: 1}), nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &errorfRecorder{}
+			config := RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: -1, Store: tc.store}
+
+			handler := RateLimiter(config, nil, WithRateLimiterLogger(logger))(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+			codes := make([]int, 0, 2)
+
+			for i := 0; i < 2; i++ {
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
+				codes = append(codes, rr.Code)
+			}
+
+			assert.Equal(t, []int{http.StatusOK, http.StatusTooManyRequests}, codes)
+			assert.Equal(t, tc.expLogs, logger.entries())
+		})
+	}
+}
+
+func TestNewMemoryRateLimiterStore_MaxKeysDefault(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxKeys    int64
+		expMaxKeys int64
+	}{
+		{"unset uses default", 0, defaultMaxKeys},
+		{"negative uses default instead of unbounded", -1, defaultMaxKeys},
+		{"positive is kept", 5, 5},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewMemoryRateLimiterStore(RateLimiterConfig{RequestsPerSecond: 1, Burst: 1, MaxKeys: tc.maxKeys})
+
+			assert.Equal(t, tc.expMaxKeys, store.(*memoryRateLimiterStore).maxKeys)
+		})
+	}
 }

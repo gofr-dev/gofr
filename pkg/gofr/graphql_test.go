@@ -1,3 +1,5 @@
+//go:build !gofr_nographql
+
 package gofr
 
 import (
@@ -13,8 +15,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -35,6 +39,18 @@ func (e *errWriter) Header() http.Header { return e.header }
 func (*errWriter) Write([]byte) (int, error) { return 0, errWriteFailed }
 
 func (e *errWriter) WriteHeader(status int) { e.status = status }
+
+// gqlManager reaches the concrete manager for the tests that drive Handle
+// directly. App itself needs only the four methods on graphQLRunner, which is why
+// the field is that interface -- see graphql_runner.go.
+func gqlManager(t *testing.T, app *App) *graphQLManager {
+	t.Helper()
+
+	m, ok := app.graphqlManager.(*graphQLManager)
+	require.True(t, ok, "expected the real GraphQL manager")
+
+	return m
+}
 
 func setupSchema(t *testing.T, content string) string {
 	t.Helper()
@@ -63,14 +79,14 @@ func TestGraphQL_Query(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ hello }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -108,14 +124,14 @@ func TestGraphQL_Mutation(t *testing.T) {
 	})
 
 	reqBody := `{"query": "mutation { createUser(name: \"test\") { id name } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -160,7 +176,7 @@ func TestGraphQL_Playground(t *testing.T) {
 			// Internal call to setup router as App.Run would do
 			app.httpServerSetup()
 
-			req := httptest.NewRequest(http.MethodGet, "/.well-known/graphql/ui", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/graphql/ui", http.NoBody)
 			resp := httptest.NewRecorder()
 
 			app.httpServer.router.ServeHTTP(resp, req)
@@ -201,14 +217,14 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ user(id: 1, score: 9.5, isAdmin: true, tags: [\"a\", \"b\"]) { id score isAdmin tags } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -255,14 +271,14 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ fail }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -329,14 +345,14 @@ func TestGraphQL_Enums(t *testing.T) {
 	})
 
 	reqBody := `{"query": "{ user(role: ADMIN) { id role } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 
@@ -364,14 +380,14 @@ func TestGraphQL_OperationName(t *testing.T) {
 
 	// Document with multiple named operations
 	reqBody := `{"query": "query QueryA { a } query QueryB { b }", "operationName": "QueryB"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Data struct {
@@ -404,14 +420,14 @@ func TestGraphQL_Variables(t *testing.T) {
 	})
 
 	reqBody := `{"query": "query GetUser($id: Int) { user(id: $id) { id } }", "variables": {"id": 123}}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Data struct {
@@ -435,14 +451,14 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "ok", nil })
 
 	reqBody := `{"query": "{ malformed "}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
 	err := app.graphqlManager.buildSchema()
 	require.NoError(t, err)
 
-	app.graphqlManager.Handle(resp, req)
+	gqlManager(t, app).Handle(resp, req)
 
 	var result struct {
 		Errors []any `json:"errors"`
@@ -548,4 +564,29 @@ func TestGraphQL_RequestErrors(t *testing.T) {
 			assert.Equal(t, tc.message, result.Errors[0].Message)
 		})
 	}
+}
+
+// TestApp_setupGraphQL_MissingSchema lives here rather than in gofr_test.go because it names
+// errSchemaMissing, which graphql.go compiles out under gofr_nographql. gofr_test.go is untagged,
+// so keeping it there broke `go vet -tags gofr_nographql` on the test files while the non-test
+// build stayed green -- the tagged half of a package is only as covered as the file it sits in.
+
+func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
+	c, mocks := container.NewMockContainer(t)
+	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	logger := container.NewMockLogger(gomock.NewController(t))
+	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
+	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
+	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
+	c.Logger = logger
+
+	a := &App{
+		container:      c,
+		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
+		graphqlManager: newGraphQLManager(c),
+	}
+
+	a.setupGraphQL()
 }

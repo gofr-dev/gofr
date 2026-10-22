@@ -768,7 +768,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
 				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
-			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 			errCh <- err
 		}(i)
 	}
@@ -830,7 +830,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentDuplicates(t *testing.T) {
 				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
-			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 			errCh <- err
 		}()
 	}
@@ -880,7 +880,7 @@ func Test_OpenTSDBCommitMigration_JSONFormatValidation(t *testing.T) {
 		UsedDatasources: map[string]bool{dsOpenTSDB: true},
 	}
 
-	err = migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+	err = migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 	require.NoError(t, err)
 
 	// Read the file and verify JSON formatting
@@ -924,7 +924,7 @@ func Test_OpenTSDBCommitMigration_TimestampAccuracy(t *testing.T) {
 
 	// Record time just before commit for duration calculation
 	beforeCommit := time.Now()
-	err = migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+	err = migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 	afterCommit := time.Now()
 
 	require.NoError(t, err)
@@ -1486,7 +1486,7 @@ func Test_OpenTSDBCommitMigration_Errors(t *testing.T) {
 			migratorWithOpenTSDB, mockContainer, filePath := openTSDBSetup(t)
 			tc.setupFile(t, filePath)
 
-			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 
 			require.ErrorContains(t, err, tc.expErrMsg)
 		})
@@ -1521,9 +1521,9 @@ func Test_OpenTSDBCommitMigration_BaseMigratorAndUnused(t *testing.T) {
 
 			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
 
-			mockMigrator.EXPECT().commitMigration(mockContainer, tc.data).Return(tc.baseErr)
+			mockMigrator.EXPECT().commitMigration(mockContainer, &tc.data).Return(tc.baseErr)
 
-			err := om.commitMigration(mockContainer, tc.data)
+			err := om.commitMigration(mockContainer, &tc.data)
 
 			assert.Equal(t, tc.expErr, err)
 			assert.NoFileExists(t, filePath)
@@ -1594,10 +1594,10 @@ func Test_OpenTSDBRollback(t *testing.T) {
 			data := transactionData{MigrationNumber: 3}
 
 			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockMigrator.EXPECT().rollback(mockContainer, data)
+			mockMigrator.EXPECT().rollback(mockContainer, &data)
 			mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(3))
 
-			om.rollback(mockContainer, data)
+			om.rollback(mockContainer, &data)
 
 			assert.NoFileExists(t, filePath+".tmp")
 		})

@@ -57,7 +57,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, "/", http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, "/", http.NoBody)
 		c := &container.Container{
 			Logger: logging.NewLogger(logging.FATAL),
 		}
@@ -76,7 +76,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{requestTimeout: 100 * time.Millisecond}
 
@@ -95,7 +95,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 
 func TestHandler_ServeHTTP_Panic(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{}
 
@@ -151,7 +151,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, "/", http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, "/", http.NoBody)
 		c := &container.Container{
 			Logger: logging.NewLogger(logging.FATAL),
 		}
@@ -235,6 +235,18 @@ func TestHandler_catchAllHandler(t *testing.T) {
 	assert.Nil(t, data, "TEST Failed.\n")
 
 	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
+}
+
+func TestHandler_methodNotAllowedHandler(t *testing.T) {
+	c := Context{
+		Context: t.Context(),
+	}
+
+	data, err := methodNotAllowedHandler(&c)
+
+	assert.Nil(t, data, "TEST Failed.\n")
+
+	assert.Equal(t, gofrHTTP.ErrorMethodNotAllowed{}, err, "TEST Failed.\n")
 }
 
 func TestHandler_livelinessHandler(t *testing.T) {
@@ -628,7 +640,7 @@ func TestApp_httpServerSetup_logsReadiness(t *testing.T) {
 
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(r.Context())
@@ -698,7 +710,7 @@ func TestHandler_ServeHTTP_InlinePath_HandlerError(t *testing.T) {
 
 func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	// Create context with 50ms timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Millisecond)
@@ -1438,6 +1450,7 @@ func TestHandler_Char_ErrorLogging(t *testing.T) {
 		{"entity-not-found-is-INFO", gofrHTTP.ErrorEntityNotFound{}, "INFO", false},
 		{"already-exists-is-WARN", gofrHTTP.ErrorEntityAlreadyExist{}, "WARN", false},
 		{"invalid-route-is-INFO", gofrHTTP.ErrorInvalidRoute{}, "INFO", false},
+		{"method-not-allowed-is-INFO", gofrHTTP.ErrorMethodNotAllowed{}, "INFO", false},
 		{"panic-recovery-is-ERROR", gofrHTTP.ErrorPanicRecovery{}, "ERROR", true},
 		{"too-many-requests-is-WARN", gofrHTTP.ErrorTooManyRequests{}, "WARN", false},
 		{"client-closed-is-DEBUG", gofrHTTP.ErrorClientClosedRequest{}, "DEBUG", false},

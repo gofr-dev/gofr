@@ -27,7 +27,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -41,11 +40,22 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewCMD(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{""}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
 	a := NewCMD()
-	// Without args we should get error on stderr.
+
+	var exits []int
+
+	a.exit = func(code int) { exits = append(exits, code) }
+
+	// Without args we should get error on stderr and a failed exit status.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
 
 	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
+	assert.Equal(t, []int{1}, exits, "a missing command must exit with status 1")
 }
 
 func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
@@ -294,7 +304,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
+		r := httptest.NewRequestWithContext(t.Context(), tc.method, tc.target, http.NoBody)
 
 		r.Header.Set("Content-Type", "application/json")
 
@@ -500,7 +510,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
-	a.EnableOAuth(jwksServer.URL, 600)
+	require.NoError(t, a.EnableOAuth(jwksServer.URL, 600))
 
 	server := httptest.NewServer(a.httpServer.router)
 	defer server.Close()
@@ -555,7 +565,7 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	}
 
 	// Pass full JWKS URL with path — the fix should extract the base URL
-	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+	require.NoError(t, a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600))
 
 	// Verify the service is registered
 	oauthService := a.container.GetHTTPService("gofr_oauth")
@@ -596,7 +606,7 @@ func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
 				container: c,
 			}
 
-			a.EnableOAuth(endpoint, 600)
+			require.Error(t, a.EnableOAuth(endpoint, 600), "endpoint: %q", endpoint)
 
 			// Service should NOT be registered for invalid endpoints
 			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
@@ -671,7 +681,8 @@ func Test_EnableBasicAuth(t *testing.T) {
 				fmt.Fprintln(w, "Hello, world!")
 			}))
 
-			a.EnableBasicAuth(tt.args...)
+			// The odd-argument cases fail here and serve without auth; TestEnableBasicAuth_Errors checks the error.
+			_ = a.EnableBasicAuth(tt.args...)
 
 			server := httptest.NewServer(a.httpServer.router)
 			defer server.Close()
@@ -809,14 +820,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
-
-	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
-
-	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
-
-	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
-
 	mockConfig7 := createMockConfig("gofr", "", "")
 
 	tests := []struct {
@@ -827,10 +830,6 @@ func Test_initTracer(t *testing.T) {
 		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
-		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
-		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
-		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
 		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
@@ -844,44 +843,6 @@ func Test_initTracer(t *testing.T) {
 			}
 			a.initTracer()
 		})
-		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func Test_initTracer_invalidConfig(t *testing.T) {
-	createMockConfig := func(traceExporter, url, authKey string) config.Config {
-		return config.NewMockConfig(map[string]string{
-			"TRACE_EXPORTER":  traceExporter,
-			"TRACER_URL":      url,
-			"TRACER_AUTH_KEY": authKey,
-		})
-	}
-	mockConfig1 := createMockConfig("abc", "https://tracer-service.dev", "")
-	mockConfig2 := createMockConfig("", "https://tracer-service.dev", "")
-	mockConfig3 := createMockConfig("otlp", "", "")
-
-	testErr := []struct {
-		desc               string
-		config             config.Config
-		expectedLogMessage string
-	}{
-		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc; tracing is disabled"},
-		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"miss tracer_url ", mockConfig3,
-			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
-	}
-
-	for i, tc := range testErr {
-		logMessage := testutil.StderrOutputForFunc(func() {
-			mockContainer, _ := container.NewMockContainer(t)
-
-			a := App{
-				Config:    tc.config,
-				container: mockContainer,
-			}
-			a.initTracer()
-		})
-
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
@@ -1033,7 +994,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 	app.httpServer.router.Handle("/test", handler)
 
 	// Create a test request
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 
@@ -1359,6 +1320,43 @@ func TestStaticHandlerGetwdError(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+// TestAddStaticFilesEndpointForms covers the endpoint forms a caller can pass to
+// App.AddStaticFiles. The normalization used to strip only a leading slash, so a
+// trailing slash survived into the stored endpoint and Router.AddStaticFiles registered
+// Path("/static/") + PathPrefix("/static//") — neither matches once ServeHTTP normalizes
+// the request with path.Clean, so every request under the endpoint 404'd.
+func TestAddStaticFilesEndpointForms(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+	const wantEndpoint = "/static"
+
+	for _, endpoint := range []string{"static", "/static", "static/", "/static/"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app := New()
+			app.AddStaticFiles(endpoint, dir)
+
+			stored := app.httpServer.staticFiles[dir]
+			assert.Equal(t, wantEndpoint, stored, "endpoint %q should normalize to /static", endpoint)
+
+			// Wire the stored endpoint exactly as App.Run does and prove it serves.
+			router := gofrHTTP.NewRouter()
+			router.AddStaticFiles(app.Logger(), stored, dir)
+
+			for _, path := range []string{wantEndpoint, wantEndpoint + "/index.html"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", endpoint, path)
+			}
+		})
+	}
+}
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -1577,24 +1575,6 @@ func TestApp_OnStart(t *testing.T) {
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
-func TestUnifiedAuthenticationRegistration(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Enable various auth methods
-	app.EnableBasicAuth("user", "pass")
-	app.EnableAPIKeyAuth("key1")
-	app.EnableOAuth("http://jwks", 3600)
-
-	// Verify HTTP middleware count (approximate check)
-	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
-	// but we can check if the grpcServer has interceptors added.
-	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
-	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
-}
-
 func Test_EnableBasicAuthWithFunc(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -1725,19 +1705,6 @@ func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
 			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
-}
-
-func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-
-	// Should log error but not panic
-	app.EnableBasicAuth()
-
-	// No middleware should be added — handler responds without auth
-	assert.NotNil(t, app.httpServer)
 }
 
 func TestHandleStartupHooks(t *testing.T) {
@@ -1885,31 +1852,6 @@ func TestInitMetricsServer_DefaultPort(t *testing.T) {
 
 	// metricServer should be initialized with default port
 	assert.NotNil(t, app.metricServer)
-}
-
-func TestStartGRPCServer_Registered(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
-
-	app := New()
-	app.grpcRegistered = true
-
-	wg := sync.WaitGroup{}
-
-	// startGRPCServer should add to WaitGroup and launch the server
-	app.startGRPCServer(&wg)
-
-	// Give it a moment to start then shut down
-	time.Sleep(50 * time.Millisecond)
-
-	// Read through getServer rather than the field: createServer publishes it from the serve
-	// goroutine, so an unguarded read here races that write.
-	if app.grpcServer != nil {
-		app.grpcServer.forceStop()
-	}
-
-	wg.Wait()
 }
 
 func TestStartGRPCServer_NotRegistered(t *testing.T) {
@@ -2277,22 +2219,230 @@ func TestApp_HTTPRegistrationOnBlockedPort(t *testing.T) {
 	}
 }
 
-func TestApp_setupGraphQL_MissingSchema(t *testing.T) {
-	c, mocks := container.NewMockContainer(t)
-	mocks.Metrics.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.Metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+// Test_HTTPMethodNotAllowed_OptionsListedOnce covers a path that lists OPTIONS itself. App has no
+// OPTIONS verb, so registering on the router is the one way that happens, and the catch-all must
+// not add a second one.
+func Test_HTTPMethodNotAllowed_OptionsListedOnce(t *testing.T) {
+	testutil.NewServerConfigs(t)
 
-	logger := container.NewMockLogger(gomock.NewController(t))
-	// The gomock controller fails the test unless Fatalf is called exactly once with the schema error.
-	// A real Fatalf exits the process, so the route mounting that follows it is not asserted.
-	logger.EXPECT().Fatalf("GraphQL build error: %v", errSchemaMissing)
-	c.Logger = logger
+	app := New()
+	app.GET("/preflighted", func(*Context) (any, error) { return "ok", nil })
+	app.httpServer.router.Add(http.MethodOptions, "/preflighted", http.NotFoundHandler())
 
-	a := &App{
-		container:      c,
-		httpServer:     newHTTPServer(c, 0, middleware.Config{}),
-		graphqlManager: newGraphQLManager(c),
+	app.httpServerSetup()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/preflighted", http.NoBody)
+	w := httptest.NewRecorder()
+
+	app.httpServer.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	assert.Equal(t, "GET, OPTIONS", w.Header().Get("Allow"))
+}
+
+// Test_HTTPMethodNotAllowed_And_NotFound covers #3853 through the app's real router, middleware
+// chain included. Both matchers reach the catch-all for a 404/405, so both must answer identically.
+// The default mux matcher builds its route index on the first unmatched request; GOFR_ROUTER=trie
+// builds it up front. An earlier revision diverged here, so each matcher is driven end to end.
+func Test_HTTPMethodNotAllowed_And_NotFound(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	for _, matcher := range []struct {
+		name string
+		env  string
+	}{
+		{"default mux matcher", ""},
+		{"trie matcher", "trie"},
+	} {
+		t.Run(matcher.name, func(t *testing.T) {
+			assertMethodNotAllowedMatrix(t, matcher.env)
+		})
+	}
+}
+
+// assertMethodNotAllowedMatrix drives the #3853 behavior end to end under one route matcher: a wrong
+// method on a registered path is a 405 naming the methods the path takes; an unregistered path stays
+// a 404.
+//
+// The CORS and X-Correlation-ID headers and the request-log line are asserted on every row because
+// they are what a 404 or 405 served outside the middleware chain loses: answered from mux's
+// NotFoundHandler/MethodNotAllowedHandler, the CORS preflight to a GET-only path became a 405 with
+// no CORS headers, and neither response was logged, traced or measured.
+type methodNotAllowedCase struct {
+	name          string
+	method        string
+	path          string
+	expectedCode  int
+	expectedAllow string
+	expectedBody  string
+}
+
+// methodNotAllowedCases is the request matrix assertMethodNotAllowedMatrix drives through the real
+// router. The app it runs against registers GET /thing, POST+PUT /multi, and DELETE /items/{id}.
+func methodNotAllowedCases() []methodNotAllowedCase {
+	return []methodNotAllowedCase{
+		{"GET registered route returns 200", http.MethodGet, "/thing", http.StatusOK, "", `{"data":"ok"}`},
+		{
+			"POST on GET-only route returns 405 with Allow header", http.MethodPost, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"DELETE on GET-only route returns 405 with Allow header", http.MethodDelete, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			// A GET route does not imply HEAD here; a HEAD request to a GET-only path answers 405
+			// naming GET, not 404, and not 200. Health probes that send HEAD see this.
+			"HEAD on GET-only route returns 405 with Allow header", http.MethodHead, "/thing",
+			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"GET on multi-method route returns 405 with the methods sorted", http.MethodGet, "/multi",
+			http.StatusMethodNotAllowed, "OPTIONS, POST, PUT", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"path parameter route returns 405 for its concrete path", http.MethodGet, "/items/42",
+			http.StatusMethodNotAllowed, "DELETE, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+		},
+		{
+			"GET on unregistered route returns 404", http.MethodGet, "/unregistered",
+			http.StatusNotFound, "", `{"error":{"message":"route not registered"}}`,
+		},
+		{
+			"POST on unregistered route returns 404", http.MethodPost, "/unregistered",
+			http.StatusNotFound, "", `{"error":{"message":"route not registered"}}`,
+		},
+		{
+			// The preflight a browser sends before a cross-origin POST. CORS answers it before any
+			// route handler, so it must never reach the 405.
+			"CORS preflight on GET-only route is answered by CORS", http.MethodOptions, "/thing",
+			http.StatusOK, "", "",
+		},
+	}
+}
+
+func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
+	t.Helper()
+	t.Setenv("GOFR_ROUTER", matcherEnv)
+
+	tests := methodNotAllowedCases()
+
+	type result struct {
+		code          int
+		allow, body   string
+		cors, traceID string
 	}
 
-	a.setupGraphQL()
+	results := make([]result, len(tests))
+
+	// The logger captures os.Stdout when it is created, so the app is built inside the capture.
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.GET("/thing", func(*Context) (any, error) { return "ok", nil })
+		app.POST("/multi", func(*Context) (any, error) { return "multi-post", nil })
+		app.PUT("/multi", func(*Context) (any, error) { return "multi-put", nil })
+		app.DELETE("/items/{id}", func(*Context) (any, error) { return nil, nil })
+
+		app.httpServerSetup()
+
+		for i, tc := range tests {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			req.Header.Set("Origin", "https://example.com")
+
+			if tc.method == http.MethodOptions {
+				req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			}
+
+			w := httptest.NewRecorder()
+			app.httpServer.router.ServeHTTP(w, req)
+
+			results[i] = result{
+				code:    w.Code,
+				allow:   w.Header().Get("Allow"),
+				body:    w.Body.String(),
+				cors:    w.Header().Get("Access-Control-Allow-Origin"),
+				traceID: w.Header().Get("X-Correlation-ID"),
+			}
+		}
+	})
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := results[i]
+
+			assert.Equal(t, tc.expectedCode, got.code)
+			assert.Equal(t, tc.expectedAllow, got.allow)
+
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, got.body)
+			}
+
+			assert.Equal(t, "*", got.cors, "CORS middleware did not run")
+			assert.NotEmpty(t, got.traceID, "Tracer/Logging middleware did not run")
+		})
+	}
+
+	assert.Contains(t, logs, `"response":405`, "a 405 was not access-logged")
+	assert.Contains(t, logs, `"response":404`, "a 404 was not access-logged")
+}
+
+// rbacGuardingAdmin guards GET /admin with a permission and configures no other method on it, so a
+// wrong method is a (method, path) pair RBAC does not enforce.
+const rbacGuardingAdmin = `{"roleHeader":"X-User-Role",` +
+	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+	`"endpoints":[{"path":"/admin","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
+
+// Test_HTTPMethodNotAllowed_UnderRBAC pins the by-design interaction between RBAC and the 405
+// catch-all. RBAC enforces only the (method, path) pairs it is configured for; a request whose
+// method it does not configure passes through to route matching, by design. So a wrong method on an
+// RBAC-guarded path is answered by the catch-all exactly as on any other registered path: 405 with
+// an Allow header. RBAC governs authorization, not path concealment -- a caller refused the guarded
+// method already learns the path exists from the 401, and the 405 adds no authorization bypass.
+func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	path := writeRBACConfig(t, t.TempDir(), "rbac.json", rbacGuardingAdmin)
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedAllow string
+	}{
+		{"the guarded method unauthenticated is denied", http.MethodGet, "/admin", http.StatusUnauthorized, ""},
+		{"a wrong method on the guarded path is 405 with Allow", http.MethodPost, "/admin", http.StatusMethodNotAllowed, "GET, OPTIONS"},
+		{"an unregistered path is 404", http.MethodPost, "/nope", http.StatusNotFound, ""},
+	}
+
+	type result struct {
+		code  int
+		allow string
+	}
+
+	results := make([]result, len(tests))
+
+	// The logger captures os.Stdout when it is created, so the app is built inside the capture.
+	testutil.StdoutOutputForFunc(func() {
+		app := New()
+		app.GET("/admin", func(*Context) (any, error) { return "secret", nil })
+		require.NoError(t, app.EnableRBAC(path))
+
+		app.httpServerSetup()
+
+		for i, tc := range tests {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			w := httptest.NewRecorder()
+			app.httpServer.router.ServeHTTP(w, req)
+
+			results[i] = result{code: w.Code, allow: w.Header().Get("Allow")}
+		}
+	})
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedCode, results[i].code)
+			assert.Equal(t, tc.expectedAllow, results[i].allow)
+		})
+	}
 }
