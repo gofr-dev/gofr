@@ -19,9 +19,12 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/rbaccheck"
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
+	"gofr.dev/pkg/gofr/rbac"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/traces/exporters"
 )
@@ -63,6 +66,7 @@ type App struct {
 
 	grpcRegistered      bool
 	httpRegistered      bool
+	rbacEnabled         bool // set by the first EnableRBAC that installs a config; guards its metric registration
 	subscriptionManager SubscriptionManager
 	graphqlManager      graphQLRunner
 	onStartHooks        []func(ctx *Context) error
@@ -78,6 +82,15 @@ type App struct {
 	// in the application's own setup, where there is nothing to abort yet; Run reports it at the
 	// same point it reports a port it could not claim. See bindMCPServer.
 	mcpConfigErr error
+
+	// rbacConfigs holds every RBAC config installed by EnableRBAC, in order, kept so Run can check
+	// them against the complete route table. Each call installs a middleware that enforces its own
+	// config, so all of them are checked. See prepareHTTPServer.
+	rbacConfigs []*rbac.Config
+
+	// rbacRoutes is the route table as the RBAC route check reads it. httpServerSetup fills it from
+	// the walk it already makes, and only when rbacConfigs is set.
+	rbacRoutes []rbaccheck.Route
 
 	// exit is os.Exit, indirected so a test can observe the status a failed startup or a failed
 	// command reports without taking the test binary down with it. Nil means os.Exit, which is what
@@ -225,7 +238,11 @@ func (a *App) httpServerSetup() {
 		}
 	}
 
+	routes := newRBACRouteCollector(len(a.rbacConfigs) > 0)
+
 	// Register default routes - these are only added when HTTP server is actually starting
+	routes.startBuiltIns(&a.httpServer.router.Router)
+
 	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
 	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
@@ -238,6 +255,8 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
+	routes.endBuiltIns(&a.httpServer.router.Router)
+
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
 	}
@@ -246,14 +265,9 @@ func (a *App) httpServerSetup() {
 
 	a.logReadiness()
 
-	if a.container.Logger != nil {
-		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
-	}
-
-	a.httpServer.router.PathPrefix("/").Handler(handler{
-		function:  catchAllHandler,
-		container: a.container,
-	})
+	// The one catch-all GoFr registers: marked so the RBAC trace label and route check can tell it
+	// from a route or static directory at "/", which share its template.
+	routemark.MarkCatchAll(a.httpServer.router.PathPrefix("/")).Handler(a.catchAll())
 
 	var registeredMethods []string
 
@@ -265,8 +279,12 @@ func (a *App) httpServerSetup() {
 			}
 		}
 
+		routes.add(route, met)
+
 		return nil
 	})
+
+	a.rbacRoutes = routes.routes
 
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
 }

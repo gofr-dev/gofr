@@ -15,6 +15,7 @@ Role-Based Access Control (RBAC) is a security mechanism that restricts access t
 - ✅ **Pure Config-Based** - All authorization rules in JSON/YAML files
 - ✅ **Two-Level Authorization Model** - Roles define permissions, endpoints require permissions (no direct role-to-route mapping)
 - ✅ **Multiple Auth Methods** - Header-based and JWT-based role extraction
+- ✅ **Multi-Value Claims** - A JWT role array, or a `scope`/permissions claim authorized directly
 - ✅ **Permission-Based** - Fine-grained permissions
 - ✅ **Role Inheritance** - Roles inherit permissions from other roles
 
@@ -121,8 +122,150 @@ error still shows why every route is unprotected.
 
 **JWT Claim Path Formats**:
 - `"role"` → `{"role": "admin"}`
+- `"roles"` → `{"roles": ["admin", "viewer"]}` (every role in the array, see [Role Arrays](#role-arrays))
 - `"roles[0]"` → `{"roles": ["admin", "user"]}` (first element)
 - `"permissions.role"` → `{"permissions": {"role": "admin"}}`
+- `"https://example.com/roles"` → `{"https://example.com/roles": ["admin"]}`
+
+A claim path is first read as a dotted path (`a.b.c`). Only if that finds nothing is it looked up as
+one whole top-level key. This is what makes namespaced claim names such as
+`https://example.com/roles`, which contain dots, work, without changing what an existing dotted path
+reads: with `jwtClaimPath: "a.b"` and a token that has both `"a.b"` and `{"a": {"b": ...}}`, the
+nested value is the one used.
+
+One request that got a 401 before can now be allowed: with `jwtClaimPath: "a.b"`, a token that has a flat
+key `"a.b"` (for example `{"a": "x", "a.b": "admin"}`, or `{"realm_access.roles": ["admin"]}` with path
+`realm_access.roles`) used to fail the dotted walk and get a 401. It now reads the whole key. This needs your
+identity provider to put a flat key with dots into a signed token.
+
+### Configuration Reference
+
+| Key | Type | Used in | Meaning |
+|---|---|---|---|
+| `roleHeader` | string | header mode | HTTP header that carries one role name, e.g. `X-User-Role` |
+| `jwtClaimPath` | string | roles mode | JWT claim that holds a role name or an array of role names |
+| `permissionsClaimPath` | string | permissions mode | JWT claim that holds the permissions themselves, e.g. `scope` |
+| `roles` | array | header and roles modes | Role → permission mapping (see below) |
+| `endpoints` | array | all modes | Route & method → required permission mapping (see below) |
+
+Exactly one mode is active:
+
+- **Permissions mode** when `permissionsClaimPath` is set.
+- **Roles mode** when `jwtClaimPath` is set.
+- **Header mode** when only `roleHeader` is set.
+
+`EnableRBAC` returns an error at startup if:
+
+- both `jwtClaimPath` and `permissionsClaimPath` are set;
+- `permissionsClaimPath` cannot be parsed, for example `scope[x]` (a path that can never be read
+  would deny every request without a word).
+
+At startup RBAC logs one line naming the mode it runs in, for example:
+
+```
+RBAC enabled: mode=permissions, source=scope
+```
+
+### Role Arrays
+
+When the claim named by `jwtClaimPath` is a JSON array, the request holds **every** role in it,
+and is allowed if **any** of those roles has a required permission:
+
+```json
+{ "jwtClaimPath": "roles" }
+```
+
+| Token claim | Roles held |
+|---|---|
+| `"roles": ["admin", "viewer"]` | `admin` and `viewer` |
+| `"roles": ["viewer", "unknown"]` | `viewer` (names not in `roles[]` grant nothing) |
+| `"roles": ["", 42, "viewer"]` | `42` and `viewer` (empty entries, objects and nulls are ignored; a number or boolean is read as its text, the same as a scalar claim) |
+| `"role": "Org Admin"` with `jwtClaimPath: "role"` | one role named `Org Admin` (a role string is never split) |
+| `"role": 123` or `"role": true` | one role named `123` or `true` (a number or boolean is read as its text) |
+| `"role": null` | no role (the request is denied with a 403) |
+| `"roles": [...]` with `jwtClaimPath: "roles[0]"` | the first element only |
+
+### Permissions Mode (scope claim)
+
+Many identity providers put what a token may do straight into the token, in a `scope` claim
+(`"orders:read orders:write"`) or a `permissions` array. Permissions mode authorizes from that
+claim directly, with no `roles[]` section:
+
+```json
+{
+  "permissionsClaimPath": "scope",
+  "endpoints": [
+    { "path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"] },
+    { "path": "/orders", "methods": ["POST"], "requiredPermissions": ["orders:write"] }
+  ]
+}
+```
+
+A request is allowed if the token holds **any** of the endpoint's `requiredPermissions`, compared
+by exact string match:
+
+| Token claim | Permissions held |
+|---|---|
+| `"scope": "orders:read orders:write"` | `orders:read` and `orders:write` (a string is split on spaces) |
+| `"permissions": ["orders:read", "orders:write"]` | each entry as is (entries are not split) |
+| `"permissions": ["", true, "orders:read"]` | `orders:read` (empty and non-string entries are ignored) |
+| `"scope": ""`, `"scope": null`, `"scope": []` or no `scope` claim | nothing (the request is denied with a 403) |
+
+RBAC does not validate the token: it reads the claim from a token the OAuth middleware has already
+accepted. Because in permissions mode the token itself is the grant, validate the issuer, audience
+and expiry in `EnableOAuth`, with the parser options of
+[`golang-jwt/jwt`](https://pkg.go.dev/github.com/golang-jwt/jwt/v5#ParserOption):
+
+```go
+issuer := app.Config.Get("TOKEN_ISSUER")
+if issuer == "" {
+    app.Logger().Fatalf("TOKEN_ISSUER is not set")
+}
+
+if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10,
+    jwt.WithIssuer(issuer),
+    jwt.WithAudience("orders-api"),
+    jwt.WithExpirationRequired(),
+); err != nil {
+    app.Logger().Fatalf("%v", err)
+}
+```
+
+An empty issuer disables the issuer check (`jwt.WithIssuer("")` checks nothing), so the app should refuse to start without it, as above.
+
+These run on **every request that carries a token**, not only on routes that have a rule in
+`endpoints`, so a token minted for another API, or one that never expires, is refused with a 401
+everywhere. Without them a token from another issuer or for another API, or one with no `exp`, is
+accepted.
+
+Permissions mode is only as strict as your identity provider. If the provider grants a client any
+scope it asks for, every user holds every permission. Check how your provider decides which scopes
+a token gets — some need per-user RBAC or an access policy turned on before scopes are restricted.
+
+### Rule Summary for JWT Modes
+
+| Case | Result |
+|---|---|
+| No JWT claims are in the request (OAuth not enabled) | 401 |
+| Roles mode, the claim is missing or `""` | 401 |
+| Roles mode, the claim is `null` | 403 |
+| Roles mode, the claim (or an array entry) is a number or boolean | read as a role name, e.g. `123` → role `123` |
+| Permissions mode, the claim is missing, `null`, `""` or `[]` | 403 |
+| The claim is an object, or (permissions mode) a number or boolean | 403, plus a WARN log naming the claim path (never its value) |
+| No role or permission held grants a required permission | 403 |
+
+Only the status codes follow [RFC 6750 §3.1](https://www.rfc-editor.org/rfc/rfc6750#section-3.1): a
+401 means no usable credential was presented, and a 403 means the token is fine but holds nothing
+that grants access. No `WWW-Authenticate` header is set. A custom `ErrorHandler` receives exactly
+`rbac.ErrRoleNotFound` (401) or `rbac.ErrAccessDenied` (403), so comparing with `==` works.
+
+### Config Checks at Startup for JWT Modes
+
+- A `permissionsClaimPath` that cannot be parsed, for example `scope[x]`, is rejected.
+- With `permissionsClaimPath` set, `roleHeader` is never consulted; RBAC logs a WARN at startup if
+  both are present.
+- With `permissionsClaimPath` set, a `roles` section is never consulted; RBAC logs a WARN at startup
+  if one is present, so a section left over from roles mode is not mistaken for one that applies.
 
 ### Roles and Permissions
 
@@ -317,6 +460,133 @@ request, so it is NOT enforced - any route it was meant to govern is currently u
 
 Treat that line as an open route, not a warning about a typo.
 
+#### A method the config does not list
+
+RBAC enforces only the `(method, path)` pairs you configure. A request whose method is not listed
+for a path is not an RBAC match, so it passes through to normal route matching — by design. If the
+path is registered for other methods, the router answers `405 Method Not Allowed` with an `Allow`
+header naming them; if the path is not registered at all, it answers `404`. RBAC governs
+authorization, not the existence of a route: a caller refused the configured method already learns
+the path exists from the `401`, so the `405` adds no authorization bypass.
+
+### Startup Route Check
+
+The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
+When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
+them and logs each kind of mismatch below as an **error**. By default the app keeps starting, so
+read the startup logs: each line names a route that is not protected the way the config intends.
+[`GOFR_RBAC_ROUTE_CHECK`](#choosing-what-a-mismatch-does) can make a mismatch stop startup instead.
+
+Paths are compared exactly as written, the same way requests are matched: `/api/users/` and
+`/api/users` are different paths, and so are `files` and `/files`.
+
+**A dead rule** is a rule that matches no registered route. It is usually a typo — a rule for
+`/api/user/{id}` when the route is `/api/users/{id}` — and it means the route it was written for
+is **not protected**. A rule counts as dead when no request could be matched by both the rule and
+a registered route. A rule whose method the route does not register (`DELETE` on a route that only
+has `GET`) is dead too. A dead rule marked `"public": true` cannot leave a route unprotected, so it
+is reported only as a warning.
+
+```
+RBAC route check failed: rules match no registered route: DELETE /api/user/{id}. These rules
+protect nothing; fix each rule's path or methods, or remove it.
+```
+
+**An uncovered route** is a registered route, for a given method, that no rule matches, so it would
+be served without role checks (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). To
+keep a route open on purpose, such as `/login` or a webhook, give it a rule with `"public": true`.
+The routes GoFr adds itself — health, alive, `/favicon.ico`, and the OpenAPI, Swagger and GraphQL
+Playground pages under `/.well-known/` — are exempt. A route your application registers under
+`/.well-known/` is not, and needs a rule like any other. Other routes GoFr registers for you do
+need a rule: the `./static` directory (served at `/static` and everything under `/static/`
+when it exists) and `/graphql` when GraphQL is enabled. A catch-all needs the `/` in front of it:
+a rule for `/admin/{rest:.*}` matches `/admin/users` but not `/admin`, so the route `/admin` needs
+a rule of its own.
+
+```
+RBAC route check failed: routes covered by no rule: GET /api/posts, POST /api/users. They are
+served without role checks; add a rule for each, with "public": true for a route meant to be open.
+```
+
+**A partly covered route** is one that rules match for some of its requests but not for all of
+them. The requests no rule matches are served without role checks. Common causes:
+
+- a constraint narrower than the route: a rule for `/api/users/{id:[0-9]+}` does not govern
+  `/api/users/abc`, which the route `/api/users/{id}` serves;
+- a method list narrower than the route: a static directory answers every method, so a rule for
+  `["GET"]` leaves `HEAD /static/app.js` unchecked. Use `["*"]` for static files.
+
+```
+RBAC route check failed: routes only partly covered: * /static/{path:.*} (by GET /static/{path:.*}).
+Requests these rules do not match are served without role checks; add a rule that matches each
+route in full.
+```
+
+A rule set that opens the static directory and a login route:
+
+```json
+{"path": "/login", "methods": ["POST"], "public": true},
+{"path": "/static", "methods": ["*"], "public": true},
+{"path": "/static/{path:.*}", "methods": ["*"], "public": true}
+```
+
+A static directory served at the root, with `app.AddStaticFiles("/", dir)`, is the route
+`* /{path:.*}`, and the rule that covers it also matches GoFr's health routes,
+`/.well-known/alive` and `/.well-known/health`. The check does not report this, because those
+routes are exempt, but a request to them without a role gets a 401, so a liveness probe fails. Open
+them with a public rule; the more specific rule wins, whatever order the two are written in:
+
+```json
+{"path": "/.well-known/{path:.*}", "methods": ["GET"], "public": true},
+{"path": "/{path:.*}", "methods": ["*"], "requiredPermissions": ["files:read"]}
+```
+
+The dead-rule check is lenient on purpose: two path variables with different constraints —
+`{id:[0-9]+}` in the rule and `{id:[a-z]+}` in the route — are treated as matching, so a rule like
+that is not reported as dead. The coverage check is strict: a rule covers a route only when the
+check can show that it matches every request the route serves, so the same pair is reported as
+partly covered. A rule the check cannot read in full is reported as partly covering its route
+rather than trusted, which includes:
+
+- a catch-all followed by more segments, such as `/api/{rest:.*}/admin`: it covers nothing, as the
+  check does not work out what the catch-all leaves for the segments after it;
+- a constraint that can match `/`, such as `{p:[^.]+}`: like `{path:.*}`, it can span several
+  segments, so a single-segment `{x}` does not cover it;
+- a segment holding more than one variable, such as `{a}-{b}`: it is read as the pattern mux builds
+  from it, not as one free variable.
+
+Constraints are compared as written, the way mux reads them: `{id: [0-9]+}`, with a space, only
+matches IDs that start with a space, so it neither matches nor covers `{id:[0-9]+}`.
+
+The check sees the route table, not the middleware in front of it: a request answered before
+routing (a CORS preflight, for example) never reaches RBAC either way.
+
+When `EnableRBAC` is called more than once, every config enforces its own rules on each request, so
+the check looks at all of them. A route is reported as uncovered or partly covered only when no
+config covers it in full. A dead rule is reported for each config that holds it, prefixed with the
+config's number in the order `EnableRBAC` was called:
+
+```
+RBAC route check failed: rules match no registered route: config 1: GET /amdin/{id}. These rules
+protect nothing; fix each rule's path or methods, or remove it.
+```
+
+#### Choosing what a mismatch does
+
+Set `GOFR_RBAC_ROUTE_CHECK` in your config:
+
+| Value | Behavior |
+|---|---|
+| `warn` (default) | Log each mismatch as an error and keep starting. |
+| `fail` | Log each mismatch, release what startup opened, and exit with status 1. A dead public rule is only a warning and does not stop startup. |
+| `off` | Skip the check. For apps that leave routes without a rule on purpose and rely on [Unmatched Routes Behavior](#unmatched-routes-behavior). |
+
+Any other value is logged as an error and treated as `warn`.
+
+The check runs after the [`OnStart` hooks](/docs/advanced-guide/startup-hooks), because a hook can
+still register a route, and before the MCP port is claimed or any server starts. With `fail`, the
+datasources are already connected and the hooks have run by the time a mismatch stops startup.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
@@ -339,14 +609,27 @@ if err := app.EnableRBAC("configs/rbac.json"); err != nil {
 
 ```json
 {
-  "jwtClaimPath": "role",  // or "roles[0]", "permissions.role", etc.
+  "jwtClaimPath": "role",  // or "roles", "roles[0]", "permissions.role", etc.
   "roles": [...],
   "endpoints": [...]
 }
 ```
 
+**Call order**: call `EnableOAuth` before `EnableRBAC`. The OAuth middleware is what puts the
+verified token's claims into the request; without it every request in a JWT mode gets a 401, and
+RBAC logs a WARN once, on the first such request, telling you to call `EnableOAuth` first.
+
+For a full permissions-mode app, with tests that sign their own tokens against a local JWKS
+server, see [`examples/using-rbac-permissions`](https://github.com/gofr-dev/gofr/tree/development/examples/using-rbac-permissions).
+
 
 ## Accessing Role in Handlers
+
+RBAC itself stores what granted a request in the request context, under a key internal to the
+`rbac` package: the role, when the request holds one; the one role that granted access, when the
+claim is an array of roles; and the permission that granted access, in permissions mode. Public
+routes store nothing. Handlers cannot read that key, so read the role from the claims or header as
+shown below.
 
 For business logic, you can access the user's role from the request context:
 
@@ -570,8 +853,18 @@ Or use role inheritance to avoid duplication:
 - Verify permission check - check logs to see if permission check is being performed
 
 **JWT role extraction failing**
-- Ensure OAuth middleware is enabled before RBAC
+- Ensure OAuth middleware is enabled before RBAC (a WARN `call EnableOAuth before EnableRBAC`
+  on the first request means it is not)
 - Verify JWT claim path is correct
+- A WARN naming the claim path means the claim has a type RBAC cannot read (an object, or in
+  permissions mode a number or boolean); it must be a string or an array of strings
+- A rule on a `/.well-known/*` path always gets a 401: the OAuth middleware does not verify tokens
+  there, so the request carries no claims
+
+**Every permissions-mode request gets a 401**
+- The 401 comes from `EnableOAuth`, not RBAC. If it is given `jwt.WithAudience`, check that the
+  token's `aud` matches; with `jwt.WithExpirationRequired`, that it has an `exp`; with
+  `jwt.WithIssuer`, that its `iss` matches
 
 **Config file not found**
 - Ensure config file exists at the specified path — relative paths resolve against the process's
@@ -633,10 +926,11 @@ In this configuration:
 - `GET /api/posts` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
 - `GET /health` → **Not in RBAC config** → Allowed to proceed (will work if route exists)
 
-This design allows you to:
-- Gradually add RBAC protection to specific endpoints
-- Keep some routes unprotected (not in RBAC config)
-- Let the router handle 404s for non-existent routes
+At startup, the app in this example logs an error for `POST /api/users` and `GET /api/posts`:
+they are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
+Give every registered route a rule, and a route meant to be open one with `"public": true`.
+The runtime behavior above still applies to a request no rule matches, for example one to a route
+the check reported as only partly covered, or to any route when `GOFR_RBAC_ROUTE_CHECK=off`.
 
 ## Security and Privacy
 
@@ -645,7 +939,11 @@ This design allows you to:
 RBAC middleware implements industry-standard security practices to protect sensitive data:
 
 **Traces (OpenTelemetry):**
-- ✅ HTTP method and route patterns included
+- ✅ HTTP method and route patterns included: `http.route` is the route the router matched, and
+  `rbac.rule` is the path of the RBAC rule that governed the request (`<unmatched>` when none did).
+  When the two disagree, the rule is broader or narrower than the route. `http.route` is
+  `<unmatched>` when no route matched, that is, when GoFr's catch-all answered the request. An
+  application route registered at `/` is reported as `/`.
 - ✅ Authorization status (allowed/denied) included
 - ❌ Roles excluded (privacy protection - roles are PII)
 - ❌ Error messages sanitized (prevent information leakage)
@@ -653,13 +951,36 @@ RBAC middleware implements industry-standard security practices to protect sensi
 **Metrics:**
 - ✅ Authorization decision counts included
 - ✅ Status (allowed/denied) included
+- ✅ `rbac_role_extraction_failures` counts requests whose role or permissions could not be read,
+  with a `reason` label: `no_jwt_claims` (RBAC is not behind OAuth), `missing_role` (no role claim or
+  header) or `unreadable_claim` (an IdP or client problem)
 - ❌ Roles excluded (avoid high cardinality and PII concerns)
 
 **Logs:**
 - ✅ Roles included (required for compliance: SOC 2, PCI-DSS, NIST)
 - ✅ HTTP method, route, status, and reason included
+- ✅ With a role array or permissions mode, an allowed request logs only the one role or
+  permission that granted access (in permissions mode it is logged as `permission`, not `role`), and a denied request logs only how many were held
+  (`held_count`), never their names. The `role` passed to a custom `ErrorHandler` on such a
+  denial is empty. A single role (header, `"role"` or `"roles[0]"`) is logged as before.
+- ❌ Claim values are never logged; an unreadable claim is reported by its path only
 - ❌ No authorization tokens, headers, or request bodies logged
 - ❌ No user IDs or personal information logged
+
+#### Upgrade note: `http.route` on the `rbac.authorize` span
+
+Earlier releases set `http.route` on the `rbac.authorize` span to the path of the RBAC rule that
+governed the request, or `<unmatched>` when no rule did. It is now the route the router matched, the
+same value as on the request's HTTP span, and the old value moved to the new `rbac.rule` attribute.
+
+The value of `http.route` changes in two cases:
+
+- **The rule is broader or narrower than the route.** A request to `GET /api/users/42` governed by
+  a rule for `/api/{path:.*}` was reported as `/api/{path:.*}` and is now `/api/users/{id}`.
+- **No rule matches the request.** It was reported as `<unmatched>` and is now the route template.
+
+Nothing fails when the value changes, so check every dashboard, alert or query that groups the
+`rbac.authorize` span by `http.route`: to keep grouping by rule, group by `rbac.rule` instead.
 
 ### What's Never Logged
 
