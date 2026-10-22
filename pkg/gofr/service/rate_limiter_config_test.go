@@ -12,15 +12,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type validateTestCase struct {
+	desc        string
+	cfg         RateLimiterConfig
+	expErr      error
+	expRequests float64
+	expBurst    int
+	expWindow   time.Duration
+}
+
 func TestRateLimiterConfig_Validate(t *testing.T) {
-	testCases := []struct {
-		desc        string
-		cfg         RateLimiterConfig
-		expErr      error
-		expRequests float64
-		expBurst    int
-		expWindow   time.Duration
-	}{
+	runValidateTestCases(t, []validateTestCase{
 		{
 			desc:        "zero requests falls back to default",
 			cfg:         RateLimiterConfig{Requests: 0, Burst: 100},
@@ -37,6 +39,41 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 			expBurst:    100,
 			expWindow:   defaultWindow,
 		},
+		{
+			desc:        "fractional rate below one per second is valid",
+			cfg:         RateLimiterConfig{Requests: 0.5, Window: time.Second, Burst: 1},
+			expRequests: 0.5,
+			expBurst:    1,
+			expWindow:   time.Second,
+		},
+		{
+			desc:        "exactly one per second is valid",
+			cfg:         RateLimiterConfig{Requests: 1, Window: time.Second, Burst: 1},
+			expRequests: 1,
+			expBurst:    1,
+			expWindow:   time.Second,
+		},
+		{
+			desc:        "non-positive burst uses the default burst",
+			cfg:         RateLimiterConfig{Requests: 5, Window: time.Second, Burst: 0},
+			expRequests: 5,
+			expBurst:    defaultBurstCapacity,
+			expWindow:   time.Second,
+		},
+		{
+			desc:        "burst less than requests is raised to requests",
+			cfg:         RateLimiterConfig{Requests: 5, Burst: 3},
+			expErr:      errBurstLessThanRequests,
+			expRequests: 5,
+			expBurst:    5,
+			expWindow:   defaultWindow,
+		},
+	})
+}
+
+// Requests must convert to an int burst, so NaN, +Inf and values at or above math.MaxInt fall back to the default.
+func TestRateLimiterConfig_ValidateNonFiniteOrHugeRequests(t *testing.T) {
+	runValidateTestCases(t, []validateTestCase{
 		{
 			desc:        "NaN requests falls back to default",
 			cfg:         RateLimiterConfig{Requests: math.NaN(), Burst: 100},
@@ -93,36 +130,11 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 			expBurst:    1e18,
 			expWindow:   time.Hour,
 		},
-		{
-			desc:        "fractional rate below one per second is valid",
-			cfg:         RateLimiterConfig{Requests: 0.5, Window: time.Second, Burst: 1},
-			expRequests: 0.5,
-			expBurst:    1,
-			expWindow:   time.Second,
-		},
-		{
-			desc:        "exactly one per second is valid",
-			cfg:         RateLimiterConfig{Requests: 1, Window: time.Second, Burst: 1},
-			expRequests: 1,
-			expBurst:    1,
-			expWindow:   time.Second,
-		},
-		{
-			desc:        "non-positive burst uses the default burst",
-			cfg:         RateLimiterConfig{Requests: 5, Window: time.Second, Burst: 0},
-			expRequests: 5,
-			expBurst:    defaultBurstCapacity,
-			expWindow:   time.Second,
-		},
-		{
-			desc:        "burst less than requests is raised to requests",
-			cfg:         RateLimiterConfig{Requests: 5, Burst: 3},
-			expErr:      errBurstLessThanRequests,
-			expRequests: 5,
-			expBurst:    5,
-			expWindow:   defaultWindow,
-		},
-	}
+	})
+}
+
+func runValidateTestCases(t *testing.T, testCases []validateTestCase) {
+	t.Helper()
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
