@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -527,6 +528,37 @@ func TestContainer_Health_RecoversAfterHungBackendAnswers(t *testing.T) {
 		"health never recovered after the hung backend answered — the round claim leaked")
 }
 
+// probeGoroutines counts the goroutines the health probe started, found by the probe's functions on
+// their stacks. runtime.NumGoroutine counts the whole process, which also holds whatever earlier
+// tests left running — a Redis, SQL or MQTT retry loop that completes a connection mid-test adds
+// the client's reader, writer and keepalive goroutines to the total.
+func probeGoroutines() int {
+	buf := make([]byte, 1<<20)
+
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+
+			break
+		}
+
+		buf = make([]byte, 2*len(buf))
+	}
+
+	count := 0
+
+	for _, stack := range strings.Split(string(buf), "\n\n") {
+		if strings.Contains(stack, "container.runCheck.func") ||
+			strings.Contains(stack, "container.waitForChecks.func") ||
+			strings.Contains(stack, "container.(*Container).runHealthChecks.func") {
+			count++
+		}
+	}
+
+	return count
+}
+
 // The point of the in-flight guard is that goroutines do not accumulate. Counting them directly is
 // the only assertion that actually proves it: the round count could stay at one while each timed-out
 // round still left a waiter behind.
@@ -561,7 +593,11 @@ func TestContainer_Health_TimeoutsDoNotAccumulateGoroutines(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	baseline := runtime.NumGoroutine()
+	baseline := probeGoroutines()
+
+	// The first timed-out probe keeps its abandoned check and waiter, so zero here means
+	// probeGoroutines no longer recognizes the probe's functions and would pass vacuously.
+	require.Positive(t, baseline, "probeGoroutines found no health-probe goroutines; were they renamed?")
 
 	for range 25 {
 		_ = c.Health(t.Context())
@@ -569,10 +605,12 @@ func TestContainer_Health_TimeoutsDoNotAccumulateGoroutines(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	growth := runtime.NumGoroutine() - baseline
+	growth := probeGoroutines() - baseline
 
 	// Without the guard each probe leaves behind its own check plus a waiter, so 25 probes grow
-	// the count by roughly 50. A couple of goroutines of slack absorbs the runtime's own churn.
+	// the count by roughly 50. Only the probe's own goroutines are counted, so a connection another
+	// test's retry loop happens to complete meanwhile cannot move the number; a couple of goroutines
+	// of slack absorbs the rest.
 	assert.LessOrEqual(t, growth, 5,
 		"25 timed-out probes grew the goroutine count by %d; rounds are accumulating", growth)
 
