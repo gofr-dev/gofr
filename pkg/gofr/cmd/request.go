@@ -53,7 +53,7 @@ func NewRequest(args []string) *Request {
 			a = arg[1:]
 		}
 
-		switch values := strings.Split(a, "="); len(values) {
+		switch values := strings.SplitN(a, "=", argsLen2); len(values) {
 		case argsLen1:
 			// Support -t -a etc.
 			r.params[values[0]] = trueString
