@@ -40,8 +40,10 @@ GoFr offers two ways to implement basic authentication:
 **1. Predefined Credentials**
 
 Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined credentials.
-It returns an error when no credentials, or an odd number of arguments, are passed; no middleware is
-installed in that case, so stop the app rather than serve routes unauthenticated.
+It returns an error when no credentials or an odd number of arguments are passed;
+no middleware is installed in that case, so stop the app rather than serve routes unauthenticated.
+It also returns an error when a username or password is empty; the middleware is still installed without that pair,
+so it rejects every request for those credentials.
 
 ```go
 func main() {
