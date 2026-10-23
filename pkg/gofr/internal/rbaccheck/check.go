@@ -28,7 +28,8 @@ type Route struct {
 	BuiltIn bool
 }
 
-// Mismatches lists what Check found, each entry as "METHOD path", sorted.
+// Mismatches lists what Check found, each entry as "METHOD path", sorted. For several configs
+// (CheckAll), entries of different configs are listed in config order.
 type Mismatches struct {
 	// DeadRules match no route - usually a typo in the path, or a method the route does not
 	// register - so the route each was written for is unguarded.
@@ -50,8 +51,9 @@ type PartialCoverage struct {
 	// Route is the route, as "METHOD path".
 	Route string
 
-	// Rules are the rules that match part of it, sorted. With more than one config, each is
-	// prefixed with its config's number, as "config 2: METHOD path".
+	// Rules are the rules that match part of it, sorted within a config. With more than one config,
+	// each is prefixed with its config's number, as "config 2: METHOD path", and the configs are
+	// listed in order.
 	Rules []string
 }
 
@@ -151,8 +153,10 @@ func CheckAll(configs [][]rbac.EndpointMapping, routes []Route) Mismatches {
 	}
 
 	m.Uncovered, m.PartlyCovered = commonGaps(results)
-	m.DeadRules = sortedUnique(m.DeadRules)
-	m.DeadPublicRules = sortedUnique(m.DeadPublicRules)
+	// Each config's dead rules are already sorted and appended in config order, which a text sort
+	// would break once there are ten configs ("config 10" before "config 2").
+	m.DeadRules = slices.Compact(m.DeadRules)
+	m.DeadPublicRules = slices.Compact(m.DeadPublicRules)
 
 	return m
 }
@@ -186,7 +190,7 @@ func commonGaps(results []Mismatches) (uncovered []string, partlyCovered []Parti
 		case unc[route] == len(results):
 			uncovered = append(uncovered, route)
 		default:
-			partlyCovered = append(partlyCovered, PartialCoverage{Route: route, Rules: sortedUnique(partly[route])})
+			partlyCovered = append(partlyCovered, PartialCoverage{Route: route, Rules: slices.Compact(partly[route])})
 		}
 	}
 

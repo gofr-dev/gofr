@@ -212,6 +212,19 @@ func TestCheckAll(t *testing.T) {
 	static := []rbac.EndpointMapping{guard("/static", "*"), guard("/static/{path:.*}", "*")}
 	numeric := guard("/api/users/{id:[0-9]+}", http.MethodGet)
 
+	const configCount = 11
+
+	manyConfigs := make([][]rbac.EndpointMapping, configCount)
+	manyRules := make([]string, configCount)
+	manyDead := make([]string, configCount)
+
+	for i := range manyConfigs {
+		manyConfigs[i] = append([]rbac.EndpointMapping{guard("/api/users", "*"), guard("/api/posts", "*"), numeric}, static...)
+		manyConfigs[i] = append(manyConfigs[i], guard("/api/gone", http.MethodGet))
+		manyDead[i] = fmt.Sprintf("config %d: GET /api/gone", i+1)
+		manyRules[i] = fmt.Sprintf("config %d: GET /api/users/{id:[0-9]+}", i+1)
+	}
+
 	testCases := []struct {
 		desc    string
 		configs [][]rbac.EndpointMapping
@@ -247,6 +260,15 @@ func TestCheckAll(t *testing.T) {
 				Uncovered: []string{"DELETE /api/users/{id}"},
 				PartlyCovered: []PartialCoverage{{Route: "GET /api/users/{id}",
 					Rules: []string{"config 1: GET /api/users/{id:[0-9]+}", "config 2: GET /api/users/{id:[a-z]+}"}}},
+			},
+		},
+		{
+			desc:    "rules from ten or more configs are listed in config order, not text order",
+			configs: manyConfigs,
+			want: Mismatches{
+				DeadRules:     manyDead,
+				Uncovered:     []string{"DELETE /api/users/{id}"},
+				PartlyCovered: []PartialCoverage{{Route: "GET /api/users/{id}", Rules: manyRules}},
 			},
 		},
 	}
