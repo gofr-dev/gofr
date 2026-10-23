@@ -121,20 +121,20 @@ func TestBasicAuthUnaryInterceptor(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+}
 
-	t.Run("Empty Username", func(t *testing.T) {
-		emptyUser := BasicAuthUnaryInterceptor(BasicAuthProvider{Users: map[string]string{"": ""}})
+func TestBasicAuthUnaryInterceptor_EmptyUsername(t *testing.T) {
+	interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{Users: map[string]string{"": ""}})
 
-		// "Og==" is base64 of ":", an empty username and password.
-		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
-			"authorization": []string{"Basic Og=="},
-		})
-		_, err := emptyUser(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
-			return nil, nil
-		})
-
-		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+	// "Og==" is base64 of ":", an empty username and password.
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+		"authorization": []string{"Basic Og=="},
 	})
+	_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+		return nil, nil
+	})
+
+	assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
 }
 
 func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {

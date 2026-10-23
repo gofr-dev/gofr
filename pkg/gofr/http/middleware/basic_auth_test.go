@@ -240,13 +240,15 @@ func TestBasicAuthMiddleware(t *testing.T) {
 			expStatus: http.StatusUnauthorized},
 		{desc: "valid credentials", header: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
 			expStatus: http.StatusOK, expValue: "user"},
+		// "Og==" is base64 of ":", matching the stored empty username and password.
+		{desc: "empty username and password", header: "Basic Og==", expStatus: http.StatusUnauthorized},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			var gotValue any
 
-			handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"user": "password"}})(
+			handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"user": "password", "": ""}})(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					gotValue = r.Context().Value(Username)
 
@@ -263,20 +265,4 @@ func TestBasicAuthMiddleware(t *testing.T) {
 			assert.Equal(t, tc.expValue, gotValue)
 		})
 	}
-}
-
-func TestBasicAuthMiddleware_EmptyUsernameRejected(t *testing.T) {
-	handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"": ""}})(
-		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-
-	// "Og==" is base64 of ":", an empty username and password.
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
-	req.Header.Set(headerAuthorization, "Basic Og==")
-
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
