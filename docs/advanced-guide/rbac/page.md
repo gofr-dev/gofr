@@ -121,9 +121,9 @@ error still shows why every route is unprotected.
 **From your application** (permissions from a live store, see
 [Permissions from Your Application](#permissions-from-your-application-extractor)):
 ```go
-app.EnableRBACWithExtractor(func(c *container.Container, r *http.Request) ([]string, error) {
+app.EnableRBACWithOptions(gofr.WithRBACExtractor(func(c *container.Container, r *http.Request) ([]string, error) {
 	return lookUpPermissions(r.Context(), c, r)
-})
+}))
 ```
 
 **Precedence**: If both are set, **only JWT is considered**. The header is not checked when `jwtClaimPath` is configured, even if JWT extraction fails.
@@ -158,7 +158,7 @@ identity provider to put a flat key with dots into a signed token.
 
 Exactly one mode is active:
 
-- **Extractor mode** when RBAC is enabled with `EnableRBACWithExtractor` (see
+- **Extractor mode** when RBAC is enabled with `EnableRBACWithOptions` and `WithRBACExtractor` (see
   [Permissions from Your Application](#permissions-from-your-application-extractor)).
 - **Permissions mode** when `permissionsClaimPath` is set.
 - **Roles mode** when `jwtClaimPath` is set.
@@ -281,7 +281,7 @@ that grants access. No `WWW-Authenticate` header is set. A custom `ErrorHandler`
 
 A token's claims are fixed until the token expires. When permissions live in your own store — a
 database table, a policy service — and a change there must take effect on the next request, let the
-application supply the permissions with `EnableRBACWithExtractor`:
+application supply the permissions with `EnableRBACWithOptions` and the `WithRBACExtractor` option:
 
 ```go
 func main() {
@@ -291,7 +291,7 @@ func main() {
 		app.Logger().Fatalf("%v", err)
 	}
 
-	if err := app.EnableRBACWithExtractor(permissionsFromStore); err != nil {
+	if err := app.EnableRBACWithOptions(gofr.WithRBACExtractor(permissionsFromStore)); err != nil {
 		app.Logger().Fatalf("%v", err)
 	}
 
@@ -332,6 +332,17 @@ func permissionsFromStore(c *container.Container, r *http.Request) ([]string, er
 }
 ```
 
+`EnableRBACWithOptions` takes options, each optional: `WithRBACExtractor(fn)` sets the extractor, and
+`WithRBACConfigPath(path)` reads the config from `path` instead of the default paths. With no
+options it behaves exactly like `EnableRBAC()`. For example, to use both:
+
+```go
+err := app.EnableRBACWithOptions(
+	gofr.WithRBACConfigPath("configs/custom-rbac.json"),
+	gofr.WithRBACExtractor(permissionsFromStore),
+)
+```
+
 The config file then needs only `endpoints`:
 
 ```json
@@ -368,7 +379,7 @@ set, and receives the extractor's error as its `err` (on a timeout, an error mat
 
 **Timeout.** The extractor runs with a deadline on `r.Context()`: 5 seconds, or the Go duration in
 `RBAC_EXTRACTOR_TIMEOUT` (for example `2s`). A value that does not parse, or is zero or negative, is
-an error from `EnableRBACWithExtractor`. Pass `r.Context()` to every call the extractor makes, as
+an error from `EnableRBACWithOptions`. Pass `r.Context()` to every call the extractor makes, as
 the example does: the deadline can only stop calls that receive it, and an extractor that ignores it
 holds the request until it returns, and is then denied with a 503.
 

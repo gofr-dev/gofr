@@ -17,6 +17,9 @@ import (
 //
 // An error denies the request. An error with a StatusCode() int method sets the response status,
 // ErrRoleNotFound (or an error wrapping it) is a 401, and any other error is a 403.
+//
+// A panic in the extractor is recovered by the logging middleware that wraps the app's handlers; a
+// caller using Middleware directly must recover it itself.
 type Extractor func(c *container.Container, r *http.Request) ([]string, error)
 
 // Option changes how LoadPermissions builds a Config.
