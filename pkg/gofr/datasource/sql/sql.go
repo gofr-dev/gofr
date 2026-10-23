@@ -58,8 +58,8 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
-	// connectTimeout is the network connect timeout in whole seconds for the
-	// networked dialects; zero leaves the driver default (no timeout) in place.
+	// connectTimeout is the connect timeout in whole seconds for the networked dialects; zero
+	// leaves the driver default (no timeout) in place. For MySQL it bounds only the TCP dial.
 	connectTimeout int
 }
 
@@ -400,7 +400,9 @@ func getDBConfig(configs config.Config) *DBConfig {
 
 // getConnectTimeout reads DB_CONNECT_TIMEOUT (whole seconds) for a networked dialect. Unset or 0
 // means no timeout, as before the key existed; a negative or non-numeric value is logged and
-// ignored. SQLite does not dial, so the key is not read for it.
+// ignored. SQLite does not dial, so the key is not read for it. For PostgreSQL, Supabase and
+// CockroachDB the limit covers the whole connection attempt; for MySQL it bounds only the TCP
+// dial (an unreachable host), not a server that accepts the connection and then stalls.
 func getConnectTimeout(dialect string, configs config.Config, logger datasource.Logger) int {
 	raw := configs.Get("DB_CONNECT_TIMEOUT")
 	if dialect == sqlite || raw == "" {
@@ -437,6 +439,9 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
 		}
 
+		// The driver's timeout is a dial timeout: it applies to the TCP connect only, not the
+		// handshake (go-sql-driver/mysql connector.go). readTimeout is deliberately not used,
+		// as it would also cap every query.
 		if dbConfig.connectTimeout > 0 {
 			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.connectTimeout)
 		}
