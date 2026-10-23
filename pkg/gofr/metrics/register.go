@@ -66,14 +66,14 @@ func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
 func (m *metricsManager) NewCounter(name, desc string) {
 	counter, err := m.meter.Int64Counter(name, metric.WithDescription(desc))
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
 
 	err = m.store.setCounter(name, counter)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 	}
 }
 
@@ -84,14 +84,14 @@ func (m *metricsManager) NewCounter(name, desc string) {
 func (m *metricsManager) NewUpDownCounter(name, desc string) {
 	upDownCounter, err := m.meter.Float64UpDownCounter(name, metric.WithDescription(desc))
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
 
 	err = m.store.setUpDownCounter(name, upDownCounter)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 	}
 }
 
@@ -112,14 +112,14 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 	histogram, err := m.meter.Float64Histogram(name, metric.WithDescription(desc),
 		metric.WithExplicitBucketBoundaries(buckets...))
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
 
 	err = m.store.setHistogram(name, histogram)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 	}
 }
 
@@ -133,14 +133,14 @@ func (m *metricsManager) NewGauge(name, desc string) {
 
 	_, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc), metric.WithFloat64Callback(gauge.callbackFunc))
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
 
 	err = m.store.setGauge(name, gauge)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 	}
 }
 
@@ -175,7 +175,7 @@ func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer)
 func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) {
 	counter, err := m.store.getCounter(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
@@ -200,7 +200,7 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
 	upDownCounter, err := m.store.getUpDownCounter(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
@@ -220,7 +220,7 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
@@ -242,7 +242,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 func (m *metricsManager) RecordHistogramAttrs(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
@@ -268,7 +268,7 @@ func (m *metricsManager) RecordHistogramOpt(ctx context.Context, name string, va
 	opts ...metric.RecordOption) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
@@ -286,7 +286,7 @@ func (m *metricsManager) RecordHistogramOpt(ctx context.Context, name string, va
 func (m *metricsManager) SetGauge(name string, value float64, labels ...string) {
 	gauge, err := m.store.getGauge(name)
 	if err != nil {
-		m.logger.Error(err)
+		m.logger.Errorf("%v", err)
 
 		return
 	}
