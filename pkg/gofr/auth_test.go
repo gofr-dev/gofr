@@ -133,3 +133,22 @@ func TestEnableOAuth_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestEnableOAuth_InvalidRefreshInterval(t *testing.T) {
+	for i, interval := range []int{0, -1} {
+		var (
+			a   *App
+			err error
+		)
+
+		logs := testutil.StderrOutputForFunc(func() {
+			a = newAuthTestApp(t)
+			err = a.EnableOAuth("http://localhost/.well-known/jwks.json", interval)
+		})
+
+		require.ErrorContains(t, err, "invalid JWKS refresh interval", "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Nil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Contains(t, logs, "OAuth authentication is DISABLED", "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "TEST[%d], Failed.\ninterval %d", i, interval)
+	}
+}
