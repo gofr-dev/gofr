@@ -41,6 +41,9 @@ type httpServer struct {
 	certFile    string
 	keyFile     string
 	staticFiles map[string]string
+	// hideInternalErrors is HTTP_HIDE_INTERNAL_ERRORS, read once in New so an invalid value
+	// is reported once rather than once per route.
+	hideInternalErrors bool
 }
 
 var (
