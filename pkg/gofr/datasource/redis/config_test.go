@@ -279,6 +279,7 @@ type redisURLCase struct {
 	wantRootCAs    bool
 	wantStdout     []string
 	wantStderr     []string
+	rejectStderr   []string
 }
 
 func TestGetRedisConfig_URL(t *testing.T) {
@@ -294,6 +295,10 @@ func TestGetRedisConfig_URL(t *testing.T) {
 
 			for _, want := range tc.wantStderr {
 				assert.Contains(t, stderr, want)
+			}
+
+			for _, reject := range tc.rejectStderr {
+				assert.NotContains(t, stderr, reject)
 			}
 
 			assert.Equal(t, tc.wantHost, conf.HostName)
@@ -401,6 +406,19 @@ func redisURLCases(caPath string) []redisURLCase {
 			name:       "unknown query option",
 			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6379?bogus=1"},
 			wantStderr: []string{"invalid REDIS_URL", "bogus"},
+		},
+		{
+			// url.Error quotes the URL with %q, so a control character defeats a plain replace of the raw URL.
+			name:       "control character in the password",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "\x01@cache.internal:6379"},
+			wantStderr: []string{"invalid REDIS_URL", "invalid control character"},
+		},
+		{
+			// url.EscapeError quotes the bad sequence, which is part of the password.
+			name:         "bad escape in the password",
+			env:          map[string]string{"REDIS_URL": "redis://app:" + secret + "%zz@cache.internal:6379"},
+			wantStderr:   []string{"invalid REDIS_URL", "invalid URL escape"},
+			rejectStderr: []string{"%zz"},
 		},
 	}
 }
