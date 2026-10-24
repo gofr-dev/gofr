@@ -17,15 +17,27 @@ import (
 )
 
 func Test_NewClient_HostNameMissing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	tests := []struct {
+		name string
+		env  map[string]string
+	}{
+		{name: "REDIS_HOST empty", env: map[string]string{"REDIS_HOST": ""}},
+		{name: "invalid REDIS_URL", env: map[string]string{"REDIS_URL": "unix:///var/run/redis.sock", "REDIS_HOST": "localhost"}},
+	}
 
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": ""})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	client := NewClient(mockConfig, mockLogger, mockMetrics)
-	assert.Nil(t, client, "Test_NewClient_HostNameMissing Failed! Expected redis client to be nil")
+			mockLogger := logging.NewMockLogger(logging.ERROR)
+			mockMetrics := NewMockMetrics(ctrl)
+			mockConfig := config.NewMockConfig(tc.env)
+
+			client := NewClient(mockConfig, mockLogger, mockMetrics)
+			assert.Nil(t, client, "Test_NewClient_HostNameMissing Failed! Expected redis client to be nil")
+		})
+	}
 }
 
 func Test_NewClient_InvalidPort(t *testing.T) {

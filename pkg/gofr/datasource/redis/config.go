@@ -3,7 +3,10 @@ package redis
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -27,32 +30,218 @@ const (
 	trueValue                 = "true"
 	payloadKey                = "payload"
 	queryPipeline             = "pipeline"
+	redisURLPlaceholder       = "REDIS_URL"
+	redisDBKey                = "REDIS_DB"
+	redisHostKey              = "REDIS_HOST"
+	redisPortKey              = "REDIS_PORT"
+	redisUserKey              = "REDIS_USER"
+	redisPasswordKey          = "REDIS_PASSWORD"
+	redisTLSEnabledKey        = "REDIS_TLS_ENABLED"
+)
+
+var (
+	errInvalidRedisURL       = errors.New("invalid REDIS_URL")
+	errInvalidRedisURLScheme = errors.New("scheme must be redis or rediss")
+	errInvalidRedisURLEscape = errors.New("invalid URL escape")
 )
 
 // getRedisConfig builds the Redis Config struct from the provided [Config].
-// It supports TLS configuration using the following environment variables:
+// When REDIS_URL is set it alone decides host, port, user, password, DB and TLS (see [configFromURL]);
+// otherwise the discrete REDIS_* variables are used. It supports TLS configuration using
+// the following environment variables:
 //
-//	REDIS_TLS_ENABLED: set to "true" to enable TLS
+//	REDIS_TLS_ENABLED: set to "true" to enable TLS (ignored when REDIS_URL is set; use rediss:// instead)
 //	REDIS_TLS_CA_CERT: PEM-encoded CA certificate (string)
 //	REDIS_TLS_CERT:    PEM-encoded client certificate (string or file path)
 //	REDIS_TLS_KEY:     PEM-encoded client private key (string or file path)
 //
 // If TLS is enabled, the function sets up the [tls.Config] for the [Redis] client.
+// Pool size and timeouts are then applied from REDIS_POOL_SIZE, REDIS_MIN_IDLE_CONNS and
+// REDIS_DIAL_TIMEOUT / REDIS_READ_TIMEOUT / REDIS_WRITE_TIMEOUT.
 func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
+	var redisConfig *Config
+
+	if rawURL := c.Get("REDIS_URL"); rawURL != "" {
+		redisConfig = configFromURL(c, rawURL, logger)
+		if redisConfig.HostName == "" {
+			return redisConfig
+		}
+	} else {
+		redisConfig = configFromVars(c, logger)
+	}
+
+	applyPoolOptions(c, redisConfig.Options, logger)
+
+	// Parse PubSub config if PUBSUB_BACKEND=REDIS
+	if strings.EqualFold(c.Get("PUBSUB_BACKEND"), redisBackend) {
+		parsePubSubConfig(c, redisConfig)
+	}
+
+	return redisConfig
+}
+
+// configFromURL builds the connection settings from REDIS_URL. On an invalid URL it logs an
+// error and returns a Config with an empty HostName, so no client is created.
+func configFromURL(c config.Config, rawURL string, logger datasource.Logger) *Config {
+	warnURLReplacedVars(c, logger)
+
+	redisConfig, err := parseRedisURL(rawURL)
+	if err != nil {
+		logger.Errorf("%v", err)
+
+		return &Config{}
+	}
+
+	if redisConfig.TLS != nil {
+		applyTLSFiles(c, redisConfig.TLS, logger)
+	}
+
+	return redisConfig
+}
+
+// parseRedisURL parses a redis:// or rediss:// URL. The returned error never contains the raw URL.
+func parseRedisURL(rawURL string) (*Config, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, redactURLError(err, rawURL)
+	}
+
+	if u.Scheme != "redis" && u.Scheme != "rediss" {
+		return nil, fmt.Errorf("%w: %w, got %q", errInvalidRedisURL, errInvalidRedisURLScheme, u.Scheme)
+	}
+
+	options, err := redis.ParseURL(rawURL)
+	if err != nil {
+		return nil, redactURLError(err, rawURL)
+	}
+
+	host, portStr, err := net.SplitHostPort(options.Addr)
+	if err != nil {
+		return nil, redactURLError(err, rawURL)
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, redactURLError(err, rawURL)
+	}
+
+	return &Config{
+		HostName: host,
+		Port:     port,
+		Username: options.Username,
+		Password: options.Password,
+		DB:       options.DB,
+		Options:  options,
+		TLS:      options.TLSConfig,
+	}, nil
+}
+
+// redactURLError strips the raw URL, which may hold a password, from a parse error.
+func redactURLError(err error, rawURL string) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err
+	}
+
+	// An escape error quotes the bad sequence, which can be part of the password.
+	var escapeErr url.EscapeError
+	if errors.As(err, &escapeErr) {
+		return fmt.Errorf("%w: %w", errInvalidRedisURL, errInvalidRedisURLEscape)
+	}
+
+	return fmt.Errorf("%w: %s", errInvalidRedisURL, strings.ReplaceAll(err.Error(), rawURL, redisURLPlaceholder))
+}
+
+// warnURLReplacedVars logs the names, never the values, of set variables that REDIS_URL replaces.
+func warnURLReplacedVars(c config.Config, logger datasource.Logger) {
+	// The variables that REDIS_URL replaces when it is set.
+	urlReplacedVars := []string{redisHostKey, redisPortKey, redisUserKey, redisPasswordKey, redisDBKey, redisTLSEnabledKey}
+
+	var ignored []string
+
+	for _, name := range urlReplacedVars {
+		if c.Get(name) != "" {
+			ignored = append(ignored, name)
+		}
+	}
+
+	if len(ignored) > 0 {
+		logger.Warnf("REDIS_URL is set, ignoring %s", strings.Join(ignored, ", "))
+	}
+}
+
+// applyPoolOptions sets pool size and timeouts from their variables, overriding any REDIS_URL query parameter.
+// An invalid or negative value logs a warning and leaves the option as it was.
+func applyPoolOptions(c config.Config, options *redis.Options, logger datasource.Logger) {
+	if v, ok := nonNegativeInt(c, "REDIS_POOL_SIZE", logger); ok {
+		options.PoolSize = v
+	}
+
+	if v, ok := nonNegativeInt(c, "REDIS_MIN_IDLE_CONNS", logger); ok {
+		options.MinIdleConns = v
+	}
+
+	if d, ok := nonNegativeDuration(c, "REDIS_DIAL_TIMEOUT", logger); ok {
+		options.DialTimeout = d
+	}
+
+	if d, ok := nonNegativeDuration(c, "REDIS_READ_TIMEOUT", logger); ok {
+		options.ReadTimeout = d
+	}
+
+	if d, ok := nonNegativeDuration(c, "REDIS_WRITE_TIMEOUT", logger); ok {
+		options.WriteTimeout = d
+	}
+}
+
+func nonNegativeInt(c config.Config, name string, logger datasource.Logger) (int, bool) {
+	raw := c.Get(name)
+	if raw == "" {
+		return 0, false
+	}
+
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		logger.Warnf("invalid %s %q, want a non-negative integer; keeping the default", name, raw)
+
+		return 0, false
+	}
+
+	return v, true
+}
+
+func nonNegativeDuration(c config.Config, name string, logger datasource.Logger) (time.Duration, bool) {
+	raw := c.Get(name)
+	if raw == "" {
+		return 0, false
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 0 {
+		logger.Warnf("invalid %s %q, want a non-negative duration such as 500ms; keeping the default", name, raw)
+
+		return 0, false
+	}
+
+	return d, true
+}
+
+// configFromVars builds the connection settings from the discrete REDIS_* variables.
+func configFromVars(c config.Config, logger datasource.Logger) *Config {
 	var redisConfig = &Config{}
 
-	redisConfig.HostName = c.Get("REDIS_HOST")
-	redisConfig.Username = c.Get("REDIS_USER")
-	redisConfig.Password = c.Get("REDIS_PASSWORD")
+	redisConfig.HostName = c.Get(redisHostKey)
+	redisConfig.Username = c.Get(redisUserKey)
+	redisConfig.Password = c.Get(redisPasswordKey)
 
-	port, err := strconv.Atoi(c.Get("REDIS_PORT"))
+	port, err := strconv.Atoi(c.Get(redisPortKey))
 	if err != nil {
 		port = defaultRedisPort
 	}
 
 	redisConfig.Port = port
 
-	db, err := strconv.Atoi(c.Get("REDIS_DB"))
+	db, err := strconv.Atoi(c.Get(redisDBKey))
 	if err != nil {
 		db = 0 // default to DB 0 if not specified
 	}
@@ -64,19 +253,23 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	options.Username = redisConfig.Username
 	options.Password = redisConfig.Password
 	options.DB = redisConfig.DB
+	redisConfig.Options = options
 
-	// Parse PubSub config if PUBSUB_BACKEND=REDIS
-	if strings.EqualFold(c.Get("PUBSUB_BACKEND"), redisBackend) {
-		parsePubSubConfig(c, redisConfig)
-	}
-
-	if c.Get("REDIS_TLS_ENABLED") != trueValue {
-		redisConfig.Options = options
+	if c.Get(redisTLSEnabledKey) != trueValue {
 		return redisConfig
 	}
 
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	applyTLSFiles(c, tlsConfig, logger)
 
+	options.TLSConfig = tlsConfig
+	redisConfig.TLS = tlsConfig
+
+	return redisConfig
+}
+
+// applyTLSFiles loads REDIS_TLS_CA_CERT and the REDIS_TLS_CERT / REDIS_TLS_KEY pair into tlsConfig.
+func applyTLSFiles(c config.Config, tlsConfig *tls.Config, logger datasource.Logger) {
 	if caCertPath := c.Get("REDIS_TLS_CA_CERT"); caCertPath != "" {
 		caCert, err := os.ReadFile(caCertPath)
 		if err != nil {
@@ -98,12 +291,6 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
 	}
-
-	options.TLSConfig = tlsConfig
-	redisConfig.TLS = tlsConfig
-	redisConfig.Options = options
-
-	return redisConfig
 }
 
 // parsePubSubConfig parses PubSub configuration from environment variables.

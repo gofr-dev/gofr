@@ -114,6 +114,32 @@ REDIS_TLS_CERT_PATH=./configs/certs/client.crt
 REDIS_TLS_KEY_PATH=./configs/certs/client.key
 ```
 
+## Connecting with a URL (Optional):
+
+Managed Redis providers usually hand out a single connection URL. Set it as `REDIS_URL` instead of the separate variables:
+
+```env
+REDIS_URL=rediss://appuser:securepassword@redis.example.com:6380/0
+```
+
+- Only the `redis://` and `rediss://` schemes are accepted. `rediss://` turns TLS on and verifies the server against the URL's host name.
+- The URL wins. When `REDIS_URL` is set, `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, and GoFr logs one warning that names the ignored variables.
+- An invalid URL logs an error and Redis is not connected, the same as a missing `REDIS_HOST`. The error never contains the password.
+- A certificate cannot be put in a URL, so `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
+- The database in the URL (`/0` above) is used by `ctx.Redis`. Redis Pub/Sub keeps using `REDIS_PUBSUB_DB` (default `15`).
+
+## Pool and Timeout Settings (Optional):
+
+These variables tune the connection pool, with or without `REDIS_URL`. Each one overrides the matching URL parameter (`?pool_size=20`), and an invalid or negative value logs a warning and keeps the default.
+
+```env
+REDIS_POOL_SIZE=20
+REDIS_MIN_IDLE_CONNS=2
+REDIS_DIAL_TIMEOUT=2s
+REDIS_READ_TIMEOUT=500ms
+REDIS_WRITE_TIMEOUT=500ms
+```
+
 The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
 
 ```go
