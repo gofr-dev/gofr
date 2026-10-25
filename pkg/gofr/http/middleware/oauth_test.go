@@ -285,6 +285,15 @@ func TestPublicKeys_updateKeys(t *testing.T) {
 	}
 }
 
+func TestNewOAuth_NonPositiveRefreshInterval(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Second} {
+		provider := NewOAuth(OauthConfigs{Provider: MockJWKSProvider{}, RefreshInterval: interval})
+
+		require.Eventually(t, func() bool { return provider.Get("111") != nil }, time.Second, 10*time.Millisecond,
+			"keys not loaded for interval %v", interval)
+	}
+}
+
 func Test_getPublicKeyFunc(t *testing.T) {
 	testCases := []struct {
 		provider PublicKeyProvider
