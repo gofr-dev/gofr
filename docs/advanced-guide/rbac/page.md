@@ -593,6 +593,15 @@ request, so it is NOT enforced - any route it was meant to govern is currently u
 
 Treat that line as an open route, not a warning about a typo.
 
+#### A method the config does not list
+
+RBAC enforces only the `(method, path)` pairs you configure. A request whose method is not listed
+for a path is not an RBAC match, so it passes through to normal route matching — by design. If the
+path is registered for other methods, the router answers `405 Method Not Allowed` with an `Allow`
+header naming them; if the path is not registered at all, it answers `404`. RBAC governs
+authorization, not the existence of a route: a caller refused the configured method already learns
+the path exists from the `401`, so the `405` adds no authorization bypass.
+
 ### Startup Route Check
 
 The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
