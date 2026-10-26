@@ -314,7 +314,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_DIALECT
--  Database dialect. Supported values: mysql, postgres, supabase
+-  Database dialect. Supported values: mysql, postgres, supabase, sqlite, cockroachdb. If unset, SQL is not initialized; GoFr logs an error at startup when DB_HOST or DB_NAME is set.
 
 ---
 
