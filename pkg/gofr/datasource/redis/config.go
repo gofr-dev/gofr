@@ -43,6 +43,7 @@ var (
 	errInvalidRedisURL       = errors.New("invalid REDIS_URL")
 	errInvalidRedisURLScheme = errors.New("scheme must be redis or rediss")
 	errInvalidRedisURLEscape = errors.New("invalid URL escape")
+	errInvalidRedisURLHost   = errors.New("missing host")
 )
 
 // getRedisConfig builds the Redis Config struct from the provided [Config].
@@ -108,6 +109,11 @@ func parseRedisURL(rawURL string) (*Config, error) {
 
 	if u.Scheme != "redis" && u.Scheme != "rediss" {
 		return nil, fmt.Errorf("%w: %w, got %q", errInvalidRedisURL, errInvalidRedisURLScheme, u.Scheme)
+	}
+
+	// go-redis turns an empty host into localhost, so redis://:6379 would connect to the wrong server.
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("%w: %w", errInvalidRedisURL, errInvalidRedisURLHost)
 	}
 
 	options, err := redis.ParseURL(rawURL)

@@ -124,7 +124,7 @@ REDIS_URL=rediss://appuser:securepassword@redis.example.com:6380/0
 
 - Only the `redis://` and `rediss://` schemes are accepted. `rediss://` turns TLS on and verifies the server against the URL's host name.
 - The URL wins. When `REDIS_URL` is set, `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, and GoFr logs one warning that names the ignored variables.
-- An invalid URL logs an error and Redis is not connected, the same as a missing `REDIS_HOST`. The error never contains the password.
+- An invalid URL logs an error and Redis is not connected, the same as a missing `REDIS_HOST`. The error never contains the password. A URL with no host (`redis://:6379`) is invalid; GoFr does not fall back to `localhost`.
 - A certificate cannot be put in a URL, so `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
 - The database in the URL (`/0` above) is used by `ctx.Redis`. Redis Pub/Sub keeps using `REDIS_PUBSUB_DB` (default `15`).
 

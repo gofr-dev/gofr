@@ -532,7 +532,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - REDIS_URL
-- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL logs an error and Redis is not connected. `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
+- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL, including one with no host, logs an error and Redis is not connected. `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
 -  ""
 
 ---

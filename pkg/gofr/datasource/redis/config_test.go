@@ -403,6 +403,18 @@ func redisURLCases(caPath string) []redisURLCase {
 			wantStderr: []string{"invalid REDIS_URL", "unix"},
 		},
 		{
+			// go-redis fills an empty host with localhost, which would connect to the wrong server.
+			name:       "empty URL body has no host",
+			env:        map[string]string{"REDIS_URL": "redis://"},
+			wantStderr: []string{"invalid REDIS_URL", "missing host"},
+		},
+		{
+			// What redis://${HOST}:6379 becomes when HOST is unset.
+			name:       "port without host",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@:6379"},
+			wantStderr: []string{"invalid REDIS_URL", "missing host"},
+		},
+		{
 			name:       "unknown query option",
 			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6379?bogus=1"},
 			wantStderr: []string{"invalid REDIS_URL", "bogus"},
