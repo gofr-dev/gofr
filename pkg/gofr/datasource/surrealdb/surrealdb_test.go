@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -397,9 +398,10 @@ func Test_ExtractRecordWithNonStringKey(t *testing.T) {
 }
 
 var (
-	errInfo = errors.New("info failed")
-	errUse  = errors.New("use failed")
-	errAuth = errors.New("invalid credentials")
+	errInfo  = errors.New("info failed")
+	errUse   = errors.New("use failed")
+	errAuth  = errors.New("invalid credentials")
+	errClose = errors.New("close failed")
 )
 
 const (
@@ -1027,16 +1029,20 @@ func Test_authenticateCredentials(t *testing.T) {
 			setupMocks: func(*testMocks) {},
 		},
 		{
-			desc:       "only username provided",
-			username:   "root",
-			setupMocks: func(*testMocks) {},
-			expErr:     errInvalidCredentialsConfig,
+			desc:     "only username provided",
+			username: "root",
+			setupMocks: func(m *testMocks) {
+				m.logger.EXPECT().Errorf("%s: %v", "invalid SurrealDB credentials configuration", errInvalidCredentialsConfig)
+			},
+			expErr: errInvalidCredentialsConfig,
 		},
 		{
-			desc:       "only password provided",
-			password:   "secret",
-			setupMocks: func(*testMocks) {},
-			expErr:     errInvalidCredentialsConfig,
+			desc:     "only password provided",
+			password: "secret",
+			setupMocks: func(m *testMocks) {
+				m.logger.EXPECT().Errorf("%s: %v", "invalid SurrealDB credentials configuration", errInvalidCredentialsConfig)
+			},
+			expErr: errInvalidCredentialsConfig,
 		},
 		{
 			desc:     "sign in succeeds",
@@ -1070,6 +1076,176 @@ func Test_authenticateCredentials(t *testing.T) {
 			err := client.authenticateCredentials(t.Context())
 
 			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func Test_initSession(t *testing.T) {
+	tests := []struct {
+		desc         string
+		username     string
+		password     string
+		setupMocks   func(m *testMocks)
+		expErr       error
+		expConnected bool
+	}{
+		{
+			desc: "success without credentials",
+			setupMocks: func(m *testMocks) {
+				m.db.EXPECT().Use(gomock.Any(), testNamespace, testDatabase).Return(nil)
+			},
+			expConnected: true,
+		},
+		{
+			desc:     "success with credentials",
+			username: "root",
+			password: "secret",
+			setupMocks: func(m *testMocks) {
+				m.db.EXPECT().Use(gomock.Any(), testNamespace, testDatabase).Return(nil)
+				m.db.EXPECT().SignIn(gomock.Any(), &surrealdb.Auth{Username: "root", Password: "secret"}).Return("token", nil)
+			},
+			expConnected: true,
+		},
+		{
+			desc: "use fails",
+			setupMocks: func(m *testMocks) {
+				m.db.EXPECT().Use(gomock.Any(), testNamespace, testDatabase).Return(errUse)
+				m.logger.EXPECT().Errorf("%s: %v", "unable to set the namespace and database for SurrealDB", errUse)
+			},
+			expErr: errUse,
+		},
+		{
+			desc:     "incomplete credentials",
+			username: "root",
+			setupMocks: func(m *testMocks) {
+				m.db.EXPECT().Use(gomock.Any(), testNamespace, testDatabase).Return(nil)
+				m.logger.EXPECT().Errorf("%s: %v", "invalid SurrealDB credentials configuration", errInvalidCredentialsConfig)
+			},
+			expErr: errInvalidCredentialsConfig,
+		},
+		{
+			desc:     "sign in fails",
+			username: "root",
+			password: "wrong",
+			setupMocks: func(m *testMocks) {
+				m.db.EXPECT().Use(gomock.Any(), testNamespace, testDatabase).Return(nil)
+				m.db.EXPECT().SignIn(gomock.Any(), &surrealdb.Auth{Username: "root", Password: "wrong"}).Return("", errAuth)
+				m.logger.EXPECT().Errorf("%s: %v", "failed to sign in to SurrealDB", errAuth)
+			},
+			expErr: errAuth,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := newTestMocks(t)
+			tc.setupMocks(m)
+
+			client := newTestClient(m, m.db)
+			client.config.Username = tc.username
+			client.config.Password = tc.password
+
+			err := client.initSession(t.Context())
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expConnected, client.db != nil)
+		})
+	}
+}
+
+// closeRecorderDB is a DB whose connection can be closed; it records each close and the context it received.
+type closeRecorderDB struct {
+	DB
+
+	closeErr   error
+	closeCalls int
+	deadlineOK bool
+	remaining  time.Duration
+	ctxErr     error
+}
+
+func (f *closeRecorderDB) close(ctx context.Context) error {
+	f.closeCalls++
+
+	var deadline time.Time
+
+	deadline, f.deadlineOK = ctx.Deadline()
+	f.remaining = time.Until(deadline)
+	f.ctxErr = ctx.Err()
+
+	return f.closeErr
+}
+
+func Test_disconnect(t *testing.T) {
+	canceledCtx := func(t *testing.T) context.Context {
+		t.Helper()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		return ctx
+	}
+
+	tests := []struct {
+		desc          string
+		closeErr      error
+		ctx           func(t *testing.T) context.Context
+		db            func(m *testMocks, f *closeRecorderDB) DB
+		setupMocks    func(m *testMocks)
+		expCloseCalls int
+		expBounded    bool
+	}{
+		{
+			desc:          "closes with a bounded context and resets",
+			ctx:           func(t *testing.T) context.Context { t.Helper(); return t.Context() },
+			db:            func(_ *testMocks, f *closeRecorderDB) DB { return f },
+			setupMocks:    func(*testMocks) {},
+			expCloseCalls: 1,
+			expBounded:    true,
+		},
+		{
+			desc:          "close ignores the caller's cancellation",
+			ctx:           canceledCtx,
+			db:            func(_ *testMocks, f *closeRecorderDB) DB { return f },
+			setupMocks:    func(*testMocks) {},
+			expCloseCalls: 1,
+			expBounded:    true,
+		},
+		{
+			desc:     "close error is logged",
+			closeErr: errClose,
+			ctx:      func(t *testing.T) context.Context { t.Helper(); return t.Context() },
+			db:       func(_ *testMocks, f *closeRecorderDB) DB { return f },
+			setupMocks: func(m *testMocks) {
+				m.logger.EXPECT().Errorf("%s: %v", "failed to close SurrealDB connection", errClose)
+			},
+			expCloseCalls: 1,
+			expBounded:    true,
+		},
+		{
+			desc:       "non-closable db is reset",
+			ctx:        func(t *testing.T) context.Context { t.Helper(); return t.Context() },
+			db:         func(m *testMocks, _ *closeRecorderDB) DB { return m.db },
+			setupMocks: func(*testMocks) {},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := newTestMocks(t)
+			tc.setupMocks(m)
+
+			fake := &closeRecorderDB{closeErr: tc.closeErr}
+			client := newTestClient(m, tc.db(m, fake))
+
+			client.disconnect(tc.ctx(t))
+
+			assert.Nil(t, client.db)
+			assert.Equal(t, tc.expCloseCalls, fake.closeCalls)
+			assert.Equal(t, tc.expBounded, fake.deadlineOK, "close context must carry a deadline")
+			assert.Equal(t, tc.expBounded, fake.remaining > 0, "close deadline must be in the future")
+			assert.LessOrEqual(t, fake.remaining, closeTimeout)
+			require.NoError(t, fake.ctxErr)
 		})
 	}
 }
@@ -1192,6 +1368,15 @@ func Test_Connect(t *testing.T) {
 				m.logger.EXPECT().Logf("Successfully connected to SurrealDB at %v:%v to database %v", host, port, testDatabase)
 			},
 			expConnDone: true,
+		},
+		{
+			desc: "incomplete credentials leaves client disconnected",
+			config: Config{Host: host, Port: port, Namespace: testNamespace, Database: testDatabase, TLSEnabled: true,
+				Username: "root"},
+			setupMocks: func(m *testMocks) {
+				m.logger.EXPECT().Debugf("connecting to SurrealDB at %s", httpsEndpoint)
+				m.logger.EXPECT().Errorf("%s: %v", "invalid SurrealDB credentials configuration", errInvalidCredentialsConfig)
+			},
 		},
 	}
 

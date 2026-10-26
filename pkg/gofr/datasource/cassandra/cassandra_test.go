@@ -31,7 +31,6 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)

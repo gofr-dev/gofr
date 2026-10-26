@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1009,5 +1011,97 @@ func BenchmarkRouter_Get_PathParam(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		r.ServeHTTP(w, req)
+	}
+}
+
+func Test_Router_AllowedMethods(t *testing.T) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users", noopHandler())
+	r.Add(http.MethodPost, "/users", noopHandler())
+	r.Add(http.MethodPut, "/users/{id}", noopHandler())
+	r.Add(http.MethodDelete, "/users/{id}", noopHandler())
+	r.Add(http.MethodGet, "/orders/{id:[0-9]+}", noopHandler())
+	// Registered after the /orders route, so a mismatch it records must not leak into the next one.
+	r.Add(http.MethodPost, "/orders/new", noopHandler())
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		expected []string
+	}{
+		{"exact match with GET and POST", http.MethodPatch, "/users", []string{"GET", "POST"}},
+		{"path param match with PUT and DELETE", http.MethodPatch, "/users/123", []string{"DELETE", "PUT"}},
+		{"unregistered path", http.MethodPatch, "/unknown", nil},
+		{"regexp parameter that does not match is not the route", http.MethodPatch, "/orders/abc", nil},
+		{"regexp parameter that matches", http.MethodPatch, "/orders/42", []string{"GET"}},
+		{"only the route whose path matches is listed", http.MethodGet, "/orders/new", []string{"POST"}},
+		{"the request's own method is listed when registered", http.MethodGet, "/users", []string{"GET", "POST"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			assert.Equal(t, tc.expected, r.AllowedMethods(req))
+		})
+	}
+}
+
+// countedRoutes registers n GET routes directly on mux, each counting how often it is asked to
+// match. The counter is the route's first matcher, so it sees every Match call on that route.
+func countedRoutes(r *Router, n int) *atomic.Int64 {
+	var calls atomic.Int64
+
+	for i := range n {
+		r.Router.NewRoute().MatcherFunc(func(*http.Request, *mux.RouteMatch) bool {
+			calls.Add(1)
+
+			return true
+		}).Methods(http.MethodGet).Path(fmt.Sprintf("/route-%d", i)).Handler(noopHandler())
+	}
+
+	return &calls
+}
+
+// Test_Router_AllowedMethods_DoesNotScanEveryRoute pins what keeps a 404 from costing two full
+// scans: mux has already walked every route to reject the request, and AllowedMethods must not
+// walk them again. It may only match the routes registered under the request's path.
+func Test_Router_AllowedMethods_DoesNotScanEveryRoute(t *testing.T) {
+	const routes = 500
+
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(RouterEnvVar, matcher)
+
+			r := NewRouter()
+			calls := countedRoutes(r, routes)
+
+			unknown := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nope", http.NoBody)
+			assert.Nil(t, r.AllowedMethods(unknown))
+			assert.Zero(t, calls.Load(), "an unregistered path must not match any route")
+
+			wrongMethod := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/route-7", http.NoBody)
+			assert.Equal(t, []string{http.MethodGet}, r.AllowedMethods(wrongMethod))
+			assert.EqualValues(t, 1, calls.Load(), "only the route registered at the path is matched")
+		})
+	}
+}
+
+// Benchmark_Router_AllowedMethods_Miss measures the lookup an unregistered path pays on top of
+// mux's own scan, at a route count where a second scan would show.
+func Benchmark_Router_AllowedMethods_Miss(b *testing.B) {
+	r := NewRouter()
+
+	for i := range 1000 {
+		r.Add(http.MethodGet, fmt.Sprintf("/route-%d/{id}", i), noopHandler())
+	}
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/nope", http.NoBody)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = r.AllowedMethods(req)
 	}
 }
