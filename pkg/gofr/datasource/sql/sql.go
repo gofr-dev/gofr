@@ -38,11 +38,14 @@ const (
 	loopbackIPv4 = "127.0.0.1"
 	// dbStructTag is the struct tag naming the column a field is scanned from.
 	dbStructTag = "db"
+	// supportedDialects lists every DB_DIALECT value, for the error logs that name them.
+	supportedDialects = "mysql, postgres, " + supabaseDialect + ", " + sqlite + ", " + cockroachDB
 )
 
 var (
-	errUnsupportedDialect = fmt.Errorf(
-		"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+	errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - %s", supportedDialects)
+	errMissingDialect     = fmt.Errorf("DB_DIALECT is not set, so SQL is not initialized although DB_HOST or "+
+		"DB_NAME is set; supported dialects are - %s", supportedDialects)
 	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
 )
 
@@ -123,6 +126,14 @@ func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger dat
 	}
 }
 
+// logMissingDialect logs an error when DB settings are present without DB_DIALECT: that usually means the
+// dialect was forgotten, not that SQL is unwanted. With no DB settings at all it stays silent.
+func logMissingDialect(dbConfig *DBConfig, logger datasource.Logger) {
+	if dbConfig.HostName != "" || dbConfig.Database != "" {
+		logger.Errorf("%v", errMissingDialect)
+	}
+}
+
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
@@ -131,6 +142,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	}
 
 	if dbConfig.Dialect == "" {
+		logMissingDialect(dbConfig, logger)
+
 		return nil
 	}
 
@@ -156,7 +169,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
-		logger.Error(errUnsupportedDialect)
+		logger.Errorf("%v", errUnsupportedDialect)
 		return nil
 	}
 

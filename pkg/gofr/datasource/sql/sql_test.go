@@ -102,22 +102,58 @@ func TestNewSQL_ConnectTimeout(t *testing.T) {
 	}
 }
 
-func TestNewSQL_InvalidDialect(t *testing.T) {
-	ctrl := gomock.NewController(t)
+func TestNewSQL_DialectLogs(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+		wantLog string
+	}{
+		{
+			desc:    "empty dialect with DB_HOST set",
+			configs: map[string]string{"DB_HOST": "localhost"},
+			wantLog: errMissingDialect.Error(),
+		},
+		{
+			desc:    "empty dialect with only DB_NAME set",
+			configs: map[string]string{"DB_NAME": "orders"},
+			wantLog: errMissingDialect.Error(),
+		},
+		{
+			desc:    "empty dialect with no DB settings",
+			configs: map[string]string{},
+		},
+		{
+			desc:    "unsupported dialect",
+			configs: map[string]string{"DB_DIALECT": "abc", "DB_HOST": "localhost"},
+			wantLog: errUnsupportedDialect.Error(),
+		},
+	}
 
-	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_DIALECT": "abc",
-		"DB_HOST":    "localhost",
-	})
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 
-	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := logging.NewMockLogger(logging.ERROR)
-		mockMetrics := NewMockMetrics(ctrl)
+			var db *DB
 
-		NewSQL(mockConfig, mockLogger, mockMetrics)
-	})
+			// The real logger, not the mock: it writes JSON, which is where an error value logged as-is loses its text.
+			testLogs := testutil.StderrOutputForFunc(func() {
+				logger := logging.NewLogger(logging.ERROR)
+				mockMetrics := NewMockMetrics(ctrl)
 
-	assert.Containsf(t, testLogs, errUnsupportedDialect.Error(), "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
+				db = NewSQL(config.NewMockConfig(tc.configs), logger, mockMetrics)
+			})
+
+			assert.Nil(t, db)
+
+			if tc.wantLog == "" {
+				assert.Empty(t, testLogs)
+
+				return
+			}
+
+			assert.Contains(t, testLogs, tc.wantLog)
+		})
+	}
 }
 
 func TestNewSQL_GetDBDialect(t *testing.T) {
