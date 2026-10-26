@@ -264,6 +264,7 @@ func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger)
 	return kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      conf.Brokers,
 		Dialer:       dialer,
+		Balancer:     &kafka.Hash{},
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
 		BatchTimeout: time.Duration(conf.BatchTimeout),

@@ -128,6 +128,16 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
+	return k.publish(ctx, topic, nil, message)
+}
+
+// PublishWithKey publishes a record using key-based partitioning.
+// A nil key retains the round-robin behavior of Publish.
+func (k *kafkaClient) PublishWithKey(ctx context.Context, topic string, key, message []byte) error {
+	return k.publish(ctx, topic, key, message)
+}
+
+func (k *kafkaClient) publish(ctx context.Context, topic string, key, message []byte) error {
 	ctx, span, headers := startPublishSpan(ctx, topic)
 	defer span.End()
 
@@ -142,6 +152,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	err := writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic:   topic,
+			Key:     key,
 			Value:   message,
 			Headers: headers,
 			Time:    time.Now(),
