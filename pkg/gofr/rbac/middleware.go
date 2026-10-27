@@ -260,8 +260,12 @@ func reportExtractionFailure(r *http.Request, config *Config, err error, warning
 	}
 
 	switch {
-	case f.reason == reasonExtractorTimeout && errors.Is(f.cause, context.DeadlineExceeded):
-		// A canceled request is the client going away, not a slow extractor.
+	case f.reason == reasonExtractorError:
+		// Logged for every request, unlike the warnings: the cause can change from one request to the
+		// next. It goes to the log only, never the response.
+		config.Logger.Errorf("RBAC: extractor failed, request denied (trace %s): %v",
+			trace.SpanFromContext(r.Context()).SpanContext().TraceID(), f.cause)
+	case f.reason == reasonExtractorTimeout:
 		warnings.extractorTimeout.Do(func() {
 			config.Logger.Warnf("RBAC: extractor did not return within %s; request denied with 503", config.extractorTimeout)
 		})

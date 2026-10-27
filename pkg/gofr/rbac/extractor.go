@@ -30,8 +30,9 @@ const defaultExtractorTimeout = 5 * time.Second
 
 // Values of the reason label on the extraction failures metric, in extractor mode.
 const (
-	reasonExtractorError   = "extractor_error"
-	reasonExtractorTimeout = "extractor_timeout"
+	reasonExtractorError    = "extractor_error"
+	reasonExtractorTimeout  = "extractor_timeout"
+	reasonExtractorCanceled = "extractor_canceled"
 )
 
 var (
@@ -85,10 +86,16 @@ func extractHeldFromExtractor(r *http.Request, config *Config) (held, error) {
 	perms, err := config.extractor(config.container, r.WithContext(ctx))
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
+		// A canceled request is the client going away, not a slow extractor.
+		reason := reasonExtractorTimeout
+		if errors.Is(ctxErr, context.Canceled) {
+			reason = reasonExtractorCanceled
+		}
+
 		return held{}, &extractionFailure{
 			sentinel: fmt.Errorf("%w: %w", gofrHTTP.ErrorServiceUnavailable{}, ctxErr),
 			cause:    ctxErr,
-			reason:   reasonExtractorTimeout,
+			reason:   reason,
 		}
 	}
 
@@ -96,10 +103,5 @@ func extractHeldFromExtractor(r *http.Request, config *Config) (held, error) {
 		return held{}, &extractionFailure{sentinel: err, cause: err, reason: reasonExtractorError}
 	}
 
-	list := make([]any, len(perms))
-	for i, p := range perms {
-		list[i] = p
-	}
-
-	return held{list: list, permissionsMode: true}, nil
+	return held{perms: perms, permissionsMode: true}, nil
 }

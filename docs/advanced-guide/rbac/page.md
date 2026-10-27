@@ -1002,8 +1002,9 @@ Or use role inheritance to avoid duplication:
 **Every extractor-mode request gets a 503**
 - The extractor does not return within the timeout (5 seconds, or `RBAC_EXTRACTOR_TIMEOUT`), or it
   returns an error with a 503 status. The `rbac_role_extraction_failures` metric counts the first
-  with the reason `extractor_timeout` and the second with `extractor_error`, and the first timeout
-  logs a WARN
+  with the reason `extractor_timeout` and the second with `extractor_error`. The first timeout logs a
+  WARN; every extractor error is logged at ERROR with its cause and the request's trace ID. A request
+  the client cancels while the extractor runs is counted as `extractor_canceled` instead
 - Check that the extractor passes `r.Context()` to the calls it makes
 
 **Config file not found**
@@ -1093,7 +1094,8 @@ RBAC middleware implements industry-standard security practices to protect sensi
 - ✅ Status (allowed/denied) included
 - ✅ `rbac_role_extraction_failures` counts requests whose role or permissions could not be read,
   with a `reason` label: `no_jwt_claims` (RBAC is not behind OAuth), `missing_role` (no role claim or
-  header) or `unreadable_claim` (an IdP or client problem)
+  header) or `unreadable_claim` (an IdP or client problem); in extractor mode, `extractor_error`,
+  `extractor_timeout` or `extractor_canceled` (the client went away while the extractor ran)
 - ❌ Roles excluded (avoid high cardinality and PII concerns)
 
 **Logs:**

@@ -17,9 +17,10 @@ var errUnreadableClaim = errors.New("claim is not a string or an array of string
 // permissions themselves. It reads the claim value in place rather than merging it into a new list,
 // so checking a request allocates nothing.
 type held struct {
-	list            []any  // an array claim; nil when the claim was a single string
-	str             string // a string claim, or the header value
-	permissionsMode bool   // entries are permissions (permissions mode), not role names
+	list            []any    // an array claim; nil when the claim was a single string
+	perms           []string // the permissions an extractor returned, read as they are
+	str             string   // a string claim, or the header value
+	permissionsMode bool     // entries are permissions (permissions mode), not role names
 }
 
 // heldFromClaim interprets a claim value. permissionsMode selects permissions mode, where a string is a
@@ -61,6 +62,16 @@ func (h held) multi() bool {
 
 // grant returns the held role or permission that grants any of required, and whether one does.
 func (h held) grant(required []string, roles map[string]map[string]struct{}) (string, bool) {
+	if h.perms != nil {
+		for _, p := range h.perms {
+			if p != "" && slices.Contains(required, p) {
+				return p, true
+			}
+		}
+
+		return "", false
+	}
+
 	if h.list == nil {
 		return h.grantFromString(required, roles)
 	}
@@ -130,6 +141,18 @@ func entryName(entry any, permissionsMode bool) string {
 
 // count returns how many usable roles or permissions are held.
 func (h held) count() int {
+	if h.perms != nil {
+		n := 0
+
+		for _, p := range h.perms {
+			if p != "" {
+				n++
+			}
+		}
+
+		return n
+	}
+
 	if h.list == nil {
 		if !h.permissionsMode {
 			if h.str == "" {

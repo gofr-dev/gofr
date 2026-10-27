@@ -3,6 +3,7 @@ package rbac
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,6 +71,8 @@ type extractorTestCase struct {
 	wantCount   int    // the held count the audit log names on a denial after extraction
 	wantErrIs   error  // what the ErrorHandler's err must match, when errorHandler is set
 	wantErrSame bool   // the ErrorHandler gets wantErrIs itself, not a wrapper
+
+	wantErrorLog string // text the error log for an extractor error must contain
 }
 
 func extractorTestCases() []extractorTestCase {
@@ -91,7 +94,8 @@ func extractorTestCases() []extractorTestCase {
 			wantStatus: http.StatusOK, wantCalled: true, wantServed: true, wantPerm: "orders:read"},
 		{desc: "a plain error is a 403, even with permissions returned",
 			extractor:  staticExtractor([]string{"orders:read"}, errStoreDown),
-			wantStatus: http.StatusForbidden, wantCalled: true, wantReason: reasonExtractorError},
+			wantStatus: http.StatusForbidden, wantCalled: true, wantReason: reasonExtractorError,
+			wantErrorLog: "store down"},
 		{desc: "an error with a status code sets the status",
 			extractor:  staticExtractor(nil, gofrHTTP.ErrorServiceUnavailable{Dependency: "store"}),
 			wantStatus: http.StatusServiceUnavailable, wantCalled: true, wantReason: reasonExtractorError},
@@ -112,7 +116,7 @@ func extractorTestCases() []extractorTestCase {
 			wantStatus: http.StatusServiceUnavailable, wantCalled: true, wantReason: reasonExtractorTimeout},
 		{desc: "a canceled request is denied even when the extractor grants",
 			extractor: staticExtractor([]string{"orders:read"}, nil), cancelReq: true,
-			wantStatus: http.StatusServiceUnavailable, wantCalled: true, wantReason: reasonExtractorTimeout},
+			wantStatus: http.StatusServiceUnavailable, wantCalled: true, wantReason: reasonExtractorCanceled},
 		{desc: "a public route never calls the extractor",
 			extractor: staticExtractor(nil, errStoreDown), path: "/health",
 			wantStatus: http.StatusOK, wantServed: true},
@@ -236,6 +240,15 @@ func TestMiddleware_Extractor(t *testing.T) {
 				assert.Equal(t, tc.wantCount, auditLog.HeldCount, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
+			// An extractor error is logged once, with its cause; nothing else logs an error.
+			if tc.wantReason == reasonExtractorError {
+				require.Len(t, res.logger.errorLogs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, res.logger.errorLogs[0], "RBAC: extractor failed", "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, res.logger.errorLogs[0], tc.wantErrorLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				assert.Empty(t, res.logger.errorLogs, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
 			if tc.wantErrIs == nil {
 				return
 			}
@@ -247,6 +260,31 @@ func TestMiddleware_Extractor(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMiddleware_ExtractorAllocs(t *testing.T) {
+	// allocs counts the allocations of one granted request whose extractor returns n permissions,
+	// the required one last so that every entry is checked.
+	allocs := func(n int) int {
+		perms := make([]string, n)
+		for i := range perms {
+			perms[i] = fmt.Sprintf("perm:%d", i)
+		}
+
+		perms[n-1] = "orders:read"
+
+		cfg := &Config{Endpoints: extractorEndpoints()}
+		WithExtractor(staticExtractor(perms, nil), nil, 0)(cfg)
+		require.NoError(t, cfg.processUnifiedConfig())
+
+		wrapped := Middleware(cfg)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/orders", http.NoBody)
+		w := httptest.NewRecorder()
+
+		return int(testing.AllocsPerRun(100, func() { wrapped.ServeHTTP(w, req) }))
+	}
+
+	assert.Equal(t, allocs(3), allocs(50), "allocations must not grow with the number of permissions")
 }
 
 func TestMiddleware_ExtractorTimeoutWarnsOnce(t *testing.T) {
