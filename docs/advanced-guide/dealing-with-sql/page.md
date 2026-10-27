@@ -13,6 +13,9 @@ which allows connecting to different SQL dialects(MySQL, PostgreSQL, SQLite) wit
 
 With GoFr, connecting to different SQL databases is as straightforward as setting the DB_DIALECT environment variable to the respective dialect.
 
+If `DB_DIALECT` is not set, GoFr does not initialize SQL and `ctx.SQL` is nil, so an app can guard on `ctx.SQL == nil`.
+GoFr logs an error at startup when `DB_DIALECT` is missing but `DB_HOST` or `DB_NAME` is set, since that usually means the dialect was forgotten.
+
 ## Usage for PostgreSQL and MySQL
 To connect with PostgreSQL, set `DB_DIALECT` to `postgres`. Similarly, To connect with MySQL, simply set `DB_DIALECT` to `mysql`.
 

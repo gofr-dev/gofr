@@ -66,6 +66,29 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	assert.NotNil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
+func TestContainer_SQLNilWhenNotInitialized(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+	}{
+		{desc: "no db settings", configs: map[string]string{}},
+		{desc: "host without dialect", configs: map[string]string{"DB_HOST": "localhost"}},
+		{desc: "unsupported dialect", configs: map[string]string{"DB_DIALECT": "abc", "DB_HOST": "localhost"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := NewContainer(config.NewMockConfig(tc.configs))
+
+			// Compare the interface itself: assert.Nil also passes for a typed nil (*sql.DB)(nil),
+			// which is exactly the value apps can't guard against with c.SQL == nil.
+			if c.SQL != nil {
+				t.Errorf("expected untyped nil SQL, got %T", c.SQL)
+			}
+		})
+	}
+}
+
 func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	testCases := []struct {
 		desc    string
