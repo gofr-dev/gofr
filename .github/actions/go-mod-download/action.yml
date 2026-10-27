@@ -1,0 +1,39 @@
+name: Download Go modules
+description: >
+  Run `go mod download`, retrying a failed attempt twice with a growing pause,
+  so one dropped response from the module proxy does not fail the job.
+
+inputs:
+  working-directory:
+    description: Directory holding the go.mod to download for.
+    default: .
+
+runs:
+  using: composite
+  steps:
+    # Nothing is tested in this step, so a retry cannot hide a defect: it only
+    # rides out a network blip (proxy.golang.org answered one download with
+    # "stream error: INTERNAL_ERROR" and failed a whole job). A proxy that stays
+    # down still fails the step after the third attempt.
+    #
+    # The workflow also sets GOPROXY="https://proxy.golang.org|direct", which
+    # falls back to the source repository on any proxy error; this retry covers
+    # the cases where the fallback fails too.
+    - name: Download Go modules
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -eo pipefail
+        for attempt in 1 2 3; do
+          if go mod download; then
+            exit 0
+          fi
+
+          if [ "$attempt" -lt 3 ]; then
+            echo "::warning::go mod download failed (attempt $attempt of 3), retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          fi
+        done
+
+        echo "::error::go mod download failed 3 times"
+        exit 1
