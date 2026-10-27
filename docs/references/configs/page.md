@@ -520,7 +520,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - REDIS_RECORD_ARGS
-- Set to `false` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command.
+- Set to `false` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command. Redis pub/sub message bodies are masked in the debug log too.
 -  true
 
 ---

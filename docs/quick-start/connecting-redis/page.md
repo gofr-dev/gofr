@@ -102,7 +102,8 @@ These variables are stored in a `.env` file located within the `configs` directo
 
 At `LOG_LEVEL=DEBUG`, GoFr logs every Redis command together with its keys and values, and trace spans record the
 full command in the `db.statement` attribute. Set `REDIS_RECORD_ARGS=false` to hide them: each argument in the log
-becomes `*****`, and spans drop `db.statement` but are still named after the command (for example `set`).
+becomes `*****`, and spans drop `db.statement` but are still named after the command (for example `set`). The
+same flag masks the message body in the debug log of each message published or received through Redis pub/sub.
 
 ```env
 REDIS_RECORD_ARGS=false

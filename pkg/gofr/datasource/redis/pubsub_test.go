@@ -3106,3 +3106,108 @@ func TestPubSub_IsPermanentError(t *testing.T) {
 		})
 	}
 }
+
+// pubsubLogRecorder is a datasource.Logger that keeps every *pubsub.Log passed
+// to Debug, so a test can assert on the logged message value.
+type pubsubLogRecorder struct {
+	queryLogRecorder
+
+	mu   sync.Mutex
+	logs []*pubsub.Log
+}
+
+func (r *pubsubLogRecorder) Debug(args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, a := range args {
+		if l, ok := a.(*pubsub.Log); ok {
+			r.logs = append(r.logs, l)
+		}
+	}
+}
+
+// messageValues returns the MessageValue of every logged entry in mode.
+func (r *pubsubLogRecorder) messageValues(mode string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var values []string
+
+	for _, l := range r.logs {
+		if l.Mode == mode {
+			values = append(values, l.MessageValue)
+		}
+	}
+
+	return values
+}
+
+func TestPubSub_MessageValueLog(t *testing.T) {
+	const payload = `{"card":"4111-1111-1111-1111"}`
+
+	testCases := []struct {
+		desc      string
+		mode      string
+		hideArgs  bool
+		wantValue string
+	}{
+		{desc: "channel logs payload by default", mode: modePubSub, wantValue: payload},
+		{desc: "channel masks payload when hidden", mode: modePubSub, hideArgs: true, wantValue: redactedArg},
+		{desc: "stream logs payload by default", mode: modeStreams, wantValue: payload},
+		{desc: "stream masks payload when hidden", mode: modeStreams, hideArgs: true, wantValue: redactedArg},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s, err := miniredis.Run()
+			require.NoError(t, err)
+
+			defer s.Close()
+
+			mockMetrics := NewMockMetrics(gomock.NewController(t))
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			conf := map[string]string{
+				"REDIS_HOST":                   s.Host(),
+				"REDIS_PORT":                   s.Port(),
+				"PUBSUB_BACKEND":               "REDIS",
+				"REDIS_PUBSUB_MODE":            tc.mode,
+				"REDIS_STREAMS_CONSUMER_GROUP": "grp",
+				"REDIS_STREAMS_BLOCK_TIMEOUT":  "100ms",
+			}
+			if tc.hideArgs {
+				conf[recordArgsKey] = "false"
+			}
+
+			logs := &pubsubLogRecorder{}
+			ps, ok := NewPubSub(config.NewMockConfig(conf), logs, mockMetrics).(*PubSub)
+			require.True(t, ok)
+
+			defer ps.Close()
+
+			ctx := context.Background()
+			received := make(chan *pubsub.Message, 1)
+
+			go func() {
+				m, subErr := ps.Subscribe(ctx, "orders")
+				if subErr == nil {
+					received <- m
+				}
+			}()
+
+			time.Sleep(500 * time.Millisecond)
+			require.NoError(t, ps.Publish(ctx, "orders", []byte(payload)))
+
+			select {
+			case <-received:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timeout waiting for the published message")
+			}
+
+			assert.Equal(t, []string{tc.wantValue}, logs.messageValues("PUB"))
+			assert.Equal(t, []string{tc.wantValue}, logs.messageValues("SUB"))
+		})
+	}
+}
