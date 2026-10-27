@@ -324,7 +324,7 @@ type prepareHTTPServerCase struct {
 func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 	t.Helper()
 
-	return []prepareHTTPServerCase{
+	return append([]prepareHTTPServerCase{
 		{
 			desc:   "rules that all match a route log nothing",
 			config: rbacGuardingPing,
@@ -383,22 +383,6 @@ func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 			wantLog: []string{routeCheckFailed, "* /{path:.*}"},
 		},
 		{
-			desc:    "with two configs, a route one of them guards is not reported, and a dead rule in the first is",
-			config:  rbacGuardingPingAndAdminWithTypo,
-			second:  rbacGuardingPing,
-			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
-			wantLog: []string{routeCheckFailed, "config 1: GET /amdin/{id}"},
-			notLog:  []string{"routes covered by no rule", "routes only partly covered", "GET /admin", "config 2"},
-		},
-		{
-			desc:    "with two configs, a route neither guards is reported",
-			config:  rbacGuardingPing,
-			second:  rbacGuardingPing,
-			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
-			wantLog: []string{routeCheckFailed, "routes covered by no rule: GET /admin"},
-			notLog:  []string{"rules match no registered route"},
-		},
-		{
 			desc:     "a dead public rule is a warning that does not stop startup",
 			config:   rbacWithDeadPublicRule,
 			mode:     "fail",
@@ -417,6 +401,36 @@ func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 			setup:   func(a *App) { a.GET("/.well-known/custom", func(*Context) (any, error) { return "ok", nil }) },
 			wantLog: []string{routeCheckFailed, "GET /.well-known/custom"},
 			notLog:  []string{"/.well-known/health", "/.well-known/alive", "favicon.ico"},
+		},
+	}, twoConfigRouteCheckCases()...)
+}
+
+// twoConfigRouteCheckCases are the cases of TestApp_prepareHTTPServer where EnableRBAC is called twice.
+func twoConfigRouteCheckCases() []prepareHTTPServerCase {
+	return []prepareHTTPServerCase{
+		{
+			desc:    "with two configs, a route one of them guards is not reported, and a dead rule in the first is",
+			config:  rbacGuardingPingAndAdminWithTypo,
+			second:  rbacGuardingPing,
+			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "config 1: GET /amdin/{id}"},
+			notLog:  []string{"routes covered by no rule", "routes only partly covered", "GET /admin", "config 2"},
+		},
+		{
+			desc:    "with two configs, a route neither guards is reported",
+			config:  rbacGuardingPing,
+			second:  rbacGuardingPing,
+			setup:   func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed, "routes covered by no rule: GET /admin"},
+			notLog:  []string{"rules match no registered route"},
+		},
+		{
+			desc:   "with two configs, a partly covered route names each config's rules",
+			config: rbacPartlyCoveringItems,
+			second: rbacPartlyCoveringItems,
+			setup:  func(a *App) { a.GET("/items/{id}", func(*Context) (any, error) { return "ok", nil }) },
+			wantLog: []string{routeCheckFailed,
+				"GET /items/{id} (by config 1: GET /items/{id:[0-9]+} and config 2: GET /items/{id:[0-9]+})"},
 		},
 	}
 }
