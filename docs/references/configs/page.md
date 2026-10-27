@@ -532,7 +532,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - REDIS_URL
-- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL, including one with no host, logs an error and Redis is not connected. `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
+- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL, including one with no host, logs an error and Redis is not connected. Percent-encode a user name or password that contains `@`, `/`, `:` or `%` (`p@ss` becomes `p%40ss`). `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
 -  ""
 
 ---
@@ -567,7 +567,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 {% /table %}
 
-> **Note**: An invalid or negative value for `REDIS_POOL_SIZE`, `REDIS_MIN_IDLE_CONNS` or one of the `REDIS_*_TIMEOUT` variables logs a warning and keeps the default.
+> **Note**: An invalid value for `REDIS_POOL_SIZE`, `REDIS_MIN_IDLE_CONNS` or one of the `REDIS_*_TIMEOUT` variables logs a warning and is ignored, so the `REDIS_URL` parameter or the default still applies. `REDIS_POOL_SIZE` and the timeouts must be greater than zero; `REDIS_MIN_IDLE_CONNS` can be `0`.
 
 **Redis PubSub Configuration:**
 

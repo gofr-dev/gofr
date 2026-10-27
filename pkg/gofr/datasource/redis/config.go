@@ -177,38 +177,39 @@ func warnURLReplacedVars(c config.Config, logger datasource.Logger) {
 }
 
 // applyPoolOptions sets pool size and timeouts from their variables, overriding any REDIS_URL query parameter.
-// An invalid or negative value logs a warning and leaves the option as it was.
+// An invalid value logs a warning and leaves the option as it was. Pool size and timeouts must be positive:
+// go-redis turns 0 into its own default, which would silently discard a value set in REDIS_URL.
 func applyPoolOptions(c config.Config, options *redis.Options, logger datasource.Logger) {
-	if v, ok := nonNegativeInt(c, "REDIS_POOL_SIZE", logger); ok {
+	if v, ok := intAtLeast(c, "REDIS_POOL_SIZE", 1, logger); ok {
 		options.PoolSize = v
 	}
 
-	if v, ok := nonNegativeInt(c, "REDIS_MIN_IDLE_CONNS", logger); ok {
+	if v, ok := intAtLeast(c, "REDIS_MIN_IDLE_CONNS", 0, logger); ok {
 		options.MinIdleConns = v
 	}
 
-	if d, ok := nonNegativeDuration(c, "REDIS_DIAL_TIMEOUT", logger); ok {
+	if d, ok := positiveDuration(c, "REDIS_DIAL_TIMEOUT", logger); ok {
 		options.DialTimeout = d
 	}
 
-	if d, ok := nonNegativeDuration(c, "REDIS_READ_TIMEOUT", logger); ok {
+	if d, ok := positiveDuration(c, "REDIS_READ_TIMEOUT", logger); ok {
 		options.ReadTimeout = d
 	}
 
-	if d, ok := nonNegativeDuration(c, "REDIS_WRITE_TIMEOUT", logger); ok {
+	if d, ok := positiveDuration(c, "REDIS_WRITE_TIMEOUT", logger); ok {
 		options.WriteTimeout = d
 	}
 }
 
-func nonNegativeInt(c config.Config, name string, logger datasource.Logger) (int, bool) {
+func intAtLeast(c config.Config, name string, minValue int, logger datasource.Logger) (int, bool) {
 	raw := c.Get(name)
 	if raw == "" {
 		return 0, false
 	}
 
 	v, err := strconv.Atoi(raw)
-	if err != nil || v < 0 {
-		logger.Warnf("invalid %s %q, want a non-negative integer; keeping the default", name, raw)
+	if err != nil || v < minValue {
+		logger.Warnf("invalid %s %q, want an integer of at least %d; ignoring it", name, raw, minValue)
 
 		return 0, false
 	}
@@ -216,20 +217,25 @@ func nonNegativeInt(c config.Config, name string, logger datasource.Logger) (int
 	return v, true
 }
 
-func nonNegativeDuration(c config.Config, name string, logger datasource.Logger) (time.Duration, bool) {
+func positiveDuration(c config.Config, name string, logger datasource.Logger) (time.Duration, bool) {
 	raw := c.Get(name)
 	if raw == "" {
 		return 0, false
 	}
 
 	d, err := time.ParseDuration(raw)
-	if err != nil || d < 0 {
-		logger.Warnf("invalid %s %q, want a non-negative duration such as 500ms; keeping the default", name, raw)
+	if err != nil || d <= 0 {
+		logger.Warnf("invalid %s %q, want a positive duration such as 500ms; ignoring it", name, raw)
 
 		return 0, false
 	}
 
 	return d, true
+}
+
+// addr returns the host and port as a dialable address.
+func (c *Config) addr() string {
+	return net.JoinHostPort(c.HostName, strconv.Itoa(c.Port))
 }
 
 // configFromVars builds the connection settings from the discrete REDIS_* variables.
@@ -255,7 +261,7 @@ func configFromVars(c config.Config, logger datasource.Logger) *Config {
 	redisConfig.DB = db
 
 	options := new(redis.Options)
-	options.Addr = fmt.Sprintf("%s:%d", redisConfig.HostName, redisConfig.Port)
+	options.Addr = redisConfig.addr()
 	options.Username = redisConfig.Username
 	options.Password = redisConfig.Password
 	options.DB = redisConfig.DB

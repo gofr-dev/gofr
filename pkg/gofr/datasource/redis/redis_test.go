@@ -2,6 +2,8 @@ package redis
 
 import (
 	"crypto/tls"
+	"io"
+	"strconv"
 	"testing"
 	"time"
 
@@ -38,6 +40,66 @@ func Test_NewClient_HostNameMissing(t *testing.T) {
 			assert.Nil(t, client, "Test_NewClient_HostNameMissing Failed! Expected redis client to be nil")
 		})
 	}
+}
+
+func TestNewClient_ConnectFailureLog(t *testing.T) {
+	port := strconv.Itoa(testutil.GetFreePort(t))
+
+	tests := []struct {
+		name    string
+		env     map[string]string
+		connect func(config.Config, *MockMetrics) io.Closer
+		want    string
+	}{
+		{
+			name:    "client with discrete variables",
+			env:     map[string]string{"REDIS_HOST": "127.0.0.1", "REDIS_PORT": port, "REDIS_DB": "3"},
+			connect: newTestClient,
+			want:    "could not connect to redis at '127.0.0.1:" + port + "' on database 3",
+		},
+		{
+			name:    "client with an IPv6 URL",
+			env:     map[string]string{"REDIS_URL": "redis://[::1]:" + port + "/2"},
+			connect: newTestClient,
+			want:    "could not connect to redis at '[::1]:" + port + "' on database 2",
+		},
+		{
+			name:    "pubsub with an IPv6 URL",
+			env:     map[string]string{"PUBSUB_BACKEND": "REDIS", "REDIS_URL": "redis://[::1]:" + port + "/2", "REDIS_PUBSUB_DB": "4"},
+			connect: newTestPubSub,
+			want:    "could not connect to redis at '[::1]:" + port + "' on database 4",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			mockMetrics := NewMockMetrics(ctrl)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			var closer io.Closer
+
+			stderr := testutil.StderrOutputForFunc(func() {
+				closer = tc.connect(config.NewMockConfig(tc.env), mockMetrics)
+			})
+
+			require.NotNil(t, closer)
+
+			t.Cleanup(func() { _ = closer.Close() })
+
+			assert.Contains(t, stderr, tc.want)
+		})
+	}
+}
+
+func newTestClient(c config.Config, metrics *MockMetrics) io.Closer {
+	return NewClient(c, logging.NewMockLogger(logging.ERROR), metrics)
+}
+
+func newTestPubSub(c config.Config, metrics *MockMetrics) io.Closer {
+	return NewPubSub(c, logging.NewMockLogger(logging.ERROR), metrics)
 }
 
 func Test_NewClient_InvalidPort(t *testing.T) {

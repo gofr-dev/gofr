@@ -57,6 +57,28 @@ func TestGetRedisConfig_InvalidPortAndDB(t *testing.T) {
 	assert.Equal(t, 0, conf.DB)
 }
 
+func TestGetRedisConfig_Addr(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      map[string]string
+		wantAddr string
+	}{
+		{name: "host name", env: map[string]string{"REDIS_HOST": "localhost"}, wantAddr: "localhost:6379"},
+		{name: "IPv6 host variable", env: map[string]string{"REDIS_HOST": "::1", "REDIS_PORT": "6380"}, wantAddr: "[::1]:6380"},
+		{name: "IPv6 URL", env: map[string]string{"REDIS_URL": "redis://[::1]:6380"}, wantAddr: "[::1]:6380"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := testGetRedisConfig(t, tc.env)
+
+			require.NotNil(t, conf.Options)
+			assert.Equal(t, tc.wantAddr, conf.Options.Addr)
+			assert.Equal(t, tc.wantAddr, conf.addr())
+		})
+	}
+}
+
 func TestGetRedisConfig_TLS(t *testing.T) {
 	certFile, err := os.CreateTemp(t.TempDir(), "cert-*.pem")
 	require.NoError(t, err)
@@ -338,6 +360,10 @@ func assertRedisURLConfig(t *testing.T, tc *redisURLCase, conf *Config) {
 }
 
 func redisURLCases(caPath string) []redisURLCase {
+	return append(validRedisURLCases(caPath), invalidRedisURLCases()...)
+}
+
+func validRedisURLCases(caPath string) []redisURLCase {
 	const secret = redisURLTestSecret
 
 	return []redisURLCase{
@@ -357,6 +383,24 @@ func redisURLCases(caPath string) []redisURLCase {
 			wantPort:       6390,
 			wantTLS:        true,
 			wantServerName: "cache.example.com",
+		},
+		{
+			name:         "IPv6 host in brackets",
+			env:          map[string]string{"REDIS_URL": "redis://app:" + secret + "@[::1]:6380/2"},
+			wantHost:     "::1",
+			wantPort:     6380,
+			wantUser:     "app",
+			wantPassword: secret,
+			wantDB:       2,
+		},
+		{
+			// The example in docs/quick-start/connecting-redis.
+			name:         "percent-encoded password",
+			env:          map[string]string{"REDIS_URL": "redis://appuser:p%40ss%2Fw%3Ard@redis.example.com:6379"},
+			wantHost:     "redis.example.com",
+			wantPort:     defaultRedisPort,
+			wantUser:     "appuser",
+			wantPassword: "p@ss/w:rd",
 		},
 		{
 			name:     "missing port defaults to 6379",
@@ -387,6 +431,13 @@ func redisURLCases(caPath string) []redisURLCase {
 			wantServerName: "cache.example.com",
 			wantRootCAs:    true,
 		},
+	}
+}
+
+func invalidRedisURLCases() []redisURLCase {
+	const secret = redisURLTestSecret
+
+	return []redisURLCase{
 		{
 			name:       "invalid port",
 			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:port"},
@@ -493,6 +544,29 @@ func TestGetRedisConfig_PoolAndTimeouts(t *testing.T) {
 			},
 			wantStdout: []string{
 				"REDIS_POOL_SIZE", "REDIS_MIN_IDLE_CONNS", "REDIS_DIAL_TIMEOUT", "REDIS_READ_TIMEOUT", "REDIS_WRITE_TIMEOUT",
+			},
+		},
+		{
+			// go-redis turns a zero pool size or timeout into its own default, which would discard the URL value.
+			name: "zero pool size and timeouts warn and keep the URL query value",
+			env: map[string]string{
+				"REDIS_URL":           "redis://cache.internal?pool_size=5&dial_timeout=3s&read_timeout=10s&write_timeout=2s",
+				"REDIS_POOL_SIZE":     "0",
+				"REDIS_DIAL_TIMEOUT":  "0",
+				"REDIS_READ_TIMEOUT":  "0",
+				"REDIS_WRITE_TIMEOUT": "0s",
+			},
+			wantPoolSize:     5,
+			wantDialTimeout:  3 * time.Second,
+			wantReadTimeout:  10 * time.Second,
+			wantWriteTimeout: 2 * time.Second,
+			wantStdout:       []string{"REDIS_POOL_SIZE", "REDIS_DIAL_TIMEOUT", "REDIS_READ_TIMEOUT", "REDIS_WRITE_TIMEOUT"},
+		},
+		{
+			name: "zero min idle connections is applied",
+			env: map[string]string{
+				"REDIS_URL":            "redis://cache.internal?min_idle_conns=4",
+				"REDIS_MIN_IDLE_CONNS": "0",
 			},
 		},
 	}
