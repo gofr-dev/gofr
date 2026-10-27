@@ -319,7 +319,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_DIALECT
--  Database dialect. Supported values: mysql, postgres, supabase
+-  Database dialect. Supported values: mysql, postgres, supabase, sqlite, cockroachdb. If unset, SQL is not initialized; GoFr logs an error at startup when DB_HOST or DB_NAME is set.
 
 ---
 
@@ -358,6 +358,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  DB_MAX_OPEN_CONNECTION
 -  Number of maximum connections which can be used with database.
 -  0 (unlimited)
+---
+
+-  DB_CONNECT_TIMEOUT
+-  Timeout in whole seconds for establishing a database connection (MySQL, PostgreSQL, Supabase and CockroachDB; SQLite ignores it). When set, it bounds how long establishing a connection can take. For PostgreSQL, Supabase and CockroachDB this includes a host that accepts the connection but never answers. For MySQL it bounds only the TCP dial (an unreachable host), not a server that accepts the connection and then stalls the handshake. Unset or 0 means no timeout, as before. A negative or non-numeric value logs a warning and is ignored.
+-  0 (no timeout)
+
 ---
 
 -  DB_SSL_MODE
