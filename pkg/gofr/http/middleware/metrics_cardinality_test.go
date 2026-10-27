@@ -286,12 +286,16 @@ func TestUnmatchedLimitZero(t *testing.T) {
 		method   string
 		target   string
 		routed   bool
+		status   int // what an unrouted request is answered with
 		expected [3]string
 	}{
-		{name: "first unmatched request collapses", method: http.MethodGet, target: "/.env",
+		{name: "first unmatched request collapses", method: http.MethodGet, target: "/.env", status: http.StatusNotFound,
 			expected: [3]string{unmatchedPathLabel, http.MethodGet, "404"}},
-		{name: "custom method collapses too", method: "PROPFIND", target: "/wp-json",
+		{name: "custom method collapses too", method: "PROPFIND", target: "/wp-json", status: http.StatusNotFound,
 			expected: [3]string{unmatchedPathLabel, otherMethodLabel, "404"}},
+		{name: "auth rejecting before routing collapses", method: http.MethodGet, target: "/admin/.git/config",
+			status:   http.StatusUnauthorized,
+			expected: [3]string{unmatchedPathLabel, http.MethodGet, "401"}},
 		{name: "templated route stays verbatim", method: http.MethodGet, target: "/users/42", routed: true,
 			expected: [3]string{"/users/{id}", http.MethodGet, "200"}},
 	}
@@ -315,7 +319,7 @@ func TestUnmatchedLimitZero(t *testing.T) {
 			} else {
 				// Without a router every request is untemplated, as an unmatched one is.
 				h = mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					w.WriteHeader(http.StatusNotFound)
+					w.WriteHeader(tt.status)
 				}))
 			}
 

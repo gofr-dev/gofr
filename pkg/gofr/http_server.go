@@ -79,13 +79,18 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 
 	wsManager := websocket.New()
 
+	metricsOpts := []middleware.MetricsOption{middleware.WithCardinalityLimit(middlewareConfigs.MetricsCardinalityLimit)}
+
+	// A nil limit means METRICS_UNMATCHED_LIMIT is unset: keep the default budget.
+	if middlewareConfigs.MetricsUnmatchedLimit != nil {
+		metricsOpts = append(metricsOpts, middleware.WithUnmatchedLimit(*middlewareConfigs.MetricsUnmatchedLimit))
+	}
+
 	r.Use(
 		middleware.Tracer,
 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics(),
-			middleware.WithCardinalityLimit(middlewareConfigs.MetricsCardinalityLimit),
-			middleware.WithUnmatchedLimit(middlewareConfigs.MetricsUnmatchedLimit)),
+		middleware.Metrics(c.Metrics(), metricsOpts...),
 	)
 
 	return &httpServer{

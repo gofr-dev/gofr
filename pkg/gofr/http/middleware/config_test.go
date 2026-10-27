@@ -206,9 +206,10 @@ func TestGetConfigs_MetricsUnmatchedLimit(t *testing.T) {
 		name     string
 		value    string
 		expected int
+		unset    bool
 		warns    bool
 	}{
-		{name: "unset keeps the default budget", value: "", expected: untemplatedLabelLimit},
+		{name: "unset leaves the limit nil so the default budget applies", value: "", unset: true},
 		{name: "zero collapses from the first request", value: "0", expected: 0},
 		{name: "a positive value is kept", value: "100", expected: 100},
 		{name: "a value above the default is kept for the middleware to cap", value: "1000", expected: 1000},
@@ -230,7 +231,11 @@ func TestGetConfigs_MetricsUnmatchedLimit(t *testing.T) {
 				got = GetConfigs(config.NewMockConfig(env), logging.NewMockLogger(logging.WARN))
 			})
 
-			assert.Equal(t, tt.expected, got.MetricsUnmatchedLimit)
+			if tt.unset {
+				assert.Nil(t, got.MetricsUnmatchedLimit)
+			} else if assert.NotNil(t, got.MetricsUnmatchedLimit) {
+				assert.Equal(t, tt.expected, *got.MetricsUnmatchedLimit)
+			}
 
 			if !tt.warns {
 				assert.Empty(t, logs, "a valid value must not be reported")
