@@ -16,6 +16,11 @@ runs:
     # "stream error: INTERNAL_ERROR" and failed a whole job). A proxy that stays
     # down still fails the step after the third attempt.
     #
+    # Every failure is retried, deterministic ones too (bad go.mod, checksum
+    # mismatch, missing version): those cost 45s on a job that is already red.
+    # Sorting failures by error text would be fragile, and a network error worded
+    # differently from the list would fail on the first blip, defeating the retry.
+    #
     # The workflow also sets GOPROXY="https://proxy.golang.org|direct", which
     # falls back to the source repository on any proxy error; this retry covers
     # the cases where the fallback fails too.
