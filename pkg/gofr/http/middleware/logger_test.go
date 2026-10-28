@@ -1030,7 +1030,9 @@ func Test_LoggingContract_RequestLogZeroValueIsEmptyObject(t *testing.T) {
 //     \u00XX otherwise; DEL (U+007F) is NOT escaped and passes through raw.
 //   - U+2028 / U+2029 ARE escaped (JS line separators).
 //   - Non-ASCII (CJK, emoji, accented) passes through as raw UTF-8, unescaped.
-//   - Invalid UTF-8 bytes are replaced by the escaped form of U+FFFD.
+//   - Invalid UTF-8 bytes are replaced by U+FFFD: escaped by the original
+//     encoding/json engine, raw by json/v2 (the Go 1.27 default); see
+//     invalidUTF8Replacement.
 func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1083,9 +1085,9 @@ func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 			`{"uri":"/\u2028\u2029"}`,
 		},
 		{
-			"invalid UTF-8 bytes become the escaped replacement character",
+			"invalid UTF-8 bytes become the replacement character",
 			RequestLog{URI: "/\xff\xfe/ok"},
-			`{"uri":"/\ufffd\ufffd/ok"}`,
+			`{"uri":"/` + invalidUTF8Replacement + invalidUTF8Replacement + `/ok"}`,
 		},
 	}
 

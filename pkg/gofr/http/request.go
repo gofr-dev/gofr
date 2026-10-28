@@ -203,7 +203,11 @@ func (r *Request) bindJSON(i any) error {
 		return err
 	}
 
-	return json.Unmarshal(body, &i)
+	// i itself, not &i: Bind has already checked that i is a pointer. Decoding
+	// through &i adds a layer of `any`, and json/v2 (encoding/json's engine from
+	// Go 1.27) then leaves the struct name out of a type error, so a client that
+	// sent a string for an int got "Go struct field .b" instead of "T.b".
+	return json.Unmarshal(body, i)
 }
 
 // mediaType extracts the bare media type from a Content-Type header value.

@@ -800,7 +800,7 @@ func Test_LogWireFormat_MessageShapeByArity(t *testing.T) {
 // Test_LogWireFormat_HTMLEscapingOnTheRealPath pins that the production writer
 // (json.NewEncoder(out).Encode) HTML-escapes by default, exactly like
 // json.Marshal. A URI carrying `<`, `>` or `&` is rewritten on the wire, and
-// invalid UTF-8 becomes the escaped replacement character.
+// invalid UTF-8 becomes the replacement character (see invalidUTF8Replacement).
 func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -825,7 +825,7 @@ func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 		{
 			"invalid UTF-8",
 			"/\xff/ok",
-			`{"uri":"/\ufffd/ok"}`,
+			`{"uri":"/` + invalidUTF8Replacement + `/ok"}`,
 		},
 		{
 			"CJK and emoji stay raw",
