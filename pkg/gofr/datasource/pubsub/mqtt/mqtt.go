@@ -70,8 +70,11 @@ type Config struct {
 	CloseTimeout     time.Duration
 }
 
+// subscription is what Subscribe keeps per topic. Unsubscribe closes done, never msgs: paho can
+// still be running the handler, and a send on a closed msgs would panic.
 type subscription struct {
 	msgs    chan *pubsub.Message
+	done    chan struct{}
 	handler func(_ mqtt.Client, msg mqtt.Message)
 }
 
@@ -105,6 +108,10 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
 }
 
+// Subscribe returns the next message on the topic, subscribing to it on the broker on the first call.
+// It returns nil, nil when ctx is done or when Unsubscribe is called for the topic while it waits.
+// Unsubscribe is only final for a caller that then stops calling Subscribe: the next call subscribes
+// to the topic again, and the subscriber loop behind app.Subscribe makes that call.
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if !m.Client.IsConnected() {
 		time.Sleep(defaultRetryTimeout)
@@ -118,7 +125,8 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	subs, ok := m.subscriptions[topic]
 	if !ok {
 		subs.msgs = make(chan *pubsub.Message, messageBuffer)
-		subs.handler = m.createMqttHandler(subs.msgs)
+		subs.done = make(chan struct{})
+		subs.handler = m.createMqttHandler(subs.msgs, subs.done)
 		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
 
 		if token.Wait() && token.Error() != nil {
@@ -137,11 +145,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 	select {
 	// blocks if there are no messages in the channel
-	case msg, ok := <-subs.msgs:
-		if !ok {
-			return nil, nil
-		}
-
+	case msg := <-subs.msgs:
 		spanCtx, span := startSubscribeSpan(ctx, topic)
 		defer span.End()
 
@@ -157,6 +161,8 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 		})
 
 		return msg, nil
+	case <-subs.done:
+		return nil, nil
 	case <-ctx.Done():
 		return nil, nil
 	}
