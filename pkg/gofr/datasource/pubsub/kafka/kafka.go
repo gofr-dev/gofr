@@ -132,8 +132,12 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 // PublishWithKey publishes a record using key-based partitioning.
-// A nil key retains the round-robin behavior of Publish.
+// Nil and empty keys retain the round-robin behavior of Publish.
 func (k *kafkaClient) PublishWithKey(ctx context.Context, topic string, key, message []byte) error {
+	if len(key) == 0 {
+		key = nil
+	}
+
 	return k.publish(ctx, topic, key, message)
 }
 

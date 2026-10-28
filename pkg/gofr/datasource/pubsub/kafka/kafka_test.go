@@ -284,7 +284,15 @@ func TestKafkaClient_Publish(t *testing.T) {
 			},
 		}
 
-		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Return(nil)
+		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, messages ...kafka.Message) error {
+				require.Len(t, messages, 1)
+				assert.Nil(t, messages[0].Key)
+				assert.Equal(t, []byte("hello"), messages[0].Value)
+
+				return nil
+			},
+		)
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test")
 
