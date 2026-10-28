@@ -313,9 +313,10 @@ limit is inclusive of that overflow slot, so a value of `n` keeps up to `n-1` re
 METRICS_CARDINALITY_LIMIT=5000
 ```
 
-HTTP metrics record requests that match no route (scanner paths such as `/.env` or `/wp-json`) under their raw
-path until each process has seen 500 distinct label sets, then record them as `__unmatched__`. Short-lived
-instances rarely reach that budget, so across many instances the raw paths still pile up at the backend. Set
+HTTP metrics record requests that match no route (scanner paths such as `/.env` or `/wp-json`, and a known path
+called with a method it does not serve, which is answered 405) under their raw path until each process has
+seen 500 distinct label sets, then record them as `__unmatched__`. Short-lived instances rarely reach that
+budget, so across many instances the raw paths still pile up at the backend. Set
 `METRICS_UNMATCHED_LIMIT` to lower the budget; `0` records every unmatched request as `__unmatched__` from the
 first one, while registered routes keep their own series:
 

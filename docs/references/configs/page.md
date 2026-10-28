@@ -111,7 +111,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_UNMATCHED_LIMIT
--  Most distinct (path, method, status) label sets that HTTP metrics record verbatim, per process, for requests that match no route (and for unknown methods) before recording them as `__unmatched__` / `__other__`. It only ever lowers the budget: the effective value is the smallest of this, a quarter of METRICS_CARDINALITY_LIMIT, and 500. Set 0 to collapse from the first request, which suits short-lived or autoscaled instances (Cloud Run, serverless) where each instance would otherwise add its own scanner paths at the backend. A negative or non-integer value is treated as 0 and logged as a warning. At 0, requests served by a route registered at `/` and static files are also recorded as `__unmatched__`.
+-  Most distinct (path, method, status) label sets that HTTP metrics record verbatim, per process, for requests that match no route, including a known path called with a method it does not serve (405), and for unknown methods before recording them as `__unmatched__` / `__other__`. It only ever lowers the budget: the effective value is the smallest of this, a quarter of METRICS_CARDINALITY_LIMIT, and 500. Set 0 to collapse from the first request, which suits short-lived or autoscaled instances (Cloud Run, serverless) where each instance would otherwise add its own scanner paths at the backend. A negative or non-integer value is treated as 0 and logged as a warning. At 0, requests served by a route registered at `/` and static files are also recorded as `__unmatched__`.
 -  500
 
 ---

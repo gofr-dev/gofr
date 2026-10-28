@@ -330,3 +330,44 @@ func TestUnmatchedLimitZero(t *testing.T) {
 		})
 	}
 }
+
+// TestUnmatchedLimitPositive is the case between the default budget and zero: the first
+// limit distinct unmatched paths keep their own series and every later one collapses.
+func TestUnmatchedLimitPositive(t *testing.T) {
+	tests := []struct {
+		name     string
+		limit    int
+		targets  []string
+		expected map[[3]string]int
+	}{
+		{name: "paths past the limit collapse", limit: 2, targets: []string{"/.env", "/wp-json", "/.git/config"},
+			expected: map[[3]string]int{
+				{"/.env", http.MethodGet, "404"}:            1,
+				{"/wp-json", http.MethodGet, "404"}:         1,
+				{unmatchedPathLabel, http.MethodGet, "404"}: 1,
+			}},
+		{name: "an admitted path keeps recording verbatim", limit: 1, targets: []string{"/.env", "/.env", "/wp-json"},
+			expected: map[[3]string]int{
+				{"/.env", http.MethodGet, "404"}:            2,
+				{unmatchedPathLabel, http.MethodGet, "404"}: 1,
+			}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			untemplatedLabels.reset()
+			defer untemplatedLabels.reset()
+
+			rec := &cardRecorder{}
+			h := Metrics(rec, WithCardinalityLimit(2000), WithUnmatchedLimit(tt.limit))(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+
+			for _, target := range tt.targets {
+				h.ServeHTTP(httptest.NewRecorder(),
+					httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody))
+			}
+
+			assert.Equal(t, tt.expected, rec.series())
+		})
+	}
+}

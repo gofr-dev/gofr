@@ -216,6 +216,8 @@ func TestGetConfigs_MetricsUnmatchedLimit(t *testing.T) {
 		{name: "whitespace is trimmed", value: " 64 ", expected: 64},
 		{name: "a negative value is treated as zero", value: "-1", expected: 0, warns: true},
 		{name: "a non-integer value is treated as zero", value: "abc", expected: 0, warns: true},
+		{name: "a value overflowing int is treated as zero", value: "99999999999999999999", expected: 0, warns: true},
+		{name: "an explicit plus sign is accepted", value: "+5", expected: 5},
 	}
 
 	for _, tt := range tests {
