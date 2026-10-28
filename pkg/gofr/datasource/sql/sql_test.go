@@ -269,49 +269,51 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 }
 
-func TestGetDBConfig_RecordArgs(t *testing.T) {
+func TestGetDBConfig_RedactArgs(t *testing.T) {
 	testCases := []struct {
 		desc         string
-		recordArgs   string
+		redactArgs   string
 		wantHideArgs bool
 	}{
-		{desc: "unset shows args", recordArgs: "", wantHideArgs: false},
-		{desc: "TRUE shows args", recordArgs: "TRUE", wantHideArgs: false},
-		{desc: "FALSE hides args", recordArgs: "FALSE", wantHideArgs: true},
-		{desc: "0 hides args", recordArgs: "0", wantHideArgs: true},
-		{desc: "invalid value shows args", recordArgs: "maybe", wantHideArgs: false},
+		{desc: "unset shows args", redactArgs: "", wantHideArgs: false},
+		{desc: "FALSE shows args", redactArgs: "FALSE", wantHideArgs: false},
+		{desc: "TRUE hides args", redactArgs: "TRUE", wantHideArgs: true},
+		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
+		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
+		{desc: "invalid value shows args", redactArgs: "maybe", wantHideArgs: false},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			mockConfig := config.NewMockConfig(map[string]string{"DB_RECORD_ARGS": tc.recordArgs})
+			mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
 
 			assert.Equal(t, tc.wantHideArgs, getDBConfig(mockConfig).hideArgs)
 		})
 	}
 }
 
-func TestWarnInvalidRecordArgs(t *testing.T) {
+func TestWarnInvalidRedactArgs(t *testing.T) {
 	testCases := []struct {
 		desc       string
-		recordArgs string
+		redactArgs string
 		wantWarn   bool
 	}{
-		{desc: "unset", recordArgs: "", wantWarn: false},
-		{desc: "valid boolean", recordArgs: "False", wantWarn: false},
-		{desc: "invalid value", recordArgs: "maybe", wantWarn: true},
+		{desc: "unset", redactArgs: "", wantWarn: false},
+		{desc: "valid boolean", redactArgs: "True", wantWarn: false},
+		{desc: "padded boolean", redactArgs: " true ", wantWarn: false},
+		{desc: "invalid value", redactArgs: "maybe", wantWarn: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			out := testutil.StdoutOutputForFunc(func() {
-				mockConfig := config.NewMockConfig(map[string]string{"DB_RECORD_ARGS": tc.recordArgs})
+				mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
 
-				warnInvalidRecordArgs(mockConfig, logging.NewMockLogger(logging.WARN))
+				warnInvalidRedactArgs(mockConfig, logging.NewMockLogger(logging.WARN))
 			})
 
 			if tc.wantWarn {
-				assert.Contains(t, out, `invalid DB_RECORD_ARGS "maybe"`)
+				assert.Contains(t, out, `invalid DB_REDACT_ARGS "maybe"`)
 			} else {
 				assert.Empty(t, out)
 			}

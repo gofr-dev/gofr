@@ -452,9 +452,9 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
-- DB_RECORD_ARGS
-- Set to `false` to hide query arguments: each value in the debug query log becomes `*****`, so only the count stays visible. Covers queries on the DB and inside transactions.
-- true
+- DB_REDACT_ARGS
+- Set to `true` to hide query arguments: each value in the debug query log becomes `*****`, so only the count stays visible. Covers queries on the DB and inside transactions, for the SQL datasource GoFr creates from config (not a connection passed to `NewSQLFromDB`).
+- false
 
 ---
 
@@ -519,9 +519,9 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
-- REDIS_RECORD_ARGS
-- Set to `false` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command. Redis pub/sub message bodies are masked in the debug log too.
--  true
+- REDIS_REDACT_ARGS
+- Set to `true` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command. Redis pub/sub message bodies are masked in the debug log too.
+-  false
 
 ---
 

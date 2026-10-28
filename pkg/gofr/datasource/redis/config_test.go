@@ -218,18 +218,19 @@ func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
 	require.NotNil(t, conf.PubSubStreamsConfig)
 }
 
-func TestGetRedisConfig_RecordArgs(t *testing.T) {
+func TestGetRedisConfig_RedactArgs(t *testing.T) {
 	testCases := []struct {
 		desc         string
-		recordArgs   string
+		redactArgs   string
 		wantHideArgs bool
 		wantWarn     bool
 	}{
-		{desc: "unset shows args", recordArgs: "", wantHideArgs: false},
-		{desc: "true shows args", recordArgs: "true", wantHideArgs: false},
-		{desc: "false hides args", recordArgs: "false", wantHideArgs: true},
-		{desc: "0 hides args", recordArgs: "0", wantHideArgs: true},
-		{desc: "invalid value shows args and warns", recordArgs: "maybe", wantHideArgs: false, wantWarn: true},
+		{desc: "unset shows args", redactArgs: "", wantHideArgs: false},
+		{desc: "false shows args", redactArgs: "false", wantHideArgs: false},
+		{desc: "true hides args", redactArgs: "true", wantHideArgs: true},
+		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
+		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
+		{desc: "invalid value shows args and warns", redactArgs: "maybe", wantHideArgs: false, wantWarn: true},
 	}
 
 	for _, tc := range testCases {
@@ -239,14 +240,14 @@ func TestGetRedisConfig_RecordArgs(t *testing.T) {
 			out := testutil.StdoutOutputForFunc(func() {
 				conf = getRedisConfig(config.NewMockConfig(map[string]string{
 					"REDIS_HOST":        "localhost",
-					"REDIS_RECORD_ARGS": tc.recordArgs,
+					"REDIS_REDACT_ARGS": tc.redactArgs,
 				}), logging.NewMockLogger(logging.WARN))
 			})
 
 			assert.Equal(t, tc.wantHideArgs, conf.hideArgs)
 
 			if tc.wantWarn {
-				assert.Contains(t, out, `invalid REDIS_RECORD_ARGS "maybe"`)
+				assert.Contains(t, out, `invalid REDIS_REDACT_ARGS "maybe"`)
 			} else {
 				assert.Empty(t, out)
 			}

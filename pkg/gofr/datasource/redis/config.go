@@ -27,8 +27,8 @@ const (
 	trueValue                 = "true"
 	payloadKey                = "payload"
 	queryPipeline             = "pipeline"
-	recordArgsKey             = "REDIS_RECORD_ARGS"
-	// redactedArg stands in for each command argument when REDIS_RECORD_ARGS is false.
+	redactArgsKey             = "REDIS_REDACT_ARGS"
+	// redactedArg stands in for each command argument when REDIS_REDACT_ARGS is true.
 	redactedArg = "*****"
 )
 
@@ -110,24 +110,24 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	return redisConfig
 }
 
-// hideArgs reports whether REDIS_RECORD_ARGS asks for command arguments to be
-// hidden. Only a value that parses as boolean false hides them; an unparsable
+// hideArgs reports whether REDIS_REDACT_ARGS asks for command arguments to be
+// hidden. Only a value that parses as boolean true hides them; an unparsable
 // value is warned about and keeps them visible.
 func hideArgs(c config.Config, logger datasource.Logger) bool {
-	recordArgs := c.Get(recordArgsKey)
-	if recordArgs == "" {
+	redactArgs := c.Get(redactArgsKey)
+	if redactArgs == "" {
 		return false
 	}
 
-	record, err := strconv.ParseBool(recordArgs)
+	redact, err := strconv.ParseBool(strings.TrimSpace(redactArgs))
 	if err != nil {
-		logger.Warnf("invalid %s %q, expected true or false; command arguments will be logged and traced",
-			recordArgsKey, recordArgs)
+		logger.Warnf("invalid %s %q, expected true or false; command arguments stay visible in logs and traces",
+			redactArgsKey, redactArgs)
 
 		return false
 	}
 
-	return !record
+	return redact
 }
 
 // parsePubSubConfig parses PubSub configuration from environment variables.

@@ -3178,7 +3178,7 @@ func TestPubSub_MessageValueLog(t *testing.T) {
 				"REDIS_STREAMS_BLOCK_TIMEOUT":  "100ms",
 			}
 			if tc.hideArgs {
-				conf[recordArgsKey] = "false"
+				conf[redactArgsKey] = "true"
 			}
 
 			logs := &pubsubLogRecorder{}

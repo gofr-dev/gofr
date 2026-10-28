@@ -105,7 +105,7 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 }
 
 // loggedMessage returns the message body as it appears in the debug log:
-// masked when REDIS_RECORD_ARGS is false, verbatim otherwise.
+// masked when REDIS_REDACT_ARGS is false, verbatim otherwise.
 func (ps *PubSub) loggedMessage(message []byte) string {
 	if ps.config.hideArgs {
 		return redactedArg

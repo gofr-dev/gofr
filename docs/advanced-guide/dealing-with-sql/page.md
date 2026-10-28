@@ -52,12 +52,14 @@ DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ## Keeping query arguments out of logs and traces
 
 At `LOG_LEVEL=DEBUG`, GoFr logs every query together with its arguments, which can include personal data or
-secrets. Set `DB_RECORD_ARGS=false` to replace each argument with `*****`, so the log still shows how many
+secrets. Set `DB_REDACT_ARGS=true` to replace each argument with `*****`, so the log still shows how many
 arguments a query had but not their values:
 
 ```dotenv
-DB_RECORD_ARGS=false // Default true
+DB_REDACT_ARGS=true // Default false
 ```
+
+`DB_REDACT_ARGS` applies to the SQL datasource GoFr creates from config. A connection passed to `NewSQLFromDB` is not redacted.
 
 The query text itself is still logged and traced, so pass sensitive values as arguments (`?` / `$1`) rather than
 building them into the query string. Trace spans carry only the query text, never its arguments.

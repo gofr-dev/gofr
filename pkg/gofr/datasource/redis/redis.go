@@ -58,7 +58,7 @@ type Config struct {
 	PubSubQueryLimit    int           // Default query message limit (default: 10)
 
 	// hideArgs masks command arguments in the debug query log and drops
-	// db.statement from trace spans (REDIS_RECORD_ARGS=false).
+	// db.statement from trace spans (REDIS_REDACT_ARGS=true).
 	hideArgs bool
 }
 

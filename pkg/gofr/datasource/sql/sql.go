@@ -65,7 +65,7 @@ type DBConfig struct {
 	// leaves the driver default (no timeout) in place. For MySQL it bounds only the TCP dial.
 	connectTimeout int
 
-	// hideArgs masks query arguments in the debug query log (DB_RECORD_ARGS=false).
+	// hideArgs masks query arguments in the debug query log (DB_REDACT_ARGS=true).
 	// The zero value shows them, so a DBConfig built outside getDBConfig keeps the
 	// existing behavior.
 	hideArgs bool
@@ -73,11 +73,11 @@ type DBConfig struct {
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
 // a DBConfig is stringified, so the raw secret is never printed. It also stands in
-// for each query argument when DB_RECORD_ARGS is false.
+// for each query argument when DB_REDACT_ARGS is true.
 const redactedPassword = "*****"
 
-// recordArgsKey names the config that, set to false, masks query arguments.
-const recordArgsKey = "DB_RECORD_ARGS"
+// redactArgsKey names the config that, set to true, masks query arguments.
+const redactArgsKey = "DB_REDACT_ARGS"
 
 // String implements fmt.Stringer so that logging a DBConfig — directly or as part
 // of a larger struct, with %v or %+v — never leaks the raw password. The Password
@@ -156,7 +156,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	warnInvalidRecordArgs(configs, logger)
+	warnInvalidRedactArgs(configs, logger)
 
 	dbConfig.connectTimeout = getConnectTimeout(dbConfig.Dialect, configs, logger)
 
@@ -216,6 +216,9 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 // conf supplies the dialect plus the labels and pool sizing used in logs,
 // metrics and health output. A nil conf or db returns nil.
 //
+// DB_REDACT_ARGS applies only to the SQL datasource GoFr creates from config; a
+// connection passed to NewSQLFromDB does not have its query arguments redacted.
+//
 // Because it accepts any opened *sql.DB, this is the provider-agnostic seam for
 // managed-database authentication: GCP Cloud SQL passes a connector-backed handle,
 // while AWS RDS/Aurora IAM and Azure Entra ID modules pass a sql.OpenDB(connector)
@@ -257,7 +260,7 @@ func NewSQLFromConnector(connector driver.Connector, conf config.Config,
 	}
 
 	dbConfig := getDBConfig(conf)
-	warnInvalidRecordArgs(conf, logger)
+	warnInvalidRedactArgs(conf, logger)
 
 	// The connector owns routing (host/port/TLS), so a port label is meaningless on
 	// this path; clear it so connection logs don't print a dangling ':' after the host.
@@ -420,29 +423,29 @@ func getDBConfig(configs config.Config) *DBConfig {
 		// Supported for postgres, supabase, cockroachdb, and mysql
 		SSLMode:  configs.GetOrDefault("DB_SSL_MODE", sslModeDisable),
 		Charset:  configs.Get("DB_CHARSET"),
-		hideArgs: hideArgs(configs.Get(recordArgsKey)),
+		hideArgs: hideArgs(configs.Get(redactArgsKey)),
 	}
 }
 
-// hideArgs reports whether a DB_RECORD_ARGS value asks for query arguments to be
-// masked. Only a value that parses as boolean false hides them; an empty or
-// unparsable value keeps them visible (see warnInvalidRecordArgs).
-func hideArgs(recordArgs string) bool {
-	record, err := strconv.ParseBool(recordArgs)
+// hideArgs reports whether a DB_REDACT_ARGS value asks for query arguments to be
+// masked. Only a value that parses as boolean true hides them; an empty or
+// unparsable value keeps them visible (see warnInvalidRedactArgs).
+func hideArgs(redactArgs string) bool {
+	redact, err := strconv.ParseBool(strings.TrimSpace(redactArgs))
 
-	return err == nil && !record
+	return err == nil && redact
 }
 
-// warnInvalidRecordArgs warns when DB_RECORD_ARGS is set to a value that is not a
+// warnInvalidRedactArgs warns when DB_REDACT_ARGS is set to a value that is not a
 // boolean, since getDBConfig then keeps showing query arguments.
-func warnInvalidRecordArgs(configs config.Config, logger datasource.Logger) {
-	recordArgs := configs.Get(recordArgsKey)
-	if recordArgs == "" {
+func warnInvalidRedactArgs(configs config.Config, logger datasource.Logger) {
+	redactArgs := configs.Get(redactArgsKey)
+	if redactArgs == "" {
 		return
 	}
 
-	if _, err := strconv.ParseBool(recordArgs); err != nil {
-		logger.Warnf("invalid %s %q, expected true or false; query arguments will be logged", recordArgsKey, recordArgs)
+	if _, err := strconv.ParseBool(strings.TrimSpace(redactArgs)); err != nil {
+		logger.Warnf("invalid %s %q, expected true or false; query arguments stay visible in logs", redactArgsKey, redactArgs)
 	}
 }
 
