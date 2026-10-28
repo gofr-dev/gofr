@@ -32,11 +32,10 @@ func newReader(exp metricSdk.Exporter, interval time.Duration) metricSdk.Reader 
 // chunkingExporter sends each collection as a sequence of requests of at most
 // limit points. Temporality, aggregation, flush and shutdown pass through.
 //
-// The OTel SDK has an equivalent batcher, but only behind the experimental
-// OTEL_GO_X_METRIC_EXPORT_BATCH_SIZE environment variable; this makes the
-// limit a property of the exporter instead of something every deployment has to
-// discover. When both are active the SDK's batches arrive already small enough
-// and pass through unchanged.
+// The OTel SDK can batch too, via the PeriodicReader's WithMaxExportBatchSize
+// option, but that is opt-in per deployment; this makes the limit a property of
+// the exporter instead of something every deployment has to configure. When both
+// are active the SDK's batches arrive already small enough and pass through unchanged.
 type chunkingExporter struct {
 	metricSdk.Exporter
 	limit int
