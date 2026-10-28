@@ -22,8 +22,8 @@ import (
 // caller using Middleware directly must recover it itself.
 type Extractor func(c *container.Container, r *http.Request) ([]string, error)
 
-// Option changes how LoadPermissions builds a Config.
-type Option func(*Config)
+// option changes how loadPermissions builds a Config.
+type option func(*Config)
 
 // defaultExtractorTimeout bounds an extractor call when no timeout is given.
 const defaultExtractorTimeout = 5 * time.Second
@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	// errNilExtractor is returned when WithExtractor is given a nil function.
+	// errNilExtractor is returned when an extractor is given a nil function.
 	errNilExtractor = errors.New("RBAC extractor is nil")
 
 	// errExtractorWithClaimPath is returned when a config names a JWT claim to read and an extractor
@@ -44,9 +44,9 @@ var (
 	errExtractorWithClaimPath = errors.New("jwtClaimPath and permissionsClaimPath cannot be combined with an extractor")
 )
 
-// WithExtractor makes the config read permissions from fn instead of a header or a JWT claim. fn
+// withExtractor makes the config read permissions from fn instead of a header or a JWT claim. fn
 // receives c, and runs under timeout; a timeout that is zero or negative means 5 seconds.
-func WithExtractor(fn Extractor, c *container.Container, timeout time.Duration) Option {
+func withExtractor(fn Extractor, c *container.Container, timeout time.Duration) option {
 	if timeout <= 0 {
 		timeout = defaultExtractorTimeout
 	}

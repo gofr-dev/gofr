@@ -34,8 +34,8 @@ func staticExtractor(perms []string, err error) Extractor {
 }
 
 // withTestExtractor sets an extractor that grants nothing.
-func withTestExtractor() Option {
-	return WithExtractor(staticExtractor(nil, nil), nil, 0)
+func withTestExtractor() option {
+	return withExtractor(staticExtractor(nil, nil), nil, 0)
 }
 
 // blockingExtractor waits for the request context to end, the way an extractor that passes
@@ -168,7 +168,7 @@ func serveExtractor(t *testing.T, tc *extractorTestCase) extractorResult {
 	var res extractorResult
 
 	cfg := Config{Endpoints: extractorEndpoints()}
-	WithExtractor(func(got *container.Container, r *http.Request) ([]string, error) {
+	withExtractor(func(got *container.Container, r *http.Request) ([]string, error) {
 		res.called = true
 
 		assert.Same(t, c, got, "the extractor must get the container it was set up with")
@@ -274,7 +274,7 @@ func TestMiddleware_ExtractorAllocs(t *testing.T) {
 		perms[n-1] = "orders:read"
 
 		cfg := &Config{Endpoints: extractorEndpoints()}
-		WithExtractor(staticExtractor(perms, nil), nil, 0)(cfg)
+		withExtractor(staticExtractor(perms, nil), nil, 0)(cfg)
 		require.NoError(t, cfg.processUnifiedConfig())
 
 		wrapped := Middleware(cfg)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
@@ -293,7 +293,7 @@ func TestMiddleware_ExtractorTimeoutWarnsOnce(t *testing.T) {
 	var calls atomic.Int32
 
 	cfg := &Config{Endpoints: extractorEndpoints(), Logger: logger}
-	WithExtractor(func(c *container.Container, r *http.Request) ([]string, error) {
+	withExtractor(func(c *container.Container, r *http.Request) ([]string, error) {
 		calls.Add(1)
 
 		return blockingExtractor(c, r)
@@ -321,7 +321,7 @@ func TestLoadPermissions_ExtractorMode(t *testing.T) {
 	testCases := []struct {
 		desc    string
 		content string
-		opt     Option
+		opt     option
 		wantErr error
 		warn    string
 	}{
@@ -334,7 +334,7 @@ func TestLoadPermissions_ExtractorMode(t *testing.T) {
 			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`, opt: withTestExtractor(),
 			wantErr: errExtractorWithClaimPath},
 		{desc: "a nil extractor is rejected",
-			content: `{` + endpoints + `}`, opt: WithExtractor(nil, nil, 0),
+			content: `{` + endpoints + `}`, opt: withExtractor(nil, nil, 0),
 			wantErr: errNilExtractor},
 		{desc: "an extractor with a roles section warns that the roles are not consulted",
 			content: `{"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
@@ -351,7 +351,7 @@ func TestLoadPermissions_ExtractorMode(t *testing.T) {
 
 			logger := &mockLogger{}
 
-			config, err := LoadPermissions(path, logger, nil, nil, tc.opt)
+			config, err := loadPermissions(path, logger, nil, nil, tc.opt)
 			if tc.wantErr != nil {
 				require.ErrorIs(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -388,7 +388,7 @@ func TestWithExtractor(t *testing.T) {
 			c := &container.Container{}
 
 			var cfg Config
-			WithExtractor(staticExtractor(nil, nil), c, tc.timeout)(&cfg)
+			withExtractor(staticExtractor(nil, nil), c, tc.timeout)(&cfg)
 
 			assert.NotNil(t, cfg.extractor, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Same(t, c, cfg.container, "TEST[%d], Failed.\n%s", i, tc.desc)

@@ -350,7 +350,7 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, d *
 }
 
 // extractHeld extracts what the request holds for authorization.
-// Supports the application's extractor (via WithExtractor), permissions-mode extraction (via
+// Supports the application's extractor (via LoadPermissionsWithExtractor), permissions-mode extraction (via
 // PermissionsClaimPath), role extraction from JWT claims (via JWTClaimPath), or header-based role
 // extraction (via RoleHeader), in that order of precedence.
 // When a JWT claim path is set the header is never consulted, even if JWT extraction fails.

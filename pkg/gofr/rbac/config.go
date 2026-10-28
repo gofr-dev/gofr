@@ -158,7 +158,7 @@ type Config struct {
 	// single source of truth for resolving a request that no exact key matches.
 	rules []endpointRule `json:"-" yaml:"-"`
 
-	// The application's extractor and what it runs with, set by WithExtractor. extractorSet tells a
+	// The application's extractor and what it runs with, set by withExtractor. extractorSet tells a
 	// nil extractor, which is an error, from none.
 	extractorSet     bool                 `json:"-" yaml:"-"`
 	extractor        Extractor            `json:"-" yaml:"-"`
@@ -173,9 +173,22 @@ type Config struct {
 // It does not register the rbac_role_extraction_failures counter that Middleware increments;
 // App.EnableRBAC does. A caller that uses LoadPermissions and Middleware directly with metrics must
 // register that counter itself, or each failed extraction logs an error and is not counted.
-// opts are applied before the config is validated; see WithExtractor.
-func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer,
-	opts ...Option) (*Config, error) {
+func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer) (*Config, error) {
+	return loadPermissions(path, logger, metrics, tracer)
+}
+
+// LoadPermissionsWithExtractor is LoadPermissions for a config whose permissions come from fn, the
+// application's Extractor, instead of a header or a JWT claim. fn receives c and runs under timeout;
+// a timeout that is zero or negative means 5 seconds. It returns an error if fn is nil, or if the
+// config file sets jwtClaimPath or permissionsClaimPath.
+func LoadPermissionsWithExtractor(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer,
+	fn Extractor, c *container.Container, timeout time.Duration) (*Config, error) {
+	return loadPermissions(path, logger, metrics, tracer, withExtractor(fn, c, timeout))
+}
+
+// loadPermissions loads the config at path. opts are applied before the config is validated.
+func loadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer,
+	opts ...option) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read RBAC config file %s: %w", path, err)

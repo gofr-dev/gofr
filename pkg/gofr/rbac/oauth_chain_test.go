@@ -111,7 +111,7 @@ func TestMiddleware_BehindOAuth(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg := tc.config
 			if tc.extractor {
-				WithExtractor(grantsBySubject, nil, 0)(&cfg)
+				withExtractor(grantsBySubject, nil, 0)(&cfg)
 			}
 
 			require.NoError(t, cfg.processUnifiedConfig())
