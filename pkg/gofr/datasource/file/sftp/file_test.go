@@ -237,6 +237,21 @@ func TestJSONReader_Scan(t *testing.T) {
 	}
 }
 
+func TestJSONReader_RewindError(t *testing.T) {
+	client := newInMemClient(t)
+	logger := NewMockLogger(gomock.NewController(t))
+	f := sftpFile{File: writeRemoteFile(t, client, "/json/rewind.json", `{"name":"a"}`), logger: logger}
+
+	// A closed file cannot be rewound, which ReadAll cannot reach: its first token read fails first.
+	require.NoError(t, f.File.Close())
+	logger.EXPECT().Errorf("failed to rewind JSON file for reading as object %v", gomock.Any())
+
+	reader, err := f.createJSONObjectReader()
+
+	require.ErrorIs(t, err, os.ErrClosed)
+	assert.Nil(t, reader)
+}
+
 func TestSftpFile_ReadAll_JSONErrors(t *testing.T) {
 	client := newInMemClient(t)
 
