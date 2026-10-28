@@ -28,19 +28,58 @@ const (
 	// elasticsearchMappingType is the key naming a field's type in an index mapping.
 	elasticsearchMappingType = "type"
 
-	// elasticsearchMaxMigrationHits is Elasticsearch's default index.max_result_window, the most hits one search returns.
-	elasticsearchMaxMigrationHits = 10000
+	// elasticsearchMigrationPageSize is how many migration records one search returns. It is far below
+	// Elasticsearch's default index.max_result_window (10000), so an index configured with a smaller
+	// window still works.
+	elasticsearchMigrationPageSize = 1000
+	// elasticsearchSearchAfter is the search request key carrying the sort values of the last hit read.
+	elasticsearchSearchAfter = "search_after"
 )
 
-// getElasticsearchMigrationVersionsQuery fetches applied migration versions, highest first, so the
-// last applied version is always included even if the index holds more records than one search returns.
+// getElasticsearchMigrationVersionsQuery builds the query for the first page of applied migration
+// versions, highest first. Later pages come from getElasticsearchMigrationVersionsPageQuery.
 func getElasticsearchMigrationVersionsQuery() map[string]any {
 	return map[string]any{
-		"size": elasticsearchMaxMigrationHits,
+		"size": elasticsearchMigrationPageSize,
 		"sort": []map[string]any{
 			{migrationFieldVersion: map[string]any{"order": "desc"}},
 		},
 		elasticsearchSourceField: []string{migrationFieldVersion},
+	}
+}
+
+// getElasticsearchMigrationVersionsPageQuery builds the query for the page of versions below lastVersion.
+// The version is the document ID, so it is unique and needs no tiebreaker in the sort.
+func getElasticsearchMigrationVersionsPageQuery(lastVersion int64) map[string]any {
+	query := getElasticsearchMigrationVersionsQuery()
+	query[elasticsearchSearchAfter] = []any{lastVersion}
+
+	return query
+}
+
+// getElasticsearchMigrationVersions reads every applied migration version, one page at a time, so
+// neither the result window nor the size of the index can leave an applied version out.
+func getElasticsearchMigrationVersions(c *container.Container) ([]int64, error) {
+	var (
+		versions []int64
+		query    = getElasticsearchMigrationVersionsQuery()
+	)
+
+	for {
+		result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, query)
+		if err != nil {
+			return nil, err
+		}
+
+		page, hitCount := extractMigrationVersions(result)
+		versions = append(versions, page...)
+
+		// A short page is the last one. Stopping when no version was read guards against paging forever.
+		if hitCount < elasticsearchMigrationPageSize || len(page) == 0 {
+			return versions, nil
+		}
+
+		query = getElasticsearchMigrationVersionsPageQuery(page[len(page)-1])
 	}
 }
 
@@ -102,13 +141,11 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 
 // getAppliedMigrations retrieves the applied migration versions from Elasticsearch.
 func (em elasticsearchMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
-	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex},
-		getElasticsearchMigrationVersionsQuery())
+	versions, err := getElasticsearchMigrationVersions(c)
 	if err != nil {
 		return nil, fmt.Errorf("elasticsearch: %w", err)
 	}
 
-	versions := extractMigrationVersions(result)
 	c.Debugf("Elasticsearch applied migrations fetched: %v", versions)
 
 	applied, err := em.migrator.getAppliedMigrations(c)
@@ -123,19 +160,20 @@ func (em elasticsearchMigrator) getAppliedMigrations(c *container.Container) (ma
 	return applied, nil
 }
 
-// extractMigrationVersions extracts the migration versions from the Elasticsearch search result.
-func extractMigrationVersions(result map[string]any) []int64 {
+// extractMigrationVersions extracts the migration versions from the Elasticsearch search result,
+// along with how many hits the result held.
+func extractMigrationVersions(result map[string]any) (versions []int64, hitCount int) {
 	hits, ok := result["hits"].(map[string]any)
 	if !ok {
-		return nil
+		return nil, 0
 	}
 
 	hitsList, ok := hits["hits"].([]any)
 	if !ok {
-		return nil
+		return nil, 0
 	}
 
-	versions := make([]int64, 0, len(hitsList))
+	versions = make([]int64, 0, len(hitsList))
 
 	for _, h := range hitsList {
 		hit, ok := h.(map[string]any)
@@ -156,7 +194,7 @@ func extractMigrationVersions(result map[string]any) []int64 {
 		versions = append(versions, int64(version))
 	}
 
-	return versions
+	return versions, len(hitsList)
 }
 
 // beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).
