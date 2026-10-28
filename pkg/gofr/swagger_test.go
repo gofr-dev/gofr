@@ -119,8 +119,12 @@ func TestSwaggerUIHandler_Error(t *testing.T) {
 
 	resp, err := SwaggerUIHandler(ctx)
 
-	assert.Nil(t, resp)
-	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/abc.abc"})
+	require.Nil(t, resp)
+	var notFound gofrHTTP.ErrorEntityNotFound
+	require.ErrorAs(t, err, &notFound)
+	assert.Equal(t, "file", notFound.Name)
+	assert.Equal(t, "abc.abc", notFound.Value)
+	assert.Equal(t, http.StatusNotFound, notFound.StatusCode())
 }
 
 func TestSwaggerUIHandler_NoFileExtension(t *testing.T) {
