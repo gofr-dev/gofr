@@ -901,6 +901,10 @@ func TestConnectReplicas_ReplicaNotInitialized(t *testing.T) {
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+
+	// Declared before expectSQLInit's catch-all Warnf so that gomock matches it first.
+	mockLogger.EXPECT().Warnf("Failed to connect to replica #%d (%s): %v", 1, "localhost:3307", errReplicaNotInitialized).Times(1)
+
 	expectSQLInit(mockLogger, mockMetrics)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(0)
@@ -955,7 +959,16 @@ func TestResolverProvider_Connect(t *testing.T) {
 			setupMocks: func(l *MockLogger) {
 				l.EXPECT().Errorf("Failed to create replicas: %v", gomock.Any())
 			},
-			expType: nil,
+			expType: &gofrSQL.DB{},
+		},
+		{
+			desc:     "invalid replica port keeps the primary",
+			newApp:   newSQLiteApp,
+			replicas: []ReplicaCredential{{Host: "localhost:notaport", User: "user", Password: "pass"}},
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("Failed to create replicas: %v", gomock.Any())
+			},
+			expType: &gofrSQL.DB{},
 		},
 	}
 
@@ -967,13 +980,18 @@ func TestResolverProvider_Connect(t *testing.T) {
 
 			tc.setupMocks(mockLogger)
 
-			provider := NewDBResolverProvider(tc.newApp(t), &Config{Replicas: tc.replicas})
+			app := tc.newApp(t)
+			primary := app.GetSQL()
+
+			provider := NewDBResolverProvider(app, &Config{Replicas: tc.replicas})
 			provider.UseLogger(mockLogger)
 			provider.UseMetrics(mockMetrics)
 
 			provider.Connect()
 
+			require.NotNil(t, provider.GetResolver())
 			assert.IsType(t, tc.expType, provider.GetResolver())
+			assert.Same(t, primary, provider.GetResolver())
 		})
 	}
 }

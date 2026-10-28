@@ -150,6 +150,9 @@ func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metr
 	if err != nil {
 		logger.Errorf("Failed to create replicas: %v", err)
 
+		// Keep serving from the primary; a nil resolver would make AddDBResolver drop SQL entirely.
+		p.resolver = p.app.GetSQL()
+
 		return nil
 	}
 
