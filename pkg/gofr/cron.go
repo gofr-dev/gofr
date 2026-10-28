@@ -266,6 +266,25 @@ func (e errParsing) Error() string {
 	return fmt.Sprintf("unable to parse %s", e.invalidPart)
 }
 
+// errReversedRange denotes a range in schedule whose start is greater than its end, which would never match.
+type errReversedRange struct {
+	start, end int
+	input      string
+}
+
+func (e errReversedRange) Error() string {
+	return fmt.Sprintf("range start %d is greater than end %d in %s", e.start, e.end, e.input)
+}
+
+// errInvalidStep denotes a step in schedule that is not greater than zero, which would never advance.
+type errInvalidStep struct {
+	input string
+}
+
+func (e errInvalidStep) Error() string {
+	return fmt.Sprintf("step must be greater than 0 in %s", e.input)
+}
+
 // noopRequest is a non-operating implementation of Request interface
 // this is required to prevent panics while executing cron jobs.
 type noopRequest struct {

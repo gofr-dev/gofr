@@ -34,6 +34,11 @@ Each field can take a specific value or combination of values to define the sche
 `*` (asterisk) to represent **any** value and `,` (comma) to separate multiple values. It also supports `0-n` to define a
 range of values for which the cron should run and `*/n` to define number of times the cron should run. Here n is an integer.
 
+The `n` in `*/n` is a step and must be greater than 0, and the start of a range must not be greater than its end, so
+`*/0` and `10-5` are rejected: `AddCronJob` logs the error and does not add the job. A step can also follow a range, as in
+`10-30/5`, and can be mixed with other values in a comma separated list, for example `*/30,45` in the minute field runs at
+minutes 0, 30 and 45.
+
 ## Adding cron jobs in GoFr applications
 Adding cron jobs to GoFr applications is made easy with a simple injection of user's function to the cron table maintained
 by the GoFr. With the 5-field format the minimum time difference between a cron job's two consecutive runs is a minute,

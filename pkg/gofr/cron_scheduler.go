@@ -93,7 +93,7 @@ func parsePart(s string, minValue, maxValue int) (map[int]struct{}, error) {
 
 // parseSteps parses a */N or A-B/N part and adds every Nth value of the range to r.
 // A step of zero would never advance and a reversed range would select nothing,
-// so both are reported as parsing errors instead of being accepted silently.
+// so both return an error that says why instead of being accepted silently.
 func parseSteps(s, match1, match2 string, minValue, maxValue int, r map[int]struct{}) error {
 	localMin := minValue
 	localMax := maxValue
@@ -114,7 +114,7 @@ func parseSteps(s, match1, match2 string, minValue, maxValue int, r map[int]stru
 
 	n, _ := strconv.Atoi(match2)
 	if n <= 0 {
-		return errParsing{match2, s}
+		return errInvalidStep{s}
 	}
 
 	for i := localMin; i <= localMax; i += n {
@@ -186,7 +186,7 @@ func validateRange(localMin, localMax, minValue, maxValue int, rangeVal, input s
 	}
 
 	if localMin > localMax {
-		return errParsing{rangeVal, input}
+		return errReversedRange{localMin, localMax, input}
 	}
 
 	return nil

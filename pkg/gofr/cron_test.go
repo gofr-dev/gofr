@@ -149,13 +149,21 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 			expErrString: "unable to parse",
 		},
 		{
+			desc: "trailing comma after a step",
+			schedules: []string{
+				"*/30, * * * *",
+				"* 0-10/5, * * *",
+			},
+			expErrString: "unable to parse",
+		},
+		{
 			desc: "zero step",
 			schedules: []string{
 				"*/0 * * * *",
 				"* 1-10/0 * * *",
 				"* * 1,*/0 * *",
 			},
-			expErrString: "unable to parse 0",
+			expErrString: "step must be greater than 0",
 		},
 		{
 			desc: "reversed range",
@@ -163,20 +171,48 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				"10-5/2 * * * *",
 				"* 10-5 * * *",
 			},
-			expErrString: "unable to parse",
+			expErrString: "range start 10 is greater than end 5",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			for _, s := range tc.schedules {
-				j, err := parseSchedule(s)
+				j, err := parseScheduleWithTimeout(t, s)
 
 				assert.Nil(t, j)
 				require.ErrorContains(t, err, tc.expErrString)
 			}
 		})
 	}
+}
+
+// parseScheduleWithTimeout fails the test when parseSchedule does not return within 2 seconds, so that a
+// regression to an endless loop, as a zero step used to cause, fails fast instead of hanging the whole package.
+func parseScheduleWithTimeout(t *testing.T, s string) (*job, error) {
+	t.Helper()
+
+	type result struct {
+		j   *job
+		err error
+	}
+
+	done := make(chan result, 1)
+
+	go func() {
+		j, err := parseSchedule(s)
+		done <- result{j, err}
+	}()
+
+	var res result
+
+	select {
+	case res = <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("parseSchedule(%q) did not return within 2s", s)
+	}
+
+	return res.j, res.err
 }
 
 func TestCron_parseSchedule_StepInCommaList(t *testing.T) {
@@ -205,6 +241,17 @@ func TestCron_parseSchedule_StepInCommaList(t *testing.T) {
 				day:       map[int]struct{}{1: {}, 2: {}, 3: {}, 11: {}},
 				month:     getDefaultJobField(1, 12, 1),
 				dayOfWeek: map[int]struct{}{},
+			},
+		},
+		{
+			desc:     "two steps in a comma list",
+			schedule: "*/15,*/20 * * * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 15: {}, 20: {}, 30: {}, 40: {}, 45: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       getDefaultJobField(1, 31, 1),
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: getDefaultJobField(0, 6, 1),
 			},
 		},
 	}
@@ -932,6 +979,20 @@ func TestErrOutOfRange_Error(t *testing.T) {
 	err := errOutOfRange{rangeVal: "65", input: "65-70", min: 0, max: 59}
 
 	expected := "out of range for 65 in 65-70. 65 must be in range 0-59"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrReversedRange_Error(t *testing.T) {
+	err := errReversedRange{start: 10, end: 5, input: "10-5/2"}
+
+	expected := "range start 10 is greater than end 5 in 10-5/2"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrInvalidStep_Error(t *testing.T) {
+	err := errInvalidStep{input: "*/0"}
+
+	expected := "step must be greater than 0 in */0"
 	assert.Equal(t, expected, err.Error())
 }
 
