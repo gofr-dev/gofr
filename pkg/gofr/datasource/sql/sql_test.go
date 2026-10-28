@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -428,6 +429,142 @@ func TestSQL_getDBConnectionString_MySQLTLSParam(t *testing.T) {
 			assert.Equal(t, tc.expOut, connString)
 		})
 	}
+}
+
+//nolint:gochecknoglobals // table kept out of the test body so the test stays within funlen.
+var postgresQuotingTestCases = []struct {
+	desc    string
+	configs *DBConfig
+	expOut  string
+}{
+	{
+		desc: "password with a space is quoted",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p@ss w0rd",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password='p@ss w0rd' dbname=test sslmode=disable",
+	},
+	{
+		desc: "password with a tab is quoted",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p@ss\tword",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password='p@ss\tword' dbname=test sslmode=disable",
+	},
+	{
+		desc: "password with a newline is quoted",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p@ss\nword",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password='p@ss\nword' dbname=test sslmode=disable",
+	},
+	{
+		desc: "password with a non-breaking space is quoted",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p@ss\u00a0word",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password='p@ss\u00a0word' dbname=test sslmode=disable",
+	},
+	{
+		desc: "password with an equals sign needs no quoting",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p=ss=word",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password=p=ss=word dbname=test sslmode=disable",
+	},
+	{
+		desc: "password with a backslash is quoted and escaped",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `ab\cd`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='ab\\cd' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with a single quote is quoted and escaped",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "a'b",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='a\'b' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with all three characters at once",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `p \'s w0rd`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='p \\\'s w0rd' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "every field goes through the rule, port and sslmode included",
+		configs: &DBConfig{
+			Dialect: "cockroachdb", HostName: "db host", User: "us er", Password: "p'w",
+			Port: "26257", Database: "db name", SSLMode: "require",
+		},
+		expOut: "host='db host' port=26257 user='us er' password='p\\'w' dbname='db name' sslmode=require",
+	},
+	{
+		desc: "empty password is quoted as an empty value",
+		configs: &DBConfig{
+			Dialect: "supabase", HostName: "host", User: "user", Password: "",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password='' dbname=test sslmode=disable",
+	},
+	{
+		desc: "values without special characters are left untouched",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: "p@ssw0rd",
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: "host=host port=3201 user=user password=p@ssw0rd dbname=test sslmode=disable",
+	},
+}
+
+func TestSQL_getDBConnectionString_PostgresQuoting(t *testing.T) {
+	for _, tc := range postgresQuotingTestCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			connString, err := getDBConnectionString(tc.configs)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expOut, connString)
+		})
+	}
+}
+
+// TestSQL_getDBConnectionString_PostgresParsedBack runs the connection string through the
+// parser lib/pq itself uses, so the quoting is checked against something other than our own
+// expectation, and asserts the values survive the trip.
+func TestSQL_getDBConnectionString_PostgresParsedBack(t *testing.T) {
+	configs := &DBConfig{
+		Dialect: "postgres", HostName: "db host", User: "us er", Password: "p@ss w0rd\t'\\=",
+		Port: "55000", Database: "db name", SSLMode: "disable",
+	}
+
+	unquoted := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		configs.HostName, configs.Port, configs.User, configs.Password, configs.Database, configs.SSLMode)
+
+	_, err := pq.NewConfig(unquoted)
+	require.Error(t, err, "a value with a space should not survive the lib/pq parser as it is")
+
+	connString, err := getDBConnectionString(configs)
+	require.NoError(t, err)
+
+	parsed, err := pq.NewConfig(connString)
+	require.NoError(t, err, "lib/pq rejected the quoted connection string: %s", connString)
+
+	assert.Equal(t, configs.HostName, parsed.Host)
+	assert.Equal(t, configs.User, parsed.User)
+	assert.Equal(t, configs.Password, parsed.Password)
+	assert.Equal(t, configs.Database, parsed.Database)
+	assert.Equal(t, configs.Port, fmt.Sprint(parsed.Port))
+	assert.Equal(t, configs.SSLMode, string(parsed.SSLMode))
 }
 
 func Test_NewSQLMock(t *testing.T) {

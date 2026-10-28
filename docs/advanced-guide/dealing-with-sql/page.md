@@ -29,6 +29,12 @@ DB_PORT=3306
 DB_DIALECT=postgres
 ```
 
+On PostgreSQL, Supabase and CockroachDB, every value that goes into the libpq connection string is
+quoted when it is empty or holds a space, a single quote or a backslash, and passed through
+unchanged otherwise: that covers `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` and
+`DB_SSLMODE`. Keep the raw value in `.env` — a password such as `p@ss w0rd` or `ab\cd` works as it
+is. Do not pre-quote or pre-escape it.
+
 ## Usage for SQLite
 To connect with SQLite, set `DB_DIALECT` to `sqlite` and `DB_NAME` to the name of your DB File. If the DB file already exists then it will be used otherwise a new one will be created.
 

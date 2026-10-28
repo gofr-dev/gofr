@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
@@ -462,7 +463,9 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
 		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode)
+			quotePGValue(dbConfig.HostName), quotePGValue(dbConfig.Port), quotePGValue(dbConfig.User),
+			quotePGValue(dbConfig.Password), quotePGValue(dbConfig.Database),
+			quotePGValue(dbConfig.SSLMode))
 
 		if dbConfig.connectTimeout > 0 {
 			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.connectTimeout)
@@ -476,6 +479,33 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	default:
 		return "", errUnsupportedDialect
 	}
+}
+
+// quotePGValue renders a value for a libpq key/value connection string. lib/pq ends an
+// unquoted value at the first unicode space and reads a backslash as an escape, so a value
+// holding either of those, or a single quote, is single quoted with backslashes and quotes
+// escaped. An empty value is quoted too, matching the copy in cloudsql/settings.go, which
+// cannot be shared: that datasource is its own module and does not import gofr.dev.
+func quotePGValue(value string) string {
+	if value != "" && !strings.ContainsAny(value, "'\\") && !strings.ContainsFunc(value, unicode.IsSpace) {
+		return value
+	}
+
+	var b strings.Builder
+
+	b.WriteByte('\'')
+
+	for _, r := range value {
+		if r == '\\' || r == '\'' {
+			b.WriteByte('\\')
+		}
+
+		b.WriteRune(r)
+	}
+
+	b.WriteByte('\'')
+
+	return b.String()
 }
 
 func pushDBMetrics(database *DB, metrics Metrics) {
