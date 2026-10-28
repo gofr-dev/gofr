@@ -33,7 +33,7 @@ docker exec gofr-redis redis-cli -a password SET greeting "Hello from Redis."
 GoFr applications rely on environment variables to configure and connect to a Redis server.  
 These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
-If `REDIS_HOST` is not set, GoFr does not initialize Redis and `ctx.Redis` is nil, so an app can guard on `ctx.Redis == nil`.
+If `REDIS_HOST` is not set, GoFr does not initialize Redis and `ctx.Redis` is nil, so an app can guard on `ctx.Redis == nil`, as the example below does.
 
 ### Required Environment Variables:
 
@@ -134,8 +134,12 @@ func main() {
 	app := gofr.New()
 
 	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
-		// Get the value using the Redis instance
+		// Redis is nil when REDIS_HOST is not set
+		if ctx.Redis == nil {
+			return "redis not configured", nil
+		}
 
+		// Get the value using the Redis instance
 		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			// If the key is not found, we are not considering this an error and returning ""
