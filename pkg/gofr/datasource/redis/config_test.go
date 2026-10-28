@@ -444,6 +444,21 @@ func invalidRedisURLCases() []redisURLCase {
 			wantStderr: []string{"invalid REDIS_URL"},
 		},
 		{
+			name:       "port out of range",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:99999999999/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
+			name:       "port above 65535",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:65536/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
+			name:       "port zero",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:0/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
 			name:       "bad db path",
 			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6379/abc"},
 			wantStderr: []string{"invalid REDIS_URL"},

@@ -20,6 +20,8 @@ import (
 
 const (
 	defaultRedisPort          = 6379
+	minPort                   = 1
+	maxPort                   = 65535
 	defaultPubSubDB           = 15 // Highest default Redis database (0-15)
 	modePubSub                = "pubsub"
 	modeStreams               = "streams"
@@ -44,6 +46,7 @@ var (
 	errInvalidRedisURLScheme = errors.New("scheme must be redis or rediss")
 	errInvalidRedisURLEscape = errors.New("invalid URL escape")
 	errInvalidRedisURLHost   = errors.New("missing host")
+	errInvalidRedisURLPort   = errors.New("port must be between 1 and 65535")
 )
 
 // getRedisConfig builds the Redis Config struct from the provided [Config].
@@ -129,6 +132,10 @@ func parseRedisURL(rawURL string) (*Config, error) {
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, redactURLError(err, rawURL)
+	}
+
+	if port < minPort || port > maxPort {
+		return nil, fmt.Errorf("%w: %w, got %d", errInvalidRedisURL, errInvalidRedisURLPort, port)
 	}
 
 	return &Config{
