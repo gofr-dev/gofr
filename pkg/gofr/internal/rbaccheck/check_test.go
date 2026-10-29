@@ -132,16 +132,16 @@ func mismatchCases() []checkCase {
 				guard("/static", "*"),
 				guard("/static/{path:.*}", "*"),
 			},
-			want: Mismatches{PartlyCovered: []string{
-				"DELETE /api/users/{id} (by DELETE /api/users/{id:[0-9]+})",
-				"GET /api/users/{id} (by GET /api/users/{id:[0-9]+})",
+			want: Mismatches{PartlyCovered: []PartialCoverage{
+				{Route: "DELETE /api/users/{id}", Rules: []string{"DELETE /api/users/{id:[0-9]+}"}},
+				{Route: "GET /api/users/{id}", Rules: []string{"GET /api/users/{id:[0-9]+}"}},
 			}},
 		},
 		{
 			desc:      "a method list narrower than a static route covers it only partly",
 			endpoints: append(coveringRules()[:4], guard("/static/{path:.*}", http.MethodGet, http.MethodHead)),
-			want: Mismatches{PartlyCovered: []string{
-				"* /static/{path:.*} (by GET /static/{path:.*} and HEAD /static/{path:.*})",
+			want: Mismatches{PartlyCovered: []PartialCoverage{
+				{Route: "* /static/{path:.*}", Rules: []string{"GET /static/{path:.*}", "HEAD /static/{path:.*}"}},
 			}},
 		},
 	}
@@ -212,6 +212,19 @@ func TestCheckAll(t *testing.T) {
 	static := []rbac.EndpointMapping{guard("/static", "*"), guard("/static/{path:.*}", "*")}
 	numeric := guard("/api/users/{id:[0-9]+}", http.MethodGet)
 
+	const configCount = 11
+
+	manyConfigs := make([][]rbac.EndpointMapping, configCount)
+	manyRules := make([]string, configCount)
+	manyDead := make([]string, configCount)
+
+	for i := range manyConfigs {
+		manyConfigs[i] = append([]rbac.EndpointMapping{guard("/api/users", "*"), guard("/api/posts", "*"), numeric}, static...)
+		manyConfigs[i] = append(manyConfigs[i], guard("/api/gone", http.MethodGet))
+		manyDead[i] = fmt.Sprintf("config %d: GET /api/gone", i+1)
+		manyRules[i] = fmt.Sprintf("config %d: GET /api/users/{id:[0-9]+}", i+1)
+	}
+
 	testCases := []struct {
 		desc    string
 		configs [][]rbac.EndpointMapping
@@ -238,14 +251,24 @@ func TestCheckAll(t *testing.T) {
 			want: Mismatches{DeadRules: []string{"config 1: GET /api/user"}, Uncovered: []string{"GET /api/posts"}},
 		},
 		{
-			desc: "a route only partly covered by every config is partly covered",
+			desc: "a route only partly covered by every config lists each config's rules",
 			configs: [][]rbac.EndpointMapping{
 				append([]rbac.EndpointMapping{guard("/api/users", "*"), guard("/api/posts", "*"), numeric}, static...),
-				append([]rbac.EndpointMapping{guard("/api/posts", "*"), numeric}, static...),
+				append([]rbac.EndpointMapping{guard("/api/posts", "*"), guard("/api/users/{id:[a-z]+}", http.MethodGet)}, static...),
 			},
 			want: Mismatches{
+				Uncovered: []string{"DELETE /api/users/{id}"},
+				PartlyCovered: []PartialCoverage{{Route: "GET /api/users/{id}",
+					Rules: []string{"config 1: GET /api/users/{id:[0-9]+}", "config 2: GET /api/users/{id:[a-z]+}"}}},
+			},
+		},
+		{
+			desc:    "rules from ten or more configs are listed in config order, not text order",
+			configs: manyConfigs,
+			want: Mismatches{
+				DeadRules:     manyDead,
 				Uncovered:     []string{"DELETE /api/users/{id}"},
-				PartlyCovered: []string{"GET /api/users/{id} (by GET /api/users/{id:[0-9]+})"},
+				PartlyCovered: []PartialCoverage{{Route: "GET /api/users/{id}", Rules: manyRules}},
 			},
 		},
 	}
@@ -259,6 +282,24 @@ func TestCheckAll(t *testing.T) {
 	}
 }
 
+func TestPartialCoverage_String(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		partial PartialCoverage
+		want    string
+	}{
+		{"one rule", PartialCoverage{Route: "GET /a/{id}", Rules: []string{"GET /a/{id:[0-9]+}"}},
+			"GET /a/{id} (by GET /a/{id:[0-9]+})"},
+		{"rules from two configs", PartialCoverage{Route: "GET /a/{id}",
+			Rules: []string{"config 1: GET /a/{id:[0-9]+}", "config 2: GET /a/{id:[a-z]+}"}},
+			"GET /a/{id} (by config 1: GET /a/{id:[0-9]+} and config 2: GET /a/{id:[a-z]+})"},
+	}
+
+	for i, tc := range testCases {
+		assert.Equal(t, tc.want, tc.partial.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
 func TestMismatches_Failed(t *testing.T) {
 	testCases := []struct {
 		desc       string
@@ -269,7 +310,7 @@ func TestMismatches_Failed(t *testing.T) {
 		{"only dead public rules", Mismatches{DeadPublicRules: []string{"GET /healthz"}}, false},
 		{"a dead rule", Mismatches{DeadRules: []string{"GET /api/user"}}, true},
 		{"an uncovered route", Mismatches{Uncovered: []string{"GET /api/users"}}, true},
-		{"a partly covered route", Mismatches{PartlyCovered: []string{"GET /a (by GET /a/{id:[0-9]+})"}}, true},
+		{"a partly covered route", Mismatches{PartlyCovered: []PartialCoverage{{Route: "GET /a", Rules: []string{"GET /a/{id:[0-9]+}"}}}}, true},
 	}
 
 	for i, tc := range testCases {
