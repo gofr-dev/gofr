@@ -104,6 +104,7 @@ func TestEnableBasicAuth_EmptyCredentialsFailClosed(t *testing.T) {
 	}{
 		{desc: "empty username and password reject Basic Og==", args: []string{"", ""}, wantStatus: http.StatusUnauthorized},
 		{desc: "empty password rejects the user", args: []string{"admin", ""}, user: "admin", wantStatus: http.StatusUnauthorized},
+		{desc: "empty username rejects the password", args: []string{"", "pass"}, pass: "pass", wantStatus: http.StatusUnauthorized},
 		{desc: "valid pair still works beside an empty one", args: []string{"user", "pass", "", ""},
 			user: "user", pass: "pass", wantStatus: http.StatusOK},
 	}

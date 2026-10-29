@@ -133,6 +133,9 @@ func TestBasicAuthInterceptors_EmptyCredentials(t *testing.T) {
 		{desc: "empty username and password", users: map[string]string{"": ""}, header: "Basic Og=="},
 		{desc: "empty stored password", users: map[string]string{"admin": ""},
 			header: "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:"))},
+		// The stored password is set, so only the empty username check rejects ":pass".
+		{desc: "empty username", users: map[string]string{"": "pass"},
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte(":pass"))},
 	}
 
 	for _, tc := range tests {

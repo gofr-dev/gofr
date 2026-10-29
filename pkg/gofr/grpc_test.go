@@ -15,8 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -729,6 +732,43 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	// addGRPCInterceptors -- passes on the defaults alone and proves nothing.
 	assert.Len(t, app.grpcServer.interceptors, 5, "gRPC unary interceptors should be registered")
 	assert.Len(t, app.grpcServer.streamInterceptors, 5, "gRPC stream interceptors should be registered")
+}
+
+type incomingStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s incomingStream) Context() context.Context { return s.ctx }
+
+func TestEnableBasicAuth_EmptyCredentialsGRPCFailClosed(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	require.ErrorIs(t, app.EnableBasicAuth("", ""), errEmptyBasicAuthCredential)
+	require.Len(t, app.grpcServer.interceptors, defaultInterceptorCount+1)
+	require.Len(t, app.grpcServer.streamInterceptors, defaultInterceptorCount+1)
+
+	// "Og==" is base64 of ":", an empty username and password.
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{"Basic Og=="}})
+
+	unary := app.grpcServer.interceptors[defaultInterceptorCount]
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{}, func(context.Context, any) (any, error) {
+		t.Error("unary handler must not run")
+
+		return nil, nil
+	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	stream := app.grpcServer.streamInterceptors[defaultInterceptorCount]
+	err = stream(nil, incomingStream{ctx: ctx}, &grpc.StreamServerInfo{}, func(any, grpc.ServerStream) error {
+		t.Error("stream handler must not run")
+
+		return nil
+	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 func TestStartGRPCServer_Registered(t *testing.T) {
