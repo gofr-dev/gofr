@@ -99,7 +99,7 @@ func (a *BasicAuthProvider) validateCredentials(username, password string) bool 
 	default:
 		storedPass, ok := a.Users[username]
 
-		if !ok || username == "" {
+		if !ok || username == "" || storedPass == "" {
 			// Use dummyValue constant
 			subtle.ConstantTimeCompare([]byte(password), []byte(dummyValue))
 

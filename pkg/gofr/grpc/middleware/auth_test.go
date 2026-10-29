@@ -123,18 +123,50 @@ func TestBasicAuthUnaryInterceptor(t *testing.T) {
 	})
 }
 
-func TestBasicAuthUnaryInterceptor_EmptyUsername(t *testing.T) {
-	interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{Users: map[string]string{"": ""}})
+func TestBasicAuthInterceptors_EmptyCredentials(t *testing.T) {
+	tests := []struct {
+		desc   string
+		users  map[string]string
+		header string
+	}{
+		// "Og==" is base64 of ":", an empty username and password.
+		{desc: "empty username and password", users: map[string]string{"": ""}, header: "Basic Og=="},
+		{desc: "empty stored password", users: map[string]string{"admin": ""},
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:"))},
+	}
 
-	// "Og==" is base64 of ":", an empty username and password.
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
-		"authorization": []string{"Basic Og=="},
-	})
-	_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
-		return nil, nil
-	})
+	for _, tc := range tests {
+		provider := BasicAuthProvider{Users: tc.users}
+		unary := BasicAuthUnaryInterceptor(provider)
+		stream := BasicAuthStreamInterceptor(provider)
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{tc.header}})
 
-	assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+		t.Run("unary "+tc.desc, func(t *testing.T) {
+			var called bool
+
+			_, err := unary(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+				called = true
+
+				return nil, nil
+			})
+
+			assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+			assert.False(t, called)
+		})
+
+		t.Run("stream "+tc.desc, func(t *testing.T) {
+			var called bool
+
+			err := stream(nil, &mockServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, func(_ any, _ grpc.ServerStream) error {
+				called = true
+
+				return nil
+			})
+
+			assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+			assert.False(t, called)
+		})
+	}
 }
 
 func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
