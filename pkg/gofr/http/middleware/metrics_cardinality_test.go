@@ -247,3 +247,127 @@ func BenchmarkMetricLabels(b *testing.B) {
 		}
 	})
 }
+
+func TestWithUnmatchedLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     []MetricsOption
+		expected int64
+	}{
+		{name: "no options keeps the default", expected: untemplatedLabelLimit},
+		{name: "zero collapses everything", opts: []MetricsOption{WithUnmatchedLimit(0)}, expected: 0},
+		{name: "negative is treated as zero", opts: []MetricsOption{WithUnmatchedLimit(-5)}, expected: 0},
+		{name: "lowers the budget below a quarter of the ceiling",
+			opts: []MetricsOption{WithCardinalityLimit(2000), WithUnmatchedLimit(10)}, expected: 10},
+		{name: "never raises the budget above the default",
+			opts: []MetricsOption{WithCardinalityLimit(2000), WithUnmatchedLimit(1000)}, expected: untemplatedLabelLimit},
+		{name: "never raises the budget above a quarter of the ceiling",
+			opts: []MetricsOption{WithCardinalityLimit(40), WithUnmatchedLimit(100)}, expected: 10},
+		{name: "option order does not matter",
+			opts: []MetricsOption{WithUnmatchedLimit(100), WithCardinalityLimit(40)}, expected: 10},
+		{name: "option order does not matter when lowering",
+			opts: []MetricsOption{WithUnmatchedLimit(10), WithCardinalityLimit(2000)}, expected: 10},
+		{name: "an unlimited ceiling still honors the lower limit",
+			opts: []MetricsOption{WithCardinalityLimit(0), WithUnmatchedLimit(7)}, expected: 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, newMetricsOptions(tt.opts...).untemplatedLimit())
+		})
+	}
+}
+
+// TestUnmatchedLimitZero is the short-lived-instance case: with no budget, scanner
+// paths collapse from the very first request while real routes keep their series.
+func TestUnmatchedLimitZero(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		target   string
+		routed   bool
+		status   int // what an unrouted request is answered with
+		expected [3]string
+	}{
+		{name: "first unmatched request collapses", method: http.MethodGet, target: "/.env", status: http.StatusNotFound,
+			expected: [3]string{unmatchedPathLabel, http.MethodGet, "404"}},
+		{name: "custom method collapses too", method: "PROPFIND", target: "/wp-json", status: http.StatusNotFound,
+			expected: [3]string{unmatchedPathLabel, otherMethodLabel, "404"}},
+		{name: "auth rejecting before routing collapses", method: http.MethodGet, target: "/admin/.git/config",
+			status:   http.StatusUnauthorized,
+			expected: [3]string{unmatchedPathLabel, http.MethodGet, "401"}},
+		{name: "templated route stays verbatim", method: http.MethodGet, target: "/users/42", routed: true,
+			expected: [3]string{"/users/{id}", http.MethodGet, "200"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			untemplatedLabels.reset()
+			defer untemplatedLabels.reset()
+
+			rec := &cardRecorder{}
+			mw := Metrics(rec, WithCardinalityLimit(2000), WithUnmatchedLimit(0))
+
+			var h http.Handler
+
+			if tt.routed {
+				router := mux.NewRouter()
+				router.Use(mw)
+				router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+					Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+				h = router
+			} else {
+				// Without a router every request is untemplated, as an unmatched one is.
+				h = mw(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(tt.status)
+				}))
+			}
+
+			h.ServeHTTP(httptest.NewRecorder(),
+				httptest.NewRequestWithContext(context.Background(), tt.method, tt.target, http.NoBody))
+
+			assert.Equal(t, map[[3]string]int{tt.expected: 1}, rec.series())
+		})
+	}
+}
+
+// TestUnmatchedLimitPositive is the case between the default budget and zero: the first
+// limit distinct unmatched paths keep their own series and every later one collapses.
+func TestUnmatchedLimitPositive(t *testing.T) {
+	tests := []struct {
+		name     string
+		limit    int
+		targets  []string
+		expected map[[3]string]int
+	}{
+		{name: "paths past the limit collapse", limit: 2, targets: []string{"/.env", "/wp-json", "/.git/config"},
+			expected: map[[3]string]int{
+				{"/.env", http.MethodGet, "404"}:            1,
+				{"/wp-json", http.MethodGet, "404"}:         1,
+				{unmatchedPathLabel, http.MethodGet, "404"}: 1,
+			}},
+		{name: "an admitted path keeps recording verbatim", limit: 1, targets: []string{"/.env", "/.env", "/wp-json"},
+			expected: map[[3]string]int{
+				{"/.env", http.MethodGet, "404"}:            2,
+				{unmatchedPathLabel, http.MethodGet, "404"}: 1,
+			}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			untemplatedLabels.reset()
+			defer untemplatedLabels.reset()
+
+			rec := &cardRecorder{}
+			h := Metrics(rec, WithCardinalityLimit(2000), WithUnmatchedLimit(tt.limit))(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+
+			for _, target := range tt.targets {
+				h.ServeHTTP(httptest.NewRecorder(),
+					httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody))
+			}
+
+			assert.Equal(t, tt.expected, rec.series())
+		})
+	}
+}
