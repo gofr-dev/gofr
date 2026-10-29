@@ -831,7 +831,6 @@ func order(ctx *gofr.Context) (any, error) {
 
 Use the optional `pubsub.KeyedPublisher` interface when related messages must reach
 the same Kafka partition, for example all batches of a job or events for an order.
-The existing `pubsub.Publisher` and `pubsub.Client` interfaces are unchanged.
 
 ```go
 import (
@@ -856,21 +855,9 @@ func publishOrder(ctx *gofr.Context) (any, error) {
 }
 ```
 
-Kafka supports this optional capability; other backends need not implement it.
-Check the type assertion rather than assuming support. Falling back to `Publish`
-does not preserve key-based partition affinity.
-
-Kafka writers use the `kafka-go` `Hash` balancer by default. Non-empty keys use
-FNV-1a hashing with signed modulo partition selection (compatible with Sarama's
-hash partitioner), not the Java producer's default Murmur2 partitioning.
-Producers using different partitioners can send the same key to different
-partitions.
-
 `Publish` sends a nil key and retains round-robin routing. `PublishWithKey` treats
 both nil and empty keys (`[]byte{}`) as unkeyed records, also using round-robin
-routing. Identical non-empty keys select the same partition while the partition
-count is unchanged; different keys may share a partition. Increasing the
-partition count can move a key to another partition.
+routing.
 
 ## Distributed Tracing
 
