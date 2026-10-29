@@ -105,8 +105,14 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets; past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets (`METRICS_UNMATCHED_LIMIT` lowers it further); past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
 -  2000
+
+---
+
+-  METRICS_UNMATCHED_LIMIT
+-  Most distinct (path, method, status) label sets that HTTP metrics record verbatim, per process, for requests that match no route, including a known path called with a method it does not serve (405), and for unknown methods before recording them as `__unmatched__` / `__other__`. It only ever lowers the budget: the effective value is the smallest of this, a quarter of METRICS_CARDINALITY_LIMIT, and 500. Set 0 to collapse from the first request, which suits short-lived or autoscaled instances (Cloud Run, serverless) where each instance would otherwise add its own scanner paths at the backend. A negative or non-integer value is treated as 0 and logged as a warning. At 0, requests served by a route registered at `/` and static files are also recorded as `__unmatched__`.
+-  500
 
 ---
 
