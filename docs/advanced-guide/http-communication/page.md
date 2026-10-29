@@ -176,7 +176,7 @@ echo -n "your-password" | base64
 # Output: eW91ci1wYXNzd29yZA==
 ```
 
-- **OAuthConfig** - This option allows the user to add `OAuth` as default auth for downstream HTTP Service.
+- **OAuthConfig** - This option allows the user to add `OAuth` as default auth for downstream HTTP Service. The access token is cached and reused until it is close to expiring, so a new one is not requested on every call. Concurrent requests share a single token grant, and a failed grant is not cached so it is retried on the next call. The configuration is read once, when the service is registered.
 - **FileTokenAuthConfig** - This option reads a bearer token from a file and refreshes it periodically, injecting an `Authorization: Bearer <token>` header on every outgoing call. It is intended for Kubernetes projected service account tokens, which are rotated on disk. See [File-Based Token Authentication](#file-based-token-authentication) below.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
