@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/internal/logjson"
 )
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
@@ -116,6 +118,35 @@ type RequestLog struct {
 // GoFr emitted before PR-7's internal optimization.
 const zeroTraceID = "00000000000000000000000000000000"
 const zeroSpanID = "0000000000000000"
+
+// registerRequestLogJSON makes the request log encode without reflection when GoFr's logger writes
+// it as JSON. The encoder belongs to the process, not to one middleware, so it is registered once.
+//
+//nolint:gochecknoglobals // one registration per process, whichever Logging call comes first.
+var registerRequestLogJSON sync.Once
+
+// appendRequestLogJSON appends a *RequestLog as encoding/json encodes it: the fields in struct
+// order, each omitted when empty. Any other value, or a field it cannot encode byte-for-byte,
+// reports false and the logger falls back to encoding/json.
+func appendRequestLogJSON(dst []byte, v any) ([]byte, bool) {
+	rl, ok := v.(*RequestLog)
+	if !ok || rl == nil {
+		return dst, false
+	}
+
+	o := logjson.BeginObject(dst)
+	o.String("trace_id", rl.TraceID)
+	o.String("span_id", rl.SpanID)
+	o.String("start_time", rl.StartTime)
+	o.Int("response_time", rl.ResponseTime)
+	o.String("method", rl.Method)
+	o.String("user_agent", rl.UserAgent)
+	o.String("ip", rl.IP)
+	o.String("uri", rl.URI)
+	o.Int("response", int64(rl.Response))
+
+	return o.End()
+}
 
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
@@ -237,6 +268,8 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	// The optional interfaces are resolved once, here, from what the logger
 	// supports. The per-request path then carries none of that branching.
 	sink := newLogSink(logger)
+
+	registerRequestLogJSON.Do(func() { logjson.Register(appendRequestLogJSON) })
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

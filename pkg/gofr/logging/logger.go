@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"golang.org/x/term"
 
+	"gofr.dev/pkg/gofr/internal/logjson"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -54,6 +56,9 @@ type logger struct {
 	isTerminal bool
 	lock       chan struct{}
 	file       *os.File
+
+	// lines holds *[]byte buffers that encodeJSON reuses to build one log line.
+	lines sync.Pool
 }
 
 type logEntry struct {
@@ -110,15 +115,75 @@ func (l *logger) logf(level Level, format string, args ...any) {
 	l.encodeJSON(&entry, out)
 }
 
-// encodeJSON writes one entry as JSON.
+// maxPooledLine is the largest line buffer kept for reuse. A service that once logs a very large
+// message must not hold that much memory per pooled buffer for the rest of its life.
+const maxPooledLine = 64 << 10
+
+// initialLineCap fits a request log line, the most frequent line, without growing.
+const initialLineCap = 512
+
+// encodeJSON writes one entry as JSON, followed by a newline, in one Write.
 //
-// The entry is taken by pointer so that logf and logEntry can share this without
-// copying the struct at the call. That is a readability choice, not a saving:
-// &entry escapes into Encode's any exactly as a boxed copy would, and the
-// allocation count is identical either way -- measured at 4 for Log and 6 for
-// Infof, before and after. encoding/json produces the same bytes for both.
-func (*logger) encodeJSON(entry *logEntry, out io.Writer) {
-	_ = json.NewEncoder(out).Encode(entry)
+// The common entries -- a string message, or a message type registered with logjson such as the
+// request log -- are written by appendEntry without reflection. It writes exactly the bytes
+// encoding/json writes, or reports false, and then encoding/json writes the entry as it always has.
+// BenchmarkEncodeJSON compares the two.
+func (l *logger) encodeJSON(entry *logEntry, out io.Writer) {
+	bp, _ := l.lines.Get().(*[]byte)
+	if bp == nil {
+		b := make([]byte, 0, initialLineCap)
+		bp = &b
+	}
+
+	line, ok := appendEntry((*bp)[:0], entry)
+	if ok {
+		_, _ = out.Write(line)
+	} else {
+		_ = json.NewEncoder(out).Encode(entry)
+	}
+
+	// io.Writer must not retain the slice, so the buffer is free again here.
+	if cap(line) <= maxPooledLine {
+		*bp = line[:0]
+		l.lines.Put(bp)
+	}
+}
+
+// appendEntry appends entry as encoding/json encodes it, with the newline Encode adds. Field order
+// and names follow logEntry's tags.
+func appendEntry(dst []byte, e *logEntry) ([]byte, bool) {
+	var ok bool
+
+	// Level.MarshalJSON writes the level name in quotes; the names need no escape.
+	dst = append(dst, `{"level":"`...)
+	dst = append(dst, e.Level.String()...)
+	dst = append(dst, `","time":`...)
+
+	if dst, ok = logjson.AppendTime(dst, e.Time); !ok {
+		return dst, false
+	}
+
+	dst = append(dst, `,"message":`...)
+
+	if dst, ok = logjson.AppendMessage(dst, e.Message); !ok {
+		return dst, false
+	}
+
+	if e.TraceID != "" {
+		dst = append(dst, `,"trace_id":`...)
+
+		if dst, ok = logjson.AppendString(dst, e.TraceID); !ok {
+			return dst, false
+		}
+	}
+
+	dst = append(dst, `,"gofrVersion":`...)
+
+	if dst, ok = logjson.AppendString(dst, e.GofrVersion); !ok {
+		return dst, false
+	}
+
+	return append(dst, '}', '\n'), true
 }
 
 func (l *logger) Debug(args ...any) {
