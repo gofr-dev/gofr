@@ -530,7 +530,7 @@ func (c *Config) GetRolePermissions(role string) []string {
 // Returns all required permissions (user needs ANY of them - OR logic).
 // Config is read-only after initialization, so no mutex is needed.
 func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
-	endpoint, isPublic := c.resolve(strings.ToUpper(method), path)
+	endpoint, isPublic := c.resolveEndpointInternal(strings.ToUpper(method), path, true)
 	if endpoint == nil || isPublic {
 		return nil, isPublic
 	}

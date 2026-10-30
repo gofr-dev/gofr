@@ -1593,3 +1593,84 @@ func TestMiddleware_TraceRouteLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestMiddleware_LiteralPatternDoesNotBypassProtectedHandler(t *testing.T) {
+	// A request whose URL-encoded path matches a pattern rule's literal string (e.g. "/reports/%7Bid:%5B0-9%5D+%7D")
+	// must not bypass authentication when a narrower protected route covers it.
+	endpoints := []EndpointMapping{
+		{Path: "/reports/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
+		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
+	}
+	roles := []RoleDefinition{
+		{Name: "admin", Permissions: []string{"reports:read"}},
+	}
+	config := newTestConfig(t, endpoints, roles)
+
+	reached := false
+	handler := Middleware(config)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// An unauthenticated request with URL-encoded pattern text:
+	// Path decodes to "/reports/{id:[0-9]+}", which does NOT match the public regex "[0-9]+".
+	// It matches "/reports/{name}" and must be rejected with 401 Unauthorized.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/%7Bid:%5B0-9%5D+%7D", http.NoBody)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.False(t, reached, "unauthenticated request matching protected route must not reach handler")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	// With proper role, it should be allowed
+	reached = false
+
+	reqAuth := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/%7Bid:%5B0-9%5D+%7D", http.NoBody)
+	reqAuth.Header.Set("X-User-Role", "admin")
+
+	recAuth := httptest.NewRecorder()
+	handler.ServeHTTP(recAuth, reqAuth)
+
+	assert.True(t, reached, "authenticated request must reach handler")
+	assert.Equal(t, http.StatusOK, recAuth.Code)
+}
+
+func TestMiddleware_ProtectedOnlyLiteralPatternRetainsUnauthorized(t *testing.T) {
+	// An unauthenticated request whose path literally equals a protected pattern rule (e.g. "/items/%7Bid:%5B0-9%5D+%7D")
+	// must match the protected exact pattern key and return HTTP 401 Unauthorized, not 404.
+	endpoints := []EndpointMapping{
+		{Path: "/items/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"items:read"}},
+	}
+	roles := []RoleDefinition{
+		{Name: "admin", Permissions: []string{"items:read"}},
+	}
+	config := newTestConfig(t, endpoints, roles)
+
+	reached := false
+	handler := Middleware(config)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Unauthenticated request with URL-encoded literal pattern text matches the protected pattern key -> 401
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/items/%7Bid:%5B0-9%5D+%7D", http.NoBody)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.False(t, reached, "unauthenticated request must not reach handler")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	// With proper role, it should be allowed
+	reached = false
+
+	reqAuth := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/items/%7Bid:%5B0-9%5D+%7D", http.NoBody)
+	reqAuth.Header.Set("X-User-Role", "admin")
+
+	recAuth := httptest.NewRecorder()
+	handler.ServeHTTP(recAuth, reqAuth)
+
+	assert.True(t, reached, "authenticated request must reach handler")
+	assert.Equal(t, http.StatusOK, recAuth.Code)
+}
