@@ -3,6 +3,8 @@ package grpc
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -672,6 +674,52 @@ func TestLogGRPCEntry_WithNilLogger(_ *testing.T) {
 
 	// This should not panic
 	logGRPCEntry(nil, log, "/test.Service/Method")
+}
+
+func TestLogRPC_ErrorStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code int32
+	}{
+		{name: "OK", code: int32(codes.OK)},
+		{name: "gRPC error", err: status.Error(codes.Internal, "server error"), code: int32(codes.Internal)},
+		{name: "plain error", err: errors.New("handler error"), code: int32(codes.Unknown)}, //nolint:err113 // Verify a plain handler error.
+		{name: "canceled", err: context.Canceled, code: int32(codes.Canceled)},
+		{name: "deadline", err: context.DeadlineExceeded, code: int32(codes.DeadlineExceeded)},
+		{name: "wrapped canceled", err: fmt.Errorf("handler: %w", context.Canceled), code: int32(codes.Canceled)},
+		{name: "wrapped deadline", err: fmt.Errorf("handler: %w", context.DeadlineExceeded), code: int32(codes.DeadlineExceeded)},
+	}
+
+	for _, tt := range tests {
+		for _, streamType := range []string{"", "SERVER_STREAM"} {
+			t.Run(tt.name+"/"+streamType, func(t *testing.T) {
+				logger, metrics, ctrl := createMocks(t)
+				defer ctrl.Finish()
+
+				ctx := t.Context()
+				method := "/test.Service/Method"
+
+				labels := []any{"method", method, "status", strconv.Itoa(int(tt.code))}
+				if streamType != "" {
+					labels = append(labels, "stream_type", streamType)
+				}
+
+				logger.EXPECT().Info(gomock.Any()).Do(func(args ...any) {
+					entry, ok := args[0].(*gRPCLog)
+					require.True(t, ok)
+					assert.Equal(t, tt.code, entry.StatusCode)
+				})
+				metrics.EXPECT().RecordHistogram(ctx, "test_metric", gomock.Any(), labels...)
+
+				if streamType == "" {
+					logRPC(ctx, logger, metrics, time.Now(), tt.err, method, "test_metric")
+				} else {
+					logStreamRPC(ctx, logger, metrics, time.Now(), tt.err, method, streamType, "test_metric")
+				}
+			})
+		}
+	}
 }
 
 func TestRecordGRPCMetrics(t *testing.T) {

@@ -218,7 +218,11 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 	}
 
 	if err != nil {
-		statusErr, _ := status.FromError(err)
+		statusErr, ok := status.FromError(err)
+		if !ok {
+			statusErr = status.FromContextError(err)
+		}
+
 		//nolint:gosec //errorcode is guaranteed to be in safe range
 		logEntry.StatusCode = int32(statusErr.Code())
 	} else {
@@ -240,7 +244,11 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	if err != nil {
-		statusErr, _ := status.FromError(err)
+		statusErr, ok := status.FromError(err)
+		if !ok {
+			statusErr = status.FromContextError(err)
+		}
+
 		//nolint:gosec // gRPC codes are typically under the range.
 		logEntry.StatusCode = int32(statusErr.Code())
 	} else {

@@ -416,7 +416,13 @@ These metrics are automatically available in your metrics endpoint and can be us
 
 Request duration histograms `app_gRPC-Server_stats` and `app_gRPC-Client_stats` include `method` and `status` labels.
 The `status` value is the numeric gRPC status code as a string (`"0"` for OK, `"13"` for Internal), matching the logged `statusCode`.
-For error monitoring, filter the histogram counts by `status!="0"` and aggregate across status codes when calculating total traffic.
+For example, calculate the server RPC error ratio over five minutes using the Prometheus-exported metric name:
+
+```promql
+sum(rate(app_gRPC_Server_stats_count{status!="0"}[5m]))
+/
+sum(rate(app_gRPC_Server_stats_count[5m]))
+```
 
 Compatibility note: the new `status` label splits existing histogram series by outcome. Update dashboards and alerts that assume one series per method to aggregate across `status`.
 
