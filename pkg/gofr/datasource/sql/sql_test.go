@@ -269,6 +269,58 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 }
 
+func TestGetDBConfig_RedactArgs(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		redactArgs   string
+		wantHideArgs bool
+	}{
+		{desc: "unset shows args", redactArgs: "", wantHideArgs: false},
+		{desc: "FALSE shows args", redactArgs: "FALSE", wantHideArgs: false},
+		{desc: "TRUE hides args", redactArgs: "TRUE", wantHideArgs: true},
+		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
+		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
+		{desc: "invalid value shows args", redactArgs: "maybe", wantHideArgs: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
+
+			assert.Equal(t, tc.wantHideArgs, getDBConfig(mockConfig).hideArgs)
+		})
+	}
+}
+
+func TestWarnInvalidRedactArgs(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		redactArgs string
+		wantWarn   bool
+	}{
+		{desc: "unset", redactArgs: "", wantWarn: false},
+		{desc: "valid boolean", redactArgs: "True", wantWarn: false},
+		{desc: "padded boolean", redactArgs: " true ", wantWarn: false},
+		{desc: "invalid value", redactArgs: "maybe", wantWarn: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
+
+				warnInvalidRedactArgs(mockConfig, logging.NewMockLogger(logging.WARN))
+			})
+
+			if tc.wantWarn {
+				assert.Contains(t, out, `invalid DB_REDACT_ARGS "maybe"`)
+			} else {
+				assert.Empty(t, out)
+			}
+		})
+	}
+}
+
 func TestSQL_getDBConnectionString(t *testing.T) {
 	testCases := []struct {
 		desc    string

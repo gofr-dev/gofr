@@ -49,6 +49,21 @@ DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
 > ##### Check out the example on how to add configuration for SQL in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)
 
+## Keeping query arguments out of logs and traces
+
+At `LOG_LEVEL=DEBUG`, GoFr logs every query together with its arguments, which can include personal data or
+secrets. Set `DB_REDACT_ARGS=true` to replace each argument with `*****`, so the log still shows how many
+arguments a query had but not their values:
+
+```dotenv
+DB_REDACT_ARGS=true // Default false
+```
+
+`DB_REDACT_ARGS` applies to the SQL datasource GoFr creates from config. A connection passed to `NewSQLFromDB` is not redacted.
+
+The query text itself is still logged and traced, so pass sensitive values as arguments (`?` / `$1`) rather than
+building them into the query string. Trace spans carry only the query text, never its arguments.
+
 ## Related production guides
 
 - **Connection Pooling**: [Tune `DB_MAX_OPEN_CONNECTION` and friends for production load](/docs/guides/connection-pooling) — sizing pools to match traffic and DB capacity.
