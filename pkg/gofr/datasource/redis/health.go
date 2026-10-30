@@ -4,8 +4,6 @@ package redis
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -21,7 +19,7 @@ func (r *Redis) HealthCheck() datasource.Health {
 		Details: make(map[string]any),
 	}
 
-	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)
+	h.Details["host"] = r.config.addr()
 
 	ctx, cancel := context.WithTimeout(context.Background(), healthCheckTimeout)
 	defer cancel()
@@ -56,8 +54,7 @@ func (ps *PubSub) Health() datasource.Health {
 		},
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-	res.Details["host"] = addr
+	res.Details["host"] = ps.config.addr()
 
 	mode := ps.config.PubSubMode
 	if mode == "" {
