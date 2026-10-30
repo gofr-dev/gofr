@@ -250,13 +250,25 @@ func resolveEndpoint(methodUpper, path string, rules []endpointRule) (*EndpointM
 // The exact lookups stay consistent with the ordered scan because a literal path is always
 // more specific than any pattern, and an explicitly declared method is always preferred over
 // a wildcard one - which is why the request's own method is probed before "*".
+//
+// To prevent request bypasses where an incoming path literally matches a public mux pattern
+// (e.g. "/reports/{id:[0-9]+}") instead of satisfying the pattern's regex constraint, public
+// pattern hits fall through to the ordered rule scan unless allowPublicPatternExact is set.
 func (c *Config) resolve(methodUpper, path string) (*EndpointMapping, bool) {
+	return c.resolveEndpointInternal(methodUpper, path, false)
+}
+
+func (c *Config) resolveEndpointInternal(methodUpper, path string, allowPublicPatternExact bool) (*EndpointMapping, bool) {
 	if endpoint, isPublic := c.getExactEndpoint(methodUpper + ":" + path); endpoint != nil {
-		return endpoint, isPublic
+		if !isPublic || allowPublicPatternExact || !isMuxPattern(endpoint.Path) {
+			return endpoint, isPublic
+		}
 	}
 
 	if endpoint, isPublic := c.getExactEndpoint("*:" + path); endpoint != nil {
-		return endpoint, isPublic
+		if !isPublic || allowPublicPatternExact || !isMuxPattern(endpoint.Path) {
+			return endpoint, isPublic
+		}
 	}
 
 	return resolveEndpoint(methodUpper, path, c.rules)

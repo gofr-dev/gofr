@@ -455,26 +455,12 @@ func buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
 	return fmt.Sprintf("%s:%s", methodUpper, pattern)
 }
 
-// storeEndpointMapping stores an endpoint mapping for exact path lookup. A duplicate (method, path) declaration
+// storeEndpointMapping stores an endpoint mapping. A duplicate (method, path) declaration
 // overwrites the earlier one entirely - including the public flag and the permission list, which
 // live in separate maps. Leaving either behind would mix the two declarations together: a public
 // entry followed by a protected one for the same key would keep serving the route unauthenticated
 // while reporting the protected endpoint.
-//
-// Only literal paths are stored in the exact lookup maps; pattern paths (containing mux variables)
-// are handled exclusively by the ordered specificity scan in resolveEndpoint.
 func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUpper string) error {
-	if !endpoint.Public && len(endpoint.RequiredPermissions) == 0 {
-		return fmt.Errorf("%w: %s %s", ErrEndpointMissingPermissions, methodUpper, endpoint.Path)
-	}
-
-	// Pattern paths must not be stored as exact-lookup keys; otherwise a request whose path is
-	// literally the pattern string matches the exact fast path, skipping regex constraints and
-	// specificity ordering.
-	if compilePattern(endpoint.Path) != nil {
-		return nil
-	}
-
 	// Store endpoint object for fast lookup
 	c.endpointMap[key] = endpoint
 
@@ -486,6 +472,10 @@ func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUppe
 	}
 
 	delete(c.publicEndpointsMap, key)
+
+	if len(endpoint.RequiredPermissions) == 0 {
+		return fmt.Errorf("%w: %s %s", ErrEndpointMissingPermissions, methodUpper, endpoint.Path)
+	}
 
 	// Store all required permissions (not just the first one)
 	permissions := make([]string, len(endpoint.RequiredPermissions))
@@ -540,7 +530,7 @@ func (c *Config) GetRolePermissions(role string) []string {
 // Returns all required permissions (user needs ANY of them - OR logic).
 // Config is read-only after initialization, so no mutex is needed.
 func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
-	endpoint, isPublic := c.resolve(strings.ToUpper(method), path)
+	endpoint, isPublic := c.resolveEndpointInternal(strings.ToUpper(method), path, true)
 	if endpoint == nil || isPublic {
 		return nil, isPublic
 	}
