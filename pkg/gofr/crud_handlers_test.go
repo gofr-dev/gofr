@@ -3,7 +3,6 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -33,8 +32,14 @@ var (
 )
 
 func createTestContext(method, path, id string, body []byte, cont *container.Container) *Context {
+	return createTestContextWithKey(method, path, "id", id, body, cont)
+}
+
+// createTestContextWithKey builds a request whose path variable is named key, the way the router
+// names it after the entity's primary key (for example "book_id").
+func createTestContextWithKey(method, path, key, id string, body []byte, cont *container.Container) *Context {
 	testReq := httptest.NewRequestWithContext(context.Background(), method, path+"/"+id, bytes.NewBuffer(body))
-	testReq = mux.SetURLVars(testReq, map[string]string{"id": id})
+	testReq = mux.SetURLVars(testReq, map[string]string{key: id})
 	testReq.Header.Set("Content-Type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(testReq)
 
@@ -430,7 +435,7 @@ func Test_GetHandler(t *testing.T) {
 				mockRow:      sqlmock.NewRows(nil),
 				mockErr:      nil,
 				expectedResp: nil,
-				expectedErr:  sql.ErrNoRows,
+				expectedErr:  gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "2"},
 			},
 			{
 				desc:         "error scanning rows",
@@ -617,7 +622,7 @@ func Test_DeleteHandler(t *testing.T) {
 				id:           "3",
 				mockResp:     sqlmock.NewResult(0, 0),
 				mockErr:      nil,
-				expectedErr:  errEntityNotFound,
+				expectedErr:  gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "3"},
 				expectedResp: nil,
 			},
 			{
@@ -654,6 +659,67 @@ type autoIncrementEntity struct {
 type requiredMetaEntity struct {
 	ID   int `json:"id"`
 	Meta any `json:"meta" sql:"not_null"`
+}
+
+type bookEntity struct {
+	BookID int    `json:"book_id"`
+	Title  string `json:"title"`
+}
+
+// A primary key not named ID is routed as /{rest_path}/{book_id}, so Get and Delete must read that
+// path variable rather than "id", and a missing row is a 404.
+func Test_GetDeleteHandler_NonIDPrimaryKey(t *testing.T) {
+	e := entity{name: "bookEntity", entityType: reflect.TypeOf(bookEntity{}), primaryKey: "book_id", tableName: "book_entity"}
+
+	tests := []struct {
+		desc    string
+		method  string
+		id      string
+		mock    func(mock sqlmock.Sqlmock, id string)
+		call    func(e *entity, c *Context) (any, error)
+		expResp any
+		expErr  error
+	}{
+		{desc: "get existing row", method: http.MethodGet, id: "7",
+			mock: func(mock sqlmock.Sqlmock, id string) {
+				mock.ExpectQuery("SELECT * FROM `book_entity` WHERE `book_id`=?").WithArgs(id).
+					WillReturnRows(sqlmock.NewRows([]string{"book_id", "title"}).AddRow(7, "dune"))
+			},
+			call: (*entity).Get, expResp: &bookEntity{BookID: 7, Title: "dune"}},
+		{desc: "get missing row is a 404", method: http.MethodGet, id: "8",
+			mock: func(mock sqlmock.Sqlmock, id string) {
+				mock.ExpectQuery("SELECT * FROM `book_entity` WHERE `book_id`=?").WithArgs(id).WillReturnRows(sqlmock.NewRows(nil))
+			},
+			call: (*entity).Get, expErr: gofrHTTP.ErrorEntityNotFound{Name: "book_id", Value: "8"}},
+		{desc: "delete existing row", method: http.MethodDelete, id: "7",
+			mock: func(mock sqlmock.Sqlmock, id string) {
+				mock.ExpectExec("DELETE FROM `book_entity` WHERE `book_id`=?").WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			call: (*entity).Delete, expResp: "bookEntity successfully deleted with id: 7"},
+		{desc: "delete missing row is a 404", method: http.MethodDelete, id: "8",
+			mock: func(mock sqlmock.Sqlmock, id string) {
+				mock.ExpectExec("DELETE FROM `book_entity` WHERE `book_id`=?").WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			call: (*entity).Delete, expErr: gofrHTTP.ErrorEntityNotFound{Name: "book_id", Value: "8"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := container.NewContainer(nil)
+			db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: "mysql"})
+			c.SQL = db
+
+			defer db.Close()
+
+			tc.mock(mock, tc.id)
+
+			resp, err := tc.call(&e, createTestContextWithKey(tc.method, "/books", "book_id", tc.id, nil, c))
+
+			assert.Equal(t, tc.expResp, resp)
+			assert.Equal(t, tc.expErr, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
 
 func Test_CreateHandler_AutoIncrementAndErrors(t *testing.T) {
