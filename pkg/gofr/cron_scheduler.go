@@ -129,6 +129,11 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	parts := strings.Split(s, ",")
 
 	for _, part := range parts {
+		// a leading, trailing or doubled comma leaves an empty value, as in */30, or 5,,6
+		if part == "" {
+			return nil, errEmptyListValue{s}
+		}
+
 		// */2 or 1-59/5 pattern inside a comma separated list
 		if matches := matchN.FindStringSubmatch(part); matches != nil {
 			if err := parseSteps(part, matches[1], matches[2], minValue, maxValue, r); err != nil {

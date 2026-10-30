@@ -285,6 +285,16 @@ func (e errInvalidStep) Error() string {
 	return fmt.Sprintf("step must be greater than 0 in %s", e.input)
 }
 
+// errEmptyListValue denotes an empty value in a comma separated list in schedule, left by a leading, trailing or
+// doubled comma.
+type errEmptyListValue struct {
+	input string
+}
+
+func (e errEmptyListValue) Error() string {
+	return fmt.Sprintf("empty value in list in %s", e.input)
+}
+
 // noopRequest is a non-operating implementation of Request interface
 // this is required to prevent panics while executing cron jobs.
 type noopRequest struct {

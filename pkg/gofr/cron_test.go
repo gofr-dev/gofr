@@ -149,14 +149,6 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 			expErrString: "unable to parse",
 		},
 		{
-			desc: "trailing comma after a step",
-			schedules: []string{
-				"*/30, * * * *",
-				"* 0-10/5, * * *",
-			},
-			expErrString: "unable to parse",
-		},
-		{
 			desc: "zero step",
 			schedules: []string{
 				"*/0 * * * *",
@@ -183,6 +175,28 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				assert.Nil(t, j)
 				require.ErrorContains(t, err, tc.expErrString)
 			}
+		})
+	}
+}
+
+func TestCron_parseSchedule_EmptyListValue(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		schedule string
+		expErr   string
+	}{
+		{desc: "trailing comma after a step", schedule: "*/30, * * * *", expErr: "empty value in list in */30,"},
+		{desc: "trailing comma after a range step", schedule: "* 0-10/5, * * *", expErr: "empty value in list in 0-10/5,"},
+		{desc: "two commas in a row", schedule: "5,,6 * * * *", expErr: "empty value in list in 5,,6"},
+		{desc: "leading comma", schedule: "* * ,1 * *", expErr: "empty value in list in ,1"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			j, err := parseScheduleWithTimeout(t, tc.schedule)
+
+			assert.Nil(t, j)
+			require.EqualError(t, err, tc.expErr)
 		})
 	}
 }
@@ -993,6 +1007,13 @@ func TestErrInvalidStep_Error(t *testing.T) {
 	err := errInvalidStep{input: "*/0"}
 
 	expected := "step must be greater than 0 in */0"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrEmptyListValue_Error(t *testing.T) {
+	err := errEmptyListValue{input: "*/30,"}
+
+	expected := "empty value in list in */30,"
 	assert.Equal(t, expected, err.Error())
 }
 
