@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -116,14 +117,17 @@ func (f sftpFile) ReadAll() (file.RowReader, error) {
 func (f sftpFile) createJSONReader() (file.RowReader, error) {
 	decoder := json.NewDecoder(f.File)
 
-	token, err := f.peekJSONToken(decoder)
+	// Read the first token with the decoder itself. Peeking through a copy of the
+	// decoder is not a peek: the copy reads from the same file, and with the
+	// original encoding/json engine the bytes it buffers are lost to this decoder.
+	token, err := decoder.Token()
 	if err != nil {
 		f.logger.Errorf("failed to decode JSON token %v", err)
 		return nil, err
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		// JSON array
+		// JSON array: '[' is consumed, so Next and Scan walk its elements.
 		return &jsonReader{decoder: decoder, token: token}, nil
 	}
 
@@ -131,36 +135,15 @@ func (f sftpFile) createJSONReader() (file.RowReader, error) {
 	return f.createJSONObjectReader()
 }
 
-// Peek the first JSON token to determine its type.
-func (sftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
-	newDecoder := *decoder
-
-	token, err := newDecoder.Token()
-	if err != nil {
-		return nil, err
-	}
-
-	return token, nil
-}
-
-// Create a JSON reader for a JSON object.
+// Create a JSON reader for a JSON object. Reading the first token has moved the
+// remote file's offset, so it is rewound and the object decoded from the start.
 func (f sftpFile) createJSONObjectReader() (file.RowReader, error) {
-	name := f.File.Name()
-
-	if err := f.File.Close(); err != nil {
-		f.logger.Errorf("failed to close JSON file for reading as object %v", err)
+	if _, err := f.File.Seek(0, io.SeekStart); err != nil {
+		f.logger.Errorf("failed to rewind JSON file for reading as object %v", err)
 		return nil, err
 	}
 
-	newFile, err := os.Open(name)
-	if err != nil {
-		f.logger.Errorf("failed to open JSON file for reading as object %v", err)
-		return nil, err
-	}
-
-	decoder := json.NewDecoder(newFile)
-
-	return &jsonReader{decoder: decoder}, nil
+	return &jsonReader{decoder: json.NewDecoder(f.File)}, nil
 }
 
 func (f sftpFile) createTextCSVReader() file.RowReader {

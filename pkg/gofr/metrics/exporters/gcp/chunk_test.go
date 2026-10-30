@@ -336,21 +336,31 @@ func Test_chunkingExporter_Export(t *testing.T) {
 func Test_newReader(t *testing.T) {
 	tests := []struct {
 		name      string
-		sdkBatch  string
+		batchSize int
 		wantCalls []int
 	}{
-		{"splits at the Telemetry API cap", "", []int{200, 200, 50}},
-		// The SDK's experimental batcher may already have split the collection;
-		// the exporter must then pass the smaller batches through untouched.
-		{"composes with the SDK's own batching", "150", []int{150, 150, 150}},
+		{"splits at the Telemetry API cap", 0, []int{200, 200, 50}},
+		// When the SDK's PeriodicReader batches a collection smaller than the
+		// exporter's cap, the exporter must pass the smaller batches through untouched.
+		{"composes with the SDK's own batching", 150, []int{150, 150, 150}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("OTEL_GO_X_METRIC_EXPORT_BATCH_SIZE", tc.sdkBatch)
-
 			rec := &recordingExporter{t: t}
+
+			// A positive batchSize exercises the SDK's own batching via the stable
+			// WithMaxExportBatchSize option (otel v1.47 removed the experimental
+			// OTEL_GO_X_METRIC_EXPORT_BATCH_SIZE env var); zero uses the plain reader.
 			reader := newReader(rec, time.Hour)
+			if tc.batchSize > 0 {
+				reader = metricSdk.NewPeriodicReader(
+					&chunkingExporter{Exporter: rec, limit: maxPointsPerRequest},
+					metricSdk.WithInterval(time.Hour),
+					metricSdk.WithMaxExportBatchSize(tc.batchSize),
+				)
+			}
+
 			provider := metricSdk.NewMeterProvider(metricSdk.WithReader(reader))
 
 			counter, err := provider.Meter("test").Int64Counter("requests")
