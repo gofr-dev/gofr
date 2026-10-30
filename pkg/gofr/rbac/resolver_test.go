@@ -446,3 +446,33 @@ func TestGetEndpointForRequest_SlashConstraintDoesNotOutrankNarrowRule(t *testin
 		assert.Equal(t, "/files/private/{name}", endpoint.Path)
 	}
 }
+
+func TestGetEndpointForRequest_LiteralPatternDoesNotBypassRegexConstraint(t *testing.T) {
+	// A pattern rule's raw text must not be stored as an exact-lookup key; otherwise a request
+	// whose path is literally the pattern string matches the exact fast path, skipping the regex
+	// constraint and any narrower protected rule that should match.
+	endpoints := []EndpointMapping{
+		{Path: "/reports/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
+		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
+	}
+
+	config := newTestConfig(t, endpoints, nil)
+
+	// A valid numeric id matches the public pattern
+	reqNumeric := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/123", http.NoBody)
+	ep, isPublic := getEndpointForRequest(reqNumeric, config)
+	require.NotNil(t, ep)
+	assert.True(t, isPublic)
+
+	// A request for the literal pattern text must NOT match the public pattern because "{id:[0-9]+}" is not numeric.
+	// It should match the protected "/reports/{name}" rule.
+	reqLiteral := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/{id:[0-9]+}", http.NoBody)
+	ep, isPublic = getEndpointForRequest(reqLiteral, config)
+	require.NotNil(t, ep)
+	assert.False(t, isPublic, "request for literal pattern text must not match public rule")
+	assert.Equal(t, "/reports/{name}", ep.Path)
+
+	perms, isPublic := config.GetEndpointPermission(http.MethodGet, "/reports/{id:[0-9]+}")
+	assert.False(t, isPublic)
+	assert.Equal(t, []string{"reports:read"}, perms)
+}
