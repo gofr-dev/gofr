@@ -105,8 +105,14 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets; past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
+-  Per-instrument attribute-set limit, inclusive of the overflow slot: an instrument keeps up to one fewer than this many distinct label sets per collection cycle, and the remaining series collapse into a single otel.metric.overflow series (so a value of n keeps n-1 real label sets). Set 0 or negative for unlimited. When unset, the OpenTelemetry SDK default applies (2000, or OTEL_GO_X_CARDINALITY_LIMIT if set); a set value takes precedence over OTEL_GO_X_CARDINALITY_LIMIT. HTTP metrics give requests that match no route (and unknown methods) at most a quarter of this limit, capped at 500 distinct (path, method, status) label sets (`METRICS_UNMATCHED_LIMIT` lowers it further); past that they are recorded as `__unmatched__` / `__other__`, so scanner traffic cannot push real routes into the overflow series.
 -  2000
+
+---
+
+-  METRICS_UNMATCHED_LIMIT
+-  Most distinct (path, method, status) label sets that HTTP metrics record verbatim, per process, for requests that match no route, including a known path called with a method it does not serve (405), and for unknown methods before recording them as `__unmatched__` / `__other__`. It only ever lowers the budget: the effective value is the smallest of this, a quarter of METRICS_CARDINALITY_LIMIT, and 500. Set 0 to collapse from the first request, which suits short-lived or autoscaled instances (Cloud Run, serverless) where each instance would otherwise add its own scanner paths at the backend. A negative or non-integer value is treated as 0 and logged as a warning. At 0, requests served by a route registered at `/` and static files are also recorded as `__unmatched__`.
+-  500
 
 ---
 
@@ -314,7 +320,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_DIALECT
--  Database dialect. Supported values: mysql, postgres, supabase
+-  Database dialect. Supported values: mysql, postgres, supabase, sqlite, cockroachdb. If unset, SQL is not initialized; GoFr logs an error at startup when DB_HOST or DB_NAME is set.
 
 ---
 
@@ -353,6 +359,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  DB_MAX_OPEN_CONNECTION
 -  Number of maximum connections which can be used with database.
 -  0 (unlimited)
+---
+
+-  DB_CONNECT_TIMEOUT
+-  Timeout in whole seconds for establishing a database connection (MySQL, PostgreSQL, Supabase and CockroachDB; SQLite ignores it). When set, it bounds how long establishing a connection can take. For PostgreSQL, Supabase and CockroachDB this includes a host that accepts the connection but never answers. For MySQL it bounds only the TCP dial (an unreachable host), not a server that accepts the connection and then stalls the handshake. Unset or 0 means no timeout, as before. A negative or non-numeric value logs a warning and is ignored.
+-  0 (no timeout)
+
 ---
 
 -  DB_SSL_MODE
@@ -529,7 +541,45 @@ This document lists all the configuration options supported by the GoFr framewor
 - Path to the TLS key file for Redis (or PEM-encoded string).
 -  ""
 
+---
+
+- REDIS_URL
+- Connection URL for Redis, such as `rediss://user:password@host:6380/2`. Only the `redis://` and `rediss://` schemes are accepted, and `rediss://` turns TLS on. When set, it alone decides the host, port, user, password, DB and TLS: `REDIS_HOST`, `REDIS_PORT`, `REDIS_USER`, `REDIS_PASSWORD`, `REDIS_DB` and `REDIS_TLS_ENABLED` are ignored, with a warning that names them. An invalid URL, including one with no host, logs an error and Redis is not connected. Percent-encode a user name or password that contains `@`, `/`, `:` or `%` (`p@ss` becomes `p%40ss`). `REDIS_TLS_CA_CERT`, `REDIS_TLS_CERT` and `REDIS_TLS_KEY` still apply to a `rediss://` URL.
+-  ""
+
+---
+
+- REDIS_POOL_SIZE
+- Maximum number of connections in the Redis pool. Overrides a `pool_size` parameter in `REDIS_URL`.
+-  10 per CPU
+
+---
+
+- REDIS_MIN_IDLE_CONNS
+- Minimum number of idle connections kept in the Redis pool. Overrides a `min_idle_conns` parameter in `REDIS_URL`.
+-  0
+
+---
+
+- REDIS_DIAL_TIMEOUT
+- Timeout for opening a new Redis connection, as a duration (`500ms`). Overrides a `dial_timeout` parameter in `REDIS_URL`.
+-  5s
+
+---
+
+- REDIS_READ_TIMEOUT
+- Timeout for reading a Redis reply, as a duration (`500ms`). Overrides a `read_timeout` parameter in `REDIS_URL`.
+-  5s
+
+---
+
+- REDIS_WRITE_TIMEOUT
+- Timeout for writing a Redis command, as a duration (`500ms`). Overrides a `write_timeout` parameter in `REDIS_URL`.
+-  Same as `REDIS_READ_TIMEOUT`
+
 {% /table %}
+
+> **Note**: An invalid value for `REDIS_POOL_SIZE`, `REDIS_MIN_IDLE_CONNS` or one of the `REDIS_*_TIMEOUT` variables logs a warning and is ignored, so the `REDIS_URL` parameter or the default still applies. `REDIS_POOL_SIZE` and the timeouts must be greater than zero; `REDIS_MIN_IDLE_CONNS` can be `0`.
 
 **Redis PubSub Configuration:**
 

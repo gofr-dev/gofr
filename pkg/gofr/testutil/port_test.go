@@ -160,3 +160,71 @@ func TestReserveServerPorts(t *testing.T) {
 		require.NoError(t, listener.Close(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
+
+// ephemeralPortRange is the range the OS hands out as the local port of an outgoing connection. On
+// Linux it is configurable and read from the kernel; elsewhere, or where it is unreadable, the
+// fallback is a superset of what macOS and Windows use, so it is safe.
+func ephemeralPortRange() (low, high int) {
+	low, high = 32768, 65535
+
+	data, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range")
+	if err != nil {
+		return low, high
+	}
+
+	var l, h int
+	if _, err := fmt.Sscanf(string(data), "%d %d", &l, &h); err != nil {
+		return low, high
+	}
+
+	return l, h
+}
+
+func Test_reserveFreePort(t *testing.T) {
+	low, high := ephemeralPortRange()
+
+	ports := make([]int, 0, 200)
+
+	for range cap(ports) {
+		port, err := reserveFreePort(t.Context())
+		require.NoError(t, err)
+
+		ports = append(ports, port)
+	}
+
+	tests := []struct {
+		desc  string
+		check func(t *testing.T, port int)
+	}{
+		{"outside the range outgoing connections draw their local port from", func(t *testing.T, port int) {
+			t.Helper()
+
+			assert.False(t, port >= low && port <= high, "port %d is inside the ephemeral range %d-%d", port, low, high)
+		}},
+		{"bindable on all interfaces, as the framework does", func(t *testing.T, port int) {
+			t.Helper()
+
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", ":"+strconv.Itoa(port))
+			require.NoError(t, err)
+			require.NoError(t, listener.Close())
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			for _, port := range ports {
+				tc.check(t, port)
+			}
+		})
+	}
+
+	t.Run("never the same port twice in one process", func(t *testing.T) {
+		seen := make(map[int]bool, len(ports))
+
+		for _, port := range ports {
+			require.False(t, seen[port], "port %d was handed out twice", port)
+
+			seen[port] = true
+		}
+	})
+}

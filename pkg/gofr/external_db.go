@@ -305,8 +305,9 @@ func (a *App) closeExistingSQL() {
 }
 
 // isNilDatasource reports whether a container datasource interface is nil or holds
-// a typed-nil pointer (as container.Create can leave SQL when the dialect is unset),
-// so AddSQLDB never calls Close on a nil value.
+// a typed-nil pointer, so AddSQLDB never calls Close on a nil value. container.Create
+// assigns SQL only when NewSQL returns a non-nil *DB; this check is defense in depth
+// for any other code path or provider that stores a typed nil.
 func isNilDatasource(i any) bool {
 	if i == nil {
 		return true
