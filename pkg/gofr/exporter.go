@@ -7,17 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/traces/exporters"
 )
 
 // errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
 var errUnexpectedStatusCode = errors.New("unexpected response status code")
+
+// redactedCredential replaces a credential from the endpoint in an error's text.
+const redactedCredential = "REDACTED"
 
 // emptyAttributeValue is the value exported for an attribute that carries no data.
 const emptyAttributeValue = "invalid"
@@ -73,7 +80,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create HTTP request, error: %w", err)
+		return fmt.Errorf("failed to create HTTP request, error: %w", redactRequestError(err, e.endpoint))
 	}
 
 	req.Header.Set("Content-Type", contentTypeJSON)
@@ -82,7 +89,9 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	resp, err := client.Do(req)
 	if err != nil {
+		err = redactRequestError(err, e.endpoint)
 		logger.Errorf("failed to create spans, error: %v", err)
+
 		return err
 	}
 	defer resp.Body.Close()
@@ -92,7 +101,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		// Log as well as return: the batch processor swallows the returned error, so without this a
 		// misconfigured or rejecting endpoint drops every trace with no signal to the operator.
-		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
+		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", exporters.RedactURL(e.endpoint), errUnexpectedStatusCode, resp.StatusCode)
 		logger.Errorf("%v", err)
 
 		return err
@@ -100,6 +109,90 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	return nil
 }
+
+// redactRequestError returns a failed request's error without the endpoint's credentials. TRACER_URL can carry
+// them in its userinfo or query, and the *url.Error from http.NewRequest or http.Client names the URL with at most
+// the password masked. The *url.Error is kept, so errors.As and its Timeout method still work, with the URL
+// redacted and the cause passed through redactCause.
+func redactRequestError(err error, endpoint string) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return &url.Error{Op: urlErr.Op, URL: exporters.RedactURL(endpoint), Err: redactCause(urlErr.Err, endpoint)}
+	}
+
+	return redactCause(err, endpoint)
+}
+
+// redactCause hides any credential from the endpoint that a request error's cause repeats: a schemeless
+// TRACER_URL such as user:pass@host fails with `unsupported protocol scheme "user"`. The returned error still
+// unwraps to the cause, so errors.Is keeps matching context.Canceled, DeadlineExceeded and the like.
+func redactCause(err error, endpoint string) error {
+	if err == nil {
+		return nil
+	}
+
+	msg := exporters.RedactMessage(err.Error(), endpoint)
+
+	for _, secret := range endpointCredentials(endpoint) {
+		msg = strings.ReplaceAll(msg, secret, redactedCredential)
+	}
+
+	if msg == err.Error() {
+		return err
+	}
+
+	return &redactedError{msg: msg, err: err}
+}
+
+// endpointCredentials returns the parts of an endpoint that can hold a credential: the userinfo and the query,
+// longest first so that a credential containing another is replaced whole. Like exporters.RedactURL, an endpoint
+// that does not parse with a host is split on its raw text and over-redacted rather than risk a leak.
+func endpointCredentials(endpoint string) []string {
+	var userinfo, query string
+
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		password, _ := u.User.Password()
+		userinfo = u.User.Username() + ":" + password
+		query = u.RawQuery
+	} else {
+		raw, _, _ := strings.Cut(endpoint, "#")
+		raw, query, _ = strings.Cut(raw, "?")
+
+		if i := strings.LastIndex(raw, "@"); i >= 0 {
+			userinfo = raw[:i]
+			if _, rest, found := strings.Cut(userinfo, "://"); found {
+				userinfo = rest
+			}
+		}
+	}
+
+	credentials := strings.Split(userinfo, ":")
+
+	if query != "" {
+		credentials = append(credentials, query)
+
+		for pair := range strings.SplitSeq(query, "&") {
+			_, value, _ := strings.Cut(pair, "=")
+			unescaped, _ := url.QueryUnescape(value)
+			credentials = append(credentials, value, unescaped)
+		}
+	}
+
+	credentials = slices.DeleteFunc(credentials, func(s string) bool { return s == "" })
+	slices.SortFunc(credentials, func(a, b string) int { return len(b) - len(a) })
+
+	return credentials
+}
+
+// redactedError is a cause whose text had a credential removed. Unwrap returns the original cause.
+type redactedError struct {
+	msg string
+	err error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+
+func (e *redactedError) Unwrap() error { return e.err }
 
 // convertSpans converts OpenTelemetry spans to the format expected by the exporter.
 func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
