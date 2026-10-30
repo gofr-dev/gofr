@@ -496,8 +496,10 @@ func TestConfig_GetEndpointPermission_PatternText(t *testing.T) {
 		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
 		{Path: "/files/{path:.*}", Methods: []string{"GET"}, RequiredPermissions: []string{"files:read"}},
 		{Path: "/wildcard/{id}", Methods: []string{"*"}, RequiredPermissions: []string{"wildcard:write"}},
+		{Path: "/public-wildcard/{id}", Methods: []string{"*"}, Public: true},
 		{Path: "/broken/{id:[}", Methods: []string{"GET"}, Public: true},
 		{Path: "/broken/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"broken:read"}},
+		{Path: "/uncompilable-protected/{id:[}", Methods: []string{"GET"}, RequiredPermissions: []string{"uncompilable:read"}},
 	}
 
 	config := newTestConfig(t, endpoints, nil)
@@ -538,11 +540,25 @@ func TestConfig_GetEndpointPermission_PatternText(t *testing.T) {
 			expectedPublic: false,
 		},
 		{
+			desc:           "public wildcard method pattern looked up with explicit method",
+			method:         http.MethodGet,
+			path:           "/public-wildcard/{id}",
+			expectedPerms:  nil,
+			expectedPublic: true,
+		},
+		{
 			desc:           "uncompilable pattern looked up by own pattern text",
 			method:         http.MethodGet,
 			path:           "/broken/{id:[}",
 			expectedPerms:  nil,
 			expectedPublic: true,
+		},
+		{
+			desc:           "protected uncompilable pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/uncompilable-protected/{id:[}",
+			expectedPerms:  []string{"uncompilable:read"},
+			expectedPublic: false,
 		},
 	}
 

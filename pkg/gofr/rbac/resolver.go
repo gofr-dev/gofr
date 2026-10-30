@@ -258,16 +258,17 @@ func (c *Config) resolve(methodUpper, path string) (*EndpointMapping, bool) {
 	return c.resolveEndpointInternal(methodUpper, path, false)
 }
 
+// resolveEndpointInternal resolves an endpoint using exact-path lookups before falling back to
+// the ordered rule scan. When allowPublicPatternExact is false, exact hits on public mux patterns
+// are skipped and execution falls through to the ordered scan.
 func (c *Config) resolveEndpointInternal(methodUpper, path string, allowPublicPatternExact bool) (*EndpointMapping, bool) {
-	if endpoint, isPublic := c.getExactEndpoint(methodUpper + ":" + path); endpoint != nil {
-		if !isPublic || allowPublicPatternExact || !isMuxPattern(endpoint.Path) {
-			return endpoint, isPublic
-		}
-	}
+	for _, key := range []string{methodUpper + ":" + path, "*:" + path} {
+		if endpoint, isPublic := c.getExactEndpoint(key); endpoint != nil {
+			if !isPublic || allowPublicPatternExact || !isMuxPattern(endpoint.Path) {
+				return endpoint, isPublic
+			}
 
-	if endpoint, isPublic := c.getExactEndpoint("*:" + path); endpoint != nil {
-		if !isPublic || allowPublicPatternExact || !isMuxPattern(endpoint.Path) {
-			return endpoint, isPublic
+			break
 		}
 	}
 
