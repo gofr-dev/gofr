@@ -110,6 +110,7 @@ func TestRedis_HealthCheck(t *testing.T) {
 		desc        string
 		connected   bool
 		client      func(c *redis.Client) *redis.Client
+		hostName    string
 		expStatus   string
 		expHasStats bool
 		expHasError bool
@@ -134,11 +135,25 @@ func TestRedis_HealthCheck(t *testing.T) {
 			expStatus:   datasource.StatusUp,
 			expHasStats: true,
 		},
+		{
+			desc:        "IPv6 host is bracketed",
+			client:      func(*redis.Client) *redis.Client { return nil },
+			hostName:    "::1",
+			expStatus:   datasource.StatusDown,
+			expHasError: true,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			client, cfg := newMiniredisClient(t, tc.connected)
+
+			expHost := client.Options().Addr
+
+			if tc.hostName != "" {
+				cfg.HostName = tc.hostName
+				expHost = "[" + tc.hostName + "]:" + strconv.Itoa(cfg.Port)
+			}
 
 			r := &Redis{Client: tc.client(client), config: cfg}
 
@@ -148,7 +163,7 @@ func TestRedis_HealthCheck(t *testing.T) {
 			_, hasError := h.Details["error"]
 
 			assert.Equal(t, tc.expStatus, h.Status)
-			assert.Equal(t, client.Options().Addr, h.Details["host"])
+			assert.Equal(t, expHost, h.Details["host"])
 			assert.Equal(t, tc.expHasStats, hasStats)
 			assert.Equal(t, tc.expHasError, hasError)
 		})
