@@ -282,7 +282,8 @@ func logGRPCEntry(logger Logger, logEntry *gRPCLog, method string) {
 	}
 }
 
-func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, duration time.Duration, method, streamType string, statusCode int32) {
+func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, duration time.Duration,
+	method, streamType string, statusCode int32) {
 	if metrics == nil {
 		return
 	}

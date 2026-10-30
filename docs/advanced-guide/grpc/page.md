@@ -414,6 +414,12 @@ GoFr automatically registers the following gRPC metrics:
 
 These metrics are automatically available in your metrics endpoint and can be used for monitoring and alerting.
 
+Request duration histograms `app_gRPC-Server_stats` and `app_gRPC-Client_stats` include `method` and `status` labels.
+The `status` value is the numeric gRPC status code as a string (`"0"` for OK, `"13"` for Internal), matching the logged `statusCode`.
+For error monitoring, filter the histogram counts by `status!="0"` and aggregate across status codes when calculating total traffic.
+
+Compatibility note: the new `status` label splits existing histogram series by outcome. Update dashboards and alerts that assume one series per method to aggregate across `status`.
+
 ## Customizing gRPC Client with DialOptions
 
 GoFr provides flexibility to customize your gRPC client connections using gRPC `DialOptions`. This allows users to configure aspects such as transport security, interceptors, and load balancing policies.
