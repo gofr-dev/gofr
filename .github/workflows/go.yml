@@ -38,6 +38,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# A pipe after the proxy makes the go command fall back to fetching from the
+# source repository on ANY proxy error, including a dropped connection or a
+# timeout. The default comma form falls back only on 404/410, so one bad
+# response from proxy.golang.org failed the whole job.
+env:
+  GOPROXY: https://proxy.golang.org|direct
+
 # Define the jobs that this workflow will run
 jobs:
   # Job for testing the examples directory
@@ -145,8 +152,7 @@ jobs:
         uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
-        run: |
-          go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Same treatment as the MinIO step below: pin the image and wait for the
       # service, not for `docker run -d` to return. `:latest` also meant the
@@ -273,8 +279,7 @@ jobs:
         uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
-        run: |
-          go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
@@ -880,7 +885,7 @@ jobs:
           cache: false
 
       - name: Get dependencies
-        run: go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Replaces the signal the `go mod tidy` in Submodule-Unit-Testing was
       # accidentally providing. `-diff` (Go 1.23+) reports what tidy would
@@ -1002,8 +1007,9 @@ jobs:
           cache: false
 
       - name: Download dependencies for ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: go mod download
+        uses: ./.github/actions/go-mod-download
+        with:
+          working-directory: ${{ matrix.module }}
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
@@ -1032,7 +1038,7 @@ jobs:
       - name: Check for file names errors
         # Pinned to main: v2.3.1 still declares the deprecated node20 runtime.
         # 0c7f19c ("chore: run on the node24 runtime") is not in a tagged release yet.
-        uses: ls-lint/action@0c7f19c04594e52a801dec991aae70a7ae5c6665 # main, node24 runtime
+        uses: ls-lint/action@a87c5eb4fb26d7af1bd0adba203dd1e76f7e94eb # main, node24 runtime
         with:
           config: .ls-lint.yml
 

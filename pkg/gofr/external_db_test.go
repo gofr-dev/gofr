@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -578,19 +579,45 @@ func TestApp_AddProviderDatasources(t *testing.T) {
 }
 
 func TestApp_AddDBResolver_WithoutPrimarySQL(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	testCases := []struct {
+		desc         string
+		newContainer func() *container.Container
+	}{
+		{
+			desc:         "empty container",
+			newContainer: func() *container.Container { return &container.Container{} },
+		},
+		{
+			// NewSQL returns nil without DB_DIALECT; the container must not store it as a typed nil.
+			desc: "DB_HOST set without DB_DIALECT",
+			newContainer: func() *container.Container {
+				return container.NewContainer(config.NewMockConfig(map[string]string{"DB_HOST": "localhost"}))
+			},
+		},
+	}
 
-	logger := container.NewMockLogger(ctrl)
-	logger.EXPECT().Fatal("Primary SQL connection must be configured before adding DBResolver")
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 
-	// GetResolver/Connect have no expectations: the resolver must not be wired.
-	resolver := container.NewMockDBResolverProvider(ctrl)
+			logger := container.NewMockLogger(ctrl)
+			logger.EXPECT().Fatal("Primary SQL connection must be configured before adding DBResolver")
 
-	a := &App{container: &container.Container{Logger: logger}}
+			// GetResolver/Connect have no expectations: the resolver must not be wired.
+			resolver := container.NewMockDBResolverProvider(ctrl)
 
-	a.AddDBResolver(resolver)
+			c := tc.newContainer()
+			c.Logger = logger
 
-	assert.Nil(t, a.container.SQL)
+			a := &App{container: c}
+
+			a.AddDBResolver(resolver)
+
+			if a.container.SQL != nil {
+				t.Errorf("expected untyped nil SQL, got %T", a.container.SQL)
+			}
+		})
+	}
 }
 
 func TestApp_closeExistingSQL(t *testing.T) {
