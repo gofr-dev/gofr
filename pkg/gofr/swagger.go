@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"embed"
+	"errors"
 	"mime"
 	"net/http"
 	"os"
@@ -17,7 +18,7 @@ var fs embed.FS
 const (
 	OpenAPIJSON = "openapi.json"
 
-	// swaggerFileNameParam is the path parameter naming the file served from /.well-known/{name}.
+	// swaggerFileNameParam is used by direct callers of SwaggerUIHandler.
 	swaggerFileNameParam = "name"
 )
 
@@ -36,14 +37,20 @@ func OpenAPIHandler(c *Context) (any, error) {
 	return response.File{Content: b, ContentType: contentTypeJSON}, nil
 }
 
-// SwaggerUIHandler serves the static files of the Swagger UI.
+// SwaggerUIHandler serves the Swagger UI index. It also supports an explicit
+// filename path parameter for callers that invoke the handler directly.
 func SwaggerUIHandler(c *Context) (any, error) {
 	fileName := c.PathParam(swaggerFileNameParam)
 	if fileName == "" {
-		// Read the index.html file
 		fileName = "index.html"
 	}
 
+	return serveSwaggerUIAsset(c, fileName)
+}
+
+// serveSwaggerUIAsset is shared by the Swagger index route and the individual
+// routes registered for embedded UI assets.
+func serveSwaggerUIAsset(c *Context, fileName string) (any, error) {
 	ext := filepath.Ext(fileName)
 	if ext == "" {
 		return nil, gofrHTTP.ErrorEntityNotFound{Name: "file", Value: fileName}
@@ -51,25 +58,54 @@ func SwaggerUIHandler(c *Context) (any, error) {
 
 	data, err := fs.ReadFile("static/" + fileName)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, gofrHTTP.ErrorEntityNotFound{Name: "file", Value: fileName}
+		}
+
 		c.Errorf("Failed to read Swagger UI file %s from embedded file system: %v", fileName, err)
 		return nil, err
 	}
 
-	ct := mime.TypeByExtension(ext)
+	return response.File{Content: data, ContentType: mime.TypeByExtension(ext)}, nil
+}
 
-	// Return the rendered HTML as a string
-	return response.File{Content: data, ContentType: ct}, nil
+// isSwaggerUIAsset limits the public routes to web assets, excluding embedded
+// implementation files such as static/files.go.
+func isSwaggerUIAsset(name string) bool {
+	switch filepath.Ext(name) {
+	case ".css", ".html", ".ico", ".js", ".png":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) checkAndAddOpenAPIDocumentation() {
-	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
-	if _, err := os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
-		// Route to serve the OpenAPI JSON specification file.
-		a.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
-		// Route to serve the Swagger UI, providing a user interface for the API documentation.
-		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
-		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
-		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	// Only expose Swagger documentation when the application's OpenAPI file exists.
+	if _, err := os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err != nil {
+		return
+	}
+
+	a.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+	a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+
+	// Enumerate the embedded assets at startup instead of claiming every
+	// /.well-known/{name} path. Other well-known resources remain routable by
+	// the application (or fall through to its ordinary 404 handler).
+	entries, err := fs.ReadDir("static")
+	if err != nil {
+		a.container.Errorf("Failed to list embedded Swagger UI assets: %v", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !isSwaggerUIAsset(entry.Name()) {
+			continue
+		}
+
+		fileName := entry.Name()
+		a.add(http.MethodGet, "/.well-known/"+fileName, func(c *Context) (any, error) {
+			return serveSwaggerUIAsset(c, fileName)
+		})
 	}
 }
