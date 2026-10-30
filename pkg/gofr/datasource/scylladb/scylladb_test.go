@@ -447,13 +447,11 @@ func Test_ExecCAS(t *testing.T) {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil)
 		}, true, nil},
-
 		{"success case: int dest, applied true", &mockInt, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
 			mockDeps.mockQuery.EXPECT().ScanCAS(&mockInt).Return(true, nil)
 		}, true, nil},
-
 		{"failure case: struct dest, error", &mockStruct, func(mockDeps *mockDependencies) {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery)
