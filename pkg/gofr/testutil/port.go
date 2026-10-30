@@ -3,9 +3,11 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,7 +20,29 @@ const (
 	grpcPortEnv    = "GRPC_PORT"
 )
 
-// GetFreePort asks the kernel for a free open port that is ready to use for tests.
+// The range test ports are drawn from. It sits below every range an OS uses for the local port of
+// an outgoing connection (Linux 32768-60999 by default, macOS and Windows 49152-65535), because a
+// port from there is also handed to any connection another process opens, and the tests of the
+// examples run as concurrent processes that each open Redis, SQL and HTTP connections: a port taken
+// from the kernel by listening on :0 could be gone again before the app under test binds it.
+const (
+	minTestPort = 20000
+	maxTestPort = 32000
+
+	// maxPortAttempts bounds the search, which only repeats when a candidate is in use.
+	maxPortAttempts = 100
+)
+
+// handedOutPorts remembers the ports this process was given, so that two tests of one process never
+// share a port, even when the first has not bound it yet.
+//
+//nolint:gochecknoglobals // process-wide on purpose: it is shared by every test in the binary.
+var (
+	handedOutMu    sync.Mutex
+	handedOutPorts = map[int]struct{}{}
+)
+
+// GetFreePort returns a free port that is ready to use for tests.
 func GetFreePort(t *testing.T) int {
 	t.Helper()
 
@@ -28,19 +52,50 @@ func GetFreePort(t *testing.T) int {
 	return port
 }
 
-// reserveFreePort asks the kernel for a free open port. It is the plumbing behind GetFreePort and
-// ReserveServerPorts, which differ only in how they report a failure.
+// reserveFreePort picks a random port in [minTestPort, maxTestPort) that nothing listens on. It is
+// the plumbing behind GetFreePort and ReserveServerPorts, which differ only in how they report a
+// failure.
 func reserveFreePort(ctx context.Context) (int, error) {
-	lc := net.ListenConfig{}
+	var lastErr error
 
-	listener, err := lc.Listen(ctx, "tcp", "localhost:0")
-	if err != nil {
-		return 0, err
+	for range maxPortAttempts {
+		port := minTestPort + rand.IntN(maxTestPort-minTestPort) //nolint:gosec // a spread, not a secret
+
+		if alreadyHandedOut(port) {
+			continue
+		}
+
+		// Probe the wildcard address: that is what the framework binds, and a listener on localhost
+		// alone would miss a conflict on another interface.
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+strconv.Itoa(port))
+		if err != nil {
+			lastErr = err
+
+			continue
+		}
+
+		if err := listener.Close(); err != nil {
+			return 0, err
+		}
+
+		return port, nil
 	}
 
-	port := listener.Addr().(*net.TCPAddr).Port
+	return 0, fmt.Errorf("no free port in %d-%d after %d attempts: %w", minTestPort, maxTestPort, maxPortAttempts, lastErr)
+}
 
-	return port, listener.Close()
+// alreadyHandedOut reports whether port was given out before, and marks it as given out if not.
+func alreadyHandedOut(port int) bool {
+	handedOutMu.Lock()
+	defer handedOutMu.Unlock()
+
+	if _, ok := handedOutPorts[port]; ok {
+		return true
+	}
+
+	handedOutPorts[port] = struct{}{}
+
+	return false
 }
 
 // ServiceConfigs holds the configuration details for different server components.

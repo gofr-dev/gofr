@@ -53,13 +53,12 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 		return err
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
-		Host:          addr,
+		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
@@ -89,13 +88,12 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 		return err
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
-		Host:          addr,
+		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
@@ -287,13 +285,12 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 
 		if msg != nil {
 			end := time.Since(start)
-			addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 			ps.logger.Debug(&pubsub.Log{
 				Mode:          "SUB",
 				CorrelationID: span.SpanContext().TraceID().String(),
 				MessageValue:  ps.loggedMessage(msg.Value),
 				Topic:         topic,
-				Host:          addr,
+				Host:          ps.config.addr(),
 				PubSubBackend: redisBackend,
 				Time:          end.Microseconds(),
 			})

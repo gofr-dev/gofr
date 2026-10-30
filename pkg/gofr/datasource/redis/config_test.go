@@ -1,8 +1,16 @@
 package redis
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -47,6 +55,28 @@ func TestGetRedisConfig_InvalidPortAndDB(t *testing.T) {
 
 	assert.Equal(t, defaultRedisPort, conf.Port)
 	assert.Equal(t, 0, conf.DB)
+}
+
+func TestGetRedisConfig_Addr(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      map[string]string
+		wantAddr string
+	}{
+		{name: "host name", env: map[string]string{"REDIS_HOST": "localhost"}, wantAddr: "localhost:6379"},
+		{name: "IPv6 host variable", env: map[string]string{"REDIS_HOST": "::1", "REDIS_PORT": "6380"}, wantAddr: "[::1]:6380"},
+		{name: "IPv6 URL", env: map[string]string{"REDIS_URL": "redis://[::1]:6380"}, wantAddr: "[::1]:6380"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := testGetRedisConfig(t, tc.env)
+
+			require.NotNil(t, conf.Options)
+			assert.Equal(t, tc.wantAddr, conf.Options.Addr)
+			assert.Equal(t, tc.wantAddr, conf.addr())
+		})
+	}
 }
 
 func TestGetRedisConfig_TLS(t *testing.T) {
@@ -221,6 +251,7 @@ func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
 func TestGetRedisConfig_RedactArgs(t *testing.T) {
 	testCases := []struct {
 		desc         string
+		redisURL     string
 		redactArgs   string
 		wantHideArgs bool
 		wantWarn     bool
@@ -231,17 +262,21 @@ func TestGetRedisConfig_RedactArgs(t *testing.T) {
 		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
 		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
 		{desc: "invalid value shows args and warns", redactArgs: "maybe", wantHideArgs: false, wantWarn: true},
+		{desc: "REDIS_URL with unset shows args", redisURL: "redis://localhost:6379", wantHideArgs: false},
+		{desc: "REDIS_URL with true hides args", redisURL: "redis://localhost:6379", redactArgs: "true", wantHideArgs: true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			var conf *Config
 
+			env := map[string]string{"REDIS_HOST": "localhost", "REDIS_REDACT_ARGS": tc.redactArgs}
+			if tc.redisURL != "" {
+				env = map[string]string{"REDIS_URL": tc.redisURL, "REDIS_REDACT_ARGS": tc.redactArgs}
+			}
+
 			out := testutil.StdoutOutputForFunc(func() {
-				conf = getRedisConfig(config.NewMockConfig(map[string]string{
-					"REDIS_HOST":        "localhost",
-					"REDIS_REDACT_ARGS": tc.redactArgs,
-				}), logging.NewMockLogger(logging.WARN))
+				conf = getRedisConfig(config.NewMockConfig(env), logging.NewMockLogger(logging.WARN))
 			})
 
 			assert.Equal(t, tc.wantHideArgs, conf.hideArgs)
@@ -251,6 +286,362 @@ func TestGetRedisConfig_RedactArgs(t *testing.T) {
 			} else {
 				assert.Empty(t, out)
 			}
+		})
+	}
+}
+
+// writeTestCACert writes a self-signed CA certificate to a temporary file and returns its path.
+func writeTestCACert(t *testing.T) string {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+
+	return path
+}
+
+// getRedisConfigWithLogs runs getRedisConfig and returns the config with the WARN (stdout) and ERROR (stderr) output.
+func getRedisConfigWithLogs(t *testing.T, configMap map[string]string) (conf *Config, stdout, stderr string) {
+	t.Helper()
+
+	stderr = testutil.StderrOutputForFunc(func() {
+		stdout = testutil.StdoutOutputForFunc(func() {
+			conf = getRedisConfig(config.NewMockConfig(configMap), logging.NewMockLogger(logging.WARN))
+		})
+	})
+
+	return conf, stdout, stderr
+}
+
+const redisURLTestSecret = "s3cr3tP4ss"
+
+type redisURLCase struct {
+	name           string
+	env            map[string]string
+	wantHost       string
+	wantPort       int
+	wantUser       string
+	wantPassword   string
+	wantDB         int
+	wantTLS        bool
+	wantServerName string
+	wantRootCAs    bool
+	wantStdout     []string
+	wantStderr     []string
+	rejectStderr   []string
+}
+
+func TestGetRedisConfig_URL(t *testing.T) {
+	for _, tc := range redisURLCases(writeTestCACert(t)) {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, stdout, stderr := getRedisConfigWithLogs(t, tc.env)
+
+			assert.NotContains(t, stdout+stderr, redisURLTestSecret, "logs must never contain the password")
+
+			for _, want := range tc.wantStdout {
+				assert.Contains(t, stdout, want)
+			}
+
+			for _, want := range tc.wantStderr {
+				assert.Contains(t, stderr, want)
+			}
+
+			for _, reject := range tc.rejectStderr {
+				assert.NotContains(t, stderr, reject)
+			}
+
+			assert.Equal(t, tc.wantHost, conf.HostName)
+
+			if tc.wantHost != "" {
+				assertRedisURLConfig(t, &tc, conf)
+			}
+		})
+	}
+}
+
+func assertRedisURLConfig(t *testing.T, tc *redisURLCase, conf *Config) {
+	t.Helper()
+
+	assert.Equal(t, tc.wantPort, conf.Port)
+	assert.Equal(t, tc.wantUser, conf.Username)
+	assert.Equal(t, tc.wantPassword, conf.Password)
+	assert.Equal(t, tc.wantDB, conf.DB)
+
+	require.NotNil(t, conf.Options)
+	assert.Equal(t, tc.wantUser, conf.Options.Username)
+	assert.Equal(t, tc.wantPassword, conf.Options.Password)
+	assert.Equal(t, tc.wantDB, conf.Options.DB)
+
+	if !tc.wantTLS {
+		assert.Nil(t, conf.TLS)
+		assert.Nil(t, conf.Options.TLSConfig)
+
+		return
+	}
+
+	require.NotNil(t, conf.TLS)
+	assert.Same(t, conf.TLS, conf.Options.TLSConfig)
+	assert.Equal(t, tc.wantServerName, conf.TLS.ServerName)
+	assert.Equal(t, uint16(tls.VersionTLS12), conf.TLS.MinVersion)
+	assert.Equal(t, tc.wantRootCAs, conf.TLS.RootCAs != nil)
+}
+
+func redisURLCases(caPath string) []redisURLCase {
+	return append(validRedisURLCases(caPath), invalidRedisURLCases()...)
+}
+
+func validRedisURLCases(caPath string) []redisURLCase {
+	const secret = redisURLTestSecret
+
+	return []redisURLCase{
+		{
+			name:         "redis scheme with user, password and db",
+			env:          map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6380/3"},
+			wantHost:     "cache.internal",
+			wantPort:     6380,
+			wantUser:     "app",
+			wantPassword: secret,
+			wantDB:       3,
+		},
+		{
+			name:           "rediss scheme turns TLS on with the host as server name",
+			env:            map[string]string{"REDIS_URL": "rediss://cache.example.com:6390"},
+			wantHost:       "cache.example.com",
+			wantPort:       6390,
+			wantTLS:        true,
+			wantServerName: "cache.example.com",
+		},
+		{
+			name:         "IPv6 host in brackets",
+			env:          map[string]string{"REDIS_URL": "redis://app:" + secret + "@[::1]:6380/2"},
+			wantHost:     "::1",
+			wantPort:     6380,
+			wantUser:     "app",
+			wantPassword: secret,
+			wantDB:       2,
+		},
+		{
+			// The example in docs/quick-start/connecting-redis.
+			name:         "percent-encoded password",
+			env:          map[string]string{"REDIS_URL": "redis://appuser:p%40ss%2Fw%3Ard@redis.example.com:6379"},
+			wantHost:     "redis.example.com",
+			wantPort:     defaultRedisPort,
+			wantUser:     "appuser",
+			wantPassword: "p@ss/w:rd",
+		},
+		{
+			name:     "missing port defaults to 6379",
+			env:      map[string]string{"REDIS_URL": "redis://cache.internal"},
+			wantHost: "cache.internal",
+			wantPort: defaultRedisPort,
+		},
+		{
+			name: "URL wins over discrete variables and the warning names them",
+			env: map[string]string{
+				"REDIS_URL":      "redis://cache.internal:6380",
+				"REDIS_HOST":     "other-host",
+				"REDIS_PASSWORD": "other-" + secret,
+			},
+			wantHost:   "cache.internal",
+			wantPort:   6380,
+			wantStdout: []string{"REDIS_HOST", "REDIS_PASSWORD"},
+		},
+		{
+			name: "rediss with a CA cert keeps the server name and adds root CAs",
+			env: map[string]string{
+				"REDIS_URL":         "rediss://cache.example.com",
+				"REDIS_TLS_CA_CERT": caPath,
+			},
+			wantHost:       "cache.example.com",
+			wantPort:       defaultRedisPort,
+			wantTLS:        true,
+			wantServerName: "cache.example.com",
+			wantRootCAs:    true,
+		},
+	}
+}
+
+func invalidRedisURLCases() []redisURLCase {
+	const secret = redisURLTestSecret
+
+	return []redisURLCase{
+		{
+			name:       "invalid port",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:port"},
+			wantStderr: []string{"invalid REDIS_URL"},
+		},
+		{
+			name:       "port out of range",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:99999999999/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
+			name:       "port above 65535",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:65536/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
+			name:       "port zero",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:0/3"},
+			wantStderr: []string{"invalid REDIS_URL", "port"},
+		},
+		{
+			name:       "bad db path",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6379/abc"},
+			wantStderr: []string{"invalid REDIS_URL"},
+		},
+		{
+			name:       "unix scheme is rejected",
+			env:        map[string]string{"REDIS_URL": "unix://app:" + secret + "@/var/run/redis.sock"},
+			wantStderr: []string{"invalid REDIS_URL", "unix"},
+		},
+		{
+			// go-redis fills an empty host with localhost, which would connect to the wrong server.
+			name:       "empty URL body has no host",
+			env:        map[string]string{"REDIS_URL": "redis://"},
+			wantStderr: []string{"invalid REDIS_URL", "missing host"},
+		},
+		{
+			// What redis://${HOST}:6379 becomes when HOST is unset.
+			name:       "port without host",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@:6379"},
+			wantStderr: []string{"invalid REDIS_URL", "missing host"},
+		},
+		{
+			name:       "unknown query option",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "@cache.internal:6379?bogus=1"},
+			wantStderr: []string{"invalid REDIS_URL", "bogus"},
+		},
+		{
+			// url.Error quotes the URL with %q, so a control character defeats a plain replace of the raw URL.
+			name:       "control character in the password",
+			env:        map[string]string{"REDIS_URL": "redis://app:" + secret + "\x01@cache.internal:6379"},
+			wantStderr: []string{"invalid REDIS_URL", "invalid control character"},
+		},
+		{
+			// url.EscapeError quotes the bad sequence, which is part of the password.
+			name:         "bad escape in the password",
+			env:          map[string]string{"REDIS_URL": "redis://app:" + secret + "%zz@cache.internal:6379"},
+			wantStderr:   []string{"invalid REDIS_URL", "invalid URL escape"},
+			rejectStderr: []string{"%zz"},
+		},
+	}
+}
+
+func TestGetRedisConfig_PoolAndTimeouts(t *testing.T) {
+	tests := []struct {
+		name             string
+		env              map[string]string
+		wantPoolSize     int
+		wantMinIdleConns int
+		wantDialTimeout  time.Duration
+		wantReadTimeout  time.Duration
+		wantWriteTimeout time.Duration
+		wantStdout       []string
+	}{
+		{
+			name: "each variable is applied",
+			env: map[string]string{
+				"REDIS_HOST":           "localhost",
+				"REDIS_POOL_SIZE":      "20",
+				"REDIS_MIN_IDLE_CONNS": "2",
+				"REDIS_DIAL_TIMEOUT":   "2s",
+				"REDIS_READ_TIMEOUT":   "500ms",
+				"REDIS_WRITE_TIMEOUT":  "750ms",
+			},
+			wantPoolSize:     20,
+			wantMinIdleConns: 2,
+			wantDialTimeout:  2 * time.Second,
+			wantReadTimeout:  500 * time.Millisecond,
+			wantWriteTimeout: 750 * time.Millisecond,
+		},
+		{
+			name: "env variable beats the URL query parameter",
+			env: map[string]string{
+				"REDIS_URL":          "redis://cache.internal?pool_size=5&read_timeout=1s",
+				"REDIS_POOL_SIZE":    "30",
+				"REDIS_READ_TIMEOUT": "250ms",
+			},
+			wantPoolSize:    30,
+			wantReadTimeout: 250 * time.Millisecond,
+		},
+		{
+			name: "unset leaves the URL query value",
+			env: map[string]string{
+				"REDIS_URL": "redis://cache.internal?pool_size=5&min_idle_conns=1&dial_timeout=3s",
+			},
+			wantPoolSize:     5,
+			wantMinIdleConns: 1,
+			wantDialTimeout:  3 * time.Second,
+		},
+		{
+			name: "bad or negative values warn and keep the default",
+			env: map[string]string{
+				"REDIS_HOST":           "localhost",
+				"REDIS_POOL_SIZE":      "many",
+				"REDIS_MIN_IDLE_CONNS": "-1",
+				"REDIS_DIAL_TIMEOUT":   "soon",
+				"REDIS_READ_TIMEOUT":   "-1s",
+				"REDIS_WRITE_TIMEOUT":  "10",
+			},
+			wantStdout: []string{
+				"REDIS_POOL_SIZE", "REDIS_MIN_IDLE_CONNS", "REDIS_DIAL_TIMEOUT", "REDIS_READ_TIMEOUT", "REDIS_WRITE_TIMEOUT",
+			},
+		},
+		{
+			// go-redis turns a zero pool size or timeout into its own default, which would discard the URL value.
+			name: "zero pool size and timeouts warn and keep the URL query value",
+			env: map[string]string{
+				"REDIS_URL":           "redis://cache.internal?pool_size=5&dial_timeout=3s&read_timeout=10s&write_timeout=2s",
+				"REDIS_POOL_SIZE":     "0",
+				"REDIS_DIAL_TIMEOUT":  "0",
+				"REDIS_READ_TIMEOUT":  "0",
+				"REDIS_WRITE_TIMEOUT": "0s",
+			},
+			wantPoolSize:     5,
+			wantDialTimeout:  3 * time.Second,
+			wantReadTimeout:  10 * time.Second,
+			wantWriteTimeout: 2 * time.Second,
+			wantStdout:       []string{"REDIS_POOL_SIZE", "REDIS_DIAL_TIMEOUT", "REDIS_READ_TIMEOUT", "REDIS_WRITE_TIMEOUT"},
+		},
+		{
+			name: "zero min idle connections is applied",
+			env: map[string]string{
+				"REDIS_URL":            "redis://cache.internal?min_idle_conns=4",
+				"REDIS_MIN_IDLE_CONNS": "0",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, stdout, _ := getRedisConfigWithLogs(t, tc.env)
+
+			for _, want := range tc.wantStdout {
+				assert.Contains(t, stdout, want)
+			}
+
+			require.NotNil(t, conf.Options)
+			assert.Equal(t, tc.wantPoolSize, conf.Options.PoolSize)
+			assert.Equal(t, tc.wantMinIdleConns, conf.Options.MinIdleConns)
+			assert.Equal(t, tc.wantDialTimeout, conf.Options.DialTimeout)
+			assert.Equal(t, tc.wantReadTimeout, conf.Options.ReadTimeout)
+			assert.Equal(t, tc.wantWriteTimeout, conf.Options.WriteTimeout)
 		})
 	}
 }
