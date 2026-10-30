@@ -183,6 +183,27 @@ func addMonitoringFeature() migration.Migrate {
 - **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
 - **Better organization:** Related changes stay together, making the codebase easier to understand
 
+## Migration Keys Must Increase
+
+On startup, GoFr runs only the migrations whose key is greater than the highest key already applied. A migration
+added with a key **lower** than that is never run.
+
+This usually happens when two branches add migrations at the same time. Suppose branch A adds `20260101` and branch
+B adds `20260102`, and B is merged and deployed first. GoFr applies `20260102`. When A is merged later, `20260101`
+is below the last applied key, so GoFr skips it on every start.
+
+GoFr does not run such a migration out of order, because it may depend on a state that later migrations already
+changed. Instead it logs one error on startup that names every skipped key, and the application keeps starting:
+
+```text
+migrations [20260101] are below the last applied version 20260102 and have never run; they will not run. Give them a key above 20260102.
+```
+
+To fix it, give the skipped migration a new key above the last applied one (for example, `20260103`) and deploy again.
+
+> **Note:** Migrations that only use PubSub are not recorded, so one with a key below the last applied key is
+> reported on every start.
+
 ## Multi-Instance Deployments
 
 When running multiple instances of your application (e.g., in Kubernetes or Docker Swarm), GoFr automatically coordinates migrations to ensure only one instance runs them at a time.

@@ -73,50 +73,74 @@ func Test_DGraphCheckAndCreateMigrationTable(t *testing.T) {
 	require.NoError(t, err, "Test_DGraphCheckAndCreateMigrationTable Failed!")
 }
 
-func Test_DGraphGetLastMigration(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
+func Test_DGraphGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc     string
-		err      error
-		mockResp *api.Response
-		expected int64
+		desc      string
+		mockResp  any
+		queryErr  error
+		skipInner bool
+		inner     map[int64]struct{}
+		innerErr  error
+		expected  map[int64]struct{}
+		expErr    string
 	}{
 		{
-			desc:     "success",
-			err:      nil,
-			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":10}]}`)},
-			expected: 10,
+			desc:     "backend versions merged with inner versions",
+			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":1},{"version":3},{"version":4}]}`)},
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
 		},
 		{
-			desc:     "query error",
-			err:      context.DeadlineExceeded,
-			mockResp: nil,
-			expected: -1,
-		},
-		{
-			desc:     "empty response",
-			err:      nil,
+			desc:     "empty response returns only inner set",
 			mockResp: &api.Response{Json: []byte(`{"migrations":[]}`)},
-			expected: 0,
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
+		},
+		{
+			desc:      "query error",
+			queryErr:  context.DeadlineExceeded,
+			skipInner: true,
+			expErr:    context.DeadlineExceeded.Error(),
+		},
+		{
+			desc:      "invalid JSON",
+			mockResp:  &api.Response{Json: []byte(`{invalid`)},
+			skipInner: true,
+			expErr:    "dgraph: invalid character",
+		},
+		{
+			desc:     "inner migrator error",
+			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":3}]}`)},
+			innerErr: errDgraph,
+			expErr:   errDgraph.Error(),
 		},
 	}
 
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			// Set up mock expectation for the main query
-			mockDGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).
-				Return(tc.mockResp, tc.err)
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-			resp, err := migratorWithDGraph.getLastMigration(mockContainer)
+			m := dgraphMigrator{dgraphDS: dgraphDS{client: mocks.DGraph}, migrator: mockMigrator}
 
-			assert.Equal(t, tc.expected, resp, "TEST[%v] Failed!", i)
+			mocks.DGraph.EXPECT().Query(gomock.Any(), getMigrationVersionsQuery).Return(tc.mockResp, tc.queryErr)
 
-			if tc.err != nil {
-				assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v] Failed!", i)
-			} else {
-				assert.NoError(t, err, "TEST[%v] Failed!", i)
+			if !tc.skipInner {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.inner, tc.innerErr)
 			}
+
+			resp, err := m.getAppliedMigrations(mockContainer)
+
+			if tc.expErr != "" {
+				require.ErrorContains(t, err, tc.expErr)
+				assert.Nil(t, resp)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, resp)
 		})
 	}
 }
@@ -138,7 +162,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, txn.mutated && txn.committed && txn.discarded)
 		// The record must be typed as Migration and carry the version so
-		// getLastMigration can find it on subsequent runs.
+		// getAppliedMigrations can find it on subsequent runs.
 		assert.Contains(t, string(txn.setJSON), `"dgraph.type":"Migration"`)
 		assert.Contains(t, string(txn.setJSON), `"migrations.version":10`)
 	})
@@ -289,63 +313,6 @@ func Test_DGraphCheckAndCreateMigrationTable_SchemaError(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, logs, "Migration schema might already exist:")
-}
-
-func Test_DGraphGetLastMigration_Chained(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		mockResp   any
-		setupMocks func(m *Mockmigrator, c *container.Container)
-		expVersion int64
-		expErr     error
-	}{
-		{
-			desc:     "base migrator error",
-			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":3}]}`)},
-			setupMocks: func(m *Mockmigrator, c *container.Container) {
-				m.EXPECT().getLastMigration(c).Return(int64(0), errDgraph)
-			},
-			expVersion: -1,
-			expErr:     errDgraph,
-		},
-		{
-			desc:     "base version greater than dgraph",
-			mockResp: &api.Response{Json: []byte(`{"migrations":[{"version":3}]}`)},
-			setupMocks: func(m *Mockmigrator, c *container.Container) {
-				m.EXPECT().getLastMigration(c).Return(int64(8), nil)
-			},
-			expVersion: 8,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			m := dgraphMigrator{dgraphDS: dgraphDS{client: mocks.DGraph}, migrator: mockMigrator}
-
-			mocks.DGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).Return(tc.mockResp, nil)
-			tc.setupMocks(mockMigrator, mockContainer)
-
-			resp, err := m.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, resp)
-			assert.Equal(t, tc.expErr, err)
-		})
-	}
-}
-
-func Test_DGraphGetLastMigration_InvalidJSON(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
-	mockDGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).
-		Return(&api.Response{Json: []byte(`{invalid`)}, nil)
-
-	_, err := migratorWithDGraph.getLastMigration(mockContainer)
-
-	require.ErrorContains(t, err, "dgraph: invalid character")
 }
 
 func Test_DGraphCommitMigration_DiscardError(t *testing.T) {

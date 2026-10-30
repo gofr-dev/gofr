@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 )
 
 var errMongoConn = errors.New("error connecting to mongo")
+var errMongoInner = errors.New("mongo inner migrator error")
 var errMongoDuplicateKey = errors.New("duplicate key")
 var errMongoNamespaceExists = errors.New("NamespaceExists: collection already exists")
 var errMongoAlreadyExists = errors.New("already exists")
@@ -63,36 +65,73 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_MongoGetLastMigration(t *testing.T) {
-	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
-
+func Test_MongoGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc string
-		err  error
-		resp int64
+		desc        string
+		versions    []int64
+		findErr     error
+		baseApplied map[int64]struct{}
+		baseErr     error
+		expApplied  map[int64]struct{}
+		expErr      error
 	}{
-		{"no error", nil, 0},
-		{"connection failed", errMongoConn, -1},
+		{
+			desc:        "mongo versions are unioned with inner migrator versions",
+			versions:    []int64{1, 3, 4},
+			baseApplied: map[int64]struct{}{2: {}},
+			expApplied:  map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc:        "empty collection returns only inner versions",
+			versions:    []int64{},
+			baseApplied: map[int64]struct{}{5: {}},
+			expApplied:  map[int64]struct{}{5: {}},
+		},
+		{desc: "mongo find error", findErr: errMongoConn, expErr: errMongoConn},
+		{desc: "inner migrator error", versions: []int64{2}, baseErr: errMongoInner, expErr: errMongoInner},
 	}
 
-	var migrations []struct {
-		Version int64 `bson:"version"`
-	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-	filter := make(map[string]any)
+			m := mongoMigrator{Mongo: mocks.Mongo, migrator: mockMigrator}
 
-	for i, tc := range testCases {
-		mockMongo.EXPECT().Find(gomock.Any(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
+			mocks.Mongo.EXPECT().Find(gomock.Any(), mongoMigrationCollection, make(map[string]any), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ string, _, results any) error {
+					if tc.findErr != nil {
+						return tc.findErr
+					}
 
-		resp, err := migratorWithMongo.getLastMigration(mockContainer)
+					dest := results.(*[]struct {
+						Version int64 `bson:"version"`
+					})
 
-		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+					for _, v := range tc.versions {
+						*dest = append(*dest, struct {
+							Version int64 `bson:"version"`
+						}{Version: v})
+					}
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		}
+					return nil
+				})
+
+			if tc.findErr == nil {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.baseApplied, tc.baseErr)
+			}
+
+			applied, err := m.getAppliedMigrations(mockContainer)
+
+			assert.Equal(t, tc.expApplied, applied)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
