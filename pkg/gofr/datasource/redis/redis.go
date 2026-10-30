@@ -157,7 +157,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	} else {
 		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, redisConfig, logger, stopSignal)
+		go retryConnect(rc, redisConfig, logger, defaultRetryTimeout, stopSignal)
 	}
 
 	r := &Redis{
@@ -181,13 +181,14 @@ func tracingOptions(cfg *Config) []otel.TracingOption {
 	return nil
 }
 
-// retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, redisConfig *Config, logger datasource.Logger, stopSignal <-chan struct{}) {
+// retryConnect pings Redis every interval until it answers, then adds tracing instrumentation.
+func retryConnect(client *redis.Client, redisConfig *Config, logger datasource.Logger, interval time.Duration,
+	stopSignal <-chan struct{}) {
 	for {
 		select {
 		case <-stopSignal:
 			return
-		case <-time.After(defaultRetryTimeout):
+		case <-time.After(interval):
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
@@ -259,7 +260,7 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	} else {
 		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, redisConfig, logger, ps.ctx.Done())
+		go retryConnect(rc, redisConfig, logger, defaultRetryTimeout, ps.ctx.Done())
 	}
 
 	return ps
