@@ -1030,7 +1030,9 @@ func Test_LoggingContract_RequestLogZeroValueIsEmptyObject(t *testing.T) {
 //     \u00XX otherwise; DEL (U+007F) is NOT escaped and passes through raw.
 //   - U+2028 / U+2029 ARE escaped (JS line separators).
 //   - Non-ASCII (CJK, emoji, accented) passes through as raw UTF-8, unescaped.
-//   - Invalid UTF-8 bytes are replaced by the escaped form of U+FFFD.
+//   - Invalid UTF-8 bytes are replaced by U+FFFD; the original engine escapes it and
+//     json/v2 (the Go 1.27 default) writes it raw, so that case is pinned separately
+//     in Test_LoggingContract_RequestLogInvalidUTF8.
 func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 	tests := []struct {
 		name string
@@ -1082,11 +1084,6 @@ func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 			RequestLog{URI: "/\u2028\u2029"},
 			`{"uri":"/\u2028\u2029"}`,
 		},
-		{
-			"invalid UTF-8 bytes become the escaped replacement character",
-			RequestLog{URI: "/\xff\xfe/ok"},
-			`{"uri":"/\ufffd\ufffd/ok"}`,
-		},
 	}
 
 	for _, tc := range tests {
@@ -1096,6 +1093,21 @@ func Test_LoggingContract_RequestLogEscaping(t *testing.T) {
 			assert.Equal(t, tc.want, string(b))
 		})
 	}
+}
+
+// Test_LoggingContract_RequestLogInvalidUTF8 pins that invalid UTF-8 bytes come
+// back as U+FFFD once the output is decoded. The two encoding/json engines spell
+// it differently on the wire (escaped vs raw), so the decoded string is compared.
+func Test_LoggingContract_RequestLogInvalidUTF8(t *testing.T) {
+	b, err := json.Marshal(&RequestLog{URI: "/\xff\xfe/ok"})
+	require.NoError(t, err)
+
+	var got struct {
+		URI string `json:"uri"`
+	}
+
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, "/\ufffd\ufffd/ok", got.URI)
 }
 
 // Test_LoggingContract_MarshalVersusEncoder pins the difference between the two
