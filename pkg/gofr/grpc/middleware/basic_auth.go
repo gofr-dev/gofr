@@ -81,7 +81,7 @@ func (b BasicAuthProvider) verifyCredentials(username, password string) bool {
 	}
 
 	expectedPass, ok := b.Users[username]
-	if !ok {
+	if !ok || username == "" || expectedPass == "" {
 		// Use dummy comparison to prevent timing attacks
 		subtle.ConstantTimeCompare([]byte(password), []byte("dummy"))
 
