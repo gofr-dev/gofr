@@ -2,8 +2,11 @@ package gofr
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -64,6 +67,7 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	closed.Close()
 
+	closedHost := strings.TrimPrefix(closed.URL, "http://")
 	withCredentials := func(serverURL string) string {
 		return strings.Replace(serverURL, "http://", "http://bob:S3CRETPASS@", 1) + "/api/spans?api_key=TOPSECRETKEY"
 	}
@@ -72,17 +76,42 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 	cancel()
 
 	tests := []struct {
-		desc     string
-		endpoint string
-		ctx      context.Context
-		expErrs  []error
+		desc      string
+		endpoint  string
+		ctx       context.Context
+		expErrs   []error
+		expURLErr bool   // a failed request keeps returning a *url.Error
+		expErrMsg string // a part of the returned error's text
+		expLog    string // a part of the log line; empty when nothing is logged
 	}{
 		{desc: "collector rejects the export", endpoint: withCredentials(rejecting.URL), ctx: t.Context(),
-			expErrs: []error{errUnexpectedStatusCode}},
-		{desc: "collector unreachable", endpoint: withCredentials(closed.URL), ctx: t.Context(),
-			expErrs: []error{errFailedToPostSpans}},
-		{desc: "context canceled", endpoint: withCredentials(rejecting.URL), ctx: canceled,
-			expErrs: []error{errFailedToPostSpans, context.Canceled}},
+			expErrs:   []error{errUnexpectedStatusCode},
+			expErrMsg: "failed to post spans on 'http://REDACTED@",
+			expLog:    "failed to post spans on 'http://REDACTED@"},
+		{desc: "collector unreachable", endpoint: withCredentials(closed.URL), ctx: t.Context(), expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans?REDACTED": dial tcp`,
+			expLog:    "failed to create spans, error: Post"},
+		{desc: "context canceled", endpoint: withCredentials(rejecting.URL), ctx: canceled, expURLErr: true,
+			expErrs:   []error{context.Canceled},
+			expErrMsg: `/api/spans?REDACTED": context canceled`,
+			expLog:    "failed to create spans, error: Post"},
+		{desc: "unparsable port", endpoint: "http://bob:S3CRETPASS@" + closedHost + "abc/api/spans?api_key=TOPSECRETKEY",
+			ctx: t.Context(), expURLErr: true,
+			expErrMsg: `failed to create HTTP request, error: parse "REDACTED@` + closedHost + `abc/api/spans?REDACTED"`},
+		{desc: "control character", endpoint: withCredentials(closed.URL) + "\n", ctx: t.Context(), expURLErr: true,
+			expErrMsg: `failed to create HTTP request, error: parse "REDACTED@`},
+		{desc: "schemeless endpoint", endpoint: "bob:S3CRETPASS@" + closedHost + "/api/spans?api_key=TOPSECRETKEY",
+			ctx: t.Context(), expURLErr: true,
+			expErrMsg: `unsupported protocol scheme "REDACTED"`,
+			expLog:    "unsupported protocol scheme"},
+		{desc: "username-only token", endpoint: "http://bobS3CRETPASS@" + closedHost + "/api/spans", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans": dial tcp`,
+			expLog:    "REDACTED@"},
+		{desc: "query-only key", endpoint: closed.URL + "/api/spans?api_key=TOPSECRETKEY", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "` + closed.URL + `/api/spans?REDACTED": dial tcp`,
+			expLog:    "/api/spans?REDACTED"},
 	}
 
 	for _, tc := range tests {
@@ -94,6 +123,11 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 				err = exporter.ExportSpans(tc.ctx, provideSampleSpan(t))
 			})
 
+			var urlErr *url.Error
+
+			require.Error(t, err)
+			assert.Equal(t, tc.expURLErr, errors.As(err, &urlErr))
+
 			for _, expErr := range tc.expErrs {
 				require.ErrorIs(t, err, expErr)
 			}
@@ -103,7 +137,39 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 				assert.NotContains(t, err.Error(), secret)
 			}
 
-			assert.Contains(t, logs, "REDACTED")
+			assert.Contains(t, err.Error(), tc.expErrMsg)
+			assert.Contains(t, logs, tc.expLog)
+		})
+	}
+}
+
+// A cause that repeats any part of the endpoint's userinfo or query is rewritten, and still matches its sentinel.
+func Test_redactCause(t *testing.T) {
+	const endpoint = "http://bob:S3CRETPASS@collector:4318/api/spans?api_key=TOP%2BSECRET&region=eu"
+
+	tests := []struct {
+		desc   string
+		cause  error
+		expMsg string
+	}{
+		{desc: "no credential in the cause", cause: context.Canceled, expMsg: "context canceled"},
+		{desc: "username", cause: fmt.Errorf("user bob: %w", context.Canceled), expMsg: "user REDACTED: context canceled"},
+		{desc: "password", cause: fmt.Errorf("auth S3CRETPASS: %w", context.Canceled),
+			expMsg: "auth REDACTED: context canceled"},
+		{desc: "escaped query value", cause: fmt.Errorf("key TOP%%2BSECRET: %w", context.Canceled),
+			expMsg: "key REDACTED: context canceled"},
+		{desc: "unescaped query value", cause: fmt.Errorf("key TOP+SECRET: %w", context.Canceled),
+			expMsg: "key REDACTED: context canceled"},
+		{desc: "whole query", cause: fmt.Errorf("query api_key=TOP%%2BSECRET&region=eu: %w", context.Canceled),
+			expMsg: "query REDACTED: context canceled"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := redactCause(tc.cause, endpoint)
+
+			assert.Equal(t, tc.expMsg, err.Error())
+			require.ErrorIs(t, err, context.Canceled)
 		})
 	}
 }
