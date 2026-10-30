@@ -150,6 +150,7 @@ func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
 	subs := make(map[string]subscription)
 	subs["test/topic"] = subscription{
 		msgs:    make(chan *pubsub.Message),
+		done:    make(chan struct{}),
 		handler: func(_ mqtt.Client, _ mqtt.Message) {},
 	}
 
@@ -284,6 +285,129 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 	assert.Nil(t, m)
 	require.Error(t, err)
 	require.ErrorIs(t, err, errToken)
+}
+
+func TestMQTT_SubscribeUnsubscribedWhileWaiting(t *testing.T) {
+	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	// If Unsubscribe does not end the wait, Subscribe returns on this deadline instead of hanging.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	subscribing := make(chan struct{})
+
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
+	mockClient.EXPECT().IsConnected().Return(true)
+	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).
+		DoAndReturn(func(string, byte, mqtt.MessageHandler) mqtt.Token {
+			close(subscribing)
+
+			return mockToken
+		})
+	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
+
+	mockToken.EXPECT().Wait().Return(true).Times(2)
+	mockToken.EXPECT().Error().Return(nil).Times(2)
+
+	unsubscribed := make(chan error, 1)
+
+	// Subscribe holds the lock until the topic is registered, so this Unsubscribe always finds it.
+	go func() {
+		<-subscribing
+
+		unsubscribed <- client.Unsubscribe("test/topic")
+	}()
+
+	m, err := client.Subscribe(ctx, "test/topic")
+
+	require.NoError(t, err)
+	assert.Nil(t, m)
+	require.NoError(t, ctx.Err(), "Subscribe returned on the context deadline, not on Unsubscribe")
+	require.NoError(t, <-unsubscribed)
+}
+
+func TestMQTT_UnsubscribeReleasesBlockedHandler(t *testing.T) {
+	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	var handler mqtt.MessageHandler
+
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
+	mockClient.EXPECT().IsConnected().Return(true)
+	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).
+		DoAndReturn(func(_ string, _ byte, h mqtt.MessageHandler) mqtt.Token {
+			handler = h
+
+			return mockToken
+		})
+	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
+
+	mockToken.EXPECT().Wait().Return(true).Times(2)
+	mockToken.EXPECT().Error().Return(nil).Times(2)
+
+	// With the context already canceled, Subscribe registers the topic and returns without waiting.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := client.Subscribe(ctx, "test/topic")
+	require.NoError(t, err)
+
+	// Fill the buffer, so the next message blocks in the handler as it does when nothing reads the topic.
+	for range messageBuffer {
+		handler(nil, mockMessage{topic: "test/topic", payload: "hello world"})
+	}
+
+	released := make(chan struct{})
+
+	go func() {
+		defer close(released)
+
+		handler(nil, mockMessage{topic: "test/topic", payload: "hello world"})
+	}()
+
+	require.NoError(t, client.Unsubscribe("test/topic"))
+
+	select {
+	case <-released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("message handler still blocked after Unsubscribe")
+	}
+}
+
+func TestMQTT_UnsubscribeConcurrent(t *testing.T) {
+	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
+	mockClient.EXPECT().IsConnected().Return(true)
+	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
+	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken).Times(2)
+
+	mockToken.EXPECT().Wait().Return(true).Times(3)
+	mockToken.EXPECT().Error().Return(nil).Times(3)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := client.Subscribe(ctx, "test/topic")
+	require.NoError(t, err)
+
+	// Two calls for the same topic must not race on the map or close the subscription twice (run with -race).
+	var wg sync.WaitGroup
+
+	for range 2 {
+		wg.Go(func() {
+			assert.NoError(t, client.Unsubscribe("test/topic"))
+		})
+	}
+
+	wg.Wait()
+
+	assert.Empty(t, client.subscriptions)
 }
 
 func TestMQTT_SubscribeWithFunc(t *testing.T) {
@@ -549,7 +673,7 @@ func TestMQTT_createMqttHandler(t *testing.T) {
 	msgs := make(chan *pubsub.Message, 1)
 
 	// createMqttHandler no longer reads any client state, so a bare *MQTT is enough here.
-	handler := (&MQTT{}).createMqttHandler(msgs)
+	handler := (&MQTT{}).createMqttHandler(msgs, make(chan struct{}))
 
 	handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 

@@ -259,6 +259,9 @@ MQTT_PASSWORD=password   // authentication password
 > **Note** : If `MQTT_HOST` config is not provided, the application will connect to a public broker
 > {% new-tab-link title="EMQX Broker" href="https://www.emqx.com/en/mqtt/public-mqtt5-broker" /%}
 
+> **Note**: `Unsubscribe(topic)` on the MQTT client makes a `Subscribe` call waiting on that topic return `nil, nil`.
+> It does not stop a handler registered with `app.Subscribe`, because the next `Subscribe` call from its subscriber loop subscribes to the topic again.
+
 #### Docker setup
 ```shell 
 docker run -d \
