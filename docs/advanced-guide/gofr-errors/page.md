@@ -165,3 +165,52 @@ func (e ValidationError) Response() map[string]any {
 
 > [!NOTE]
 > The `message` field is automatically populated from the `Error()` method. Custom fields with the name "message" in the `Response()` map should not be used as they will be ignored in favor of the `Error()` value.
+
+## Hiding Internal Error Details
+
+By default, the `message` in an error response is the text of `err.Error()`. For an error GoFr cannot classify, or one
+that wraps a database or driver error, that text can include internal details such as SQL fragments, hostnames or
+driver messages. Set `HTTP_HIDE_INTERNAL_ERRORS=true` to keep that text out of client responses.
+
+When it is enabled, the `message` is replaced with `Internal Server Error` when either:
+
+- the error does not implement `StatusCode() int` (an unclassified error, such as one from `errors.New`, or a GoFr
+  error wrapped with `fmt.Errorf("...: %w", err)`), or
+- the error's `StatusCode()` is 500, such as `datasource.ErrorDB`, `ErrorPanicRecovery`, or a custom error that
+  declares 500.
+
+Errors with any other status code keep their message, because that text was written for clients: for example,
+`ErrorEntityNotFound` (404), `ErrorInvalidParam` (400) or `ErrorServiceUnavailable` (503).
+
+#### Example:
+```go
+app.GET("/users/{id}", func(ctx *gofr.Context) (any, error) {
+    return nil, errors.New("dial tcp 10.0.3.7:5432: connect: connection refused")
+})
+```
+
+Without `HTTP_HIDE_INTERNAL_ERRORS` (or with `false`), the response is:
+```json
+{
+  "error": {
+    "message": "dial tcp 10.0.3.7:5432: connect: connection refused"
+  }
+}
+```
+
+With `HTTP_HIDE_INTERNAL_ERRORS=true`, the response is:
+```json
+{
+  "error": {
+    "message": "Internal Server Error"
+  }
+}
+```
+
+> [!NOTE]
+> - The status code never changes, only the message. A 500 stays 500, and a handler that returns data together with
+>   an unclassified error still responds with 206 (Partial Content) and its data.
+> - Custom fields from a `ResponseMarshaller` error are still included; only `message` is replaced.
+> - The original error is still logged on the server with the request's trace ID, so the real cause can be found for
+>   the request the client reports.
+> - Any value other than `true` or `false` logs a warning at startup and keeps the default behavior.

@@ -255,6 +255,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- HTTP_HIDE_INTERNAL_ERRORS
+- When `true`, error responses say `Internal Server Error` instead of the error's own text for every 500 and for errors that do not declare a status code, so internal details such as driver or SQL text do not reach clients. The status code does not change, and the original error is still logged with the trace ID — see [Hiding Internal Error Details](/docs/advanced-guide/gofr-errors#hiding-internal-error-details). Defaults to `false`.
+
+---
+
 - CERT_FILE
 - Set the path to your PEM certificate file for the HTTPS server to establish a secure connection.
 
