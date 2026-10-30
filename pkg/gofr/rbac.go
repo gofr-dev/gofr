@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
@@ -48,10 +49,73 @@ var errNoRBACConfig = errors.New("no RBAC config file found at configs/rbac.json
 // validated. The error is also logged, so an app that ignores it still sees why authorization is
 // off; return or exit on it to stop startup instead.
 func (a *App) EnableRBAC(configPath ...string) error {
-	return a.authDisabled(a.enableRBAC(configPath...), "Authorization", "EnableRBAC")
+	return a.authDisabled(a.enableRBAC(configPath, nil), "Authorization", "EnableRBAC")
 }
 
-func (a *App) enableRBAC(configPath ...string) error {
+// rbacExtractorTimeoutKey names the Go duration an RBAC extractor call may take.
+const rbacExtractorTimeoutKey = "RBAC_EXTRACTOR_TIMEOUT"
+
+// rbacExtractorDefaultTimeout is what an unset or invalid rbacExtractorTimeoutKey means; the rbac package
+// applies it when it is given a zero timeout.
+const rbacExtractorDefaultTimeout = "5s"
+
+// rbacExtractor is the application's extractor and the deadline it runs under.
+type rbacExtractor struct {
+	fn      rbac.Extractor
+	timeout time.Duration
+}
+
+// EnableRBACWithExtractor enables RBAC like EnableRBAC, but authorizes from the permissions fn
+// returns, supplied by the application instead of a header or a JWT claim, for example from a live
+// store, so that a revoked permission is denied on the next request rather than when the token
+// expires.
+//
+// fn is called for each request a rule in the config file protects, and returns the permissions the
+// caller holds; it receives the app's container, so it can reach the app's datasources. The request is
+// allowed if any of them is one of the rule's requiredPermissions. Public routes and routes no rule
+// matches never call fn.
+//
+// fn runs with a deadline on the request context: 5 seconds, or the Go duration in
+// RBAC_EXTRACTOR_TIMEOUT; a value that is not a positive duration is logged as a warning and the
+// 5 seconds are used, so authorization stays on. The deadline makes the request fail with a 503, but the
+// call is not abandoned: an extractor that ignores its context keeps the request waiting until it
+// returns. An error from fn denies the request: with the status of an error that has a StatusCode() int
+// method, a 401 for rbac.ErrRoleNotFound, and a 403 otherwise.
+//
+// configPath is as for EnableRBAC, and the config file must not set jwtClaimPath or
+// permissionsClaimPath. Like EnableRBAC, it returns and logs an error, and installs no middleware, if
+// fn is nil or the config cannot be loaded.
+//
+// Usage:
+//
+//	err := app.EnableRBACWithExtractor(permissionsFromStore, "configs/custom-rbac.json")
+func (a *App) EnableRBACWithExtractor(fn rbac.Extractor, configPath ...string) error {
+	ext := &rbacExtractor{fn: fn, timeout: a.rbacExtractorTimeout()}
+
+	return a.authDisabled(a.enableRBAC(configPath, ext), "Authorization", "EnableRBACWithExtractor")
+}
+
+// rbacExtractorTimeout reads rbacExtractorTimeoutKey. Unset is zero, which the rbac package reads as its
+// default. A value that is not a positive duration is logged and read as unset: failing closed here
+// would turn off authorization for a typo in a tuning setting.
+func (a *App) rbacExtractorTimeout() time.Duration {
+	value := strings.TrimSpace(a.Config.Get(rbacExtractorTimeoutKey))
+	if value == "" {
+		return 0
+	}
+
+	timeout, err := time.ParseDuration(value)
+	if err != nil || timeout <= 0 {
+		a.Logger().Warnf("invalid %s=%q: use a positive Go duration, such as 2s. Using %s.",
+			rbacExtractorTimeoutKey, value, rbacExtractorDefaultTimeout)
+
+		return 0
+	}
+
+	return timeout
+}
+
+func (a *App) enableRBAC(configPath []string, ext *rbacExtractor) error {
 	var path string
 	if len(configPath) > 0 {
 		path = configPath[0]
@@ -63,7 +127,7 @@ func (a *App) enableRBAC(configPath ...string) error {
 		}
 	}
 
-	config, err := a.loadRBACConfig(path)
+	config, err := a.loadRBACConfig(path, ext)
 	if err != nil {
 		return err
 	}
@@ -90,11 +154,22 @@ func (a *App) enableRBAC(configPath ...string) error {
 // loadRBACConfig loads the config at path and logs the startup summary. The load logs through a
 // counting logger, so the summary can say that errors were logged instead of reading as a clean
 // success. The returned config logs through the app logger, not the counting wrapper.
-func (a *App) loadRBACConfig(path string) (*rbac.Config, error) {
+func (a *App) loadRBACConfig(path string, ext *rbacExtractor) (*rbac.Config, error) {
 	logger := a.Logger()
 	loadLogger := &errorCountingLogger{Logger: logger}
 
-	config, err := rbac.LoadPermissions(path, loadLogger, a.Metrics(), otel.GetTracerProvider().Tracer("gofr-rbac"))
+	tracer := otel.GetTracerProvider().Tracer("gofr-rbac")
+
+	var config *rbac.Config
+
+	var err error
+
+	if ext != nil {
+		config, err = rbac.LoadPermissionsWithExtractor(path, loadLogger, a.Metrics(), tracer, ext.fn, a.container, ext.timeout)
+	} else {
+		config, err = rbac.LoadPermissions(path, loadLogger, a.Metrics(), tracer)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to load RBAC config: %w", err)
 	}

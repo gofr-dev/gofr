@@ -217,6 +217,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  RBAC_EXTRACTOR_TIMEOUT
+-  Deadline for the application's RBAC extractor on each request, as a Go duration such as `2s` — see [Permissions from Your Application](/docs/advanced-guide/rbac#permissions-from-your-application-extractor). A value that is not a positive duration logs a warning and the default is used; RBAC stays enabled.
+-  5s
+
+---
+
 -  LOG_DISABLE_PROBES
 -  Disable log probes for health checks
 -  false

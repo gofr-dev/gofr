@@ -12,12 +12,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 type staticKeyProvider struct{ key *rsa.PublicKey }
 
 func (p staticKeyProvider) Get(string) *rsa.PublicKey { return p.key }
+
+// grantsBySubject reads the claims the OAuth middleware verified, the way an application extractor
+// keyed on the token's subject does.
+func grantsBySubject(_ *container.Container, r *http.Request) ([]string, error) {
+	claims, ok := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+	if !ok {
+		return nil, ErrRoleNotFound
+	}
+
+	if claims["sub"] == "alice" {
+		return []string{"orders:write"}, nil
+	}
+
+	return nil, nil
+}
 
 // TestMiddleware_BehindOAuth runs RBAC behind the real OAuth middleware, so the claims RBAC reads are
 // the ones a verified, signed token produces - JSON numbers, []any arrays and all.
@@ -41,6 +57,7 @@ func TestMiddleware_BehindOAuth(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		config     Config
+		extractor  bool // permissions come from grantsBySubject
 		claims     jwt.MapClaims
 		wantStatus int
 	}{
@@ -74,11 +91,29 @@ func TestMiddleware_BehindOAuth(t *testing.T) {
 			claims:     jwt.MapClaims{"roles": []string{"viewer", "writer"}, "exp": exp},
 			wantStatus: http.StatusForbidden,
 		},
+		{
+			desc:       "extractor mode: the verified subject is granted",
+			config:     Config{Endpoints: endpoints},
+			extractor:  true,
+			claims:     jwt.MapClaims{"sub": "alice", "exp": exp},
+			wantStatus: http.StatusOK,
+		},
+		{
+			desc:       "extractor mode: another subject is denied",
+			config:     Config{Endpoints: endpoints},
+			extractor:  true,
+			claims:     jwt.MapClaims{"sub": "bob", "exp": exp},
+			wantStatus: http.StatusForbidden,
+		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg := tc.config
+			if tc.extractor {
+				withExtractor(grantsBySubject, nil, 0)(&cfg)
+			}
+
 			require.NoError(t, cfg.processUnifiedConfig())
 
 			chain := middleware.OAuth(staticKeyProvider{key: &key.PublicKey})(
