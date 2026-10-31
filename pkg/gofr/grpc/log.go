@@ -4,13 +4,17 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -218,13 +222,8 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 	}
 
 	if err != nil {
-		statusErr, ok := status.FromError(err)
-		if !ok {
-			statusErr = status.FromContextError(err)
-		}
-
 		//nolint:gosec //errorcode is guaranteed to be in safe range
-		logEntry.StatusCode = int32(statusErr.Code())
+		logEntry.StatusCode = int32(rpcStatusCode(err))
 	} else {
 		logEntry.StatusCode = int32(codes.OK)
 	}
@@ -244,13 +243,8 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	if err != nil {
-		statusErr, ok := status.FromError(err)
-		if !ok {
-			statusErr = status.FromContextError(err)
-		}
-
 		//nolint:gosec // gRPC codes are typically under the range.
-		logEntry.StatusCode = int32(statusErr.Code())
+		logEntry.StatusCode = int32(rpcStatusCode(err))
 	} else {
 		logEntry.StatusCode = int32(codes.OK)
 	}
@@ -290,6 +284,78 @@ func logGRPCEntry(logger Logger, logEntry *gRPCLog, method string) {
 	}
 }
 
+func rpcStatusCode(err error) codes.Code {
+	var grpcError interface{ GRPCStatus() *status.Status }
+	if errors.As(err, &grpcError) && grpcError.GRPCStatus() != nil {
+		return grpcError.GRPCStatus().Code()
+	}
+
+	switch {
+	case errors.Is(err, context.Canceled):
+		return codes.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return codes.DeadlineExceeded
+	default:
+		return codes.Unknown
+	}
+}
+
+type metricsOptRecorder interface {
+	RecordHistogramOpt(context.Context, string, float64, ...metric.RecordOption)
+}
+
+type rpcMetricKey struct {
+	method, streamType string
+	code               int32
+}
+
+type rpcOptionCache struct {
+	sync.RWMutex
+	options map[rpcMetricKey][]metric.RecordOption
+}
+
+const maxRPCMetricOptions = 1024
+
+//nolint:gochecknoglobals // Immutable options are shared across RPC loggers, without retaining metrics backends.
+var rpcMetricOptions rpcOptionCache
+
+func (c *rpcOptionCache) get(key rpcMetricKey) []metric.RecordOption {
+	c.RLock()
+	opts, ok := c.options[key]
+	c.RUnlock()
+
+	if ok {
+		return opts
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("method", key.method),
+		attribute.String("status", strconv.Itoa(int(key.code))),
+	}
+	if key.streamType != "" {
+		attrs = append(attrs, attribute.String("stream_type", key.streamType))
+	}
+
+	opts = []metric.RecordOption{metric.WithAttributes(attrs...)}
+
+	c.Lock()
+	defer c.Unlock()
+
+	if cached, exists := c.options[key]; exists {
+		return cached
+	}
+
+	if len(c.options) < maxRPCMetricOptions {
+		if c.options == nil {
+			c.options = make(map[rpcMetricKey][]metric.RecordOption)
+		}
+
+		c.options[key] = opts
+	}
+
+	return opts
+}
+
 func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, duration time.Duration,
 	method, streamType string, statusCode int32) {
 	if metrics == nil {
@@ -297,6 +363,13 @@ func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, durati
 	}
 
 	durationMs := float64(duration.Milliseconds()) + float64(duration.Nanoseconds()%nanosecondsPerMillisecond)/nanosecondsPerMillisecond
+
+	if recorder, ok := metrics.(metricsOptRecorder); ok {
+		opts := rpcMetricOptions.get(rpcMetricKey{method: method, streamType: streamType, code: statusCode})
+		recorder.RecordHistogramOpt(ctx, name, durationMs, opts...)
+
+		return
+	}
 
 	labels := []string{"method", method, "status", strconv.Itoa(int(statusCode))}
 	if streamType != "" {
