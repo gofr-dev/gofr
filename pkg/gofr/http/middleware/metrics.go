@@ -125,7 +125,7 @@ func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) ht
 	untemplatedLimit := newMetricsOptions(opts...).untemplatedLimit()
 
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
 			// If an outer middleware (Logging) has already wrapped w in a
 			// StatusResponseWriter, reuse it instead of double-wrapping. Both
 			// middlewares only read status — a single wrapper captures it for

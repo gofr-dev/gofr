@@ -272,7 +272,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	registerRequestLogJSON.Do(func() { logjson.Register(appendRequestLogJSON) })
 
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
 			srw := pool.Get().(*StatusResponseWriter)
 			srw.ResponseWriter = w
 			srw.status = 0

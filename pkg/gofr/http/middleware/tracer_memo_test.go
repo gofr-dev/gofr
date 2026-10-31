@@ -69,6 +69,33 @@ func TestTracerFollowsProviderReplacement(t *testing.T) {
 	assert.Equal(t, frameworkTracerName, second.Ended()[0].InstrumentationScope().Name)
 }
 
+// The mux router builds Tracer once per route, so a handler built before a provider is installed
+// must still use that provider.
+func TestTracerBuiltOnceFollowsProviderReplacement(t *testing.T) {
+	first, second := tracetest.NewSpanRecorder(), tracetest.NewSpanRecorder()
+	tp1 := trace.NewTracerProvider(trace.WithSpanProcessor(first))
+	tp2 := trace.NewTracerProvider(trace.WithSpanProcessor(second))
+
+	t.Cleanup(func() {
+		_ = tp1.Shutdown(context.Background())
+		_ = tp2.Shutdown(context.Background())
+	})
+
+	installTP(t, tp1)
+
+	h := Tracer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	serveOnce := func() {
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody))
+	}
+
+	serveOnce()
+	otel.SetTracerProvider(tp2)
+	serveOnce()
+
+	assert.Len(t, first.Ended(), 1)
+	assert.Len(t, second.Ended(), 1)
+}
+
 // uncomparableTP is a provider whose dynamic type cannot be compared with ==.
 type uncomparableTP struct {
 	embedded.TracerProvider

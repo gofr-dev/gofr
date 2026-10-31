@@ -13,7 +13,7 @@ import (
 // WSHandlerUpgrade middleware upgrades the incoming http request to a websocket connection using websocket upgrader.
 func WSHandlerUpgrade(c *container.Container, wsManager *websocket.Manager) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
 			if gorillaWebsocket.IsWebSocketUpgrade(r) {
 				conn, err := wsManager.WebSocketUpgrader.Upgrade(w, r, nil)
 				if err != nil {

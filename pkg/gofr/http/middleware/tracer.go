@@ -254,13 +254,13 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // with dashboards or alerts filtering on span.name == "gofr-router" must
 // update their filters.
 //
-// The tracer comes from frameworkTracer: gorilla/mux calls Tracer on every
-// request to build the chain, and the SDK resolves a tracer under a provider-wide
-// mutex, which was the only contended lock in GoFr under load.
+// The tracer comes from frameworkTracer, on every request: the SDK resolves a
+// tracer under a provider-wide mutex, which was the only contended lock in GoFr
+// under load. It is looked up in the handler rather than here so that a handler
+// the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
-	tr := frameworkTracer(otel.GetTracerProvider())
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return stableHandler(func(w http.ResponseWriter, r *http.Request) {
+		tr := frameworkTracer(otel.GetTracerProvider())
 		ctx := r.Context()
 
 		// extract the traceID and spanID from the headers and create a new context for the same

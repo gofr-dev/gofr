@@ -1,0 +1,127 @@
+package http
+
+import (
+	"net/http"
+	"sync/atomic"
+
+	"github.com/gorilla/mux"
+)
+
+// The default (mux) matcher composes the middleware chain inside mux.Router.Match, calling every
+// middleware constructor on every request. GoFr's own five each returned a fresh closure there, five
+// allocations per request that rebuild the same chain every time.
+//
+// The fix keeps mux in charge of serving, so mux.Vars, mux.CurrentRoute, the 404/405 handlers and
+// a direct call to the promoted Match all behave as before. What changes is what mux composes: Use
+// hands mux a single middleware, dispatch, in place of the list. For a route GoFr registered itself
+// (see ownedHandler), dispatch returns a chain built once and kept on the route; for any other
+// route it composes the list per request, exactly as mux did.
+//
+// Only constructors that say they are pure are built once. A user middleware's constructor still
+// runs on every request, as it always has under mux: it may keep per-request state in its closure,
+// and memoising it would change what it does. See buildMuxChain.
+
+// stableMiddleware is implemented by the handlers GoFr's framework middlewares return. It states
+// that the constructor which produced the handler depends only on the inner handler it was given,
+// so the handler can be built once per route and reused. The method name is exported only so the
+// middleware package can implement it; the interface itself is not.
+type stableMiddleware interface {
+	GoFrStableMiddleware()
+}
+
+// ownedHandler is the handler Add installs on a route under the mux matcher. It serves the
+// handler it wraps, and it is a pointer of a type only this package creates, which is what lets
+// dispatch recognize the route's own handler in a single type assertion: the handler GoFr's
+// routes carry is a struct with func fields, which cannot be compared or used as a map key.
+type ownedHandler struct {
+	h     http.Handler
+	chain atomic.Pointer[muxChain]
+}
+
+func (o *ownedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) { o.h.ServeHTTP(w, r) }
+
+// muxChain is a route's composed chain and the middleware generation it was built from.
+type muxChain struct {
+	gen uint64
+	h   http.Handler
+}
+
+// dispatch is the only middleware mux sees in mux mode. mux calls it from Match with the matched
+// handler, on every request, after the route matched without error -- the same point it used to
+// apply the whole list.
+func (rou *Router) dispatch(h http.Handler) http.Handler {
+	o, ok := h.(*ownedHandler)
+	if !ok {
+		return composeMiddleware(rou.mws, h)
+	}
+
+	gen := rou.gen.Load()
+	if c := o.chain.Load(); c != nil && c.gen == gen {
+		return c.h
+	}
+
+	served, cached := buildMuxChain(rou.mws, o)
+
+	// Concurrent first requests may each build; the chains are equivalent and the last store wins.
+	o.chain.Store(&muxChain{gen: gen, h: cached})
+
+	return served
+}
+
+// buildMuxChain composes mws over inner for the request being served and returns that chain
+// (served) together with the one to keep on the route (cached).
+//
+// The chain is composed inner to outer as mux would, one constructor call per middleware, and
+// that composition serves this request, so no user constructor is called more than it was. Each
+// layer's output says whether its constructor is pure. The pure layers at the inner end are kept
+// as they are; the pure layers at the outer end are composed again over a perRequest layer that
+// rebuilds everything between them on every request. In a default GoFr app every layer is pure
+// and served is cached.
+func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached http.Handler) {
+	layers := make([]http.Handler, len(mws))
+
+	h := inner
+	for i := len(mws) - 1; i >= 0; i-- {
+		h = mws[i](h)
+		layers[i] = h
+	}
+
+	// lo..hi is the impure run: [0, lo) and (hi, len) are pure.
+	lo, hi := 0, len(mws)-1
+	for lo < len(mws) && isStable(layers[lo]) {
+		lo++
+	}
+
+	if lo == len(mws) {
+		return h, h
+	}
+
+	for hi >= lo && isStable(layers[hi]) {
+		hi--
+	}
+
+	tail := inner
+	if hi+1 < len(mws) {
+		tail = layers[hi+1]
+	}
+
+	middle := &perRequest{mws: mws[lo : hi+1 : hi+1], inner: tail}
+
+	return h, composeMiddleware(mws[:lo:lo], middle)
+}
+
+func isStable(h http.Handler) bool {
+	_, ok := h.(stableMiddleware)
+
+	return ok
+}
+
+// perRequest composes its middlewares over inner on every request, as mux did for the whole chain.
+type perRequest struct {
+	mws   []mux.MiddlewareFunc
+	inner http.Handler
+}
+
+func (p *perRequest) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	composeMiddleware(p.mws, p.inner).ServeHTTP(w, r)
+}

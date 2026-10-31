@@ -104,6 +104,12 @@ type Router struct {
 	// Use can say so rather than leaving a middleware silently not running.
 	cached atomic.Bool
 
+	// gen counts Use calls under the mux matcher. A chain memoised on an
+	// ownedHandler is reused only while gen still has the value it was built at.
+	gen atomic.Uint64
+	// dispatching records that dispatch has been handed to mux.
+	dispatching bool
+
 	// logger is optional and set by the server. Nothing on the request path uses
 	// it; it exists so Use can report a late registration.
 	logger logging.Logger
@@ -318,14 +324,31 @@ func (rou *Router) chainFor(route *mux.Route, h http.Handler) http.Handler {
 }
 
 // Use registers mux middlewares. It records them in GoFr's own chain — so the
-// trie matcher can apply them when it bypasses mux's ServeHTTP — and delegates
-// to the embedded mux router, leaving the default (mux) path unchanged. It
-// shadows mux.Router.Use for calls made on *Router.
+// trie matcher can apply them when it bypasses mux's ServeHTTP — and has the
+// embedded mux router apply them. It shadows mux.Router.Use for calls made on
+// *Router.
+//
+// The trie matcher hands mux the list itself. The mux matcher hands it dispatch,
+// once, which applies the same list in the same order and memoises it per route;
+// bumping gen makes every memoised chain stale, so a middleware registered late
+// still takes effect on the next request, as it did when mux held the list.
 func (rou *Router) Use(mwf ...mux.MiddlewareFunc) {
 	rou.reportLateRegistration(len(mwf))
 
 	rou.mws = append(rou.mws, mwf...)
-	rou.Router.Use(mwf...)
+
+	if rou.useTrie {
+		rou.Router.Use(mwf...)
+
+		return
+	}
+
+	rou.gen.Add(1)
+
+	if !rou.dispatching {
+		rou.dispatching = true
+		rou.Router.Use(rou.dispatch)
+	}
 }
 
 // UseLogger gives the router somewhere to report a late middleware registration.
@@ -452,6 +475,12 @@ func isDotSegment(p string, idx int) bool {
 // directly, avoiding the per-request child span and attribute slice grow
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
+	// Under the mux matcher the route carries an ownedHandler, so dispatch can find its memoised
+	// chain. A nil handler stays nil: mux answers 404 for a route without one.
+	if !rou.useTrie && handler != nil {
+		handler = &ownedHandler{h: handler}
+	}
+
 	rou.markOwned(rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler))
 }
 
