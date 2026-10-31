@@ -221,8 +221,13 @@ var lastTracer atomic.Pointer[providerTracer] //nolint:gochecknoglobals // memo 
 // frameworkTracer returns tp.Tracer(frameworkTracerName), asking tp only when the provider changed.
 // The SDK returns the same tracer for the same name on every call, so the memo changes no span.
 //
-// Only providers of a comparable type are memoised: comparing two interfaces whose dynamic type
-// is not comparable panics. Those providers are asked on every request, as before.
+// Only pointer providers are memoised, which covers the SDK provider and otel's global delegate.
+// Comparing interfaces that hold any other kind can panic (a struct whose interface field holds an
+// uncomparable value), so those providers are asked on every request, as before.
+//
+// A provider shut down while still installed keeps handing out its memoised tracer, as the trie
+// router's per-route tracer already did. App.Shutdown stops the HTTP server before tracing, so
+// GoFr's own lifecycle never serves a request in that window.
 func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 	if last := lastTracer.Load(); last != nil && last.provider == tp {
 		return last.tracer
@@ -230,7 +235,7 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 
 	tr := tp.Tracer(frameworkTracerName)
 
-	if reflect.TypeOf(tp).Comparable() {
+	if reflect.TypeOf(tp).Kind() == reflect.Pointer {
 		lastTracer.Store(&providerTracer{provider: tp, tracer: tr})
 	}
 

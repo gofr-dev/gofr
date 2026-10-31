@@ -102,6 +102,30 @@ func TestFrameworkTracerUncomparableProvider(t *testing.T) {
 	assert.NotPanics(t, func() { serveTraced(t) })
 }
 
+// wrapTP has a comparable type, but == on two of its values panics when inner holds an
+// uncomparableTP.
+type wrapTP struct {
+	embedded.TracerProvider
+
+	inner otelTrace.TracerProvider
+}
+
+func (p wrapTP) Tracer(name string, opts ...otelTrace.TracerOption) otelTrace.Tracer {
+	return p.inner.Tracer(name, opts...)
+}
+
+func TestFrameworkTracerComparableTypeUncomparableValue(t *testing.T) {
+	calls := &atomic.Int64{}
+
+	installTP(t, wrapTP{inner: uncomparableTP{calls: calls}})
+
+	assert.NotPanics(t, func() {
+		serveTraced(t)
+		serveTraced(t)
+	})
+	assert.Equal(t, int64(2), calls.Load(), "a non-pointer provider is asked on every request")
+}
+
 func TestFrameworkTracerConcurrentReplacement(t *testing.T) {
 	providers := []otelTrace.TracerProvider{trace.NewTracerProvider(), trace.NewTracerProvider(), noop.NewTracerProvider()}
 
