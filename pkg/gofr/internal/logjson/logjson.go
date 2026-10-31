@@ -61,7 +61,7 @@ func AppendMessage(dst []byte, v any) ([]byte, bool) {
 
 // AppendString appends s as a JSON string, escaped as encoding/json escapes it with its default
 // HTML escaping. Only printable ASCII is handled. A control byte, DEL or any non-ASCII byte reports
-// false: those take escapes (\n, \u00XX,  , U+FFFD for invalid UTF-8) whose exact spelling is
+// false: those take escapes (\n, \u00XX, \u2028, U+FFFD for invalid UTF-8) whose exact spelling is
 // left to encoding/json, so the output cannot drift between Go versions.
 func AppendString(dst []byte, s string) ([]byte, bool) {
 	dst = append(dst, '"')

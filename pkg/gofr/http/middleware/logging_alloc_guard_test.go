@@ -1,8 +1,8 @@
 //go:build !race
 
 // Allocation counts are only meaningful without the race detector, which adds
-// bookkeeping allocations of its own -- this same measurement reads 8 normally
-// and 11 under -race. The guard is therefore excluded from race builds rather
+// bookkeeping allocations of its own -- this same measurement reads 6 normally
+// and more under -race. The guard is therefore excluded from race builds rather
 // than loosened to a tolerance that would no longer catch anything.
 
 package middleware
@@ -37,7 +37,9 @@ func (*discardWriter) WriteHeader(int)             {}
 //
 // It pins the count exactly, because each saving is worth one allocation and a
 // tolerance wide enough to absorb drift is also wide enough to hide a
-// regression. Reverting either optimization takes this from 8 to 9.
+// regression. Reverting either optimization takes this from 6 to 7. The JSON
+// fast path in internal/logjson (no reflection for the request log line)
+// accounts for the two allocations below the earlier 8.
 //
 // The span context is valid on purpose. GoFr installs an SDK provider with
 // NeverSample when no exporter is configured, so a default deployment really
@@ -51,7 +53,7 @@ func TestLoggingChainAllocationsDoNotRegress(t *testing.T) {
 	// only thing that moves this number is a Go or dependency upgrade, and that is
 	// worth a human looking at rather than absorbing silently. If this fails after
 	// such an upgrade, re-measure and update the constant in the same commit.
-	const wantAllocs = 8
+	const wantAllocs = 6
 
 	tid, err := trace.TraceIDFromHex("0af7651916cd43dd8448eb211c80319c")
 	if err != nil {
