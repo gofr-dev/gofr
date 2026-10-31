@@ -63,15 +63,19 @@ type Router struct {
 	// still uses mux's own linear scan there.
 	idx      *routeIndex
 	buildIdx sync.Once
-	// mws mirrors the middleware chain registered via Use, so the trie matcher
-	// can apply it itself when it bypasses mux's ServeHTTP. In mux mode it is
-	// unused (mux owns the chain) but kept in sync, costing nothing.
+	// mws is the middleware chain registered via Use. The trie matcher applies
+	// it itself when it bypasses mux's ServeHTTP; the mux matcher applies it
+	// through dispatch, the one middleware mux is given (see mux_chain.go).
 	//
 	// Invariant: every middleware MUST be registered through (*Router).Use (or
 	// UseMiddleware, which calls it). A direct call to the embedded
 	// mux.Router.Use would bypass this slice and be silently dropped in trie
 	// mode. All framework registration paths go through (*Router).Use, and the
-	// MiddlewareParity differential test guards the resulting behavior.
+	// MiddlewareParity differential test guards the resulting behavior. In
+	// mux mode a direct call is applied, but outside dispatch, which holds the
+	// whole of this slice: its place in the chain is set by the first
+	// (*Router).Use call, not by the order of the calls, so the two must not be
+	// interleaved.
 	mws []mux.MiddlewareFunc
 
 	// chains memoises the composed middleware chain per matched route.
@@ -368,8 +372,9 @@ func (rou *Router) UseLogger(l logging.Logger) {
 // which is exactly the case that used to debug badly.
 //
 // It is an error rather than a panic because the router may already be serving
-// traffic, and it is trie-only: in mux mode the chain is composed per request, so
-// a late registration takes effect and there is nothing to report. The atomic
+// traffic, and it is trie-only: in mux mode a registration makes every route's
+// memoised chain stale, so it takes effect on the next request and there is
+// nothing to report. The atomic
 // read costs nothing against a call made a handful of times at startup.
 func (rou *Router) reportLateRegistration(n int) {
 	if n == 0 || !rou.useTrie || !rou.cached.Load() || rou.logger == nil {
@@ -476,7 +481,8 @@ func isDotSegment(p string, idx int) bool {
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	// Under the mux matcher the route carries an ownedHandler, so dispatch can find its memoised
-	// chain. A nil handler stays nil: mux answers 404 for a route without one.
+	// chain; the route's GetHandler returns that wrapper. A nil handler stays nil: mux answers 404
+	// for a route without one.
 	if !rou.useTrie && handler != nil {
 		handler = &ownedHandler{h: handler}
 	}

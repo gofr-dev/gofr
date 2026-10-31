@@ -13,15 +13,20 @@ import (
 // middleware constructor on every request. GoFr's own five each returned a fresh closure there, five
 // allocations per request that rebuild the same chain every time.
 //
-// The fix keeps mux in charge of serving, so mux.Vars, mux.CurrentRoute, the 404/405 handlers and
-// a direct call to the promoted Match all behave as before. What changes is what mux composes: Use
-// hands mux a single middleware, dispatch, in place of the list. For a route GoFr registered itself
+// The fix keeps mux in charge of serving, so mux.Vars, mux.CurrentRoute and the 404/405 handlers
+// behave as before, and the promoted Match still returns the matched handler wrapped in the whole
+// chain (a user constructor now runs when that handler is served rather than inside Match). What
+// changes is what mux composes: Use hands mux a single middleware, dispatch, in place of the list. For a route GoFr registered itself
 // (see ownedHandler), dispatch returns a chain built once and kept on the route; for any other
 // route it composes the list per request, exactly as mux did.
 //
-// Only constructors that say they are pure, by returning a stablemw.Handler, are built once. A user
-// middleware's constructor still runs on every request, as it always has under mux: it may keep
-// per-request state in its closure, and memoising it would change what it does. See buildMuxChain.
+// Only the constructors GoFr registered itself through stablemw.Mark are built once. An
+// application's constructor still runs on every request, as it always has under mux: it may keep
+// per-request state in its closure, or return a different handler from one request to the next
+// (for example next itself while a flag is off), and memoising it would change what it does. The
+// mark is on the registered constructor, not on the handler it returns, so a constructor that
+// passes next through or calls a framework constructor itself is never mistaken for GoFr's.
+// See buildMuxChain.
 
 // ownedHandler is the handler Add installs on a route under the mux matcher. It serves the
 // handler it wraps, and it is a pointer of a type only this package creates, which is what lets
@@ -66,11 +71,11 @@ func (rou *Router) dispatch(h http.Handler) http.Handler {
 // (served) together with the one to keep on the route (cached).
 //
 // The chain is composed inner to outer as mux would, one constructor call per middleware, and
-// that composition serves this request, so no user constructor is called more than it was. Each
-// layer's output says whether its constructor is pure. The pure layers at the inner end are kept
-// as they are; the pure layers at the outer end are composed again over a perRequest layer that
-// rebuilds everything between them on every request. In a default GoFr app every layer is pure
-// and served is cached.
+// that composition serves this request, so no user constructor is called more than it was. A
+// layer is pure when its constructor carries stablemw's mark. The pure layers at the inner end
+// are kept as they are; the pure layers at the outer end are composed again over a perRequest
+// layer that rebuilds everything between them on every request. In a default GoFr app every
+// layer is pure and served is cached.
 func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached http.Handler) {
 	layers := make([]http.Handler, len(mws))
 
@@ -82,7 +87,7 @@ func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached
 
 	// lo..hi is the impure run: [0, lo) and (hi, len) are pure.
 	lo, hi := 0, len(mws)-1
-	for lo < len(mws) && stablemw.Is(layers[lo]) {
+	for lo < len(mws) && stablemw.Is(mws[lo]) {
 		lo++
 	}
 
@@ -90,7 +95,7 @@ func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached
 		return h, h
 	}
 
-	for hi >= lo && stablemw.Is(layers[hi]) {
+	for hi >= lo && stablemw.Is(mws[hi]) {
 		hi--
 	}
 

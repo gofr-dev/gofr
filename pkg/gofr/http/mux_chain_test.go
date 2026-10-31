@@ -16,22 +16,22 @@ import (
 )
 
 // tracingMW returns a middleware that appends name to the X-Order header and counts its
-// constructor calls. stable says whether its handler is a stablemw.Handler.
+// constructor calls. stable says whether it is registered with GoFr's mark.
 func tracingMW(name string, stable bool, built *atomic.Int64) mux.MiddlewareFunc {
-	return func(inner http.Handler) http.Handler {
+	mw := func(inner http.Handler) http.Handler {
 		built.Add(1)
 
-		f := func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add("X-Order", name)
 			inner.ServeHTTP(w, r)
-		}
-
-		if stable {
-			return stablemw.Handler(f)
-		}
-
-		return http.HandlerFunc(f)
+		})
 	}
+
+	if stable {
+		return stablemw.Mark(mw)
+	}
+
+	return mw
 }
 
 func newMuxModeRouter(t *testing.T) *Router {
@@ -181,4 +181,60 @@ func TestMuxChain_ConcurrentFirstRequests(t *testing.T) {
 	wg.Wait()
 
 	assert.Equal(t, int64(400), u.Load())
+}
+
+// An application constructor that returns next unchanged while a flag is off must still be asked
+// on every request: under mux, turning the flag on takes effect on the next request. Returning
+// next makes its layer look exactly like the marked layer below it, which is why the mark is on
+// the constructor and not on the handler.
+func TestMuxChain_PassThroughUserConstructorStaysPerRequest(t *testing.T) {
+	r := newMuxModeRouter(t)
+
+	var a, b atomic.Int64
+
+	var maintenance atomic.Bool
+
+	r.Use(tracingMW("a", true, &a))
+	r.Use(func(next http.Handler) http.Handler {
+		if !maintenance.Load() {
+			return next
+		}
+
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		})
+	})
+	r.Use(tracingMW("b", true, &b))
+
+	for range 3 {
+		assert.Equal(t, http.StatusOK, serveMux(t, r, "/users/1").Code)
+	}
+
+	maintenance.Store(true)
+
+	w := serveMux(t, r, "/users/1")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, []string{"a"}, w.Header().Values("X-Order"))
+	assert.Equal(t, int64(1), b.Load(), "the marked layer below is still built once")
+}
+
+// A constructor that builds a framework middleware itself is the application's, not GoFr's.
+func TestMuxChain_UserConstructorWrappingAMarkedOneStaysPerRequest(t *testing.T) {
+	r := newMuxModeRouter(t)
+
+	var fw, user atomic.Int64
+
+	framework := tracingMW("fw", true, &fw)
+
+	r.Use(func(next http.Handler) http.Handler {
+		user.Add(1)
+
+		return framework(next)
+	})
+
+	for range 4 {
+		assert.Equal(t, []string{"fw"}, serveMux(t, r, "/users/1").Header().Values("X-Order"))
+	}
+
+	assert.Equal(t, int64(4), user.Load())
 }

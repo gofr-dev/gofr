@@ -44,11 +44,12 @@ Two further caveats worth setting expectations against:
 - **Matching is a minority of a request.** The middleware chain — tracing, logging, metrics, CORS —
   dominates. So end-to-end throughput moves by less than the table above, approaching it only as the
   route count grows.
-- **The trie also allocates less**, where it used to allocate more. On a 100-route table, per
-  matched request: a static route costs 536 B / 8 allocations against the default matcher's
-  960 B / 12, and a parameterised route 1208 B / 11 against 1264 B / 13. The middleware chain is
-  composed once per route instead of per request, and an empty path-parameter map is no longer
-  stored. This applies to routes registered through the framework (`app.GET`, `app.POST`, ...).
+- **Allocations are close.** Both matchers compose GoFr's own middleware (tracing, logging, CORS,
+  metrics) once per route rather than on every request, for routes registered through the
+  framework (`app.GET`, `app.POST`, ...); a middleware the application registers itself is still
+  composed per request under the default matcher, as before. The trie additionally skips the
+  request copies `mux` makes to store route variables, and no longer stores an empty
+  path-parameter map, so it saves about two allocations per request.
 
 ## What stays the same
 

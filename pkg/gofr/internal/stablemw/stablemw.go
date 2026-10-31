@@ -1,21 +1,28 @@
-// Package stablemw marks the handlers GoFr's framework middlewares return, so that the http router
-// can tell them apart from a user's. It is internal so the marker does not become public API.
+// Package stablemw marks the middlewares GoFr registers itself, so that the http router can tell
+// them apart from an application's. It is internal so the mark does not become public API.
 package stablemw
 
-import "net/http"
+import (
+	"net/http"
+	"reflect"
+)
 
-// Handler is the http.HandlerFunc GoFr's framework middlewares return. Its type tells the router
-// that the constructor which built it depends only on the inner handler, so the mux matcher can
-// build that layer once per route instead of on every request. Every middleware returning one must
-// keep that property: anything it reads per request belongs inside the handler, not in the
-// constructor.
-type Handler func(http.ResponseWriter, *http.Request)
+// Mark returns mw, marked as one of GoFr's own middlewares: a constructor that depends only on the
+// inner handler it is given, so the mux matcher may build its layer once per route instead of on
+// every request. It must only wrap such constructors; anything they read per request belongs
+// inside the handler they return.
+//
+// The mark is the identity of the closure below. Only this package can create it, so no
+// application middleware can carry it -- whatever its constructor returns. Mark is never inlined
+// because an inlined copy would compile that closure again under another identity.
+//
+//go:noinline
+func Mark(mw func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(inner http.Handler) http.Handler { return mw(inner) }
+}
 
-func (f Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) { f(w, r) }
-
-// Is reports whether h is a Handler.
-func Is(h http.Handler) bool {
-	_, ok := h.(Handler)
-
-	return ok
+// Is reports whether mw was returned by Mark. It is called when a route's chain is built, not per
+// request.
+func Is(mw func(http.Handler) http.Handler) bool {
+	return mw != nil && reflect.ValueOf(mw).Pointer() == reflect.ValueOf(Mark(nil)).Pointer()
 }

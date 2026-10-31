@@ -196,7 +196,8 @@ func TestChainCacheConcurrentFirstRequests(t *testing.T) {
 }
 
 // TestMuxPathUnaffectedByChainCache pins that the default matcher still behaves
-// exactly as before -- the cache lives only on the trie path.
+// exactly as before -- this cache lives only on the trie path (mux mode memoises
+// through dispatch, see mux_chain_test.go).
 func TestMuxPathUnaffectedByChainCache(t *testing.T) {
 	t.Setenv(RouterEnvVar, MatcherMux)
 
@@ -356,9 +357,9 @@ func TestLateMiddlewareRegistrationIsReported(t *testing.T) {
 	}
 }
 
-// TestLateMiddlewareRegistrationSilentInMuxMode pins the other half: mux composes
-// the chain per request, so a late registration takes effect there and there is
-// nothing to warn about. Warning anyway would train users to ignore the message.
+// TestLateMiddlewareRegistrationSilentInMuxMode pins the other half: in mux mode a
+// registration makes the memoised chains stale, so a late registration takes
+// effect there and there is nothing to warn about. Warning anyway would train users to ignore the message.
 func TestLateMiddlewareRegistrationSilentInMuxMode(t *testing.T) {
 	t.Setenv(RouterEnvVar, MatcherMux)
 

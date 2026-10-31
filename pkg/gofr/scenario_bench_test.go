@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 // scenarioUser is the JSON body the bind scenario decodes and echoes back.
@@ -31,7 +32,7 @@ const scenarioBindBody = `{"name":"x","age":30,"email":"x@y.z"}`
 // newScenarioApp builds an App the way a user gets one from New(), registers
 // the benchmark routes and finishes the setup Run would do before serving, so
 // the returned handler is exactly what the HTTP server serves. logLevel "" is
-// the user default; "ERROR" is the minimised-observability mode.
+// the user default; "ERROR" is the minimal-observability mode.
 //
 // Request logs go to os.Stdout, so stdout is pointed at /dev/null for the run:
 // the write syscall stays in the measurement, the terminal output does not.
@@ -48,6 +49,7 @@ func newScenarioApp(b *testing.B, logLevel string, middlewares int) http.Handler
 
 	b.Cleanup(func() {
 		os.Stdout = stdout
+
 		devNull.Close()
 	})
 
@@ -90,12 +92,15 @@ func newScenarioApp(b *testing.B, logLevel string, middlewares int) http.Handler
 	})
 
 	app.httpServerSetup()
-	app.httpServer.router.Use(middleware.WSHandlerUpgrade(app.container, app.httpServer.ws))
+	// As run does: the websocket upgrade is registered last, with GoFr's mark.
+	app.httpServer.router.Use(stablemw.Mark(middleware.WSHandlerUpgrade(app.container, app.httpServer.ws)))
 
 	return app.httpServer.router
 }
 
 func benchmarkScenario(b *testing.B, logLevel string, middlewares int, method, target, body string) {
+	b.Helper()
+
 	h := newScenarioApp(b, logLevel, middlewares)
 
 	// One request is reused, as the repo's other full-chain benchmarks do, so the
@@ -145,7 +150,7 @@ func benchmarkScenario(b *testing.B, logLevel string, middlewares int, method, t
 func BenchmarkScenario(b *testing.B) {
 	modes := []struct{ name, logLevel string }{
 		{"defaults", ""},
-		{"minimised", "ERROR"},
+		{"minimised", "ERROR"}, //nolint:misspell // the mode name the recorded results use
 	}
 
 	scenarios := []struct {

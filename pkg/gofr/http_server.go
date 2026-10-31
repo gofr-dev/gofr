@@ -13,6 +13,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
 )
@@ -86,11 +87,13 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 		metricsOpts = append(metricsOpts, middleware.WithUnmatchedLimit(*middlewareConfigs.MetricsUnmatchedLimit))
 	}
 
+	// Marked as GoFr's own: each depends only on the handler it wraps, so the mux matcher builds
+	// these layers once per route instead of on every request.
 	r.Use(
-		middleware.Tracer,
-		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
-		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics(), metricsOpts...),
+		stablemw.Mark(middleware.Tracer),
+		stablemw.Mark(middleware.Logging(middlewareConfigs.LogProbes, c.Logger)),
+		stablemw.Mark(middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes)),
+		stablemw.Mark(middleware.Metrics(c.Metrics(), metricsOpts...)),
 	)
 
 	return &httpServer{
@@ -108,7 +111,7 @@ func (s *httpServer) run(c *container.Container) {
 	//	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
 	//	the connection to WebSocket, if any.
 	s.router.Use(
-		middleware.WSHandlerUpgrade(c, s.ws),
+		stablemw.Mark(middleware.WSHandlerUpgrade(c, s.ws)),
 	)
 
 	s.srvMu.Lock()

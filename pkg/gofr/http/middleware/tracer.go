@@ -12,7 +12,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/internal/stablemw"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -226,8 +225,8 @@ var lastTracer atomic.Pointer[providerTracer] //nolint:gochecknoglobals // memo 
 // Comparing interfaces that hold any other kind can panic (a struct whose interface field holds an
 // uncomparable value), so those providers are asked on every request, as before.
 //
-// A provider shut down while still installed keeps handing out its memoised tracer, as the trie
-// router's per-route tracer already did. App.Shutdown stops the HTTP server before tracing, so
+// A provider shut down while still installed keeps handing out its memoised tracer, as a tracer
+// obtained once and held would. App.Shutdown stops the HTTP server before tracing, so
 // GoFr's own lifecycle never serves a request in that window.
 func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 	if last := lastTracer.Load(); last != nil && last.provider == tp {
@@ -260,7 +259,7 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // under load. It is looked up in the handler rather than here so that a handler
 // the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
-	return stablemw.Handler(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tr := frameworkTracer(otel.GetTracerProvider())
 		ctx := r.Context()
 
