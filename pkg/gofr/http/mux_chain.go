@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 // The default (mux) matcher composes the middleware chain inside mux.Router.Match, calling every
@@ -17,17 +19,9 @@ import (
 // (see ownedHandler), dispatch returns a chain built once and kept on the route; for any other
 // route it composes the list per request, exactly as mux did.
 //
-// Only constructors that say they are pure are built once. A user middleware's constructor still
-// runs on every request, as it always has under mux: it may keep per-request state in its closure,
-// and memoising it would change what it does. See buildMuxChain.
-
-// stableMiddleware is implemented by the handlers GoFr's framework middlewares return. It states
-// that the constructor which produced the handler depends only on the inner handler it was given,
-// so the handler can be built once per route and reused. The method name is exported only so the
-// middleware package can implement it; the interface itself is not.
-type stableMiddleware interface {
-	GoFrStableMiddleware()
-}
+// Only constructors that say they are pure, by returning a stablemw.Handler, are built once. A user
+// middleware's constructor still runs on every request, as it always has under mux: it may keep
+// per-request state in its closure, and memoising it would change what it does. See buildMuxChain.
 
 // ownedHandler is the handler Add installs on a route under the mux matcher. It serves the
 // handler it wraps, and it is a pointer of a type only this package creates, which is what lets
@@ -88,7 +82,7 @@ func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached
 
 	// lo..hi is the impure run: [0, lo) and (hi, len) are pure.
 	lo, hi := 0, len(mws)-1
-	for lo < len(mws) && isStable(layers[lo]) {
+	for lo < len(mws) && stablemw.Is(layers[lo]) {
 		lo++
 	}
 
@@ -96,7 +90,7 @@ func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached
 		return h, h
 	}
 
-	for hi >= lo && isStable(layers[hi]) {
+	for hi >= lo && stablemw.Is(layers[hi]) {
 		hi--
 	}
 
@@ -108,12 +102,6 @@ func buildMuxChain(mws []mux.MiddlewareFunc, inner http.Handler) (served, cached
 	middle := &perRequest{mws: mws[lo : hi+1 : hi+1], inner: tail}
 
 	return h, composeMiddleware(mws[:lo:lo], middle)
-}
-
-func isStable(h http.Handler) bool {
-	_, ok := h.(stableMiddleware)
-
-	return ok
 }
 
 // perRequest composes its middlewares over inner on every request, as mux did for the whole chain.

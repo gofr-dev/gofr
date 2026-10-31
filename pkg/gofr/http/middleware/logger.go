@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/internal/logjson"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
@@ -272,7 +273,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	registerRequestLogJSON.Do(func() { logjson.Register(appendRequestLogJSON) })
 
 	return func(inner http.Handler) http.Handler {
-		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
+		return stablemw.Handler(func(w http.ResponseWriter, r *http.Request) {
 			srw := pool.Get().(*StatusResponseWriter)
 			srw.ResponseWriter = w
 			srw.status = 0

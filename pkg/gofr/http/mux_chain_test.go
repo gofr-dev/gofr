@@ -11,16 +11,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
-// stableTestHandler stands in for a framework middleware's handler.
-type stableTestHandler func(http.ResponseWriter, *http.Request)
-
-func (f stableTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) { f(w, r) }
-func (stableTestHandler) GoFrStableMiddleware()                              {}
-
 // tracingMW returns a middleware that appends name to the X-Order header and counts its
-// constructor calls. stable says whether its handler carries the framework marker.
+// constructor calls. stable says whether its handler is a stablemw.Handler.
 func tracingMW(name string, stable bool, built *atomic.Int64) mux.MiddlewareFunc {
 	return func(inner http.Handler) http.Handler {
 		built.Add(1)
@@ -31,7 +27,7 @@ func tracingMW(name string, stable bool, built *atomic.Int64) mux.MiddlewareFunc
 		}
 
 		if stable {
-			return stableTestHandler(f)
+			return stablemw.Handler(f)
 		}
 
 		return http.HandlerFunc(f)
@@ -48,7 +44,7 @@ func newMuxModeRouter(t *testing.T) *Router {
 		// from Match and called directly.
 		if route := mux.CurrentRoute(r); route != nil {
 			tpl, _ := route.GetPathTemplate()
-			_, _ = w.Write([]byte(mux.Vars(r)["id"] + " " + tpl))
+			w.Header().Set("X-Route", mux.Vars(r)["id"]+" "+tpl)
 		}
 	}))
 
@@ -78,7 +74,7 @@ func TestMuxChain_StableBuiltOnceUserPerRequest(t *testing.T) {
 		w := serveMux(t, r, "/users/42")
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, []string{"outer", "user", "inner"}, w.Header().Values("X-Order"))
-		assert.Equal(t, "42 /users/{id}", w.Body.String(), "mux.Vars and mux.CurrentRoute still work")
+		assert.Equal(t, "42 /users/{id}", w.Header().Get("X-Route"), "mux.Vars and mux.CurrentRoute still work")
 	}
 
 	assert.Equal(t, int64(5), user.Load(), "a user constructor runs on every request, as under mux")

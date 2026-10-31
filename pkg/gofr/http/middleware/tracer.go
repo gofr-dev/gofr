@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -259,7 +260,7 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // under load. It is looked up in the handler rather than here so that a handler
 // the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
-	return stableHandler(func(w http.ResponseWriter, r *http.Request) {
+	return stablemw.Handler(func(w http.ResponseWriter, r *http.Request) {
 		tr := frameworkTracer(otel.GetTracerProvider())
 		ctx := r.Context()
 

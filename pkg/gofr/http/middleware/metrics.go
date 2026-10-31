@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 type metrics interface {
@@ -125,7 +126,7 @@ func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) ht
 	untemplatedLimit := newMetricsOptions(opts...).untemplatedLimit()
 
 	return func(inner http.Handler) http.Handler {
-		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
+		return stablemw.Handler(func(w http.ResponseWriter, r *http.Request) {
 			// If an outer middleware (Logging) has already wrapped w in a
 			// StatusResponseWriter, reuse it instead of double-wrapping. Both
 			// middlewares only read status — a single wrapper captures it for

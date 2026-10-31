@@ -5,6 +5,8 @@ import (
 	"net/textproto"
 	"strings"
 	"sync"
+
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 const (
@@ -101,7 +103,7 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 	}
 
 	return func(inner http.Handler) http.Handler {
-		return stableHandler(func(w http.ResponseWriter, r *http.Request) {
+		return stablemw.Handler(func(w http.ResponseWriter, r *http.Request) {
 			once.Do(build)
 			setMiddlewareHeaders(w, r.Header.Get("Origin"), allowedOrigins, fixed, methods)
 

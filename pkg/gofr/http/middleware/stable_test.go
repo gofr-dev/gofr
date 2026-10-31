@@ -7,15 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
-// The router builds a layer once per route only when its handler carries the marker. Losing it
+// The router builds a layer once per route only when its handler is a stablemw.Handler. Losing it
 // silently puts the allocation back on every request, so each framework middleware is pinned.
 func TestFrameworkMiddlewaresAreStable(t *testing.T) {
-	type stable interface{ GoFrStableMiddleware() }
-
 	inner := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	routes := []string{}
 	c := container.NewContainer(nil)
@@ -27,6 +26,6 @@ func TestFrameworkMiddlewaresAreStable(t *testing.T) {
 		"Metrics":          Metrics(&mockMetrics{}),
 		"WSHandlerUpgrade": WSHandlerUpgrade(c, websocket.New()),
 	} {
-		assert.Implements(t, (*stable)(nil), mw(inner), name)
+		assert.True(t, stablemw.Is(mw(inner)), name)
 	}
 }
