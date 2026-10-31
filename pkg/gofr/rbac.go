@@ -11,6 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/internal/rbaccheck"
 	"gofr.dev/pkg/gofr/internal/routemark"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 	"gofr.dev/pkg/gofr/rbac"
 )
 
@@ -78,9 +79,10 @@ func (a *App) enableRBAC(configPath ...string) error {
 
 	a.rbacEnabled = true
 
-	// Apply middleware using the config
+	// Apply middleware using the config. It captures only the config, so it carries GoFr's mark
+	// and the mux matcher builds it once per route.
 	middlewareFunc := rbac.Middleware(config)
-	a.UseMiddleware(middlewareFunc)
+	a.UseMiddleware(stablemw.Mark(middlewareFunc))
 
 	a.rbacConfigs = append(a.rbacConfigs, config)
 

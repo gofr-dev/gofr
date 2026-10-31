@@ -238,3 +238,36 @@ func TestMuxChain_UserConstructorWrappingAMarkedOneStaysPerRequest(t *testing.T)
 
 	assert.Equal(t, int64(4), user.Load())
 }
+
+// On a cached chain an application constructor runs inside the marked layers outside it, so a
+// recovering marked layer there now catches a panic from it; the building request is as under mux.
+func TestMuxChain_UserConstructorPanicOnCachedChain(t *testing.T) {
+	r := newMuxModeRouter(t)
+
+	var panicking atomic.Bool
+
+	r.Use(stablemw.Mark(func(inner http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			defer func() {
+				if recover() != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}()
+
+			inner.ServeHTTP(w, req)
+		})
+	}))
+	r.Use(func(next http.Handler) http.Handler {
+		if panicking.Load() {
+			panic("constructor")
+		}
+
+		return next
+	})
+
+	assert.Equal(t, http.StatusOK, serveMux(t, r, "/users/1").Code)
+
+	panicking.Store(true)
+
+	assert.Equal(t, http.StatusInternalServerError, serveMux(t, r, "/users/1").Code)
+}

@@ -12,6 +12,7 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/stablemw"
 )
 
 // authDisabledMsg is logged when an Enable* method's input is unusable and it installs no middleware,
@@ -173,8 +174,12 @@ func (a *App) authDisabled(err error, mechanism, method string) error {
 
 // addAuthMiddleware installs the HTTP half. The gRPC half is a separate call at
 // each site -- see grpc_auth_enabled.go for why it cannot be done here.
+//
+// Every caller passes one of GoFr's auth constructors, which capture only their
+// provider, so the layer carries GoFr's mark and the mux matcher builds it once
+// per route.
 func (a *App) addAuthMiddleware(httpMW func(http.Handler) http.Handler) {
 	if a.httpServer != nil {
-		a.httpServer.router.Use(httpMW)
+		a.httpServer.router.Use(stablemw.Mark(httpMW))
 	}
 }

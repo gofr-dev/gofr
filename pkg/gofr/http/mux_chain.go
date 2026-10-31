@@ -15,10 +15,11 @@ import (
 //
 // The fix keeps mux in charge of serving, so mux.Vars, mux.CurrentRoute and the 404/405 handlers
 // behave as before, and the promoted Match still returns the matched handler wrapped in the whole
-// chain (a user constructor now runs when that handler is served rather than inside Match). What
-// changes is what mux composes: Use hands mux a single middleware, dispatch, in place of the list. For a route GoFr registered itself
-// (see ownedHandler), dispatch returns a chain built once and kept on the route; for any other
-// route it composes the list per request, exactly as mux did.
+// chain (once a route's chain is cached, a user constructor runs when that handler is served
+// rather than inside Match). What changes is what mux composes: Use hands mux a single
+// middleware, dispatch, in place of the list. For a route GoFr registered itself (see
+// ownedHandler), dispatch returns a chain built once and kept on the route; for any other route
+// it composes the list per request, exactly as mux did.
 //
 // Only the constructors GoFr registered itself through stablemw.Mark are built once. An
 // application's constructor still runs on every request, as it always has under mux: it may keep
@@ -27,6 +28,11 @@ import (
 // mark is on the registered constructor, not on the handler it returns, so a constructor that
 // passes next through or calls a framework constructor itself is never mistaken for GoFr's.
 // See buildMuxChain.
+//
+// One difference is visible: on a cached chain an application constructor runs inside the marked
+// layers outside it, so a constructor that panics is caught by Logging's recovery and answered
+// with a 500, where mux let the panic reach net/http. The request that builds a chain still
+// calls every constructor inside Match, as mux did.
 
 // ownedHandler is the handler Add installs on a route under the mux matcher. It serves the
 // handler it wraps, and it is a pointer of a type only this package creates, which is what lets

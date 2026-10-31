@@ -359,7 +359,8 @@ func TestLateMiddlewareRegistrationIsReported(t *testing.T) {
 
 // TestLateMiddlewareRegistrationSilentInMuxMode pins the other half: in mux mode a
 // registration makes the memoised chains stale, so a late registration takes
-// effect there and there is nothing to warn about. Warning anyway would train users to ignore the message.
+// effect there and there is nothing to warn about. Warning anyway would train
+// users to ignore the message.
 func TestLateMiddlewareRegistrationSilentInMuxMode(t *testing.T) {
 	t.Setenv(RouterEnvVar, MatcherMux)
 
