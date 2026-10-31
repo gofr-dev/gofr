@@ -3,7 +3,9 @@ package middleware
 import (
 	"net/http"
 	"net/textproto"
+	"reflect"
 	"strings"
+	"sync/atomic"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -203,6 +205,38 @@ func (c headerCarrier) Keys() []string {
 	return keys
 }
 
+// frameworkTracerName is the instrumentation scope of the request spans.
+const frameworkTracerName = "gofr-" + version.Framework
+
+// providerTracer is the tracer one provider returned for frameworkTracerName.
+type providerTracer struct {
+	provider trace.TracerProvider
+	tracer   trace.Tracer
+}
+
+// lastTracer memoises the otel global provider's tracer. It is keyed on the provider, so a later
+// otel.SetTracerProvider is picked up on the next request, exactly as before.
+var lastTracer atomic.Pointer[providerTracer] //nolint:gochecknoglobals // memo of otel's own global provider
+
+// frameworkTracer returns tp.Tracer(frameworkTracerName), asking tp only when the provider changed.
+// The SDK returns the same tracer for the same name on every call, so the memo changes no span.
+//
+// Only providers of a comparable type are memoised: comparing two interfaces whose dynamic type
+// is not comparable panics. Those providers are asked on every request, as before.
+func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
+	if last := lastTracer.Load(); last != nil && last.provider == tp {
+		return last.tracer
+	}
+
+	tr := tp.Tracer(frameworkTracerName)
+
+	if reflect.TypeOf(tp).Comparable() {
+		lastTracer.Store(&providerTracer{provider: tp, tracer: tr})
+	}
+
+	return tr
+}
+
 // Tracer is a middleware that starts a new OpenTelemetry trace span for each
 // request and records http.request.method, http.route, and
 // http.response.status_code attributes on it, following the current OTel
@@ -215,13 +249,11 @@ func (c headerCarrier) Keys() []string {
 // with dashboards or alerts filtering on span.name == "gofr-router" must
 // update their filters.
 //
-// The tracer is resolved once at chain-build time (after App.New has installed
-// the real provider via initTracer; see factory.go) and captured in the
-// per-request closure — otel.GetTracerProvider().Tracer(name) is a mutex-
-// guarded map lookup under the SDK provider, so resolving once saves that
-// lookup on every request.
+// The tracer comes from frameworkTracer: gorilla/mux calls Tracer on every
+// request to build the chain, and the SDK resolves a tracer under a provider-wide
+// mutex, which was the only contended lock in GoFr under load.
 func Tracer(inner http.Handler) http.Handler {
-	tr := otel.Tracer("gofr-" + version.Framework)
+	tr := frameworkTracer(otel.GetTracerProvider())
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
