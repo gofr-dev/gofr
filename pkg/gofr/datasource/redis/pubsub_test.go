@@ -21,48 +21,69 @@ import (
 )
 
 func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
-	t.Cleanup(s.Close)
+	tests := []struct {
+		name   string
+		env    func(s *miniredis.Miniredis) map[string]string
+		wantDB int
+	}{
+		{
+			name: "REDIS_PUBSUB_DB with discrete variables",
+			env: func(s *miniredis.Miniredis) map[string]string {
+				return map[string]string{"REDIS_HOST": s.Host(), "REDIS_PORT": s.Port(), "REDIS_DB": "0", "REDIS_PUBSUB_DB": "1"}
+			},
+			wantDB: 1,
+		},
+		{
+			name: "default database overrides the REDIS_URL database",
+			env: func(s *miniredis.Miniredis) map[string]string {
+				return map[string]string{"REDIS_URL": "redis://" + s.Addr() + "/2"}
+			},
+			wantDB: defaultPubSubDB,
+		},
+	}
 
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := miniredis.Run()
+			require.NoError(t, err)
+			t.Cleanup(s.Close)
 
-	mockMetrics := NewMockMetrics(ctrl)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
 
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
+			mockMetrics := NewMockMetrics(ctrl)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	ps := NewPubSub(config.NewMockConfig(map[string]string{
-		"PUBSUB_BACKEND":               "REDIS",
-		"REDIS_HOST":                   s.Host(),
-		"REDIS_PORT":                   s.Port(),
-		"REDIS_DB":                     "0",
-		"REDIS_PUBSUB_DB":              "1",
-		"REDIS_PUBSUB_MODE":            "streams",
-		"REDIS_STREAMS_CONSUMER_GROUP": "gofr",
-	}), mockLogger, mockMetrics)
-	require.NotNil(t, ps)
+			env := tc.env(s)
+			env["PUBSUB_BACKEND"] = "REDIS"
+			env["REDIS_PUBSUB_MODE"] = "streams"
+			env["REDIS_STREAMS_CONSUMER_GROUP"] = "gofr"
 
-	err = ps.CreateTopic(context.Background(), "db-partition-topic")
-	require.NoError(t, err)
+			ps := NewPubSub(config.NewMockConfig(env), logging.NewMockLogger(logging.DEBUG), mockMetrics)
+			require.NotNil(t, ps)
 
-	rc0 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
+			t.Cleanup(func() { _ = ps.Close() })
 
-	t.Cleanup(func() { _ = rc0.Close() })
+			err = ps.CreateTopic(context.Background(), "db-partition-topic")
+			require.NoError(t, err)
 
-	t0, err := rc0.Type(context.Background(), "db-partition-topic").Result()
-	require.NoError(t, err)
-	require.Equal(t, "none", t0)
+			for _, db := range []int{0, 2, tc.wantDB} {
+				want := "none"
+				if db == tc.wantDB {
+					want = "stream"
+				}
 
-	rc1 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 1})
+				rc := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: db})
 
-	t.Cleanup(func() { _ = rc1.Close() })
+				got, err := rc.Type(context.Background(), "db-partition-topic").Result()
+				_ = rc.Close()
 
-	t1, err := rc1.Type(context.Background(), "db-partition-topic").Result()
-	require.NoError(t, err)
-	require.Equal(t, "stream", t1)
+				require.NoError(t, err)
+				require.Equal(t, want, got, "database %d", db)
+			}
+		})
+	}
 }
 
 func TestPubSub_Query_Channel(t *testing.T) {

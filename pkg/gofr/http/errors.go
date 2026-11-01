@@ -120,6 +120,21 @@ func (ErrorInvalidRoute) StatusCode() int {
 	return http.StatusNotFound
 }
 
+// ErrorMethodNotAllowed represents an error when the HTTP method is not allowed for a route.
+type ErrorMethodNotAllowed struct{}
+
+func (ErrorMethodNotAllowed) Error() string {
+	return "method not allowed"
+}
+
+func (ErrorMethodNotAllowed) LogLevel() logging.Level {
+	return logging.INFO
+}
+
+func (ErrorMethodNotAllowed) StatusCode() int {
+	return http.StatusMethodNotAllowed
+}
+
 // ErrorRequestTimeout represents an error for request which timed out.
 type ErrorRequestTimeout struct{}
 
@@ -209,6 +224,7 @@ var (
 	_ StatusCodeResponder = ErrorMissingParam{}
 	_ StatusCodeResponder = ErrorUnsupportedMediaType{}
 	_ StatusCodeResponder = ErrorInvalidRoute{}
+	_ StatusCodeResponder = ErrorMethodNotAllowed{}
 	_ StatusCodeResponder = ErrorRequestTimeout{}
 	_ StatusCodeResponder = ErrorPanicRecovery{}
 	_ StatusCodeResponder = ErrorServiceUnavailable{}
@@ -222,6 +238,7 @@ var (
 	_ logging.LogLevelResponder = ErrorMissingParam{}
 	_ logging.LogLevelResponder = ErrorUnsupportedMediaType{}
 	_ logging.LogLevelResponder = ErrorInvalidRoute{}
+	_ logging.LogLevelResponder = ErrorMethodNotAllowed{}
 	_ logging.LogLevelResponder = ErrorRequestTimeout{}
 	_ logging.LogLevelResponder = ErrorPanicRecovery{}
 	_ logging.LogLevelResponder = ErrorServiceUnavailable{}

@@ -47,8 +47,12 @@ const graphqlPath = "/graphql"
 // MetricsOption configures the Metrics middleware.
 type MetricsOption func(*metricsOptions)
 
+// metricsOptions holds the inputs to the caller-controlled label budget. Each
+// option records only its own input; untemplatedLimit combines them after all
+// options have run, so the order they are passed in cannot change the result.
 type metricsOptions struct {
-	untemplatedLimit int64
+	ceiling        int
+	unmatchedLimit int64
 }
 
 // WithCardinalityLimit sizes the budget for caller-controlled label sets from
@@ -64,8 +68,35 @@ type metricsOptions struct {
 // ceilings each stop admitting at their own budget, so both stay bounded.
 func WithCardinalityLimit(limit int) MetricsOption {
 	return func(o *metricsOptions) {
-		o.untemplatedLimit = untemplatedBudget(limit)
+		o.ceiling = limit
 	}
+}
+
+// WithUnmatchedLimit lowers the budget for caller-controlled label sets to at
+// most limit, without touching the provider ceiling that real routes share. It
+// only ever lowers the budget: one above what WithCardinalityLimit allows, or
+// above untemplatedLabelLimit, has no effect. A limit of zero or less collapses
+// every caller-controlled request from the first one, which suits short-lived
+// instances that would each otherwise record their own scanner paths.
+func WithUnmatchedLimit(limit int) MetricsOption {
+	return func(o *metricsOptions) {
+		o.unmatchedLimit = int64(max(limit, 0))
+	}
+}
+
+func newMetricsOptions(opts ...MetricsOption) metricsOptions {
+	o := metricsOptions{unmatchedLimit: untemplatedLabelLimit}
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	return o
+}
+
+// untemplatedLimit is the budget this Metrics instance admits caller-controlled
+// label sets against.
+func (o metricsOptions) untemplatedLimit() int64 {
+	return min(untemplatedBudget(o.ceiling), o.unmatchedLimit)
 }
 
 // untemplatedCeilingShare is the inverse of the fraction of the provider ceiling
@@ -91,12 +122,7 @@ func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) ht
 	// carries none of that branching itself.
 	recorder := newHistogramRecorder(metrics)
 
-	options := metricsOptions{untemplatedLimit: untemplatedLabelLimit}
-	for _, opt := range opts {
-		opt(&options)
-	}
-
-	untemplatedLimit := options.untemplatedLimit
+	untemplatedLimit := newMetricsOptions(opts...).untemplatedLimit()
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +191,8 @@ const (
 	// untemplatedLabelLimit is the most distinct caller-controlled
 	// (path, method, status) label sets recorded verbatim before path and method
 	// collapse. WithCardinalityLimit lowers it to a quarter of a smaller provider
-	// ceiling; it never raises it.
+	// ceiling, and WithUnmatchedLimit (METRICS_UNMATCHED_LIMIT) lowers it to a
+	// value of the user's choosing; neither ever raises it.
 	//
 	// It bounds the whole attribute set rather than each label separately,
 	// because independent ceilings multiply: 4096 paths and 64 methods is a
