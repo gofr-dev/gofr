@@ -12,6 +12,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"go.opentelemetry.io/otel/trace"
 
+	"gofr.dev/pkg/gofr/internal/quietspan"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -79,7 +80,16 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, trace
 func neverSampleProvider() (ShutdownFunc, trace.TracerProvider) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
 
-	return shutdownFunc(tp), tp
+	// The HTTP tracer middleware may start this provider's spans itself (see quietspan).
+	quietspan.Register(tp)
+
+	shutdown := shutdownFunc(tp)
+
+	return func(ctx context.Context) error {
+		quietspan.Forget(tp)
+
+		return shutdown(ctx)
+	}, tp
 }
 
 // shutdownFunc wraps TracerProvider.Shutdown so it is safe to call twice:

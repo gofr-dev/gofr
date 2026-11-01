@@ -9,9 +9,11 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/quietspan"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -260,13 +262,24 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tr := frameworkTracer(otel.GetTracerProvider())
+		tp := otel.GetTracerProvider()
 		ctx := r.Context()
 
 		// extract the traceID and spanID from the headers and create a new context for the same
 		// this context will make a new span using the traceID and link the incoming SpanID as
 		// its parentID, thus connecting two spans
 		ctx = otel.GetTextMapPropagator().Extract(ctx, headerCarrier(r.Header))
+
+		// GoFr's own NeverSample provider (no TRACE_EXPORTER): its span records nothing, so the
+		// name, attributes and status it would be given are never read. quietspan starts the same
+		// span in one allocation instead of the SDK's three.
+		if quietspan.Owns(ctx, tp) {
+			inner.ServeHTTP(w, r.WithContext(quietspan.Start(ctx, tp.(*sdktrace.TracerProvider))))
+
+			return
+		}
+
+		tr := frameworkTracer(tp)
 
 		method := strings.ToUpper(r.Method)
 		// Prefer the gorilla/mux route template (e.g. "/users/{id}") so the

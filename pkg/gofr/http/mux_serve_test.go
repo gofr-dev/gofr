@@ -148,6 +148,10 @@ func TestMuxClean(t *testing.T) {
 // serveMux saves three allocations per matched request against mux.Router.ServeHTTP: the
 // RouteMatch, one of the two context values and one of the two request copies.
 func TestServeMux_Allocations(t *testing.T) {
+	if raceEnabled {
+		t.Skip("allocation counts are not stable under the race detector")
+	}
+
 	t.Setenv(RouterEnvVar, MatcherMux)
 
 	r := NewRouter()

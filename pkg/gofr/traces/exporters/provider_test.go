@@ -6,11 +6,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"gofr.dev/pkg/gofr/internal/quietspan"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
@@ -317,4 +320,15 @@ func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
 			_ = shutdown(t.Context())
 		})
 	}
+}
+
+// The no-exporter provider is the one the HTTP tracer may start spans for itself, until it is
+// shut down; any provider with an exporter is not.
+func Test_neverSampleProvider_registersUntilShutdown(t *testing.T) {
+	shutdown, tp := neverSampleProvider()
+
+	assert.True(t, quietspan.Owns(t.Context(), tp))
+	require.NoError(t, shutdown(t.Context()))
+	assert.False(t, quietspan.Owns(t.Context(), tp))
+	require.NoError(t, shutdown(t.Context()), "shutdown stays safe to call twice")
 }
