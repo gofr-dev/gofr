@@ -144,8 +144,8 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delegate to the underlying Gorilla Mux router.
-	rou.Router.ServeHTTP(w, r)
+	// Serve as the underlying Gorilla Mux router does (see mux_serve.go).
+	rou.serveMux(w, r)
 }
 
 // normalizePath canonicalizes r.URL.Path in place so routing sees a clean path
