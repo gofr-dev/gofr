@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -2099,4 +2100,52 @@ func Test_LoggingContract_ConcurrentRequestsShareThePool(t *testing.T) {
 	}
 
 	assert.Equal(t, n/2, errs, "half the requests were 500s; no status leaked across pooled writers")
+}
+
+// formatStartTime writes what Format writes with the start_time layout, for every offset
+// (including zero, negative, and sub-minute ones), year range and fraction.
+func TestFormatStartTimeMatchesFormat(t *testing.T) {
+	zones := []*time.Location{
+		time.UTC, time.Local, time.FixedZone("ist", 5*3600+1800), time.FixedZone("neg", -7*3600),
+		time.FixedZone("sub", 1234), time.FixedZone("negsub", -(3600 + 59)), time.FixedZone("zero", 0),
+		time.FixedZone("far", 14*3600), time.FixedZone("farneg", -12*3600),
+	}
+
+	const generated = 2000
+
+	instants := make([]time.Time, 0, 10+generated)
+	instants = append(instants,
+		time.Unix(0, 0), time.Unix(0, 1), time.Unix(1, 100), time.Unix(1700000000, 123456789),
+		time.Unix(1700000000, 120000000), time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC), time.Date(-1, 6, 1, 0, 0, 0, 5, time.UTC),
+		time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), time.Now(),
+	)
+
+	rng := rand.New(rand.NewPCG(3, 4)) //nolint:gosec // reproducible test input
+	for range generated {
+		instants = append(instants, time.Unix(rng.Int64N(1<<34)-1<<33, rng.Int64N(1e9)))
+	}
+
+	for _, tm := range instants {
+		for _, z := range zones {
+			in := tm.In(z)
+			require.Equal(t, in.Format(startTimeLayout), formatStartTime(in), "%v in %v", tm, z)
+		}
+	}
+}
+
+func BenchmarkFormatStartTime(b *testing.B) {
+	t := time.Now()
+
+	b.Run("Format", func(b *testing.B) {
+		for range b.N {
+			_ = t.Format(startTimeLayout)
+		}
+	})
+
+	b.Run("formatStartTime", func(b *testing.B) {
+		for range b.N {
+			_ = formatStartTime(t)
+		}
+	})
 }

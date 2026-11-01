@@ -328,6 +328,24 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	}
 }
 
+// startTimeLayout is the request log's start_time layout: RFC3339Nano, except that a zero
+// offset is written "+00:00", not "Z".
+const startTimeLayout = "2006-01-02T15:04:05.999999999-07:00"
+
+// formatStartTime is t.Format(startTimeLayout). time only fast-paths the exact RFC3339
+// layouts, so this formats with RFC3339Nano and respells its "Z" (written for a zero
+// offset, and only then) as "+00:00".
+func formatStartTime(t time.Time) string {
+	var buf [len(time.RFC3339Nano) + 8]byte
+
+	b := t.AppendFormat(buf[:0], time.RFC3339Nano)
+	if n := len(b); n > 0 && b[n-1] == 'Z' {
+		b = append(b[:n-1], "+00:00"...)
+	}
+
+	return string(b)
+}
+
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time,
 	traceID, spanID string, sink *logSink) {
 	status := srw.Status()
@@ -344,7 +362,7 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 	l := &RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
-		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		StartTime:    formatStartTime(start),
 		ResponseTime: time.Since(start).Nanoseconds() / 1000,
 		Method:       r.Method,
 		UserAgent:    r.UserAgent(),
