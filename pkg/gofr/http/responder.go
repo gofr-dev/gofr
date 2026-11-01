@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/internal/logjson"
 )
 
 var (
@@ -138,8 +139,11 @@ func (r Responder) Respond(data any, err error) {
 	// json.Encoder.Encode appends a trailing newline, exactly matching the
 	// previous json.Marshal(resp) followed by a separate Write of "\n". It also
 	// uses the same default HTML escaping as json.Marshal, so the bytes on the
-	// wire are identical to before.
-	if encodeErr := re.enc.Encode(resp); encodeErr != nil {
+	// wire are identical to before. A plain string skips the encoder for the
+	// same bytes.
+	if b, ok := appendStringEnvelope(buf.AvailableBuffer(), data, errorObj); ok {
+		buf.Write(b)
+	} else if encodeErr := re.enc.Encode(resp); encodeErr != nil {
 		putRespBuf(re)
 
 		r.w.WriteHeader(http.StatusInternalServerError)
@@ -153,6 +157,26 @@ func (r Responder) Respond(data any, err error) {
 	_, _ = r.w.Write(buf.Bytes())
 
 	putRespBuf(re)
+}
+
+// appendStringEnvelope appends the envelope Encode writes for a plain string as the only field,
+// {"data":"..."} and a newline, when logjson can spell the string exactly as encoding/json does.
+// Anything else (an error, metadata, an empty string, which omitempty drops, a named string type,
+// which may marshal itself) reports false and goes to the encoder.
+func appendStringEnvelope(dst []byte, data, errorObj any) ([]byte, bool) {
+	s, ok := data.(string)
+	if !ok || s == "" || errorObj != nil {
+		return dst, false
+	}
+
+	dst = append(dst, `{"data":`...)
+
+	dst, ok = logjson.AppendString(dst, s)
+	if !ok {
+		return dst, false
+	}
+
+	return append(dst, "}\n"...), true
 }
 
 // newRespEncoder builds an encoder bound to its own buffer. A json.Encoder is
