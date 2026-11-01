@@ -45,11 +45,17 @@ func serveQuietTraced(t *testing.T, header map[string]string) seenSpan {
 // With GoFr's NeverSample provider registered, the handler sees the span the SDK path gives it:
 // same trace ID, flags, trace state, remoteness, recording state and provider.
 func TestTracer_QuietSpanMatchesSDKPath(t *testing.T) {
+	prevTP, prevProp := otel.GetTracerProvider(), otel.GetTextMapPropagator()
+
 	tp := trace.NewTracerProvider(trace.WithSampler(trace.NeverSample()))
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
-	t.Cleanup(func() { quietspan.Forget(tp) })
+	t.Cleanup(func() {
+		quietspan.Forget(tp)
+		otel.SetTracerProvider(prevTP)
+		otel.SetTextMapPropagator(prevProp)
+	})
 
 	for name, header := range map[string]map[string]string{
 		"no parent": nil,

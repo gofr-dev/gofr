@@ -86,6 +86,77 @@ func TestServeMux_SameAsMux(t *testing.T) {
 	}
 }
 
+// Under every mux setting that decides whether a path is served or redirected, and with a
+// subrouter and a MethodNotAllowedHandler, serveMux answers as mux.Router.ServeHTTP does,
+// including the paths it hands to mux.
+func TestServeMux_SameAsMuxUnderSettings(t *testing.T) {
+	for _, setting := range []string{"default", "clean", "encoded", "encoded+clean"} {
+		r := newServeMuxRouter(t, false)
+
+		switch setting {
+		case "clean":
+			r.Router.SkipClean(false)
+		case "encoded":
+			r.Router.UseEncodedPath()
+		case "encoded+clean":
+			r.Router.UseEncodedPath()
+			r.Router.SkipClean(false)
+		}
+
+		r.Router.MethodNotAllowedHandler = observe("405")
+
+		sub := r.Router.PathPrefix("/sub").Subrouter()
+		sub.Handle("/b/{y}", observe("sub")).Methods(http.MethodPost)
+		sub.NotFoundHandler = observe("subnotfound")
+
+		for _, tc := range []struct{ method, target string }{
+			{http.MethodGet, "/users/1"}, {http.MethodPost, "/users/1"},
+			{http.MethodPost, "/sub/b/2"}, {http.MethodGet, "/sub/b/2"}, {http.MethodGet, "/sub/zz"},
+			{http.MethodGet, "/raw/x%2Fy"}, {http.MethodGet, "/raw/x%2F..%2Fy"}, {http.MethodGet, "/raw/%2e%2e"},
+			{http.MethodGet, "/zz"},
+		} {
+			t.Run(fmt.Sprintf("%s %s %s", setting, tc.method, tc.target), func(t *testing.T) {
+				// Router.ServeHTTP normalizes the path before matching; give mux the same request.
+				req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.target, http.NoBody)
+				normalizePath(req)
+
+				want := httptest.NewRecorder()
+				r.Router.ServeHTTP(want, req)
+
+				got := httptest.NewRecorder()
+				r.ServeHTTP(got, httptest.NewRequestWithContext(t.Context(), tc.method, tc.target, http.NoBody))
+
+				assert.Equal(t, want.Code, got.Code)
+				assert.Equal(t, want.Header(), got.Header())
+				assert.Equal(t, want.Body.String(), got.Body.String())
+			})
+		}
+	}
+}
+
+// A path mux would clean and redirect never reaches serveMux through ServeHTTP, which
+// normalizes it first. serveMux called on one hands it to mux, redirect included.
+func TestServeMux_UncleanPathGoesToMux(t *testing.T) {
+	for _, skipClean := range []bool{true, false} {
+		r := newServeMuxRouter(t, false)
+		r.Router.SkipClean(skipClean)
+
+		for _, target := range []string{"/users//1", "/users/./1", "/plain/", "/a/../plain", "/raw/x%2Fy/../z"} {
+			t.Run(fmt.Sprintf("skipClean=%t %s", skipClean, target), func(t *testing.T) {
+				want := httptest.NewRecorder()
+				r.Router.ServeHTTP(want, httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
+
+				got := httptest.NewRecorder()
+				r.serveMux(got, httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
+
+				assert.Equal(t, want.Code, got.Code)
+				assert.Equal(t, want.Header(), got.Header())
+				assert.Equal(t, want.Body.String(), got.Body.String())
+			})
+		}
+	}
+}
+
 // The vars map is the one mux built for the request: the same map on every call, so a write to
 // it is seen by a later read, as with mux.
 func TestServeMux_VarsMapIsStable(t *testing.T) {

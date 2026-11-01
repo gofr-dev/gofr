@@ -170,7 +170,6 @@ func (s *span) Value(key any) any {
 func (s *span) SpanContext() trace.SpanContext        { return s.sc }
 func (*span) IsRecording() bool                       { return false }
 func (*span) SetStatus(codes.Code, string)            {}
-func (*span) SetError(bool)                           {}
 func (*span) SetAttributes(...attribute.KeyValue)     {}
 func (*span) End(...trace.SpanEndOption)              {}
 func (*span) RecordError(error, ...trace.EventOption) {}
