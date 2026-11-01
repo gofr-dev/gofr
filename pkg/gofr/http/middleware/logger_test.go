@@ -629,7 +629,10 @@ func TestTraceSpanIDsMatchesOtelRendering(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := trace.NewSpanContext(tt.cfg)
 
-			gotTrace, gotSpan := traceSpanIDs(sc)
+			gotTrace, gotSpan, correlation := traceSpanIDs(sc)
+
+			assert.Equal(t, []string{tt.wantTrace}, correlation, "the header carries the trace ID")
+			assert.Equal(t, 1, cap(correlation), "a later Header.Add must not write into it")
 
 			assert.Equal(t, tt.wantTrace, gotTrace)
 			assert.Equal(t, tt.wantSpan, gotSpan)

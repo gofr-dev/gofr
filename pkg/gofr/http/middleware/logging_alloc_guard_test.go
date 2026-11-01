@@ -53,7 +53,7 @@ func TestLoggingChainAllocationsDoNotRegress(t *testing.T) {
 	// only thing that moves this number is a Go or dependency upgrade, and that is
 	// worth a human looking at rather than absorbing silently. If this fails after
 	// such an upgrade, re-measure and update the constant in the same commit.
-	const wantAllocs = 6
+	const wantAllocs = 5
 
 	tid, err := trace.TraceIDFromHex("0af7651916cd43dd8448eb211c80319c")
 	if err != nil {

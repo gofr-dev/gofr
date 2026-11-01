@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -300,14 +301,14 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// whose entry the level gate discards pays for 16 bytes it does not
 			// use. That costs no extra allocation -- one buffer covers both -- and
 			// saves one on every request that IS logged, which is the default.
-			traceID, spanID := traceSpanIDs(sc)
+			traceID, spanID, correlation := traceSpanIDs(sc)
 
 			// Assigned rather than Set: Header.Set canonicalizes its key on
 			// every call, and "X-Correlation-ID" is not already in canonical
 			// form ("Id", not "ID"), so each request paid for building the
 			// canonical string. The wire format is unchanged -- net/http emits
 			// the canonical spelling either way.
-			srw.Header()[canonicalCorrelationID] = []string{traceID}
+			srw.Header()[canonicalCorrelationID] = correlation
 
 			defer func() { panicRecovery(recover(), srw, sink.logger) }()
 
@@ -454,7 +455,8 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	}
 }
 
-// traceSpanIDs renders both IDs into ONE allocation.
+// traceSpanIDs renders both IDs, and the X-Correlation-ID header value, into ONE
+// allocation.
 //
 // otel's TraceID.String() and SpanID.String() each render the hex into a stack
 // array and then convert it with string(...). At the pinned
@@ -470,9 +472,9 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 // request whose entry is discarded pays for 16 bytes it does not use. That costs
 // no extra allocation -- the one buffer covers both -- and it buys an allocation
 // on every request that IS logged, which is the default configuration.
-func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string) {
+func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string, correlation []string) {
 	if !sc.IsValid() {
-		return zeroTraceID, zeroSpanID
+		return zeroTraceID, zeroSpanID, []string{zeroTraceID}
 	}
 
 	tid, sid := sc.TraceID(), sc.SpanID()
@@ -482,12 +484,22 @@ func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string) {
 	// what hex.Encode reports it wrote, not from restating a constant: editing
 	// either constant then changes the buffer and the offset together instead of
 	// silently moving one slice bound past the other.
-	var b [len(zeroTraceID) + len(zeroSpanID)]byte
+	ids := new(requestIDs)
 
-	n := hex.Encode(b[:], tid[:])
-	hex.Encode(b[n:], sid[:])
+	n := hex.Encode(ids.hex[:], tid[:])
+	hex.Encode(ids.hex[n:], sid[:])
 
-	s := string(b[:])
+	// The bytes are never written again, so they can back the strings directly.
+	s := unsafe.String(&ids.hex[0], len(ids.hex))
+	ids.header[0] = s[:n]
 
-	return s[:n], s[n:]
+	return s[:n], s[n:], ids.header[:]
+}
+
+// requestIDs holds a request's rendered trace and span IDs and the X-Correlation-ID header value
+// that carries the trace ID, so all three cost one allocation. The header value has len == cap
+// == 1, as []string{traceID} has, so a later Header.Add appends into a new array.
+type requestIDs struct {
+	header [1]string
+	hex    [len(zeroTraceID) + len(zeroSpanID)]byte
 }
