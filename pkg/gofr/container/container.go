@@ -21,6 +21,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	goredis "github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/ai"
@@ -28,9 +29,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
-	"gofr.dev/pkg/gofr/datasource/pubsub/google"
-	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
-	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -151,9 +149,15 @@ func (c *Container) Create(conf config.Config) {
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
-	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *redis.Redis: storing a nil pointer in the Redis interface makes c.Redis == nil false.
+	if rc := redis.NewClient(conf, c.Logger, c.metricsManager); rc != nil {
+		c.Redis = rc
+	}
 
-	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *sql.DB: storing a nil pointer in the DB interface makes c.SQL == nil false.
+	if db := sql.NewSQL(conf, c.Logger, c.metricsManager); db != nil {
+		c.SQL = db
+	}
 
 	c.createPubSub(conf)
 
@@ -209,51 +213,6 @@ func (c *Container) Close() error {
 	}
 
 	return err
-}
-
-func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
-	var qos byte
-
-	port, err := strconv.Atoi(conf.GetOrDefault("MQTT_PORT", "0"))
-	if err != nil {
-		c.Logger.Error("Invalid value for MQTT_PORT, using default: 0")
-	}
-
-	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
-
-	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
-
-	keepAlive, err := time.ParseDuration(conf.Get("MQTT_KEEP_ALIVE"))
-	if err != nil {
-		keepAlive = 30 * time.Second
-
-		c.Logger.Debug("MQTT_KEEP_ALIVE is not set or invalid, setting it to 30 seconds")
-	}
-
-	switch conf.Get("MQTT_QOS") {
-	case "1":
-		qos = 1
-	case "2":
-		qos = 2
-	default:
-		qos = 0
-	}
-
-	configs := &mqtt.Config{
-		Protocol:         conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-		Hostname:         conf.Get("MQTT_HOST"),
-		Port:             port,
-		Username:         conf.Get("MQTT_USER"),
-		Password:         conf.Get("MQTT_PASSWORD"),
-		ClientID:         conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:              qos,
-		Order:            order,
-		RetrieveRetained: retrieveRetained,
-		KeepAlive:        keepAlive,
-		CloseTimeout:     0 * time.Millisecond,
-	}
-
-	return mqtt.New(configs, c.Logger, c.metricsManager)
 }
 
 // GetHTTPService returns registered HTTP services.
@@ -402,6 +361,12 @@ func (c *Container) registerFrameworkMetrics() {
 		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
 		c.Metrics().NewCounter("app_http_retry_count", "Total number of retry events")
+
+		retryWaitBuckets := []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_retry_wait_seconds", "Time waited before each HTTP service retry in seconds.",
+			retryWaitBuckets...)
+		c.Metrics().NewCounter("app_http_retry_budget_exhausted_total",
+			"Total number of HTTP service retries skipped because the retry budget was spent.")
 		c.Metrics().NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
 		c.Metrics().NewCounter("app_circuit_open_count", "Total number of times a service circuit breaker has opened.")
 	}
@@ -434,11 +399,45 @@ func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
 
+// GetPublisher returns the pub/sub client, or nil when none is usable.
+//
+// Same filter, same reason as GetSubscriber below -- a handler calling
+// ctx.GetPublisher().Publish(...) against a typed-nil client hits the identical
+// nil receiver, it just surfaces on a request instead of at startup.
+//
+// To be precise about what this does and does not buy: an unconditional
+// ctx.GetPublisher().Publish(...) still panics, now on a nil interface rather
+// than a nil receiver. What the filter fixes is every caller that DOES check,
+// whose `!= nil` guard the typed nil used to walk straight through. The
+// constructors no longer put a typed nil in the field at all, so this is
+// defense in depth rather than the only line of it.
 func (c *Container) GetPublisher() pubsub.Publisher {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 
+// GetSubscriber returns the pub/sub client, or nil when none is usable.
+//
+// The nil check is isNil rather than a plain comparison because the pub/sub
+// constructors assign the result of google.New or kafka.New straight into the
+// interface, and those return a TYPED nil when they reject an incomplete
+// config. A typed nil is not equal to nil, so returning c.PubSub unfiltered let
+// every caller's own nil guard pass and then call a method on a nil receiver.
+// Filtering here fixes all of them at once, the worst being App.Subscribe: its
+// `GetSubscriber() == nil` guard admitted the typed nil, registered the
+// subscription, and handleSubscription then called Subscribe on the nil
+// receiver. That call sits outside the recover it installs around the handler,
+// and errgroup does not recover either -- x/sync v0.23.0 says so in
+// errgroup.go, "It is tempting to propagate panics from f() [...]" -- so the
+// panic killed the process at startup rather than surfacing on a request.
 func (c *Container) GetSubscriber() pubsub.Subscriber {
+	if isNil(c.PubSub) {
+		return nil
+	}
+
 	return c.PubSub
 }
 
@@ -496,75 +495,6 @@ func getDefaultDatasourceMicrosecondBuckets() []float64 {
 	}
 }
 
-func (c *Container) createKafkaPubSub(conf config.Config) {
-	if conf.Get("PUBSUB_BROKER") == "" {
-		return
-	}
-
-	partition, err := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
-	if err != nil {
-		c.Logger.Error("Invalid value for PARTITION_SIZE, using default: 0")
-	}
-
-	// PUBSUB_OFFSET determines the starting position for message consumption in Kafka.
-	// This allows control over whether to read historical messages or only new ones:
-	// - Default value -1: Start from the latest offset (only consume new messages after consumer starts)
-	// - Value 0: Start from the earliest offset (read all historical messages from the beginning)
-	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
-	// This is particularly important for scenarios like message replay, recovery from failures,
-	// or when you only want to process messages that arrive after the consumer is initialized.
-	offSet, err := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-	if err != nil {
-		c.Logger.Error("Invalid value for PUBSUB_OFFSET, using default: -1")
-	}
-
-	batchSize, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_SIZE, using default: %d", kafka.DefaultBatchSize)
-	}
-
-	batchBytes, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_BYTES, using default: %d", kafka.DefaultBatchBytes)
-	}
-
-	batchTimeout, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_TIMEOUT, using default: %d", kafka.DefaultBatchTimeout)
-	}
-
-	tlsConf := kafka.TLSConfig{
-		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
-		KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
-		CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
-		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
-	}
-
-	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
-
-	c.PubSub = kafka.New(&kafka.Config{
-		Brokers:          pubsubBrokers,
-		Partition:        partition,
-		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
-		OffSet:           offSet,
-		BatchSize:        batchSize,
-		BatchBytes:       batchBytes,
-		BatchTimeout:     batchTimeout,
-		SecurityProtocol: conf.Get("KAFKA_SECURITY_PROTOCOL"),
-		SASLMechanism:    conf.Get("KAFKA_SASL_MECHANISM"),
-		SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
-		SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
-		TLS:              tlsConf,
-	}, c.Logger, c.metricsManager)
-}
-
-func (c *Container) createGooglePubSub(conf config.Config) {
-	c.PubSub = google.New(google.Config{
-		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-	}, c.Logger, c.metricsManager)
-}
-
 func (c *Container) createRedisPubSub(conf config.Config) {
 	c.warnIfRedisPubSubSharesRedisDB(conf)
 
@@ -579,15 +509,7 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 		return
 	}
 
-	redisDBStr := conf.Get("REDIS_DB")
-	if redisDBStr == "" {
-		redisDBStr = "0"
-	}
-
-	redisDB, err := strconv.Atoi(redisDBStr)
-	if err != nil {
-		redisDB = 0
-	}
+	redisDB := primaryRedisDB(conf)
 
 	pubsubDBStr := conf.Get("REDIS_PUBSUB_DB")
 	if pubsubDBStr == "" {
@@ -609,6 +531,23 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 			pubsubDB, redisDB,
 		)
 	}
+}
+
+// primaryRedisDB returns the logical DB the primary Redis datasource uses. A valid REDIS_URL decides it
+// (path or ?db=), as the discrete REDIS_DB is ignored then; otherwise REDIS_DB, defaulting to 0.
+func primaryRedisDB(conf config.Config) int {
+	if rawURL := conf.Get("REDIS_URL"); rawURL != "" {
+		if opts, err := goredis.ParseURL(rawURL); err == nil {
+			return opts.DB
+		}
+	}
+
+	redisDB, err := strconv.Atoi(conf.Get("REDIS_DB"))
+	if err != nil {
+		return 0
+	}
+
+	return redisDB
 }
 
 func effectiveRedisPubSubMode(conf config.Config) string {

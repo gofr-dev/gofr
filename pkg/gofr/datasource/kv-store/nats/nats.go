@@ -108,7 +108,7 @@ func (c *Client) Connect() {
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	span := c.addTrace(ctx, "get", key)
-	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
+	defer c.sendOperationStats(time.Now(), opGet, "get", span, key)
 
 	entry, err := c.kv.Get(key)
 	if err != nil {
@@ -124,7 +124,7 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 
 func (c *Client) Set(ctx context.Context, key, value string) error {
 	span := c.addTrace(ctx, "set", key)
-	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
+	defer c.sendOperationStats(time.Now(), opSet, "set", span, key, value)
 
 	_, err := c.kv.Put(key, []byte(value))
 	if err != nil {
@@ -136,7 +136,7 @@ func (c *Client) Set(ctx context.Context, key, value string) error {
 
 func (c *Client) Delete(ctx context.Context, key string) error {
 	span := c.addTrace(ctx, "delete", key)
-	defer c.sendOperationStats(time.Now(), "DELETE", "delete", span, key)
+	defer c.sendOperationStats(time.Now(), opDelete, "delete", span, key)
 
 	err := c.kv.Delete(key)
 	if err != nil {
@@ -171,7 +171,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		h.Status = "DOWN"
 
 		c.logger.Debug(&Log{
-			Type:     "HEALTH CHECK",
+			Type:     opHealthCheck,
 			Key:      "health",
 			Value:    fmt.Sprintf("Connection failed for bucket '%s' at '%s'", c.configs.Bucket, c.configs.Server),
 			Duration: time.Since(start).Microseconds(),
@@ -187,7 +187,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Status = "UP"
 
 	c.logger.Debug(&Log{
-		Type:     "HEALTH CHECK",
+		Type:     opHealthCheck,
 		Key:      "health",
 		Value:    fmt.Sprintf("Checking connection status for bucket '%s' at '%s'", c.configs.Bucket, c.configs.Server),
 		Duration: time.Since(start).Microseconds(),

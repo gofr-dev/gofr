@@ -16,6 +16,9 @@ var fs embed.FS
 
 const (
 	OpenAPIJSON = "openapi.json"
+
+	// swaggerFileNameParam is the path parameter naming the file served from /.well-known/{name}.
+	swaggerFileNameParam = "name"
 )
 
 // OpenAPIHandler serves the `openapi.json` file at the specified path.
@@ -30,12 +33,12 @@ func OpenAPIHandler(c *Context) (any, error) {
 		return nil, err
 	}
 
-	return response.File{Content: b, ContentType: "application/json"}, nil
+	return response.File{Content: b, ContentType: contentTypeJSON}, nil
 }
 
 // SwaggerUIHandler serves the static files of the Swagger UI.
 func SwaggerUIHandler(c *Context) (any, error) {
-	fileName := c.PathParam("name")
+	fileName := c.PathParam(swaggerFileNameParam)
 	if fileName == "" {
 		// Read the index.html file
 		fileName = "index.html"

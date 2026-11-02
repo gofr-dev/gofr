@@ -279,7 +279,7 @@ func TestPostQuerySuccess(t *testing.T) {
 	}
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueries := make([]SubQuery, 0)
+	subqueries := make([]SubQuery, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",
@@ -324,7 +324,7 @@ func TestPostQueryLastSuccess(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueriesLast := make([]SubQueryLast, 0)
+	subqueriesLast := make([]SubQueryLast, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",
@@ -381,7 +381,7 @@ func TestPostQueryDeleteSuccess(t *testing.T) {
 	}
 
 	name := []string{"cpu", "disk", "net", "mem"}
-	subqueries := make([]SubQuery, 0)
+	subqueries := make([]SubQuery, 0, len(name))
 	tags := map[string]string{
 		"host":      "gofr-host",
 		"try-name":  "gofr-sample",
@@ -628,7 +628,11 @@ func TestHealthCheck_Success(t *testing.T) {
 
 	mockConn.EXPECT().Close()
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return mockConn, nil
 	}
 
@@ -643,7 +647,11 @@ func TestHealthCheck_Success(t *testing.T) {
 func TestHealthCheck_Failure(t *testing.T) {
 	client, _ := setOpenTSDBTest(t)
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return nil, errConnection
 	}
 
@@ -651,6 +659,33 @@ func TestHealthCheck_Failure(t *testing.T) {
 
 	require.Nil(t, resp, "Expected response to be nil")
 	require.EqualError(t, err, "connection error", "Expected error during health check")
+}
+
+func TestHealthCheck_ContextCanceled(t *testing.T) {
+	client, _ := setOpenTSDBTest(t)
+
+	// A listener that accepts connections, so only the canceled context can fail the dial. The
+	// mock HTTP client has no expectations: reaching the version request fails the test.
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	client.config.Host = ln.Addr().String()
+
+	origDial := dialContext
+
+	t.Cleanup(func() { dialContext = origDial })
+
+	dialContext = (&net.Dialer{}).DialContext
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	resp, err := client.HealthCheck(ctx)
+
+	require.Nil(t, resp)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestConnect(t *testing.T) {
@@ -723,6 +758,13 @@ func TestPutDataPoints_Errors(t *testing.T) {
 			expErr:   errInvalidResponseType,
 		},
 		{
+			desc:     "invalid datapoints type",
+			datas:    "not-datapoints",
+			resp:     &PutResponse{},
+			mockCall: func(*MockhttpClient) {},
+			expErr:   errInvalidParam,
+		},
+		{
 			desc:     "empty datapoints",
 			datas:    []DataPoint{},
 			resp:     &PutResponse{},
@@ -775,6 +817,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 		resp      any
 		mockCall  func(m *MockhttpClient)
 		expErrMsg string
+		expErr    error
 	}{
 		{
 			desc:      "invalid param type",
@@ -782,6 +825,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryParam",
+			expErr:    errInvalidParam,
 		},
 		{
 			desc:      "invalid response type",
@@ -789,6 +833,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &PutResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: "Must be *QueryResponse",
+			expErr:    errInvalidResponseType,
 		},
 		{
 			desc:      "invalid query params",
@@ -796,6 +841,7 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			resp:      &QueryResponse{},
 			mockCall:  func(*MockhttpClient) {},
 			expErrMsg: errInvalidQueryParam.Error(),
+			expErr:    errInvalidQueryParam,
 		},
 		{
 			desc: "query body marshal failure",
@@ -825,8 +871,21 @@ func TestQueryDataPoints_Errors(t *testing.T) {
 			err := client.QueryDataPoints(t.Context(), tc.param, tc.resp)
 
 			require.ErrorContains(t, err, tc.expErrMsg)
+			requireSentinel(t, err, tc.expErr)
 		})
 	}
+}
+
+// requireSentinel asserts errors.Is(err, expErr) for rows that name a sentinel. Rows whose error
+// has no sentinel (a wrapped driver or JSON error) leave expErr nil and rely on the message.
+func requireSentinel(t *testing.T, err, expErr error) {
+	t.Helper()
+
+	if expErr == nil {
+		return
+	}
+
+	require.ErrorIs(t, err, expErr)
 }
 
 func TestQueryLatestDataPoints_Errors(t *testing.T) {
@@ -990,14 +1049,14 @@ func TestGetAggregators_Errors(t *testing.T) {
 func TestHealthCheck_VersionFailure(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
-	originalDial := dialTimeout
+	originalDial := dialContext
 
-	t.Cleanup(func() { dialTimeout = originalDial })
+	t.Cleanup(func() { dialContext = originalDial })
 
 	mockConn := NewMockconnection(gomock.NewController(t))
 	mockConn.EXPECT().Close().Return(nil).Times(1)
 
-	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
+	dialContext = func(context.Context, string, string) (net.Conn, error) {
 		return mockConn, nil
 	}
 

@@ -777,7 +777,7 @@ func TestMQTT_Query_SuccessCases(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 
 				for _, msg := range tc.messages {
-					capturedHandler(nil, &mockMessage{topic: topic, payload: msg, qos: int(mockConfigs.QoS)})
+					capturedHandler(nil, &mockMessage{topic: topic, payload: msg, qos: mockConfigs.QoS})
 				}
 			}()
 

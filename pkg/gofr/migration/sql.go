@@ -98,7 +98,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 	return max(lastMigration, lm2), nil
 }
 
-func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (d sqlMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsSQL] {
 		dialect := c.SQL.Dialect()
 
@@ -131,7 +131,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 }
 
 func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
-	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
+	_, err := tx.Exec(query, version, migrationMethodUP, startTime, time.Since(startTime).Milliseconds())
 
 	return err
 }
@@ -153,7 +153,7 @@ func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {
 	return cmt
 }
 
-func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
+func (d sqlMigrator) rollback(c *container.Container, data *transactionData) {
 	if data.SQLTx == nil {
 		return
 	}

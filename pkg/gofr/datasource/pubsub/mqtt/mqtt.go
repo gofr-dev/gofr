@@ -21,6 +21,15 @@ const (
 	defaultQueryCollectTimeout = 5 * time.Second
 	unsubscribeOpTimeout       = 2 * time.Second
 	mqttBackend                = "MQTT"
+
+	// Health-details keys.
+	healthDetailBackend = "backend"
+	healthDetailHost    = "host"
+
+	// Metadata keys set on every received message.
+	metaDataQoS       = "qos"
+	metaDataRetained  = "retained"
+	metaDataMessageID = "messageID"
 )
 
 var (
@@ -227,10 +236,10 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 func (m *MQTT) Health() datasource.Health {
 	res := datasource.Health{
-		Status: "DOWN",
+		Status: datasource.StatusDown,
 		Details: map[string]any{
-			"backend": "MQTT",
-			"host":    m.config.Hostname,
+			healthDetailBackend: mqttBackend,
+			healthDetailHost:    m.config.Hostname,
 		},
 	}
 
@@ -247,7 +256,7 @@ func (m *MQTT) Health() datasource.Health {
 		return res
 	}
 
-	res.Status = "UP"
+	res.Status = datasource.StatusUp
 
 	return res
 }

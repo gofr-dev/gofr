@@ -53,7 +53,7 @@ func TestMetrics(t *testing.T) {
 	route := router.NewRoute()
 	route.Path("/test").Name("/test")
 
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	router.Use(Metrics(mockMetrics))
@@ -84,7 +84,7 @@ func TestMetrics_StaticFile(t *testing.T) {
 
 	router.Use(Metrics(mockMetrics))
 
-	req := httptest.NewRequest(http.MethodGet, "/static/example.js", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/example.js", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
@@ -191,7 +191,7 @@ func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 
 	router.Use(Metrics(mockMetrics))
 
-	req := httptest.NewRequest(http.MethodGet, "/static/example.js?v=42", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/static/example.js?v=42", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)

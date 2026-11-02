@@ -217,7 +217,7 @@ func setupDialer(conf *Config) (*kafka.Dialer, error) {
 		dialer.SASLMechanism = mechanism
 	}
 
-	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
+	if conf.SecurityProtocol == protocolSSL || conf.SecurityProtocol == protocolSASLSSL {
 		tlsConfig, err := createTLSConfig(&conf.TLS)
 		if err != nil {
 			return nil, err
@@ -309,15 +309,15 @@ func (k *kafkaClient) createReader(topic string, offset int64) (*kafka.Reader, e
 	return reader, nil
 }
 
-func (*kafkaClient) getReadContext(ctx context.Context) context.Context {
+// getReadContext bounds a read by defaultReadTimeout when the caller set no
+// deadline. The caller must call the returned cancel once the read is done:
+// without it the timer and the child context live on for the full timeout.
+func (*kafkaClient) getReadContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		readCtx, cancel := context.WithTimeout(ctx, defaultReadTimeout)
-		_ = cancel // We can't defer here, but timeout will handle cleanup
-
-		return readCtx
+		return context.WithTimeout(ctx, defaultReadTimeout)
 	}
 
-	return ctx
+	return ctx, func() {}
 }
 
 func (k *kafkaClient) readMessages(ctx context.Context, reader *kafka.Reader, limit int) ([]byte, error) {

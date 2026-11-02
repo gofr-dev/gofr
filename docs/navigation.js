@@ -85,6 +85,11 @@ export const navigation = [
                 desc: "Opt into the trie router with GOFR_ROUTER=trie to keep route matching flat as your route table grows, instead of scaling with the number of routes."
             },
             {
+                title: 'Slim Builds',
+                href: '/docs/advanced-guide/slim-builds',
+                desc: "Leave subsystems your service does not use out of the binary with the gofr_no* build tags, without changing a line of your code."
+            },
+            {
                 title: 'Authentication',
                 href: '/docs/advanced-guide/authentication',
                 desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."

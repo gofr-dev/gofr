@@ -35,6 +35,15 @@ const (
 	statusOK        = "OK"
 
 	defaultTimeout = 30 * time.Second
+	closeTimeout   = 5 * time.Second
+
+	// Operation names recorded in QueryLog.OperationName.
+	opQuery  = "query"
+	opSelect = "select"
+	opCreate = "create"
+	opUpdate = "update"
+	opInsert = "insert"
+	opDelete = "delete"
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -119,12 +128,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	err = c.setupNamespaceAndDatabase(ctx)
-	if err != nil {
-		return
-	}
-
-	err = c.authenticateCredentials(ctx)
+	err = c.initSession(ctx)
 	if err != nil {
 		return
 	}
@@ -162,6 +166,44 @@ func (c *Client) connectToDatabase(ctx context.Context, endpoint string) error {
 	return nil
 }
 
+// initSession selects the namespace and database and signs in on the freshly opened connection.
+// On failure it closes the connection and leaves the client not connected, so HealthCheck and every
+// operation report errNotConnected instead of running against a half-initialized session.
+func (c *Client) initSession(ctx context.Context) error {
+	err := c.setupNamespaceAndDatabase(ctx)
+	if err == nil {
+		err = c.authenticateCredentials(ctx)
+	}
+
+	if err != nil {
+		c.disconnect(ctx)
+		return err
+	}
+
+	return nil
+}
+
+// dbCloser is implemented by DB values that hold a closable connection.
+type dbCloser interface {
+	close(ctx context.Context) error
+}
+
+// disconnect closes the current connection, if it can be closed, and marks the client as not connected.
+// The close runs on a fresh context bounded by closeTimeout and detached from the caller's cancellation,
+// so an expired connect deadline cannot skip the close and a stuck connection cannot block forever.
+func (c *Client) disconnect(ctx context.Context) {
+	if closer, ok := c.db.(dbCloser); ok {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeout)
+		defer cancel()
+
+		if err := closer.close(closeCtx); err != nil {
+			c.logError("failed to close SurrealDB connection", err)
+		}
+	}
+
+	c.db = nil
+}
+
 // setupNamespaceAndDatabase sets the namespace and database for SurrealDB.
 func (c *Client) setupNamespaceAndDatabase(ctx context.Context) error {
 	err := c.db.Use(ctx, c.config.Namespace, c.config.Database)
@@ -190,6 +232,7 @@ func (c *Client) authenticateCredentials(ctx context.Context) error {
 	}
 
 	if c.config.Username == "" || c.config.Password == "" {
+		c.logError("invalid SurrealDB credentials configuration", errInvalidCredentialsConfig)
 		return errInvalidCredentialsConfig
 	}
 
@@ -250,7 +293,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "query",
+		OperationName: opQuery,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Data:          vars,
@@ -461,7 +504,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "select",
+		OperationName: opSelect,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -497,7 +540,7 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "create",
+		OperationName: opCreate,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -538,7 +581,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "update",
+		OperationName: opUpdate,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -575,7 +618,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "insert",
+		OperationName: opInsert,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,
@@ -612,7 +655,7 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
-		OperationName: "delete",
+		OperationName: opDelete,
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
 		Collection:    table,

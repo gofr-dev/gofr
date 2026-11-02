@@ -81,12 +81,12 @@ func (m redisMigrator) beginTransaction(c *container.Container) transactionData 
 	return cmt
 }
 
-func (m redisMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (m redisMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
 
 	if data.UsedDatasources[dsRedis] {
 		jsonData, err := json.Marshal(redisData{
-			Method:    "UP",
+			Method:    migrationMethodUP,
 			StartTime: data.StartTime,
 			Duration:  time.Since(data.StartTime).Milliseconds(),
 		})
@@ -115,7 +115,7 @@ func (m redisMigrator) commitMigration(c *container.Container, data transactionD
 	return m.migrator.commitMigration(c, data)
 }
 
-func (m redisMigrator) rollback(c *container.Container, data transactionData) {
+func (m redisMigrator) rollback(c *container.Container, data *transactionData) {
 	data.RedisTx.Discard()
 
 	m.migrator.rollback(c, data)

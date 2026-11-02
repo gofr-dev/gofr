@@ -103,7 +103,7 @@ func Test_CassandraCommitMigration(t *testing.T) {
 		mockCassandra.EXPECT().ExecWithCtx(gomock.Any(), insertCassandraGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
-		err := migratorWithCassandra.commitMigration(mockContainer, td)
+		err := migratorWithCassandra.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -134,9 +134,9 @@ func Test_CassandraCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
 
@@ -205,12 +205,12 @@ func Test_CassandraMigratorDelegation(t *testing.T) {
 	m := cassandraMigrator{migrator: mockMigrator}
 	data := transactionData{MigrationNumber: 4}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 	mockLogger.EXPECT().Fatalf("migration %v failed and rolled back", int64(4))
 	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(sql.ErrConnDone)
 	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(sql.ErrConnDone)
 
-	m.rollback(mockContainer, data)
+	m.rollback(mockContainer, &data)
 
 	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), sql.ErrConnDone)
 	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), sql.ErrConnDone)

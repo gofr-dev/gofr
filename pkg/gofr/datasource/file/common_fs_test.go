@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1126,6 +1127,79 @@ func TestCommonFileSystem_RetryAndConnectedState(t *testing.T) {
 
 			assert.Equal(t, tt.expRetryOff, fs.IsRetryDisabled())
 			assert.Equal(t, tt.expIsConnection, fs.IsConnected())
+		})
+	}
+}
+
+// TestCommonFileSystem_RetryState_ConcurrentAccess exercises the pattern used by the GCS/FTP/Azure
+// providers: a background retry goroutine calls Connect and polls IsConnected/IsRetryDisabled while
+// the owner calls SetDisableRetry. Under -race this fails if the flags are plain bools (#4314).
+func TestCommonFileSystem_RetryState_ConcurrentAccess(t *testing.T) {
+	tests := []struct {
+		name string
+		// initDisableRetry is set on fs before the goroutines start, so the concurrent
+		// SetDisableRetry(disableRetry) call below always exercises a real transition
+		// instead of possibly leaving the flag at its zero value.
+		initDisableRetry bool
+		disableRetry     bool
+		connectErr       error
+		expConnected     bool
+		expRetryOff      bool
+	}{
+		{
+			name:             "retry disabled while retry goroutine connects",
+			initDisableRetry: false,
+			disableRetry:     true,
+			expConnected:     true,
+			expRetryOff:      true,
+		},
+		{
+			name:             "retry re-enabled while retry goroutine connects",
+			initDisableRetry: true,
+			disableRetry:     false,
+			expConnected:     true,
+			expRetryOff:      false,
+		},
+		{
+			name:             "provider connect error leaves connected state false",
+			initDisableRetry: false,
+			disableRetry:     true,
+			connectErr:       errTest,
+			expConnected:     false,
+			expRetryOff:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockProvider := NewMockStorageProvider(ctrl)
+			mockProvider.EXPECT().Connect(gomock.Any()).Return(tt.connectErr).MinTimes(1)
+
+			fs := &CommonFileSystem{Provider: mockProvider, Location: "test-bucket"}
+			// Seed the starting state directly on the field (not via SetDisableRetry,
+			// the method under test) so the row below exercises a real transition.
+			fs.disableRetry.Store(tt.initDisableRetry)
+
+			var wg sync.WaitGroup
+
+			// Simulates startRetryConnect: poll the flags, then Connect.
+			wg.Go(func() {
+				_ = fs.IsConnected()
+				_ = fs.IsRetryDisabled()
+				_ = fs.Connect(t.Context())
+			})
+
+			// Simulates the owner toggling retry / reading state concurrently.
+			wg.Go(func() {
+				fs.SetDisableRetry(tt.disableRetry)
+				_ = fs.IsConnected()
+			})
+
+			wg.Wait()
+
+			assert.Equal(t, tt.expConnected, fs.IsConnected())
+			assert.Equal(t, tt.expRetryOff, fs.IsRetryDisabled())
 		})
 	}
 }

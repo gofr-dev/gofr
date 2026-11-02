@@ -86,10 +86,10 @@ func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactio
 	return cmt
 }
 
-func (ch clickHouseMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (ch clickHouseMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsClickhouse] {
 		err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
-			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+			migrationMethodUP, data.StartTime, time.Since(data.StartTime).Milliseconds())
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (ch clickHouseMigrator) commitMigration(c *container.Container, data transa
 	return ch.migrator.commitMigration(c, data)
 }
 
-func (ch clickHouseMigrator) rollback(c *container.Container, data transactionData) {
+func (ch clickHouseMigrator) rollback(c *container.Container, data *transactionData) {
 	ch.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)

@@ -10,6 +10,7 @@
 package scylladb
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gocql "github.com/gocql/gocql"
@@ -77,6 +78,20 @@ func NewMockiterator(ctrl *gomock.Controller) *Mockiterator {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *Mockiterator) EXPECT() *MockiteratorMockRecorder {
 	return m.recorder
+}
+
+// Close mocks base method.
+func (m *Mockiterator) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockiteratorMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockiterator)(nil).Close))
 }
 
 // Columns mocks base method.
@@ -161,6 +176,20 @@ func (m *Mockquery) Exec() error {
 func (mr *MockqueryMockRecorder) Exec() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*Mockquery)(nil).Exec))
+}
+
+// ExecWithCtx mocks base method.
+func (m *Mockquery) ExecWithCtx(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecWithCtx", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecWithCtx indicates an expected call of ExecWithCtx.
+func (mr *MockqueryMockRecorder) ExecWithCtx(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecWithCtx", reflect.TypeOf((*Mockquery)(nil).ExecWithCtx), ctx)
 }
 
 // Iter mocks base method.

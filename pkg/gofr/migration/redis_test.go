@@ -321,9 +321,9 @@ func TestRedisMigrator_CommitMigration(t *testing.T) {
 		UsedDatasources: map[string]bool{dsRedis: true},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	require.NoError(t, err)
 
 	// Verify data was written to miniredis
@@ -357,7 +357,7 @@ func TestRedisMigrator_CommitMigration_ExecError(t *testing.T) {
 	s.Close()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.Error(t, err)
 }
 
@@ -381,10 +381,10 @@ func TestRedisMigrator_Rollback(t *testing.T) {
 		RedisTx:         client.TxPipeline(),
 	}
 
-	mockMigrator.EXPECT().rollback(c, data)
+	mockMigrator.EXPECT().rollback(c, &data)
 	mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
 
-	m.rollback(c, data)
+	m.rollback(c, &data)
 }
 
 func TestRedisMigrator_UnlockError(t *testing.T) {
@@ -433,9 +433,9 @@ func TestRedisMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	require.NoError(t, err)
 
 	val := s.HGet("gofr_migrations", "1")

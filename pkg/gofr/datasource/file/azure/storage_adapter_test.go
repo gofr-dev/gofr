@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2781,4 +2782,69 @@ func TestReadSeekCloserWrapper_Seek_ReadError(t *testing.T) {
 
 	require.ErrorIs(t, err, errTest)
 	assert.Zero(t, offset)
+}
+
+func TestStorageAdapter_ConnectConcurrentWithOperations(t *testing.T) {
+	tests := []struct {
+		name string
+		op   func(a *storageAdapter)
+	}{
+		{name: "Health", op: func(a *storageAdapter) { _ = a.Health(t.Context()) }},
+		{name: "ListObjects", op: func(a *storageAdapter) { _, _ = a.ListObjects(t.Context(), "") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(shareHandler(http.StatusOK))
+			defer srv.Close()
+
+			a := &storageAdapter{cfg: &Config{
+				AccountName: "testaccount", AccountKey: "dGVzdGtleQ==", ShareName: "testshare", Endpoint: srv.URL,
+			}}
+
+			var wg sync.WaitGroup
+
+			wg.Go(func() { assert.NoError(t, a.Connect(t.Context())) })
+			wg.Go(func() {
+				for range 50 {
+					tt.op(a)
+				}
+			})
+			wg.Wait()
+
+			require.NoError(t, a.Health(t.Context()))
+		})
+	}
+}
+
+func TestStorageAdapter_NotConnected_Directories(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(a *storageAdapter) error
+	}{
+		{name: "StatObject directory", call: func(a *storageAdapter) error {
+			_, err := a.StatObject(t.Context(), "dir/")
+			return err
+		}},
+		{name: "DeleteObject directory", call: func(a *storageAdapter) error { return a.DeleteObject(t.Context(), "dir/") }},
+		{name: "DeleteObject root", call: func(a *storageAdapter) error { return a.DeleteObject(t.Context(), "/") }},
+		{name: "createDirectoryLevel", call: func(a *storageAdapter) error { return a.createDirectoryLevel(t.Context(), "dir") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &storageAdapter{cfg: &Config{ShareName: "test"}}
+
+			require.ErrorIs(t, tt.call(a), errAzureClientNotInitialized)
+		})
+	}
+}
+
+func TestStorageAdapter_SetShareClient_KeepsExisting(t *testing.T) {
+	first := newPlainShareClient(t, "http://127.0.0.1:1")
+	a := &storageAdapter{shareClient: first}
+
+	a.setShareClient(newPlainShareClient(t, "http://127.0.0.1:2"))
+
+	assert.Same(t, first, a.shareClient)
 }

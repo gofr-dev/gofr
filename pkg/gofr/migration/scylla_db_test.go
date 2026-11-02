@@ -166,7 +166,7 @@ func TestScyllaCommitMigration(t *testing.T) {
 			Exec(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(tc.err)
 
-		err := migratorWithScylla.commitMigration(mockContainer, td)
+		err := migratorWithScylla.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v] %s failed", i, tc.desc)
 	}
@@ -197,7 +197,7 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 
 	data := transactionData{MigrationNumber: 123}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data).Times(1)
+	mockMigrator.EXPECT().rollback(mockContainer, &data).Times(1)
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -205,7 +205,7 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 		}
 	}()
 
-	s.rollback(mockContainer, data)
+	s.rollback(mockContainer, &data)
 }
 
 func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
@@ -225,9 +225,9 @@ func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 		UsedDatasources: map[string]bool{},
 	}
 
-	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(c, &data).Return(nil)
 
-	err := m.commitMigration(c, data)
+	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
 

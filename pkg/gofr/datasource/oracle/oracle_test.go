@@ -10,6 +10,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
@@ -744,6 +746,120 @@ func Test_OracleTx_Rollback(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+// oracleSlowCall is how long the fake driver takes. Every recorded duration must cover it.
+const oracleSlowCall = 50 * time.Millisecond
+
+// Test_Oracle_OperationDurationCoversTheDriverCall pins the same defect fixed in clickhouse: the
+// deferred sendOperationStats sat AFTER the driver call, and `defer f(time.Now())` evaluates its
+// arguments where the defer statement is, not where it runs. The start instant was therefore taken
+// once the work had already finished, and every oracle.*.duration attribute and Log.Duration read as
+// ~0 regardless of how long the query took.
+//
+// Asserting a floor of the fake driver's own sleep is what makes this a test of the ordering rather
+// than of the clock: it cannot pass unless the timestamp is taken before the call.
+func Test_Oracle_OperationDurationCoversTheDriverCall(t *testing.T) {
+	const query = "SELECT id FROM users WHERE id = :1"
+
+	var dest []struct{}
+
+	tests := []struct {
+		desc      string
+		method    string
+		driverErr error
+		expect    func(conn *MockConnection, driverErr error)
+		call      func(ctx context.Context, c *Client) error
+	}{
+		{desc: "exec", method: "exec", expect: expectSlowOracleExec, call: func(ctx context.Context, c *Client) error {
+			return c.Exec(ctx, query, 1)
+		}},
+		{desc: "exec error", method: "exec", driverErr: errExecTest, expect: expectSlowOracleExec,
+			call: func(ctx context.Context, c *Client) error { return c.Exec(ctx, query, 1) }},
+		{desc: "select", method: "select", expect: expectSlowOracleSelect(&dest), call: func(ctx context.Context, c *Client) error {
+			return c.Select(ctx, &dest, query, 1)
+		}},
+		{desc: "select error", method: "select", driverErr: errSelectTest, expect: expectSlowOracleSelect(&dest),
+			call: func(ctx context.Context, c *Client) error { return c.Select(ctx, &dest, query, 1) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, mockLogger, c := getOracleTestConnection(t)
+
+			span := &oracleRecordingSpan{attrs: map[attribute.Key]attribute.Value{}}
+			c.tracer = &oracleRecordingTracer{span: span}
+
+			tc.expect(mockConn, tc.driverErr)
+
+			var logged *Log
+
+			mockLogger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) { logged, _ = args[0].(*Log) })
+
+			err := tc.call(t.Context(), &c)
+
+			if tc.driverErr != nil {
+				require.ErrorIs(t, err, tc.driverErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			floor := oracleSlowCall.Microseconds()
+
+			require.NotNil(t, logged, "the debug log carrying the duration must have been emitted")
+			assert.GreaterOrEqual(t, logged.Duration, floor, "Log.Duration must cover the driver call (µs)")
+
+			attr, ok := span.attrs[attribute.Key("oracle."+tc.method+".duration")]
+			require.True(t, ok, "the span must carry an oracle.%s.duration attribute", tc.method)
+			assert.GreaterOrEqual(t, attr.AsInt64(), floor, "span duration must cover the driver call (µs)")
+			assert.Equal(t, 1, span.ends, "the span must be ended exactly once")
+		})
+	}
+}
+
+func expectSlowOracleExec(conn *MockConnection, driverErr error) {
+	conn.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, string, ...any) error {
+			time.Sleep(oracleSlowCall)
+			return driverErr
+		})
+}
+
+func expectSlowOracleSelect(dest any) func(conn *MockConnection, driverErr error) {
+	return func(conn *MockConnection, driverErr error) {
+		conn.EXPECT().Select(gomock.Any(), dest, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, any, string, ...any) error {
+				time.Sleep(oracleSlowCall)
+				return driverErr
+			})
+	}
+}
+
+// oracleRecordingSpan keeps the attributes set on it and counts End calls.
+type oracleRecordingSpan struct {
+	noop.Span
+
+	attrs map[attribute.Key]attribute.Value
+	ends  int
+}
+
+func (s *oracleRecordingSpan) SetAttributes(kv ...attribute.KeyValue) {
+	for _, a := range kv {
+		s.attrs[a.Key] = a.Value
+	}
+}
+
+func (s *oracleRecordingSpan) End(...trace.SpanEndOption) { s.ends++ }
+
+type oracleRecordingTracer struct {
+	noop.Tracer
+
+	span *oracleRecordingSpan
+}
+
+func (t *oracleRecordingTracer) Start(ctx context.Context, _ string,
+	_ ...trace.SpanStartOption) (context.Context, trace.Span) {
+	return ctx, t.span
+}
+
 func newTestOracleTx(t *testing.T) (*oracleTx, sqlmock.Sqlmock, *MockLogger) {
 	t.Helper()
 
@@ -950,6 +1066,51 @@ func Test_sqlConn_Select_Errors(t *testing.T) {
 
 			require.ErrorIs(t, err, tc.expErr)
 			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+// Test_Oracle_HealthCheck_PingUsesCallerContext verifies that HealthCheck correctly
+// propagates the caller's context down to the underlying connection's Ping method.
+func Test_Oracle_HealthCheck_PingUsesCallerContext(t *testing.T) {
+	mockConn, _, c := getOracleTestConnection(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	// Expect Ping to receive the exact context passed into HealthCheck.
+	mockConn.EXPECT().Ping(ctx).Return(context.Canceled)
+
+	resp, err := c.HealthCheck(ctx)
+
+	require.ErrorIs(t, err, errStatusDown)
+
+	health, ok := resp.(*Health)
+	require.True(t, ok)
+	assert.Equal(t, StatusDown, health.Status)
+}
+
+// Test_Select_InvalidDestType_Cases tests that Select validates destination pointer types
+// (rejecting non-slice pointers like &map or &struct) prior to invoking the database driver.
+func Test_Select_InvalidDestType_Cases(t *testing.T) {
+	tests := []struct {
+		desc string
+		dest any
+	}{
+		{desc: "pointer to map", dest: &map[string]any{}},
+		{desc: "pointer to struct", dest: &Health{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConn, _, c := getOracleTestConnection(t)
+
+			// Select should fail fast on type validation without making any call to the connection.
+			mockConn.EXPECT().Select(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+			err := c.Select(t.Context(), tc.dest, "SELECT 1 FROM dual")
+
+			require.ErrorIs(t, err, errInvalidDestType)
 		})
 	}
 }

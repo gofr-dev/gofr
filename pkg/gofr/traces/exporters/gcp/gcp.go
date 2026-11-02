@@ -194,9 +194,13 @@ func (d *cachingDetector) platformDetector() resource.Detector {
 }
 
 // Detect satisfies resource.Detector. Off Google Cloud the underlying detector
-// fails; the error is returned so the SDK can report a partial resource, and the
-// exporter still starts — a span dropped by the backend is strictly better than
-// an application that will not boot.
+// resolves nothing and reports no error (contrib/detectors/gcp@v1.46.0
+// detector.go:36-37 returns (nil, nil) when metadata.OnGCE() is false), so the
+// resource carries only gcp.project_id. On Google Cloud it can return
+// resource.ErrPartialResource alongside the attributes it did resolve
+// (detector.go:152-153); that error is passed through so the SDK can report the
+// partial resource, and the exporter still starts either way — a span dropped by
+// the backend is strictly better than an application that will not boot.
 func (d *cachingDetector) Detect(ctx context.Context) (*resource.Resource, error) {
 	d.once.Do(func() {
 		// This runs before the HTTP server binds -- exporters.Build is called from

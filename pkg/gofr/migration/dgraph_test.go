@@ -1,3 +1,5 @@
+//go:build !gofr_nodgraph
+
 package migration
 
 import (
@@ -131,7 +133,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		txn := &fakeDgraphTxn{}
 		mockDGraph.EXPECT().NewTxn().Return(txn)
 
-		err := migratorWithDGraph.commitMigration(mockContainer, td)
+		err := migratorWithDGraph.commitMigration(mockContainer, &td)
 
 		require.NoError(t, err)
 		assert.True(t, txn.mutated && txn.committed && txn.discarded)
@@ -146,7 +148,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		txn := &fakeDgraphTxn{mutateErr: context.DeadlineExceeded}
 		mockDGraph.EXPECT().NewTxn().Return(txn)
 
-		err := migratorWithDGraph.commitMigration(mockContainer, td)
+		err := migratorWithDGraph.commitMigration(mockContainer, &td)
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.False(t, txn.committed)
@@ -158,7 +160,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		txn := &fakeDgraphTxn{commitErr: context.DeadlineExceeded}
 		mockDGraph.EXPECT().NewTxn().Return(txn)
 
-		err := migratorWithDGraph.commitMigration(mockContainer, td)
+		err := migratorWithDGraph.commitMigration(mockContainer, &td)
 
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
@@ -167,7 +169,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
 		mockDGraph.EXPECT().NewTxn().Return("not a txn")
 
-		err := migratorWithDGraph.commitMigration(mockContainer, td)
+		err := migratorWithDGraph.commitMigration(mockContainer, &td)
 
 		require.ErrorIs(t, err, errInvalidDgraphTxn)
 	})
@@ -176,7 +178,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
 		mockDGraph.EXPECT().NewTxn().Return((*fakeDgraphTxn)(nil))
 
-		err := migratorWithDGraph.commitMigration(mockContainer, td)
+		err := migratorWithDGraph.commitMigration(mockContainer, &td)
 
 		require.ErrorIs(t, err, errInvalidDgraphTxn)
 	})
@@ -185,7 +187,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 		migratorWithDGraph, _, mockContainer := dgraphSetup(t)
 		unused := transactionData{StartTime: time.Now(), MigrationNumber: 10}
 
-		err := migratorWithDGraph.commitMigration(mockContainer, unused)
+		err := migratorWithDGraph.commitMigration(mockContainer, &unused)
 
 		require.NoError(t, err)
 	})
@@ -361,7 +363,7 @@ func Test_DGraphCommitMigration_DiscardError(t *testing.T) {
 		migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
 		mockDGraph.EXPECT().NewTxn().Return(txn)
 
-		err = migratorWithDGraph.commitMigration(mockContainer, td)
+		err = migratorWithDGraph.commitMigration(mockContainer, &td)
 	})
 
 	require.NoError(t, err)
@@ -380,12 +382,12 @@ func Test_DGraphMigratorDelegation(t *testing.T) {
 	m := dgraphMigrator{migrator: mockMigrator}
 	data := transactionData{MigrationNumber: 4}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 	mockLogger.EXPECT().Fatalf("Migration %v failed and rolled back", int64(4))
 	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(errDgraph)
 	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(errDgraph)
 
-	m.rollback(mockContainer, data)
+	m.rollback(mockContainer, &data)
 
 	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), errDgraph)
 	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), errDgraph)

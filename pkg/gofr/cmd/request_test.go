@@ -85,3 +85,81 @@ func Test_Params(t *testing.T) {
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
 	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for none-existent query param")
 }
+
+func Test_Params_ValuesWithEquals(t *testing.T) {
+	r := NewRequest([]string{"--q=x=y,z=w"})
+
+	assert.Equal(t, []string{"x=y", "z=w"}, r.Params("q"))
+}
+
+func TestNewRequest_OptionParsing(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		expectedParams map[string]string
+	}{
+		{
+			name: "long option preserves additional equals",
+			args: []string{"--token=abc=="},
+			expectedParams: map[string]string{
+				"token": "abc==",
+			},
+		},
+		{
+			name: "short option preserves additional equals",
+			args: []string{"-query=a=b"},
+			expectedParams: map[string]string{
+				"query": "a=b",
+			},
+		},
+		{
+			name: "single dash option preserves trailing equals",
+			args: []string{"-a=="},
+			expectedParams: map[string]string{
+				"a": "=",
+			},
+		},
+		{
+			name: "unicode option value preserves additional equals",
+			args: []string{"--name=héllo=wörld"},
+			expectedParams: map[string]string{
+				"name": "héllo=wörld",
+			},
+		},
+		{
+			name: "empty values are supported",
+			args: []string{"--empty=", "-blank="},
+			expectedParams: map[string]string{
+				"empty": "",
+				"blank": "",
+			},
+		},
+		{
+			name: "flags are supported",
+			args: []string{"--verbose", "-v"},
+			expectedParams: map[string]string{
+				"verbose": trueString,
+				"v":       trueString,
+			},
+		},
+		{
+			name:           "non-option arguments are ignored",
+			args:           []string{"command", "not-an-option", ""},
+			expectedParams: map[string]string{},
+		},
+		{
+			name: "option after command argument is parsed",
+			args: []string{"command", "--env=prod"},
+			expectedParams: map[string]string{
+				"env": "prod",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewRequest(tt.args)
+			assert.Equal(t, tt.expectedParams, r.params)
+		})
+	}
+}

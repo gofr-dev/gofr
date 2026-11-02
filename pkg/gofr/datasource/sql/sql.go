@@ -14,8 +14,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
-	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -32,11 +30,22 @@ const (
 	sslModeVerifyFull = "verify-full"
 	tlsCustom         = "tls=custom"
 	localhost         = "localhost"
+
+	// DB_SSL_MODE values that only MySQL understands.
+	sslModePreferred  = "preferred"
+	sslModeSkipVerify = "skip-verify"
+	// loopbackIPv4 is the IPv4 loopback address, served under the name localhost.
+	loopbackIPv4 = "127.0.0.1"
+	// dbStructTag is the struct tag naming the column a field is scanned from.
+	dbStructTag = "db"
+	// supportedDialects lists every DB_DIALECT value, for the error logs that name them.
+	supportedDialects = "mysql, postgres, " + supabaseDialect + ", " + sqlite + ", " + cockroachDB
 )
 
 var (
-	errUnsupportedDialect = fmt.Errorf(
-		"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+	errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - %s", supportedDialects)
+	errMissingDialect     = fmt.Errorf("DB_DIALECT is not set, so SQL is not initialized although DB_HOST or "+
+		"DB_NAME is set; supported dialects are - %s", supportedDialects)
 	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
 )
 
@@ -52,6 +61,9 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
+	// connectTimeout is the connect timeout in whole seconds for the networked dialects; zero
+	// leaves the driver default (no timeout) in place. For MySQL it bounds only the TCP dial.
+	connectTimeout int
 }
 
 // redactedPassword is the fixed mask substituted for a non-empty password whenever
@@ -114,6 +126,14 @@ func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger dat
 	}
 }
 
+// logMissingDialect logs an error when DB settings are present without DB_DIALECT: that usually means the
+// dialect was forgotten, not that SQL is unwanted. With no DB settings at all it stays silent.
+func logMissingDialect(dbConfig *DBConfig, logger datasource.Logger) {
+	if dbConfig.HostName != "" || dbConfig.Database != "" {
+		logger.Errorf("%v", errMissingDialect)
+	}
+}
+
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
@@ -122,8 +142,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	}
 
 	if dbConfig.Dialect == "" {
+		logMissingDialect(dbConfig, logger)
+
 		return nil
 	}
+
+	dbConfig.connectTimeout = getConnectTimeout(dbConfig.Dialect, configs, logger)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
@@ -145,7 +169,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
-		logger.Error(errUnsupportedDialect)
+		logger.Errorf("%v", errUnsupportedDialect)
 		return nil
 	}
 
@@ -255,9 +279,13 @@ func finalizeConnection(database *DB) *DB {
 
 	database = pingToTestConnection(database)
 
-	go retryConnection(database)
+	// Close cancels ctx and waits on background, so no goroutine outlives the pool.
+	ctx, cancel := context.WithCancel(context.Background())
+	database.cancelBackground = cancel
 
-	go pushDBMetrics(database, database.metrics)
+	database.background.Go(func() { retryConnection(ctx, database) })
+
+	database.background.Go(func() { pushDBMetrics(database, database.metrics) })
 
 	return database
 }
@@ -287,7 +315,7 @@ func pingToTestConnection(database *DB) *DB {
 	return database
 }
 
-func retryConnection(database *DB) {
+func retryConnection(ctx context.Context, database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	retryDuration := connRetryFrequencyInSeconds * time.Second
@@ -299,10 +327,17 @@ func retryConnection(database *DB) {
 		default:
 		}
 
-		if database.DB.PingContext(context.Background()) != nil {
+		if database.DB.PingContext(ctx) != nil {
+			select {
+			case <-database.stopSignal:
+				// Close gave up waiting on this ping and closed the pool; exit quietly.
+				return
+			default:
+			}
+
 			database.logger.Info("retrying SQL database connection")
 
-			if !attemptReconnection(database, retryDuration) {
+			if !attemptReconnection(ctx, database, retryDuration) {
 				return
 			}
 		}
@@ -315,7 +350,7 @@ func retryConnection(database *DB) {
 	}
 }
 
-func attemptReconnection(database *DB, retryDuration time.Duration) bool {
+func attemptReconnection(ctx context.Context, database *DB, retryDuration time.Duration) bool {
 	for {
 		select {
 		case <-database.stopSignal:
@@ -323,7 +358,7 @@ func attemptReconnection(database *DB, retryDuration time.Duration) bool {
 		default:
 		}
 
-		err := database.DB.PingContext(context.Background())
+		err := database.DB.PingContext(ctx)
 		if err == nil {
 			printConnectionSuccessLog("connected", database.config, database.logger)
 
@@ -376,6 +411,27 @@ func getDBConfig(configs config.Config) *DBConfig {
 	}
 }
 
+// getConnectTimeout reads DB_CONNECT_TIMEOUT (whole seconds) for a networked dialect. Unset or 0
+// means no timeout, as before the key existed; a negative or non-numeric value is logged and
+// ignored. SQLite does not dial, so the key is not read for it. For PostgreSQL, Supabase and
+// CockroachDB the limit covers the whole connection attempt; for MySQL it bounds only the TCP
+// dial (an unreachable host), not a server that accepts the connection and then stalls.
+func getConnectTimeout(dialect string, configs config.Config, logger datasource.Logger) int {
+	raw := configs.Get("DB_CONNECT_TIMEOUT")
+	if dialect == sqlite || raw == "" {
+		return 0
+	}
+
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		logger.Warnf("invalid DB_CONNECT_TIMEOUT %q, expected a whole number of seconds; connecting without a timeout", raw)
+
+		return 0
+	}
+
+	return seconds
+}
+
 func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	switch dbConfig.Dialect {
 	case dialectMysql:
@@ -396,10 +452,23 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
 		}
 
+		// The driver's timeout is a dial timeout: it applies to the TCP connect only, not the
+		// handshake (go-sql-driver/mysql connector.go). readTimeout is deliberately not used,
+		// as it would also cap every query.
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s&timeout=%ds", connStr, dbConfig.connectTimeout)
+		}
+
 		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
-		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
+		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode)
+
+		if dbConfig.connectTimeout > 0 {
+			connStr = fmt.Sprintf("%s connect_timeout=%d", connStr, dbConfig.connectTimeout)
+		}
+
+		return connStr, nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
@@ -474,11 +543,11 @@ func getMySQLTLSParam(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case sslModeDisable, "false":
 		return "" // No TLS - insecure
-	case "preferred":
+	case sslModePreferred:
 		return "tls=preferred" // Try TLS, fallback to plain
 	case requireSSLMode, "true":
 		return tlsSkipVerify // TLS required but no cert validation
-	case "skip-verify":
+	case sslModeSkipVerify:
 		return tlsSkipVerify // Explicit skip verification
 	case sslModeVerifyCA, sslModeVerifyFull:
 		return tlsCustom // Use custom TLS config with CA verification
@@ -548,7 +617,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 
 func getServerName(hostname string) string {
 	// For localhost/127.0.0.1, use "localhost" explicitly
-	if hostname == "127.0.0.1" || hostname == "::1" {
+	if hostname == loopbackIPv4 || hostname == "::1" {
 		return localhost
 	}
 

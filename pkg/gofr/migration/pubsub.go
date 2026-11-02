@@ -51,13 +51,13 @@ func (pm pubsubMigrator) beginTransaction(c *container.Container) transactionDat
 	return pm.migrator.beginTransaction(c)
 }
 
-func (pm pubsubMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (pm pubsubMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	// No migration entry is added to PubSub anymore.
 	// We only commit the migration in the primary data source.
 	return pm.migrator.commitMigration(c, data)
 }
 
-func (pm pubsubMigrator) rollback(c *container.Container, data transactionData) {
+func (pm pubsubMigrator) rollback(c *container.Container, data *transactionData) {
 	pm.migrator.rollback(c, data)
 }
 

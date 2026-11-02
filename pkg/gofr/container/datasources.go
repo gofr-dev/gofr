@@ -483,6 +483,8 @@ type Dgraph interface {
 	QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error)
 
 	// Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+	// The write is committed before Mutate returns, whether or not CommitNow is set on the
+	// mutation. Use NewTxn directly to spread several mutations across one transaction.
 	// Parameters:
 	// - ctx: The context for the mutation.
 	// - mu: The mutation operation, usually of type *api.Mutation.

@@ -6,8 +6,11 @@ import (
 	"net/http"
 )
 
+// telemetryEnabled is the GOFR_TELEMETRY value that turns telemetry on.
+const telemetryEnabled = "true"
+
 func (a *App) hasTelemetry() bool {
-	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == "true"
+	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == telemetryEnabled
 }
 
 func (a *App) sendTelemetry(client *http.Client, isStart bool) {

@@ -84,7 +84,7 @@ func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData
 	return s.migrator.beginTransaction(c)
 }
 
-func (s scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s scyllaMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsScyllaDB] {
 		insertStmt := fmt.Sprintf(`
 		INSERT INTO %s (version, method, start_time, duration)
@@ -93,7 +93,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 
 		err := s.ScyllaDB.Exec(insertStmt,
 			data.MigrationNumber,
-			"UP",
+			migrationMethodUP,
 			data.StartTime,
 			time.Since(data.StartTime).Milliseconds(),
 		)
@@ -108,7 +108,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
+func (s scyllaMigrator) rollback(c *container.Container, data *transactionData) {
 	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }

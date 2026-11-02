@@ -45,12 +45,12 @@ func (*MockHandlerForTracing) ServeHTTP(w http.ResponseWriter, req *http.Request
 	_, _ = w.Write([]byte(traceID))
 }
 
-func TestTrace(_ *testing.T) {
+func TestTrace(t *testing.T) {
 	tp := trace.NewTracerProvider()
 	otel.SetTracerProvider(tp)
 
 	handler := Tracer(&MockHandlerForTracing{})
-	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
 
 	recorder := httptest.NewRecorder()
 

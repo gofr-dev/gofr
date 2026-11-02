@@ -82,10 +82,10 @@ func Test_pubsubMigrator_Delegation(t *testing.T) {
 	assert.Equal(t, int64(0), v)
 
 	assert.NotNil(t, p.beginTransaction(c))
-	require.NoError(t, p.commitMigration(c, transactionData{}))
+	require.NoError(t, p.commitMigration(c, &transactionData{}))
 
 	// Should not panic
-	p.rollback(c, transactionData{})
+	p.rollback(c, &transactionData{})
 	require.NoError(t, p.lock(context.TODO(), nil, c, "owner"))
 	require.NoError(t, p.unlock(c, "owner"))
 
@@ -155,7 +155,7 @@ func Test_PubSub_NoEntryAdded(t *testing.T) {
 	data.StartTime = time.Now()
 	data.UsedDatasources = map[string]bool{dsRedis: true}
 
-	err := pm.commitMigration(c, data)
+	err := pm.commitMigration(c, &data)
 	require.NoError(t, err)
 
 	// Check if entry was added to DB 1 (it should NOT be)

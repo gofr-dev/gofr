@@ -117,7 +117,7 @@ func Test_ArangoCommitMigration(t *testing.T) {
 
 		mockArango.EXPECT().Query(gomock.Any(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, gomock.Any()).Return(tc.err)
 
-		err := migratorWithArango.commitMigration(mockContainer, td)
+		err := migratorWithArango.commitMigration(mockContainer, &td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -289,12 +289,12 @@ func Test_ArangoMigratorDelegation(t *testing.T) {
 	m := arangoMigrator{migrator: mockMigrator}
 	data := transactionData{MigrationNumber: 4}
 
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 	mockLogger.EXPECT().Fatalf("Migration %v failed and rolled back", int64(4))
 	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(errArango)
 	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(errArango)
 
-	m.rollback(mockContainer, data)
+	m.rollback(mockContainer, &data)
 
 	require.ErrorIs(t, m.lock(t.Context(), func() {}, mockContainer, "owner-1"), errArango)
 	require.ErrorIs(t, m.unlock(mockContainer, "owner-1"), errArango)

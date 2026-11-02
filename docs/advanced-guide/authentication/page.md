@@ -40,12 +40,19 @@ GoFr offers two ways to implement basic authentication:
 **1. Predefined Credentials**
 
 Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined credentials.
+It returns an error when no credentials, or an odd number of arguments, are passed; no middleware is
+installed in that case, so stop the app rather than serve routes unauthenticated.
+It also returns an error when a username or password is empty; the middleware is still installed without that pair,
+so it rejects every request for those credentials.
 
 ```go
 func main() {
 	app := gofr.New()
 
-	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
+	// Replace with your credentials
+	if err := app.EnableBasicAuth("admin", "secret_password"); err != nil {
+		app.Logger().Fatalf("%v", err)
+	}
 
 	app.GET("/protected-resource", func(c *gofr.Context) (any, error) {
 		return "Success", nil
@@ -121,12 +128,15 @@ It involves sending the prefix `Bearer` trailed by the encoded token within the 
 ### Usage in GoFr
 
 Enable OAuth 2.0 to authenticate requests. Use `EnableOAuth(jwks-endpoint, refresh_interval, options ...jwt.ParserOption)` to configure GoFr.
+It returns an error when the JWKS endpoint is not a valid `http`/`https` URL with a host; no middleware is installed in that case.
 
 ```go
 func main() {
 	app := gofr.New()
 
-	app.EnableOAuth("http://jwks-endpoint", 3600)
+	if err := app.EnableOAuth("http://jwks-endpoint", 3600); err != nil {
+		app.Logger().Fatalf("%v", err)
+	}
 
 	app.Run()
 }
@@ -138,6 +148,10 @@ func main() {
 - **Audience (`aud`)**: `jwt.WithAudience("https://api.example.com")`
 - **Issuer (`iss`)**: `jwt.WithIssuer("https://auth.example.com")`
 - **Subject (`sub`)**: `jwt.WithSubject("user@example.com")`
+
+> **Handle the returned error.** On invalid input `EnableBasicAuth` and `EnableOAuth` install no
+> middleware, log that authentication is **DISABLED**, and return the error. If the error is
+> ignored, the app starts with **no authentication** on any route.
 
 ## Accessing Auth Info in Handlers
 

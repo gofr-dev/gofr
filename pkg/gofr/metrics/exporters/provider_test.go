@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
@@ -16,6 +18,7 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/version"
 )
 
 var errBuilderFailed = errors.New("builder failed")
@@ -184,11 +187,20 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 	}
 }
 
+// unsetServiceNameEnv blanks the variables that can name the service, so a test
+// that sets neither does not pick up whatever the caller's shell exports.
+func unsetServiceNameEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("OTEL_SERVICE_NAME", "")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "")
+}
+
 // Google's OTLP ingest maps points onto prometheus_target and rejects any whose
 // "location" or "instance" label is empty, so the resource has to carry a source
 // for both. instance falls back to host.id, which is detected; location can only
 // come from the operator, via the standard OTel environment variable.
 func TestBuildResource_carriesRequiredLabelSources(t *testing.T) {
+	unsetServiceNameEnv(t)
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "location=us-central1")
 
 	// host.id is only detected for push exporters, so select one.
@@ -371,6 +383,8 @@ func TestBuild_shutdownPropagatesReaderError(t *testing.T) {
 }
 
 func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.T) {
+	unsetServiceNameEnv(t)
+
 	RegisterResourceDetector("detector-fail", detectorFunc(func(context.Context) (*resource.Resource, error) {
 		return nil, errDetectorFailed
 	}))
@@ -412,6 +426,180 @@ func TestBuildResource_incompleteDetectionIsLoggedButKeepsAttributes(t *testing.
 			serviceName, ok := res.Set().Value("service.name")
 			require.True(t, ok)
 			assert.Equal(t, tc.expServiceName, serviceName.AsString())
+		})
+	}
+}
+
+// Test_buildResource pins how service.name is resolved: APP_NAME wins over the
+// environment, the discarded value is logged, and framework_version is not
+// reachable from the environment at all. Reordering the resource.Option slice in
+// buildResource fails it.
+//
+// Keep these rows identical to traces/exporters.Test_buildResource. The two
+// packages build their resources independently, and they must agree -- otherwise
+// a service reports one name to its trace backend and another to its metric
+// backend, breaking the join between them.
+func Test_buildResource(t *testing.T) {
+	unsetServiceNameEnv(t)
+
+	tests := []struct {
+		name      string
+		cfg       Config
+		env       map[string]string
+		wantAttrs map[string]string
+		wantLog   string
+	}{
+		{
+			name:      "OTEL_SERVICE_NAME loses to APP_NAME and is reported",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "from-env"},
+			wantAttrs: map[string]string{"service.name": "app"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
+		},
+		{
+			name: "service.name in OTEL_RESOURCE_ATTRIBUTES loses, its siblings do not",
+			cfg:  Config{AppName: "app"},
+			env: map[string]string{
+				"OTEL_RESOURCE_ATTRIBUTES": "service.name=from-env,deployment.environment=prod",
+			},
+			wantAttrs: map[string]string{"service.name": "app", "deployment.environment": "prod"},
+			wantLog:   `service.name="from-env" from the environment is ignored`,
+		},
+		{
+			name:      "no warning when the environment agrees with APP_NAME",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_SERVICE_NAME": "app"},
+			wantAttrs: map[string]string{"service.name": "app"},
+		},
+		{
+			name:      "framework_version is not overridable from the environment",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "framework_version=hacked"},
+			wantAttrs: map[string]string{"framework_version": version.Framework},
+		},
+		{
+			name:      "malformed OTEL_RESOURCE_ATTRIBUTES keeps its valid entries and is reported",
+			cfg:       Config{AppName: "app"},
+			env:       map[string]string{"OTEL_RESOURCE_ATTRIBUTES": "broken,deployment.environment=prod"},
+			wantAttrs: map[string]string{"deployment.environment": "prod"},
+			wantLog:   "resource detection was incomplete",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			handled := countOtelErrors(t)
+
+			var res *resource.Resource
+
+			// Warnf goes to stdout: the framework logger reserves stderr for ERROR
+			// and above.
+			out := testutil.StdoutOutputForFunc(func() {
+				res = buildResource(t.Context(), &tt.cfg, logging.NewMockLogger(logging.WARN))
+			})
+
+			assertServiceNameWarning(t, out, tt.wantLog)
+			assertResourceAttrs(t, res, tt.wantAttrs)
+
+			// buildResource reports a malformed environment through the logger above;
+			// it must not also hand it to otel.Handle, which the SDK already does on
+			// its own re-reads of the environment.
+			if n := handled.Load(); n != 0 {
+				t.Errorf("buildResource called otel.Handle %d time(s), want 0", n)
+			}
+		})
+	}
+}
+
+// countOtelErrors swaps the global OTel error handler for one that counts calls,
+// restoring the previous handler when the test ends.
+func countOtelErrors(t *testing.T) *atomic.Int32 {
+	t.Helper()
+
+	var n atomic.Int32
+
+	prev := otel.GetErrorHandler()
+
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) { n.Add(1) }))
+	t.Cleanup(func() { otel.SetErrorHandler(prev) })
+
+	return &n
+}
+
+func assertServiceNameWarning(t *testing.T, out, wantLog string) {
+	t.Helper()
+
+	if wantLog != "" && !strings.Contains(out, wantLog) {
+		t.Errorf("expected log to mention %q, got: %q", wantLog, out)
+	}
+
+	if wantLog == "" && strings.Contains(out, "from the environment is ignored") {
+		t.Errorf("unexpected service.name warning: %q", out)
+	}
+}
+
+func assertResourceAttrs(t *testing.T, res *resource.Resource, wantAttrs map[string]string) {
+	t.Helper()
+
+	got := map[string]string{}
+	for _, kv := range res.Attributes() {
+		got[string(kv.Key)] = kv.Value.AsString()
+	}
+
+	for k, v := range wantAttrs {
+		if got[k] != v {
+			t.Errorf("resource attribute %q = %q, want %q", k, got[k], v)
+		}
+	}
+
+	if _, ok := got["framework_version"]; !ok {
+		t.Error("expected framework_version on the resource")
+	}
+}
+
+// Build is exported, so an external caller can reach it without a logger.
+// noopLogger is documented as the fallback for that caller; this pins that it
+// is actually substituted rather than dereferenced.
+func Test_Build_substitutesNoopLoggerForANilLogger(t *testing.T) {
+	Register("nil-logger-test", func(_ context.Context, _ *Config, _ Logger) (metricSdk.Reader, error) {
+		return metricSdk.NewManualReader(), nil
+	})
+
+	tests := []struct {
+		name     string
+		exporter string
+		env      map[string]string
+	}{
+		{name: "prometheus only", exporter: ""},
+		{name: "unknown exporter falls back to prometheus", exporter: "no-such-exporter"},
+		{name: "push exporter builds", exporter: "nil-logger-test"},
+		// An ignored service.name is logged, so the nil path must survive a call
+		// that actually reaches the logger rather than only ones that skip it.
+		{
+			name:     "environment sets service.name",
+			exporter: "",
+			env:      map[string]string{"OTEL_SERVICE_NAME": "from-env"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			cfg := Config{AppName: "app", AppVersion: "v1", Exporter: tt.exporter}
+
+			shutdown, meter := Build(t.Context(), &cfg, nil)
+			if shutdown == nil || meter == nil {
+				t.Fatal("Build must never return a nil ShutdownFunc or Meter")
+			}
+
+			_ = shutdown(t.Context())
 		})
 	}
 }
