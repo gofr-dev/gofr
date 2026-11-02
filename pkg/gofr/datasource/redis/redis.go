@@ -149,11 +149,11 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s on database %d", redisConfig.addr(), redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, logger, stopSignal)
+		go retryConnect(rc, redisConfig, logger, stopSignal)
 	}
 
 	r := &Redis{
@@ -167,7 +167,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 }
 
 // retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-chan struct{}) {
+func retryConnect(client *redis.Client, redisConfig *Config, logger datasource.Logger, stopSignal <-chan struct{}) {
 	for {
 		select {
 		case <-stopSignal:
@@ -190,7 +190,7 @@ func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-c
 			return
 		}
 
-		logger.Errorf("could not connect to redis, error: %s", err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 	}
 }
 
@@ -240,11 +240,11 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s on database %d", redisConfig.addr(), redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, logger, ps.ctx.Done())
+		go retryConnect(rc, redisConfig, logger, ps.ctx.Done())
 	}
 
 	return ps

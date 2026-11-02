@@ -6,6 +6,7 @@ package rbaccheck
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -27,7 +28,8 @@ type Route struct {
 	BuiltIn bool
 }
 
-// Mismatches lists what Check found, each entry as "METHOD path", sorted.
+// Mismatches lists what Check found, each entry as "METHOD path", sorted. For several configs
+// (CheckAll), entries of different configs are listed in config order.
 type Mismatches struct {
 	// DeadRules match no route - usually a typo in the path, or a method the route does not
 	// register - so the route each was written for is unguarded.
@@ -39,9 +41,25 @@ type Mismatches struct {
 	// Uncovered routes are matched by no rule, so they are served without role checks.
 	Uncovered []string
 
-	// PartlyCovered routes are matched by rules for some of their requests but not all of them.
-	// Each entry names the rules, as "METHOD path (by METHOD rule and METHOD rule)".
-	PartlyCovered []string
+	// PartlyCovered routes are matched by rules for some of their requests but not all of them,
+	// sorted by route.
+	PartlyCovered []PartialCoverage
+}
+
+// PartialCoverage is a route that rules match for some of its requests but not all of them.
+type PartialCoverage struct {
+	// Route is the route, as "METHOD path".
+	Route string
+
+	// Rules are the rules that match part of it, sorted within a config. With more than one config,
+	// each is prefixed with its config's number, as "config 2: METHOD path", and the configs are
+	// listed in order.
+	Rules []string
+}
+
+// String formats p for the startup log, as "METHOD path (by METHOD rule and METHOD rule)".
+func (p PartialCoverage) String() string {
+	return p.Route + " (by " + strings.Join(p.Rules, " and ") + ")"
 }
 
 // Failed reports whether any mismatch can leave a request served without role checks: anything but
@@ -85,7 +103,7 @@ func Check(endpoints []rbac.EndpointMapping, routes []Route) Mismatches {
 		case covering == nil:
 			m.Uncovered = append(m.Uncovered, entry.label)
 		case len(covering) > 0:
-			m.PartlyCovered = append(m.PartlyCovered, entry.label+" (by "+strings.Join(sortedUnique(covering), " and ")+")")
+			m.PartlyCovered = append(m.PartlyCovered, PartialCoverage{Route: entry.label, Rules: sortedUnique(covering)})
 		}
 	}
 
@@ -102,7 +120,7 @@ func Check(endpoints []rbac.EndpointMapping, routes []Route) Mismatches {
 	m.DeadRules = sortedUnique(m.DeadRules)
 	m.DeadPublicRules = sortedUnique(m.DeadPublicRules)
 	m.Uncovered = sortedUnique(m.Uncovered)
-	m.PartlyCovered = sortedUnique(m.PartlyCovered)
+	m.PartlyCovered = sortedByRoute(m.PartlyCovered)
 
 	return m
 }
@@ -135,18 +153,20 @@ func CheckAll(configs [][]rbac.EndpointMapping, routes []Route) Mismatches {
 	}
 
 	m.Uncovered, m.PartlyCovered = commonGaps(results)
-	m.DeadRules = sortedUnique(m.DeadRules)
-	m.DeadPublicRules = sortedUnique(m.DeadPublicRules)
+	// Each config's dead rules are already sorted and appended in config order, which a text sort
+	// would break once there are ten configs ("config 10" before "config 2").
+	m.DeadRules = slices.Compact(m.DeadRules)
+	m.DeadPublicRules = slices.Compact(m.DeadPublicRules)
 
 	return m
 }
 
 // commonGaps returns the routes no config covers in full: uncovered when every config leaves them
-// uncovered, partly covered otherwise.
-func commonGaps(results []Mismatches) (uncovered, partlyCovered []string) {
+// uncovered, partly covered otherwise, naming the rules of every config that partly covers them.
+func commonGaps(results []Mismatches) (uncovered []string, partlyCovered []PartialCoverage) {
 	// A route a config lists in neither Uncovered nor PartlyCovered is covered by it in full.
-	gaps := make(map[string]int)      // route -> configs that do not cover it in full
-	partly := make(map[string]string) // route -> first PartlyCovered entry naming its rules
+	gaps := make(map[string]int)        // route -> configs that do not cover it in full
+	partly := make(map[string][]string) // route -> the partly covering rules, with their config
 	unc := make(map[string]int)
 
 	for i := range results {
@@ -156,11 +176,10 @@ func commonGaps(results []Mismatches) (uncovered, partlyCovered []string) {
 		}
 
 		for _, p := range results[i].PartlyCovered {
-			route, _, _ := strings.Cut(p, " (by ")
-			gaps[route]++
+			gaps[p.Route]++
 
-			if _, seen := partly[route]; !seen {
-				partly[route] = p
+			for _, r := range p.Rules {
+				partly[p.Route] = append(partly[p.Route], fmt.Sprintf("config %d: %s", i+1, r))
 			}
 		}
 	}
@@ -171,11 +190,18 @@ func commonGaps(results []Mismatches) (uncovered, partlyCovered []string) {
 		case unc[route] == len(results):
 			uncovered = append(uncovered, route)
 		default:
-			partlyCovered = append(partlyCovered, partly[route])
+			partlyCovered = append(partlyCovered, PartialCoverage{Route: route, Rules: slices.Compact(partly[route])})
 		}
 	}
 
-	return sortedUnique(uncovered), sortedUnique(partlyCovered)
+	return sortedUnique(uncovered), sortedByRoute(partlyCovered)
+}
+
+// sortedByRoute sorts partial coverages by route and drops repeats, as sortedUnique does for strings.
+func sortedByRoute(p []PartialCoverage) []PartialCoverage {
+	slices.SortFunc(p, func(a, b PartialCoverage) int { return strings.Compare(a.Route, b.Route) })
+
+	return slices.CompactFunc(p, func(a, b PartialCoverage) bool { return a.Route == b.Route })
 }
 
 // buildRules reads endpoints the way the rbac matcher does: an endpoint with no methods stands for
