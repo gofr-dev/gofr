@@ -68,6 +68,11 @@ If neither `REDIS_HOST` nor `REDIS_URL` is set, or `REDIS_URL` is invalid, GoFr 
 - Redis database number (default: `0`)
 
 ---
+
+- REDIS_REDACT_ARGS
+- Set to `true` to hide command arguments in the debug log and drop `db.statement` from trace spans (default: `false`). See [Keeping command arguments out of logs and traces](#keeping-command-arguments-out-of-logs-and-traces)
+
+---
 {% /table %}
 
 ## TLS Support (Optional):
@@ -99,6 +104,18 @@ If neither `REDIS_HOST` nor `REDIS_URL` is set, or `REDIS_URL` is invalid, GoFr 
 
 ---
 {% /table %}
+
+## Keeping command arguments out of logs and traces
+
+At `LOG_LEVEL=DEBUG`, GoFr logs every Redis command together with its keys and values, and trace spans record the
+full command in the `db.statement` attribute. Set `REDIS_REDACT_ARGS=true` to hide them: each argument in the log
+becomes `*****` (for a single command the number of arguments stays visible), and spans drop `db.statement` but are
+still named after the command (for example `set`). The
+same flag masks the message body in the debug log of each message published or received through Redis pub/sub.
+
+```env
+REDIS_REDACT_ARGS=true
+```
 
 ## Example `.env` File
 
