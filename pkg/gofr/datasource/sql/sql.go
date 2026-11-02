@@ -40,6 +40,11 @@ const (
 	dbStructTag = "db"
 	// supportedDialects lists every DB_DIALECT value, for the error logs that name them.
 	supportedDialects = "mysql, postgres, " + supabaseDialect + ", " + sqlite + ", " + cockroachDB
+
+	// DB_AUTH values. With dbAuthIAM a connector module supplies the connection via
+	// App.AddSQLDB, so NewSQL does not open one from the DB_* config.
+	dbAuthPassword = "password"
+	dbAuthIAM      = "iam"
 )
 
 var (
@@ -47,6 +52,12 @@ var (
 	errMissingDialect     = fmt.Errorf("DB_DIALECT is not set, so SQL is not initialized although DB_HOST or "+
 		"DB_NAME is set; supported dialects are - %s", supportedDialects)
 	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
+
+	errUnsupportedDBAuth = fmt.Errorf("unsupported DB_AUTH, so SQL is not initialized; supported values are - %s, %s",
+		dbAuthPassword, dbAuthIAM)
+	errConflictingDBAuth = fmt.Errorf("DB_AUTH=%s conflicts with the deprecated DB_IAM_AUTH=true, "+
+		"so SQL is not initialized; remove DB_IAM_AUTH", dbAuthPassword)
+	errIAMAuthSQLite = fmt.Errorf("DB_AUTH=%s is not supported for %s, so SQL is not initialized", dbAuthIAM, sqlite)
 )
 
 // DBConfig has those members which are necessary variables while connecting to database.
@@ -150,9 +161,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		setupSupabaseDefaults(dbConfig, configs, logger)
 	}
 
-	if dbConfig.Dialect == "" {
-		logMissingDialect(dbConfig, logger)
-
+	if !opensFromConfig(dbConfig, configs, logger) {
 		return nil
 	}
 
@@ -204,6 +213,60 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	}
 
 	return finalizeConnection(database)
+}
+
+// opensFromConfig reports whether NewSQL should open a connection from the DB_* config:
+// not without DB_DIALECT, and not with DB_AUTH=iam, where a connector module supplies
+// the connection through App.AddSQLDB and a connection opened here could never
+// authenticate. An invalid or conflicting DB_AUTH is logged and nothing is opened, so a
+// typo never silently falls back to password authentication.
+func opensFromConfig(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) bool {
+	if dbConfig.Dialect == "" {
+		logMissingDialect(dbConfig, logger)
+
+		return false
+	}
+
+	auth, err := dbAuth(configs)
+	if err != nil {
+		logger.Errorf("%v", err)
+
+		return false
+	}
+
+	if auth == dbAuthPassword {
+		return true
+	}
+
+	if dbConfig.Dialect == sqlite {
+		logger.Errorf("%v", errIAMAuthSQLite)
+
+		return false
+	}
+
+	logger.Infof("DB_AUTH is %s, so the SQL connection is not opened from the DB_* config; "+
+		"it is supplied by app.AddSQLDB", dbAuthIAM)
+
+	return false
+}
+
+// dbAuth resolves DB_AUTH, defaulting to password. DB_IAM_AUTH=true, parsed as the
+// cloudsql module parses it, also selects iam: released cloudsql versions read only
+// DB_IAM_AUTH, so it is accepted without a deprecation warning until they read DB_AUTH.
+func dbAuth(configs config.Config) (string, error) {
+	auth := strings.ToLower(strings.TrimSpace(configs.Get("DB_AUTH")))
+	legacyIAM, _ := strconv.ParseBool(strings.TrimSpace(configs.Get("DB_IAM_AUTH")))
+
+	switch {
+	case auth != "" && auth != dbAuthPassword && auth != dbAuthIAM:
+		return "", errUnsupportedDBAuth
+	case legacyIAM && auth == dbAuthPassword:
+		return "", errConflictingDBAuth
+	case legacyIAM || auth == dbAuthIAM:
+		return dbAuthIAM, nil
+	default:
+		return dbAuthPassword, nil
+	}
 }
 
 // NewSQLFromDB wraps an already-opened *database/sql.DB in gofr's SQL datasource,

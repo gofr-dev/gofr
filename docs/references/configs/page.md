@@ -345,6 +345,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  DB_AUTH
+-  How GoFr authenticates to the database. **password** uses DB_USER and DB_PASSWORD (an empty password is allowed, e.g. for trust authentication in local development). **iam** means a connector module supplies the connection through `app.AddSQLDB`, for example `gofr.dev/pkg/gofr/datasource/cloudsql`; GoFr then does not open a connection from the DB_* config at startup, and `ctx.SQL` stays unset until `app.AddSQLDB` is called. Any other value logs an error and SQL is not initialized. **iam** is not supported for SQLite. `DB_IAM_AUTH=true`, which the cloudsql module reads, is also treated as **iam**; combining it with `DB_AUTH=password` logs an error and SQL is not initialized.
+-  password
+
+---
+
 -  DB_NAME
 -  Name of the database to use.
 
