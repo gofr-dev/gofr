@@ -108,6 +108,11 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 			expURLErr: true,
 			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans": dial tcp`,
 			expLog:    "REDACTED@"},
+		{desc: "short credentials", endpoint: "http://a:b@" + closedHost + "/api/spans?v=1", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans?REDACTED": dial tcp ` + closedHost +
+				": connect: connection refused",
+			expLog: "dial tcp " + closedHost + ": connect: connection refused"},
 		{desc: "query-only key", endpoint: closed.URL + "/api/spans?api_key=TOPSECRETKEY", ctx: t.Context(),
 			expURLErr: true,
 			expErrMsg: `Post "` + closed.URL + `/api/spans?REDACTED": dial tcp`,
@@ -143,9 +148,10 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 	}
 }
 
-// A cause that repeats any part of the endpoint's userinfo or query is rewritten, and still matches its sentinel.
+// A cause that quotes part of the endpoint's userinfo or query is rewritten and still matches its sentinel;
+// unquoted text, such as a dial address or an error word that contains a short credential, is left alone.
 func Test_redactCause(t *testing.T) {
-	const endpoint = "http://bob:S3CRETPASS@collector:4318/api/spans?api_key=TOP%2BSECRET&region=eu"
+	const endpoint = "http://a:S3CRETPASS@collector:4318/api/spans?api_key=TOP%2BSECRET&v=1"
 
 	tests := []struct {
 		desc   string
@@ -153,15 +159,19 @@ func Test_redactCause(t *testing.T) {
 		expMsg string
 	}{
 		{desc: "no credential in the cause", cause: context.Canceled, expMsg: "context canceled"},
-		{desc: "username", cause: fmt.Errorf("user bob: %w", context.Canceled), expMsg: "user REDACTED: context canceled"},
-		{desc: "password", cause: fmt.Errorf("auth S3CRETPASS: %w", context.Canceled),
-			expMsg: "auth REDACTED: context canceled"},
-		{desc: "escaped query value", cause: fmt.Errorf("key TOP%%2BSECRET: %w", context.Canceled),
-			expMsg: "key REDACTED: context canceled"},
-		{desc: "unescaped query value", cause: fmt.Errorf("key TOP+SECRET: %w", context.Canceled),
-			expMsg: "key REDACTED: context canceled"},
-		{desc: "whole query", cause: fmt.Errorf("query api_key=TOP%%2BSECRET&region=eu: %w", context.Canceled),
-			expMsg: "query REDACTED: context canceled"},
+		{desc: "quoted username", cause: fmt.Errorf(`scheme "a": %w`, context.Canceled),
+			expMsg: `scheme "REDACTED": context canceled`},
+		{desc: "quoted password", cause: fmt.Errorf(`auth "S3CRETPASS": %w`, context.Canceled),
+			expMsg: `auth "REDACTED": context canceled`},
+		{desc: "quoted escaped query value", cause: fmt.Errorf(`key "TOP%%2BSECRET": %w`, context.Canceled),
+			expMsg: `key "REDACTED": context canceled`},
+		{desc: "quoted unescaped query value", cause: fmt.Errorf(`key "TOP+SECRET": %w`, context.Canceled),
+			expMsg: `key "REDACTED": context canceled`},
+		{desc: "quoted whole query", cause: fmt.Errorf(`query "api_key=TOP%%2BSECRET&v=1": %w`, context.Canceled),
+			expMsg: `query "REDACTED": context canceled`},
+		{desc: "short credentials inside an address and words",
+			cause:  fmt.Errorf("dial tcp 127.0.0.1:1830: connect: connection refused: %w", context.Canceled),
+			expMsg: "dial tcp 127.0.0.1:1830: connect: connection refused: context canceled"},
 	}
 
 	for _, tc := range tests {
@@ -170,6 +180,44 @@ func Test_redactCause(t *testing.T) {
 
 			assert.Equal(t, tc.expMsg, err.Error())
 			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
+// timeoutError is a cause that reports itself as a timeout and temporary, like a net.Error.
+type timeoutError struct{ msg string }
+
+func (e timeoutError) Error() string { return e.msg }
+
+func (timeoutError) Timeout() bool { return true }
+
+func (timeoutError) Temporary() bool { return true }
+
+// A redacted cause must not hide that the request timed out: (*url.Error).Timeout asks the cause directly.
+func Test_redactRequestError_KeepsTimeout(t *testing.T) {
+	const endpoint = "bob:S3CRETPASS@collector:4318/api/spans"
+
+	tests := []struct {
+		desc       string
+		cause      error
+		expTimeout bool
+	}{
+		{desc: "redacted timeout", cause: timeoutError{msg: `unsupported protocol scheme "bob"`}, expTimeout: true},
+		{desc: "unredacted timeout", cause: timeoutError{msg: "i/o timeout"}, expTimeout: true},
+		{desc: "redacted deadline", cause: fmt.Errorf(`scheme "bob": %w`, context.DeadlineExceeded), expTimeout: true},
+		{desc: "redacted non-timeout", cause: fmt.Errorf(`unsupported protocol scheme "bob": %w`, context.Canceled)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var urlErr *url.Error
+
+			err := redactRequestError(&url.Error{Op: "Post", URL: endpoint, Err: tc.cause}, endpoint)
+
+			require.ErrorAs(t, err, &urlErr)
+			assert.NotContains(t, err.Error(), "bob")
+			assert.Equal(t, tc.expTimeout, urlErr.Timeout())
+			assert.Equal(t, tc.expTimeout, urlErr.Temporary())
 		})
 	}
 }
