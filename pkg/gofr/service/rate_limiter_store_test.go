@@ -233,6 +233,53 @@ func TestLocalRateLimiterStore_CleanupRacingARequest(t *testing.T) {
 	})
 }
 
+// TestLocalRateLimiterStore_CleanupRacingRequestsStress starts a cleanup and several requests at the same moment on
+// an idle, fully refilled slow bucket, many times over. Each round must allow exactly Burst requests in total: if
+// the cleanup ever dropped a bucket a request had just spent a token from, a later request would get a new, full
+// bucket and the round would allow more.
+func TestLocalRateLimiterStore_CleanupRacingRequestsStress(t *testing.T) {
+	const (
+		rounds  = 10000
+		workers = 4
+		burst   = 5
+	)
+
+	cfg := RateLimiterConfig{Requests: 1, Window: time.Hour, Burst: burst}
+	now := int64(6 * time.Hour) // the bucket below is idle for longer than bucketTTL and fully refilled by now
+
+	for round := range rounds {
+		store := NewLocalRateLimiterStore()
+		_, _ = store.allowAt("slow", &cfg, 0)
+
+		var (
+			start   = make(chan struct{})
+			allowed atomic.Int64
+			wg      sync.WaitGroup
+		)
+
+		wg.Go(func() {
+			<-start
+			store.cleanupAt(now)
+		})
+
+		for range workers {
+			wg.Go(func() {
+				<-start
+
+				if ok, _ := store.allowAt("slow", &cfg, now); ok {
+					allowed.Add(1)
+				}
+			})
+		}
+
+		close(start)
+		wg.Wait()
+
+		total := allowed.Load() + int64(countAllowed(store, "slow", &cfg, now))
+		require.Equal(t, int64(burst), total, "round %d", round)
+	}
+}
+
 func TestLocalRateLimiterStore_ClockIsMonotonic(t *testing.T) {
 	store := NewLocalRateLimiterStore()
 	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Hour}
