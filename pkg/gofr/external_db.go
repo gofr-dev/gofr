@@ -266,17 +266,17 @@ type SQLConnector interface {
 //
 //	app.AddSQLDB(cloudsql.New(app.Config))
 //
-// container.Create eagerly opens an env-configured SQL connection whenever
-// DB_DIALECT is set, so the existing one is closed before being replaced —
+// With DB_AUTH=iam, container.Create opens no SQL connection, so the connector's is
+// the only one. Otherwise container.Create has already opened an env-configured
+// connection when DB_DIALECT is set, so it is closed before being replaced —
 // otherwise its pool and the background retry/metrics goroutines leak. When the
 // provider defers (nil connector), that env-configured connection is kept as-is.
 func (a *App) AddSQLDB(c SQLConnector) {
 	connector, cleanup, err := c.Connect()
 	if err != nil {
-		// Connector setup failed. Tear down the env-configured SQL the container
-		// opened (on the IAM path it is dialing the instance-connection-name as a
-		// literal host and would retry forever) and leave SQL unset, so health
-		// reports down rather than using a broken connection.
+		// Connector setup failed. Tear down any env-configured SQL the container
+		// opened and leave SQL unset rather than keep a connection the provider
+		// did not vouch for.
 		a.closeExistingSQL()
 		a.container.SQL = nil
 		a.Logger().Errorf("failed to initialize SQL connector: %v", err)
