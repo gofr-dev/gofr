@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"sync"
 	"testing"
 	"time"
@@ -646,6 +647,52 @@ func TestDB_Prepare(t *testing.T) {
 	}
 }
 
+func TestDB_PrepareContext(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
+			},
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?").WillReturnError(errSyntax)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
+
+				setupMetrics(t, db, "SELECT")
+
+				tc.setupMock(mock)
+
+				stmt, err := db.PrepareContext(t.Context(), "SELECT name FROM employee WHERE id = ?")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, stmt)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, stmt)
+				}
+			})
+
+			assert.Contains(t, out, "PrepareContext SELECT name FROM employee WHERE id = ?")
+		})
+	}
+}
+
 func TestDB_Begin(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -684,17 +731,107 @@ func TestDB_Begin(t *testing.T) {
 }
 
 func TestDB_BeginTx(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
 
-	db.metrics = NewMockMetrics(gomock.NewController(t))
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		setup   func(sqlmock.Sqlmock)
+		wantErr error
+	}{
+		{
+			name: "success returns a logging transaction",
+			ctx:  t.Context(),
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+				mock.ExpectExec("UPDATE employee SET name = ?").WithArgs("doe").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+		},
+		{
+			name:    "begin error",
+			ctx:     t.Context(),
+			setup:   func(mock sqlmock.Sqlmock) { mock.ExpectBegin().WillReturnError(errBegin) },
+			wantErr: errBegin,
+		},
+		{
+			name:    "context already canceled",
+			ctx:     canceled,
+			setup:   func(sqlmock.Sqlmock) {},
+			wantErr: context.Canceled,
+		},
+	}
 
-	mock.ExpectBegin()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	require.NoError(t, err)
-	assert.NotNil(t, tx)
+				tc.setup(mock)
+
+				tx, err := db.BeginTx(tc.ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+				if tc.wantErr != nil {
+					require.ErrorIs(t, err, tc.wantErr)
+					assert.Nil(t, tx)
+				} else {
+					require.NoError(t, err)
+
+					_, err = tx.ExecContext(tc.ctx, "UPDATE employee SET name = ?", "doe")
+					require.NoError(t, err)
+				}
+
+				require.NoError(t, mock.ExpectationsWereMet())
+			})
+
+			if tc.wantErr == nil {
+				assert.Contains(t, out, "TxExecContext UPDATE employee SET name = ?")
+			}
+		})
+	}
+
+	// sqlmock discards TxOptions, so a recording connector checks they reach the driver.
+	t.Run("options reach the driver", func(t *testing.T) {
+		var got driver.TxOptions
+
+		db := &DB{DB: sql.OpenDB(optsConnector{got: &got}), config: &DBConfig{}}
+		defer db.DB.Close()
+
+		tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
+
+		assert.Equal(t, driver.TxOptions{Isolation: driver.IsolationLevel(sql.LevelSerializable), ReadOnly: true}, got)
+	})
 }
+
+// optsConnector opens connections that record the options BeginTx passes to the driver.
+type optsConnector struct{ got *driver.TxOptions }
+
+func (c optsConnector) Connect(context.Context) (driver.Conn, error) { return optsConn(c), nil }
+
+func (optsConnector) Driver() driver.Driver { return nil }
+
+type optsConn struct{ got *driver.TxOptions }
+
+func (optsConn) Prepare(string) (driver.Stmt, error) { return nil, errDB }
+
+func (optsConn) Close() error { return nil }
+
+func (optsConn) Begin() (driver.Tx, error) { return nil, errBegin }
+
+func (c optsConn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	*c.got = opts
+
+	return optsTx{}, nil
+}
+
+type optsTx struct{}
+
+func (optsTx) Commit() error { return nil }
+
+func (optsTx) Rollback() error { return nil }
 
 func TestDB_Close(t *testing.T) {
 	db, mock := getDB(t, logging.INFO)
@@ -832,6 +969,54 @@ func TestTx_Query(t *testing.T) {
 			})
 
 			assert.Contains(t, out, tc.logContains)
+		})
+	}
+}
+
+func TestTx_QueryContext(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+			},
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT 1").WillReturnError(errSyntax)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
+
+				setupMetrics(t, db, "SELECT")
+
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
+
+				rows, err := tx.QueryContext(t.Context(), "SELECT 1")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, rows)
+				} else {
+					require.NoError(t, err)
+					require.NoError(t, rows.Err())
+					assert.NotNil(t, rows)
+				}
+			})
+
+			assert.Contains(t, out, "TxQueryContext SELECT 1")
 		})
 	}
 }
@@ -1030,6 +1215,53 @@ func TestTx_Prepare(t *testing.T) {
 	}
 }
 
+func TestTx_PrepareContext(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupMock func(sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
+			},
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?").WillReturnError(errSyntax)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
+
+				setupMetrics(t, db, "SELECT")
+
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
+
+				stmt, err := tx.PrepareContext(t.Context(), "SELECT name FROM employee WHERE id = ?")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, stmt)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, stmt)
+				}
+			})
+
+			assert.Contains(t, out, "TxPrepareContext SELECT name FROM employee WHERE id = ?")
+		})
+	}
+}
+
 func TestTx_Commit(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1111,6 +1343,132 @@ func TestTx_Rollback(t *testing.T) {
 
 			assert.Contains(t, out, "TxRollback ROLLBACK")
 		})
+	}
+}
+
+type txSelectUser struct {
+	ID    int
+	Name  string
+	Image string `db:"image_url"`
+}
+
+type txSelectCase struct {
+	name      string
+	ctx       context.Context
+	query     string
+	args      []any
+	data      any
+	setupMock func(sqlmock.Sqlmock)
+	want      any
+	logs      string
+	errLogs   string
+}
+
+func TestTx_Select(t *testing.T) {
+	for _, tc := range txSelectCases(t) {
+		t.Run(tc.name, func(t *testing.T) {
+			var out string
+
+			errOut := testutil.StderrOutputForFunc(func() {
+				out = testutil.StdoutOutputForFunc(func() {
+					db, mock := getDB(t, logging.DEBUG)
+					defer db.DB.Close()
+
+					tx := getTransaction(db, mock)
+					tc.setupMock(mock)
+
+					tx.Select(tc.ctx, tc.data, tc.query, tc.args...)
+
+					require.NoError(t, mock.ExpectationsWereMet())
+				})
+			})
+
+			assert.Equal(t, tc.want, tc.data)
+			assert.Contains(t, out, tc.logs)
+			assert.Contains(t, errOut, tc.errLogs)
+		})
+	}
+}
+
+func txSelectCases(t *testing.T) []txSelectCase {
+	t.Helper()
+
+	type user = txSelectUser
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	userRows := func() *sqlmock.Rows {
+		return sqlmock.NewRows([]string{"id", "name", "image_url"}).
+			AddRow(1, "Vikash", "http://via.placeholder.com/150").
+			AddRow(2, "Umang", "http://via.placeholder.com/200")
+	}
+
+	return []txSelectCase{
+		{
+			name:  "slice of single column",
+			ctx:   t.Context(),
+			query: "select id from users",
+			data:  &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("select id from users").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+			},
+			want: &[]int{1, 2},
+			logs: "TxQueryContext select id from users",
+		},
+		{
+			name:      "slice of structs",
+			ctx:       t.Context(),
+			query:     "select * from users",
+			data:      &[]user{},
+			setupMock: func(mock sqlmock.Sqlmock) { mock.ExpectQuery("select * from users").WillReturnRows(userRows()) },
+			want: &[]user{
+				{ID: 1, Name: "Vikash", Image: "http://via.placeholder.com/150"},
+				{ID: 2, Name: "Umang", Image: "http://via.placeholder.com/200"},
+			},
+			logs: "TxQueryContext select * from users",
+		},
+		{
+			name:  "single struct",
+			ctx:   t.Context(),
+			query: "select * from users where id = ?",
+			args:  []any{1},
+			data:  &user{},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("select * from users where id = ?").WithArgs(1).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "image_url"}).
+						AddRow(1, "Vikash", "http://via.placeholder.com/150"))
+			},
+			want: &user{ID: 1, Name: "Vikash", Image: "http://via.placeholder.com/150"},
+			logs: "TxQueryContext select * from users where id = ?",
+		},
+		{
+			name:      "data is not a pointer",
+			ctx:       t.Context(),
+			query:     "select * from users",
+			data:      user{},
+			setupMock: func(sqlmock.Sqlmock) {},
+			want:      user{},
+			errLogs:   "we did not get a pointer. data is not settable.",
+		},
+		{
+			name:      "context already done",
+			ctx:       canceled,
+			query:     "select id from users",
+			data:      &[]int{},
+			setupMock: func(sqlmock.Sqlmock) {},
+			want:      &[]int{},
+		},
+		{
+			name:      "query error",
+			ctx:       t.Context(),
+			query:     "select id from users",
+			data:      &[]int{},
+			setupMock: func(mock sqlmock.Sqlmock) { mock.ExpectQuery("select id from users").WillReturnError(errDB) },
+			want:      &[]int{},
+			errLogs:   "error running query: DB error",
+		},
 	}
 }
 
