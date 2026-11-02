@@ -97,14 +97,15 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	// Optimistic pre-check: only acquire locks if there MIGHT be new migrations
 	// This is a fast path to avoid lock contention when no migrations are needed
-	lastMigration, err := mg.getLastMigration(c)
+	applied, err := mg.getAppliedMigrations(c)
 	if err != nil {
 		c.Fatalf("migration failed: could not verify migration state from datasources, err: %v", err)
 
 		return
 	}
 
-	if !hasNewMigrations(keys, lastMigration) {
+	if !hasNewMigrations(keys, lastAppliedMigration(applied)) {
+		reportSkippedMigrations(c, keys, applied)
 		c.Info("no new migrations to run")
 
 		return
@@ -139,12 +140,17 @@ func acquireLockAndRun(c *container.Container, mg migrator, ds *Datasource, migr
 
 	// Re-fetch lastMigration under the lock to avoid racing with another pod
 	// that may have completed the same migration between our pre-check and lock acquisition.
-	lastMigration, err := mg.getLastMigration(c)
+	applied, err := mg.getAppliedMigrations(c)
 	if err != nil {
 		c.Fatalf("migration failed: could not verify migration state under lock, err: %v", err)
 
 		return
 	}
+
+	// Reported here rather than in the pre-check, so a start that runs migrations logs it once.
+	reportSkippedMigrations(c, keys, applied)
+
+	lastMigration := lastAppliedMigration(applied)
 
 	if !hasNewMigrations(keys, lastMigration) {
 		c.Info("no new migrations to run (verified under lock)")
@@ -163,6 +169,45 @@ func hasNewMigrations(keys []int64, lastMigration int64) bool {
 	}
 
 	return false
+}
+
+// lastAppliedMigration returns the highest applied version, or 0 when nothing has been applied.
+func lastAppliedMigration(applied map[int64]struct{}) int64 {
+	var last int64
+
+	for v := range applied {
+		last = max(last, v)
+	}
+
+	return last
+}
+
+// skippedMigrations returns the keys below the last applied version that were never applied.
+// Only keys above the last applied version run, so these never will.
+func skippedMigrations(keys []int64, applied map[int64]struct{}) []int64 {
+	last := lastAppliedMigration(applied)
+
+	var skipped []int64
+
+	for _, k := range keys {
+		if _, ok := applied[k]; !ok && k < last {
+			skipped = append(skipped, k)
+		}
+	}
+
+	return skipped
+}
+
+func reportSkippedMigrations(c *container.Container, keys []int64, applied map[int64]struct{}) {
+	skipped := skippedMigrations(keys, applied)
+	if len(skipped) == 0 {
+		return
+	}
+
+	last := lastAppliedMigration(applied)
+
+	c.Errorf("migrations %v are below the last applied version %v and have never run; they will not run. "+
+		"Give them a key above %v.", skipped, last, last)
 }
 
 func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate,
