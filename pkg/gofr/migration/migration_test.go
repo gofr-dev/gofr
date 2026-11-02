@@ -3,6 +3,7 @@ package migration
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -83,7 +84,7 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
@@ -113,7 +114,7 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(sql.ErrConnDone)
 
@@ -165,7 +166,7 @@ func TestMigrationRunClickhouseCurrentMigrationEqualLastMigration(t *testing.T) 
 		mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil)
 
 		Run(migrationMap, mockContainer)
 	})
@@ -190,7 +191,7 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
@@ -268,8 +269,8 @@ func TestMigration_SQLLockError(t *testing.T) {
 	mocks.SQL.ExpectExec(createMigrations).WillReturnResult(sqlmock.NewResult(0, 0))
 	mocks.SQL.ExpectExec(createLocks).WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// 2. getLastMigration
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 2. getAppliedMigrations
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 3. lock fails with non-duplicate error
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
@@ -334,8 +335,8 @@ func TestMigration_CommitFailure(t *testing.T) {
 	mocks.SQL.ExpectExec(createMigrations).WillReturnResult(sqlmock.NewResult(0, 0))
 	mocks.SQL.ExpectExec(createLocks).WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// 2. getLastMigration
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 2. getAppliedMigrations
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 3. lock
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
@@ -343,8 +344,8 @@ func TestMigration_CommitFailure(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// 4. re-fetch getLastMigration under lock
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 4. re-fetch getAppliedMigrations under lock
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 5. beginTransaction
 	mocks.SQL.ExpectBegin()
@@ -417,9 +418,9 @@ func TestMigration_RaceCondition_SkipUnderLock(t *testing.T) {
 	mocks.SQL.ExpectExec(createMigrations).WillReturnResult(sqlmock.NewResult(0, 0))
 	mocks.SQL.ExpectExec(createLocks).WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// 2. pre-check getLastMigration returns 0 (migration pending)
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").
-		WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 2. pre-check getAppliedMigrations returns 0 (migration pending)
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+		WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 3. lock succeeds
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
@@ -427,9 +428,9 @@ func TestMigration_RaceCondition_SkipUnderLock(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// 4. re-fetch getLastMigration under lock returns 1 (another pod already ran it)
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").
-		WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(1))
+	// 4. re-fetch getAppliedMigrations under lock returns 1 (another pod already ran it)
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+		WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(1))
 
 	// 5. unlock in defer (no migration was executed)
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
@@ -487,8 +488,8 @@ func Test_RunMigrations_SkipAlreadyRun(t *testing.T) {
 	mocks.SQL.ExpectExec(createMigrations).WillReturnResult(sqlmock.NewResult(0, 0))
 	mocks.SQL.ExpectExec(createLocks).WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// 2. getLastMigration returns 1
-	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(1))
+	// 2. getAppliedMigrations returns 1
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(1))
 
 	// Expectations for logger
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -550,8 +551,8 @@ func TestEndToEnd_OnlySQLUsed_RedisNotRecorded(t *testing.T) {
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(sqlmock.NewResult(0, 0))
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// 2. getLastMigration (pre-check)
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 2. getAppliedMigrations (pre-check)
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 3. lock (SQL side)
 	mocks.SQL.ExpectDialect().WillReturnString("mysql")
@@ -561,8 +562,8 @@ func TestEndToEnd_OnlySQLUsed_RedisNotRecorded(t *testing.T) {
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// 4. getLastMigration under lock
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	// 4. getAppliedMigrations under lock
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
 
 	// 5. beginTransaction
 	mocks.SQL.ExpectBegin()
@@ -622,7 +623,7 @@ func TestEndToEnd_ClickhouseOnly_MigrationUsesClickhouse(t *testing.T) {
 
 	// Pre-check
 	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil).Times(2)
 
 	// Migration UP
 	mockClickHouse.EXPECT().Exec(gomock.Any(), "CREATE TABLE metrics (id UInt64) ENGINE = MergeTree()").Return(nil)
@@ -664,7 +665,7 @@ func TestEndToEnd_ClickhouseOnly_MigrationDoesNotUseClickhouse(t *testing.T) {
 
 	// Pre-check
 	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil).Times(2)
 
 	// commitMigration: Clickhouse was NOT used, so INSERT should NOT happen
 
@@ -705,9 +706,9 @@ func TestEndToEnd_MultiDB_OnlySQLUsed(t *testing.T) {
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
 	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 
-	// getLastMigration (pre-check) — both DBs queried
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
-	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+	// getAppliedMigrations (pre-check) — both DBs queried
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil)
 
 	// lock (SQL only — Clickhouse delegates to base)
 	mocks.SQL.ExpectDialect().WillReturnString("mysql")
@@ -717,9 +718,9 @@ func TestEndToEnd_MultiDB_OnlySQLUsed(t *testing.T) {
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// getLastMigration (under lock)
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
-	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+	// getAppliedMigrations (under lock)
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(sqlmock.NewRows([]string{"version"}))
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getChGoFrMigrationVersions).Return(nil)
 
 	// beginTransaction
 	mocks.SQL.ExpectBegin()
@@ -744,4 +745,169 @@ func TestEndToEnd_MultiDB_OnlySQLUsed(t *testing.T) {
 	err := mocks.SQL.ExpectationsWereMet()
 	require.NoError(t, err)
 	assert.True(t, mockClickHouse.ctrl.Satisfied(), "Clickhouse should not have received INSERT for migration record")
+}
+
+func Test_skippedMigrations(t *testing.T) {
+	testCases := []struct {
+		name     string
+		keys     []int64
+		applied  map[int64]struct{}
+		expected []int64
+	}{
+		{"nothing applied", []int64{1, 2}, map[int64]struct{}{}, nil},
+		{"all below the last applied were applied", []int64{1, 2, 3, 4}, map[int64]struct{}{1: {}, 2: {}, 3: {}}, nil},
+		{"key merged after a higher one ran", []int64{20260101, 20260102}, map[int64]struct{}{20260102: {}}, []int64{20260101}},
+		{"several gaps, new key above", []int64{1, 2, 3, 4, 5}, map[int64]struct{}{1: {}, 4: {}}, []int64{2, 3}},
+		{"applied key no longer in the map", []int64{1, 3}, map[int64]struct{}{2: {}}, []int64{1}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, skippedMigrations(tc.keys, tc.applied))
+		})
+	}
+}
+
+// TestRun_SkippedMigrations covers the pre-check path: no key is above the last applied version.
+func TestRun_SkippedMigrations(t *testing.T) {
+	testCases := []struct {
+		name      string
+		applied   []int64
+		keys      []int64
+		expErrLog string
+	}{
+		{
+			name:    "key below the last applied version that never ran is reported",
+			applied: []int64{20260102},
+			keys:    []int64{20260101, 20260102},
+			expErrLog: "migrations [20260101] are below the last applied version 20260102 and have never run; " +
+				"they will not run. Give them a key above 20260102.",
+		},
+		{
+			name:    "nothing is reported when every key was applied",
+			applied: []int64{1, 2},
+			keys:    []int64{1, 2},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockContainer, mocks := newSQLOnlyMockContainer(t)
+
+			ran := map[int64]bool{}
+			migrationMap := map[int64]Migrate{}
+
+			for _, k := range tc.keys {
+				migrationMap[k] = Migrate{UP: func(Datasource) error { ran[k] = true; return nil }}
+			}
+
+			rows := sqlmock.NewRows([]string{"version"})
+			for _, v := range tc.applied {
+				rows.AddRow(v)
+			}
+
+			mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(sqlmock.NewResult(0, 0))
+			mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
+			mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnRows(rows)
+
+			logs := testutil.StderrOutputForFunc(func() {
+				mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+				Run(migrationMap, mockContainer)
+			})
+
+			if tc.expErrLog == "" {
+				assert.NotContains(t, logs, "have never run")
+			} else {
+				assert.Equal(t, 1, strings.Count(logs, tc.expErrLog), "logs: %s", logs)
+			}
+
+			assert.Empty(t, ran, "no migration should run")
+			require.NoError(t, mocks.SQL.ExpectationsWereMet())
+		})
+	}
+}
+
+// Test_acquireLockAndRun_SkippedMigrations covers the under-lock path: a key above the last applied
+// version runs, and a skipped key below it is reported exactly once and does not run.
+func Test_acquireLockAndRun_SkippedMigrations(t *testing.T) {
+	testCases := []struct {
+		name      string
+		applied   map[int64]struct{}
+		keys      []int64
+		expRun    []int64
+		expErrLog string
+	}{
+		{
+			name:      "skipped key is reported, new key runs",
+			applied:   map[int64]struct{}{1: {}, 3: {}},
+			keys:      []int64{1, 2, 3, 4},
+			expRun:    []int64{4},
+			expErrLog: "migrations [2] are below the last applied version 3 and have never run",
+		},
+		{
+			name:    "nothing is reported when every key below the last applied version ran",
+			applied: map[int64]struct{}{1: {}, 2: {}, 3: {}},
+			keys:    []int64{1, 2, 3, 4},
+			expRun:  []int64{4},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			mockContainer, _ := container.NewMockContainer(t)
+
+			var ran []int64
+
+			migrationMap := map[int64]Migrate{}
+
+			for _, k := range tc.keys {
+				migrationMap[k] = Migrate{UP: func(Datasource) error { ran = append(ran, k); return nil }}
+			}
+
+			mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, gomock.Any()).Return(nil)
+			mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.applied, nil)
+			mockMigrator.EXPECT().beginTransaction(mockContainer).Return(transactionData{}).Times(len(tc.expRun))
+			mockMigrator.EXPECT().commitMigration(mockContainer, gomock.Any()).Return(nil).Times(len(tc.expRun))
+			mockMigrator.EXPECT().unlock(mockContainer, gomock.Any()).Return(nil)
+
+			logs := testutil.StderrOutputForFunc(func() {
+				mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+				acquireLockAndRun(mockContainer, mockMigrator, &Datasource{}, migrationMap, tc.keys)
+			})
+
+			if tc.expErrLog == "" {
+				assert.NotContains(t, logs, "have never run")
+			} else {
+				assert.Equal(t, 1, strings.Count(logs, tc.expErrLog), "logs: %s", logs)
+			}
+
+			assert.Equal(t, tc.expRun, ran)
+		})
+	}
+}
+
+// newSQLOnlyMockContainer returns a mock container whose only datasource is SQL.
+func newSQLOnlyMockContainer(t *testing.T) (*container.Container, *container.Mocks) {
+	t.Helper()
+
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mockContainer.Redis = nil
+	mockContainer.Cassandra = nil
+	mockContainer.Clickhouse = nil
+	mockContainer.Mongo = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.Oracle = nil
+	mockContainer.PubSub = nil
+	mockContainer.DGraph = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+
+	return mockContainer, mocks
 }
