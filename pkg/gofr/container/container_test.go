@@ -89,6 +89,28 @@ func TestContainer_SQLNilWhenNotInitialized(t *testing.T) {
 	}
 }
 
+func TestContainer_RedisNilWhenNotInitialized(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+	}{
+		{desc: "no redis settings", configs: map[string]string{}},
+		{desc: "port without host", configs: map[string]string{"REDIS_PORT": "6379"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := NewContainer(config.NewMockConfig(tc.configs))
+
+			// Compare the interface itself: assert.Nil also passes for a typed nil (*redis.Redis)(nil),
+			// which is exactly the value apps can't guard against with c.Redis == nil.
+			if c.Redis != nil {
+				t.Errorf("expected untyped nil Redis, got %T", c.Redis)
+			}
+		})
+	}
+}
+
 func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	testCases := []struct {
 		desc    string
@@ -431,6 +453,47 @@ func TestWarnRedisPubSubSharedDB_NoWarnWhenPubSubDBDiffers(t *testing.T) {
 		"REDIS_DB":          "0",
 		"REDIS_PUBSUB_DB":   "1",
 	}))
+}
+
+func TestWarnRedisPubSubSharedDB_RedisURLDB(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      map[string]string
+		wantWarn bool
+	}{
+		{"URL path DB equals pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_PUBSUB_DB": "3"}, true},
+		{"URL query DB equals pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379?db=3", "REDIS_PUBSUB_DB": "3"}, true},
+		{"URL DB differs from pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_PUBSUB_DB": "4"}, false},
+		{"URL wins over REDIS_DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_DB": "5", "REDIS_PUBSUB_DB": "5"}, false},
+		{"URL without DB means DB 0", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379", "REDIS_PUBSUB_DB": "0"}, true},
+		{"invalid URL falls back to REDIS_DB", map[string]string{"REDIS_URL": "http://x", "REDIS_DB": "2", "REDIS_PUBSUB_DB": "2"}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			var warns []string
+
+			logger := NewMockLogger(ctrl)
+			logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+				warns = append(warns, fmt.Sprintf(format, args...))
+			}).AnyTimes()
+
+			c := &Container{Logger: logger, Redis: NewMockRedis(ctrl)}
+
+			tc.env["REDIS_PUBSUB_MODE"] = "streams"
+			c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(tc.env))
+
+			if tc.wantWarn {
+				require.Len(t, warns, 1)
+				require.Contains(t, warns[0], "migrations may fail")
+			} else {
+				require.Empty(t, warns)
+			}
+		})
+	}
 }
 
 func TestCreatePubSub_DispatchBranches(t *testing.T) {
