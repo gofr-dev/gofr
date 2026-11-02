@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -216,9 +217,8 @@ type Response struct {
 }
 
 // call forms the http request and makes a call to solr and populates the solr response.
-func (c *Client) call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (any, trace.Span, error) {
-	var span trace.Span
-
+// The span is returned on every path, including errors, so that sendOperationStats can end it.
+func (c *Client) call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (_ any, span trace.Span, err error) {
 	if c.tracer != nil {
 		ctx, span = c.tracer.Start(ctx, fmt.Sprintf("Solr %s", method),
 			trace.WithAttributes(
@@ -227,30 +227,20 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 		)
 	}
 
+	defer func() { recordSpanError(span, err) }()
+
 	ctx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
 
 	req, err := c.createRequest(ctx, method, url, params, body)
 	if err != nil {
-		return nil, nil, err
+		return nil, span, err
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, span, err
 	}
 	defer resp.Body.Close()
-
-	var respBody any
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = json.Unmarshal(b, &respBody)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	if span != nil {
 		span.SetAttributes(
@@ -258,7 +248,29 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 		)
 	}
 
+	var respBody any
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, span, err
+	}
+
+	err = json.Unmarshal(b, &respBody)
+	if err != nil {
+		return nil, span, err
+	}
+
 	return Response{resp.StatusCode, respBody}, span, nil
+}
+
+// recordSpanError records err on span, if any. It is a no-op when tracing is disabled.
+func recordSpanError(span trace.Span, err error) {
+	if span == nil || err == nil {
+		return
+	}
+
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }
 
 func (*Client) createRequest(ctx context.Context, method, url string, params map[string]any, body io.Reader) (*http.Request, error) {
