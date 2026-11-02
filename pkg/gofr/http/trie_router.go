@@ -331,6 +331,24 @@ func (n *trieNode) collect(rest string, out []*routeEntry) []*routeEntry {
 	return out
 }
 
+// candidates appends to out every route that could match req's path — the trie's
+// narrowed set plus the fallback routes — in no particular order. It is a
+// superset: each candidate still has to be confirmed with mux's own Route.Match.
+func (idx *routeIndex) candidates(req *http.Request, out []*routeEntry) []*routeEntry {
+	out = idx.root.collect(strings.Trim(req.URL.Path, "/"), out)
+
+	// mux matches the escaped path when the router is in UseEncodedPath mode,
+	// where the escaped and decoded forms can split into different segments.
+	// That flag is not readable from here, so when the two forms differ, walk
+	// both and take the union. Over-producing candidates is always safe (mux
+	// filters them); missing one would not be.
+	if esc := req.URL.EscapedPath(); esc != req.URL.Path {
+		out = idx.root.collect(strings.Trim(esc, "/"), out)
+	}
+
+	return append(out, idx.fallback...)
+}
+
 // match narrows candidates via the trie, adds the fallback routes, orders the
 // whole set by registration order, and returns mux's own match for the first
 // candidate that fully matches — identical to what stock mux would pick, only
@@ -345,20 +363,7 @@ func (n *trieNode) collect(rest string, out []*routeEntry) []*routeEntry {
 func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 	var buf [12]*routeEntry
 
-	cands := idx.root.collect(strings.Trim(req.URL.Path, "/"), buf[:0])
-
-	// mux matches the escaped path when the router is in UseEncodedPath mode,
-	// where the escaped and decoded forms can split into different segments.
-	// That flag is not readable from here, so when the two forms differ, walk
-	// both and take the union. Over-producing candidates is always safe (mux
-	// filters them); missing one would not be.
-	if esc := req.URL.EscapedPath(); esc != req.URL.Path {
-		cands = idx.root.collect(strings.Trim(esc, "/"), cands)
-	}
-
-	if len(idx.fallback) > 0 {
-		cands = append(cands, idx.fallback...)
-	}
+	cands := idx.candidates(req, buf[:0])
 
 	sortByRegistrationOrder(cands)
 

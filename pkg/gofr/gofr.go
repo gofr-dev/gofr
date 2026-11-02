@@ -267,10 +267,7 @@ func (a *App) httpServerSetup() {
 
 	// The one catch-all GoFr registers: marked so the RBAC trace label and route check can tell it
 	// from a route or static directory at "/", which share its template.
-	routemark.MarkCatchAll(a.httpServer.router.PathPrefix("/")).Handler(handler{
-		function:  catchAllHandler,
-		container: a.container,
-	})
+	routemark.MarkCatchAll(a.httpServer.router.PathPrefix("/")).Handler(a.catchAll())
 
 	var registeredMethods []string
 
