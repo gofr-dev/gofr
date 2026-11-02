@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -68,9 +67,9 @@ func validateOAuth(ctx context.Context, key auth.PublicKeyProvider, regex *regex
 	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		kid := token.Header["kid"]
+		kid, _ := token.Header["kid"].(string)
 
-		jwks := key.Get(fmt.Sprint(kid))
+		jwks := key.Get(kid)
 		if jwks == nil {
 			return nil, errKeyNotFound
 		}
