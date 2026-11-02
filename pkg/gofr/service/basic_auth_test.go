@@ -53,7 +53,7 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 			password: "cGFzc3dvcmQ=",
 			headers:  map[string]string{AuthHeader: "existing value"},
 			response: map[string]string{AuthHeader: "existing value"},
-			err:      AuthErr{Message: "value existing value already exists for header Authorization"},
+			err:      AuthErr{Message: "a value already exists for header Authorization"},
 		},
 		{
 			username: "username",

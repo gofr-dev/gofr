@@ -157,18 +157,16 @@ func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {
 }
 
 // tokenBucketScript is a Lua script for atomic token bucket rate limiting in Redis.
-// Updated to use integer-only token math for simplicity
+// Tokens are stored as a float so that partial refills carry over between calls, and the refill rate is
+// derived from the window in nanoseconds so that sub-second and non-integer windows are honored.
 //
 //nolint:gosec // This is a Lua script for Redis, not credentials
 const tokenBucketScript = `
 local key = KEYS[1]
 local burst = tonumber(ARGV[1])
-local requests = tonumber(ARGV[2]) 
-local window_seconds = tonumber(ARGV[3])
+local requests = tonumber(ARGV[2])
+local window_ns = tonumber(ARGV[3])
 local now = tonumber(ARGV[4])
-
--- Calculate refill rate as requests per second
-local refill_rate = requests / window_seconds
 
 -- Fetch bucket
 local bucket = redis.call("HMGET", key, "tokens", "last_refill")
@@ -180,25 +178,29 @@ if tokens == nil then
     last_refill = now
 end
 
--- Refill tokens (integer math only)
-local delta = math.max(0, (now - last_refill)/1e9)
-local tokens_to_add = math.floor(delta * refill_rate)
-local new_tokens = math.min(burst, tokens + tokens_to_add)
-
-local allowed = 0
-local retryAfter = 0
-
-if new_tokens >= 1 then
-    allowed = 1
-    new_tokens = new_tokens - 1
-else
-    retryAfter = math.ceil((1 - new_tokens) / refill_rate * 1000) -- ms
+-- Refill continuously and keep the fraction. The refill clock never moves backwards, so a caller whose
+-- clock lags behind another caller's does not earn the same elapsed time twice.
+if now > last_refill then
+    tokens = tokens + (now - last_refill) * requests / window_ns
+    last_refill = now
 end
 
-redis.call("HSET", key, "tokens", new_tokens, "last_refill", now)
+tokens = math.min(burst, tokens)
+
+local allowed = 0
+local retry_after = 0
+
+if tokens >= 1 then
+    allowed = 1
+    tokens = tokens - 1
+else
+    retry_after = math.ceil((1 - tokens) * window_ns / requests / 1e6) -- ms
+end
+
+redis.call("HSET", key, "tokens", tokens, "last_refill", last_refill)
 redis.call("EXPIRE", key, 600)
 
-return {allowed, retryAfter}
+return {allowed, retry_after}
 `
 
 // RedisRateLimiterStore implements RateLimiterStore using Redis.
@@ -211,15 +213,20 @@ func NewRedisRateLimiterStore(client *gofrRedis.Redis) *RedisRateLimiterStore {
 }
 
 func (r *RedisRateLimiterStore) Allow(ctx context.Context, key string, config RateLimiterConfig) (bool, time.Duration, error) {
-	now := time.Now().UnixNano()
+	return r.allowAt(ctx, key, config, time.Now().UnixNano())
+}
+
+// allowAt runs the token bucket script for key at the given Unix nanosecond time.
+func (r *RedisRateLimiterStore) allowAt(ctx context.Context, key string, config RateLimiterConfig,
+	now int64) (bool, time.Duration, error) {
 	cmd := r.client.Eval(
 		ctx,
 		tokenBucketScript,
 		[]string{"gofr:ratelimit:" + key},
-		config.Burst,                   // ARGV[1]: burst
-		config.Requests,                // ARGV[2]: requests
-		int64(config.Window.Seconds()), // ARGV[3]: window_seconds
-		now,                            // ARGV[4]: now (nanoseconds)
+		config.Burst,                // ARGV[1]: burst
+		config.Requests,             // ARGV[2]: requests
+		config.Window.Nanoseconds(), // ARGV[3]: window_ns
+		now,                         // ARGV[4]: now (nanoseconds)
 	)
 
 	result, err := cmd.Result()

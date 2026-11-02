@@ -10,10 +10,11 @@ import (
 	"strings"
 
 	gofrHttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 var (
-	// errInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive.
+	// errInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive (or is NaN).
 	errInvalidRequestsPerSecond = errors.New("requestsPerSecond must be positive")
 
 	// errInvalidBurst is returned when Burst is not positive.
@@ -40,12 +41,21 @@ type RateLimiterConfig struct {
 	PerIP             bool
 	Store             RateLimiterStore // Optional: defaults to in-memory store
 	TrustedProxies    bool             // If true, trust X-Forwarded-For and X-Real-IP headers
-	MaxKeys           int64            // Maximum unique rate limit keys (0 = default 100000)
+	// MaxKeys bounds the unique rate limit keys of the default in-memory store
+	// (0 or negative = default 100000). A caller-supplied Store owns its own bound.
+	MaxKeys int64
 }
 
 // Validate checks if the configuration values are valid.
+//
+// RequestsPerSecond must be positive and not NaN (a NaN rate would let every request
+// through silently). +Inf is allowed and behaves as unlimited. Burst must be positive.
+//
+// A zero or negative MaxKeys is not an error: when GoFr builds the default in-memory
+// store it falls back to the default key limit. A caller-supplied Store is responsible
+// for its own bound.
 func (c RateLimiterConfig) Validate() error {
-	if c.RequestsPerSecond <= 0 {
+	if c.RequestsPerSecond <= 0 || math.IsNaN(c.RequestsPerSecond) {
 		return errInvalidRequestsPerSecond
 	}
 
@@ -109,17 +119,86 @@ func getRemoteAddr(r *http.Request) string {
 	return ip
 }
 
-// RateLimiter creates a middleware that limits requests based on the configuration.
-func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Handler {
-	// Validate configuration
-	if err := config.Validate(); err != nil {
-		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
+// RateLimiterOption configures the RateLimiter middleware.
+type RateLimiterOption func(*rateLimiterOptions)
+
+type rateLimiterOptions struct {
+	logger rateLimiterLogger
+}
+
+// rateLimiterLogger is the logging contract RateLimiter needs; app.Logger() satisfies it.
+type rateLimiterLogger interface {
+	Errorf(format string, args ...any)
+}
+
+// WithRateLimiterLogger sets the logger RateLimiter uses to report an invalid
+// RateLimiterConfig and a negative MaxKeys that falls back to the default key limit.
+// l is any value with an Errorf(format string, args ...any) method,
+// typically app.Logger(). Without this option, or when l is nil, the error is still
+// logged to stderr by a GoFr logger.
+func WithRateLimiterLogger(l rateLimiterLogger) RateLimiterOption {
+	return func(o *rateLimiterOptions) {
+		if l != nil {
+			o.logger = l
+		}
+	}
+}
+
+// errorLogger returns the configured logger, falling back to a GoFr stderr logger when
+// none was provided so a misconfiguration is never silent.
+func (o *rateLimiterOptions) errorLogger() rateLimiterLogger {
+	if o.logger == nil {
+		o.logger = logging.NewLogger(logging.ERROR)
 	}
 
-	// Use in-memory store if none provided
-	if config.Store == nil {
-		config.Store = NewMemoryRateLimiterStore(config)
+	return o.logger
+}
+
+// logInvalidConfig reports an invalid config at ERROR level.
+func (o *rateLimiterOptions) logInvalidConfig(err error) {
+	o.errorLogger().Errorf("invalid rate limiter config: %v; rate limiting is disabled", err)
+}
+
+// logMaxKeysFallback reports a negative MaxKeys that the default in-memory store replaces
+// with its default key limit.
+func (o *rateLimiterOptions) logMaxKeysFallback(maxKeys int64) {
+	o.errorLogger().Errorf("invalid rate limiter MaxKeys %d; falling back to the default key limit", maxKeys)
+}
+
+// storeFor returns config.Store, or builds the default in-memory store when none is
+// provided. That store replaces a negative MaxKeys with its default, which is logged.
+func (o *rateLimiterOptions) storeFor(config RateLimiterConfig) RateLimiterStore {
+	if config.Store != nil {
+		return config.Store
 	}
+
+	if config.MaxKeys < 0 {
+		o.logMaxKeysFallback(config.MaxKeys)
+	}
+
+	return NewMemoryRateLimiterStore(config)
+}
+
+// RateLimiter creates a middleware that limits requests based on the configuration.
+//
+// If the configuration is invalid (see RateLimiterConfig.Validate), the error is logged
+// and the returned middleware passes every request through without rate limiting.
+// Pass WithRateLimiterLogger(app.Logger()) to report it through the app's logger, or
+// call config.Validate() at startup to fail fast instead.
+func RateLimiter(config RateLimiterConfig, m metrics, opts ...RateLimiterOption) func(http.Handler) http.Handler {
+	var options rateLimiterOptions
+
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	if err := config.Validate(); err != nil {
+		options.logInvalidConfig(err)
+
+		return func(next http.Handler) http.Handler { return next }
+	}
+
+	config.Store = options.storeFor(config)
 
 	// Start cleanup routine with context.Background().
 	// The cleanup goroutine runs for the application lifetime.

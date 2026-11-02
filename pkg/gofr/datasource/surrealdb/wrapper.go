@@ -12,6 +12,9 @@ type DBWrapper struct {
 	db *surrealdb.DB
 }
 
+// Ensure DBWrapper satisfies dbCloser so disconnect's type assertion keeps working at compile time.
+var _ dbCloser = (*DBWrapper)(nil)
+
 // NewDBWrapper creates a new wrapper around a surrealdb.DB instance.
 func NewDBWrapper(db *surrealdb.DB) *DBWrapper {
 	return &DBWrapper{db: db}
@@ -30,6 +33,11 @@ func (w *DBWrapper) SignIn(ctx context.Context, auth *surrealdb.Auth) (string, e
 // Info retrieves information about the current session.
 func (w *DBWrapper) Info(ctx context.Context) (any, error) {
 	return w.db.Info(ctx)
+}
+
+// close closes the underlying SurrealDB connection.
+func (w *DBWrapper) close(ctx context.Context) error {
+	return w.db.Close(ctx)
 }
 
 // GetDB returns the underlying *surrealdb.DB for package-level operations.

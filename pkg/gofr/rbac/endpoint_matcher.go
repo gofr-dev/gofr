@@ -130,41 +130,24 @@ func (c *Config) logUncompilablePattern(pattern string, index int) {
 		index, errInvalidPattern, pattern, err)
 }
 
-// checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
-// Pure permission-based: checks if role has ANY of the required permissions (OR logic).
+// checkEndpointAuthorization checks if what the request holds authorizes it for the endpoint.
+// Pure permission-based: checks if any held role or permission covers ANY of the required
+// permissions (OR logic), by exact match. It returns the role or permission that granted access.
 // Uses the endpoint parameter directly instead of re-looking it up.
-func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *Config) (allowed bool, reason string) {
+func checkEndpointAuthorization(h held, endpoint *EndpointMapping, config *Config) (allowed bool, granted string) {
 	// Public endpoints are always allowed
 	if endpoint.Public {
-		return true, "public-endpoint"
+		return true, ""
 	}
-
-	// Get required permissions
-	requiredPerms := endpoint.RequiredPermissions
 
 	// If no permission requirement found, deny (fail secure)
-	if len(requiredPerms) == 0 {
+	if len(endpoint.RequiredPermissions) == 0 {
 		return false, ""
 	}
 
-	// Get role's permissions (thread-safe)
-	rolePerms := config.GetRolePermissions(role)
-	if len(rolePerms) == 0 {
-		return false, ""
-	}
+	granted, allowed = h.grant(endpoint.RequiredPermissions, config.rolePermissionSet)
 
-	// Check if role has ANY of the required permissions (OR logic)
-	// Only exact matches are supported - wildcards are NOT supported in permissions
-	for _, requiredPerm := range requiredPerms {
-		for _, perm := range rolePerms {
-			// Exact match only - no wildcard support
-			if perm == requiredPerm {
-				return true, "permission-based"
-			}
-		}
-	}
-
-	return false, ""
+	return allowed, granted
 }
 
 // getEndpointForRequest finds the matching endpoint configuration for a request.

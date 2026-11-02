@@ -211,9 +211,7 @@ func (d *fileTokenDecorator) Unwrap() HTTP {
 }
 
 func (d *fileTokenDecorator) inject(headers map[string]string) (map[string]string, error) {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
 	if existing, ok := headers[AuthHeader]; ok && existing != "" {
 		return nil, AuthErr{Err: errAuthHeaderPresent, Message: "authorization header already set on request"}

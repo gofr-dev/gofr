@@ -14,9 +14,8 @@ import (
 )
 
 var (
-	errResp            = errors.New("error response from OpenTSDB server")
-	errInvalidArgument = errors.New("invalid argument type")
-	errUnexpected      = errors.New("unexpected error")
+	errResp       = errors.New("error response from OpenTSDB server")
+	errUnexpected = errors.New("unexpected error")
 )
 
 // AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
@@ -345,7 +344,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 
 	annotation, ok := queryAnnotation.(*Annotation)
 	if !ok {
-		return fmt.Errorf("%w: Must be *Annotation", errInvalidArgument)
+		return fmt.Errorf("%w: Must be *Annotation", errInvalidParam)
 	}
 
 	annResp, ok := resp.(*AnnotationResponse)

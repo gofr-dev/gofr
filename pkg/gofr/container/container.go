@@ -21,6 +21,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	goredis "github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/ai"
@@ -148,9 +149,15 @@ func (c *Container) Create(conf config.Config) {
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
-	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *redis.Redis: storing a nil pointer in the Redis interface makes c.Redis == nil false.
+	if rc := redis.NewClient(conf, c.Logger, c.metricsManager); rc != nil {
+		c.Redis = rc
+	}
 
-	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *sql.DB: storing a nil pointer in the DB interface makes c.SQL == nil false.
+	if db := sql.NewSQL(conf, c.Logger, c.metricsManager); db != nil {
+		c.SQL = db
+	}
 
 	c.createPubSub(conf)
 
@@ -354,6 +361,12 @@ func (c *Container) registerFrameworkMetrics() {
 		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
 		c.Metrics().NewCounter("app_http_retry_count", "Total number of retry events")
+
+		retryWaitBuckets := []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_retry_wait_seconds", "Time waited before each HTTP service retry in seconds.",
+			retryWaitBuckets...)
+		c.Metrics().NewCounter("app_http_retry_budget_exhausted_total",
+			"Total number of HTTP service retries skipped because the retry budget was spent.")
 		c.Metrics().NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
 		c.Metrics().NewCounter("app_circuit_open_count", "Total number of times a service circuit breaker has opened.")
 	}
@@ -496,15 +509,7 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 		return
 	}
 
-	redisDBStr := conf.Get("REDIS_DB")
-	if redisDBStr == "" {
-		redisDBStr = "0"
-	}
-
-	redisDB, err := strconv.Atoi(redisDBStr)
-	if err != nil {
-		redisDB = 0
-	}
+	redisDB := primaryRedisDB(conf)
 
 	pubsubDBStr := conf.Get("REDIS_PUBSUB_DB")
 	if pubsubDBStr == "" {
@@ -526,6 +531,23 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 			pubsubDB, redisDB,
 		)
 	}
+}
+
+// primaryRedisDB returns the logical DB the primary Redis datasource uses. A valid REDIS_URL decides it
+// (path or ?db=), as the discrete REDIS_DB is ignored then; otherwise REDIS_DB, defaulting to 0.
+func primaryRedisDB(conf config.Config) int {
+	if rawURL := conf.Get("REDIS_URL"); rawURL != "" {
+		if opts, err := goredis.ParseURL(rawURL); err == nil {
+			return opts.DB
+		}
+	}
+
+	redisDB, err := strconv.Atoi(conf.Get("REDIS_DB"))
+	if err != nil {
+		return 0
+	}
+
+	return redisDB
 }
 
 func effectiveRedisPubSubMode(conf config.Config) string {
