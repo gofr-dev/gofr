@@ -51,12 +51,22 @@ func TestEnableBasicAuth_Errors(t *testing.T) {
 		desc       string
 		args       []string
 		wantErr    string
+		wantLog    string
 		wantStatus int
 	}{
 		{desc: "credential pairs install the middleware", args: []string{"user", "pass"}, wantStatus: http.StatusUnauthorized},
-		{desc: "no credentials", args: nil, wantErr: "no credentials provided", wantStatus: http.StatusOK},
-		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"},
-			wantErr: "invalid number of arguments", wantStatus: http.StatusOK},
+		{desc: "no credentials", args: nil, wantErr: "no credentials provided",
+			wantLog: "Basic authentication is DISABLED", wantStatus: http.StatusOK},
+		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"}, wantErr: "invalid number of arguments",
+			wantLog: "Basic authentication is DISABLED", wantStatus: http.StatusOK},
+		{desc: "empty username", args: []string{"", "pass"}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty password", args: []string{"user", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty username and password", args: []string{"", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty credentials in a later pair", args: []string{"user", "pass", "", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
 	}
 
 	for i, tc := range tests {
@@ -76,10 +86,46 @@ func TestEnableBasicAuth_Errors(t *testing.T) {
 				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
 				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.Contains(t, logs, "Basic authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 
 			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestEnableBasicAuth_EmptyCredentialsFailClosed(t *testing.T) {
+	tests := []struct {
+		desc       string
+		args       []string
+		user       string
+		pass       string
+		wantStatus int
+	}{
+		{desc: "empty username and password reject Basic Og==", args: []string{"", ""}, wantStatus: http.StatusUnauthorized},
+		{desc: "empty password rejects the user", args: []string{"admin", ""}, user: "admin", wantStatus: http.StatusUnauthorized},
+		{desc: "empty username rejects the password", args: []string{"", "pass"}, pass: "pass", wantStatus: http.StatusUnauthorized},
+		{desc: "valid pair still works beside an empty one", args: []string{"user", "pass", "", ""},
+			user: "user", pass: "pass", wantStatus: http.StatusOK},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var a *App
+
+			testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				_ = a.EnableBasicAuth(tc.args...)
+			})
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.SetBasicAuth(tc.user, tc.pass)
+
+			rec := httptest.NewRecorder()
+
+			a.httpServer.router.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.wantStatus, rec.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }

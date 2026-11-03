@@ -63,6 +63,10 @@ func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, star
 	duration := time.Since(start)
 
 	if logger != nil {
+		if config != nil && config.hideArgs {
+			args = maskArgs(args)
+		}
+
 		logger.Debug(&Log{
 			Type:     queryType,
 			Query:    query,
@@ -77,6 +81,20 @@ func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, star
 			float64(duration)/float64(time.Millisecond), "hostname", config.HostName,
 			"database", config.Database, "type", getOperationType(query))
 	}
+}
+
+// maskArgs replaces every argument with a fixed mask, keeping the count visible.
+func maskArgs(args []any) []any {
+	if len(args) == 0 {
+		return args
+	}
+
+	masked := make([]any, len(args))
+	for i := range masked {
+		masked[i] = redactedPassword
+	}
+
+	return masked
 }
 
 func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {

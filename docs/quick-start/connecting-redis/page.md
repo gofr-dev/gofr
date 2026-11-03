@@ -33,6 +33,8 @@ docker exec gofr-redis redis-cli -a password SET greeting "Hello from Redis."
 GoFr applications rely on environment variables to configure and connect to a Redis server.  
 These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
+If neither `REDIS_HOST` nor `REDIS_URL` is set, or `REDIS_URL` is invalid, GoFr does not initialize Redis and `ctx.Redis` is nil, so an app can guard on `ctx.Redis == nil`, as the example below does.
+
 ### Required Environment Variables:
 
 {% table %}
@@ -66,6 +68,11 @@ These variables are stored in a `.env` file located within the `configs` directo
 - Redis database number (default: `0`)
 
 ---
+
+- REDIS_REDACT_ARGS
+- Set to `true` to hide command arguments in the debug log and drop `db.statement` from trace spans (default: `false`). See [Keeping command arguments out of logs and traces](#keeping-command-arguments-out-of-logs-and-traces)
+
+---
 {% /table %}
 
 ## TLS Support (Optional):
@@ -97,6 +104,18 @@ These variables are stored in a `.env` file located within the `configs` directo
 
 ---
 {% /table %}
+
+## Keeping command arguments out of logs and traces
+
+At `LOG_LEVEL=DEBUG`, GoFr logs every Redis command together with its keys and values, and trace spans record the
+full command in the `db.statement` attribute. Set `REDIS_REDACT_ARGS=true` to hide them: each argument in the log
+becomes `*****` (for a single command the number of arguments stays visible), and spans drop `db.statement` but are
+still named after the command (for example `set`). The
+same flag masks the message body in the debug log of each message published or received through Redis pub/sub.
+
+```env
+REDIS_REDACT_ARGS=true
+```
 
 ## Example `.env` File
 
@@ -132,8 +151,12 @@ func main() {
 	app := gofr.New()
 
 	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
-		// Get the value using the Redis instance
+		// Redis is nil when neither REDIS_HOST nor REDIS_URL is set, or REDIS_URL is invalid
+		if ctx.Redis == nil {
+			return "redis not configured", nil
+		}
 
+		// Get the value using the Redis instance
 		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			// If the key is not found, we are not considering this an error and returning ""
