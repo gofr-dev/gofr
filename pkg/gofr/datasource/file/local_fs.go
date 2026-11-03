@@ -2,9 +2,12 @@ package file
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
@@ -19,8 +22,9 @@ const (
 // localProvider implements StorageProvider for local filesystem.
 type localProvider struct{}
 
-// localFileSystem is a small adapter that exposes the no-arg Connect()
-// required by FileSystemProvider and delegates to CommonFileSystem.
+// localFileSystem is the local filesystem store. It exposes the no-arg Connect()
+// required by FileSystemProvider, uses the os package for file operations, and
+// delegates the remaining operations to CommonFileSystem.
 type localFileSystem struct {
 	*CommonFileSystem
 }
@@ -45,6 +49,258 @@ func (l *localFileSystem) Connect() {
 	// Local filesystem connect is a no-op but we call CommonFileSystem.Connect
 	// with a background context to set up any bookkeeping.
 	_ = l.CommonFileSystem.Connect(context.Background())
+}
+
+// The methods below replace CommonFileSystem's object-store implementations, which
+// list, copy and delete objects by name. On a real filesystem those lose data: names
+// resolve against the working directory, a copy onto the same file truncates it, and
+// every write-only open truncates. The local store calls the os package directly instead.
+
+// Create creates or truncates the named file like os.Create, creating missing parent
+// directories first.
+func (l *localFileSystem) Create(name string) (File, error) {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer l.Observe(OpCreate, startTime, &st, &msg)
+
+	if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
+		msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
+		return nil, err
+	}
+
+	f, err := os.Create(name)
+	if err != nil {
+		msg = fmt.Sprintf("failed to create %q: %v", name, err)
+		return nil, err
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Created %q for writing", name)
+
+	return l.newFile(f), nil
+}
+
+// Open opens the named file for reading like os.Open.
+func (l *localFileSystem) Open(name string) (File, error) {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer l.Observe(OpOpen, startTime, &st, &msg)
+
+	f, err := os.Open(name)
+	if err != nil {
+		msg = fmt.Sprintf("failed to open %q: %v", name, err)
+		return nil, err
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Opened %q for reading", name)
+
+	return l.newFile(f), nil
+}
+
+// OpenFile opens the named file with the given flags and permissions like os.OpenFile.
+// With O_CREATE, missing parent directories are created first.
+func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer l.Observe(OpOpenFile, startTime, &st, &msg)
+
+	if flag&os.O_CREATE != 0 {
+		if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
+			msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
+			return nil, err
+		}
+	}
+
+	f, err := os.OpenFile(name, flag, perm)
+	if err != nil {
+		msg = fmt.Sprintf("failed to open %q: %v", name, err)
+		return nil, err
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Opened %q with flags %d", name, flag)
+
+	return l.newFile(f), nil
+}
+
+// RemoveAll removes dirPath and everything under it like os.RemoveAll, and returns nil
+// if dirPath does not exist. If the working directory is dirPath or inside it, the
+// working directory is moved to dirPath's parent so that relative paths keep working.
+func (l *localFileSystem) RemoveAll(dirPath string) error {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer l.Observe(OpRemoveAll, startTime, &st, &msg)
+
+	// Both must be read before the removal: Getwd fails once the working directory is gone.
+	wd, wdErr := os.Getwd()
+	absPath, absErr := filepath.Abs(dirPath)
+
+	if err := os.RemoveAll(dirPath); err != nil {
+		msg = fmt.Sprintf("failed to remove %q: %v", dirPath, err)
+		return err
+	}
+
+	if wdErr == nil && absErr == nil && isSameOrInside(wd, absPath) && !pathExists(wd) {
+		if err := os.Chdir(filepath.Dir(absPath)); err != nil {
+			msg = fmt.Sprintf("removed %q but failed to leave it: %v", dirPath, err)
+			return err
+		}
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Directory %q and all contents deleted successfully", dirPath)
+
+	return nil
+}
+
+// Rename moves oldname to newname like os.Rename, creating newname's missing parent
+// directories first. If the two paths are on different filesystems, a regular file is
+// copied and the original removed.
+func (l *localFileSystem) Rename(oldname, newname string) error {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer l.Observe(OpRename, startTime, &st, &msg)
+
+	// Check the source first so that a failed rename does not leave new directories behind.
+	if _, err := os.Lstat(oldname); err != nil {
+		msg = fmt.Sprintf("failed to rename %q: %v", oldname, err)
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newname), DefaultDirMode); err != nil {
+		msg = fmt.Sprintf("failed to create parent directories of %q: %v", newname, err)
+		return err
+	}
+
+	err := os.Rename(oldname, newname)
+	if isCrossDeviceError(err) {
+		err = moveAcrossDevices(oldname, newname, err)
+	}
+
+	if err != nil {
+		msg = fmt.Sprintf("failed to rename %q to %q: %v", oldname, newname, err)
+		return err
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Renamed %q to %q successfully", oldname, newname)
+
+	return nil
+}
+
+func (l *localFileSystem) newFile(f *os.File) File {
+	return newLocalFile(f, l.Logger, l.Metrics, l.Location)
+}
+
+// pathExists reports whether path can be stat'ed.
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+
+	return err == nil
+}
+
+// isSameOrInside reports whether path is dir or lies inside it. Both must be absolute.
+func isSameOrInside(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// moveAcrossDevices moves a regular file to another filesystem, where os.Rename cannot:
+// it replaces dst with a copy of src and then removes src. For anything other than a
+// regular file (a directory, symlink or FIFO) it returns renameErr unchanged.
+func moveAcrossDevices(src, dst string, renameErr error) error {
+	// Lstat, not Open: opening would follow a symlink, or block on a FIFO.
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+
+	if !info.Mode().IsRegular() {
+		return renameErr
+	}
+
+	// Both paths can name the same file through different mounts, such as a bind mount
+	// or overlapping container volumes. Renaming a file onto itself does nothing, while
+	// copying it over itself and removing src would lose it.
+	if dstInfo, err := os.Lstat(dst); err == nil && os.SameFile(info, dstInfo) {
+		return nil
+	}
+
+	if err := replaceWithCopy(src, info, dst); err != nil {
+		return err
+	}
+
+	return os.Remove(src)
+}
+
+// replaceWithCopy copies src into a temporary file next to dst, with info's permissions
+// and modification time, and renames it over dst so that dst is never seen half-written.
+// src is closed before it returns, because Windows cannot remove an open file.
+func replaceWithCopy(src string, info os.FileInfo, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = in.Close() }()
+
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".tmp-*")
+	if err != nil {
+		return err
+	}
+
+	if err := fillTempFile(tmp, in, info); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+
+	return nil
+}
+
+// fillTempFile writes in to tmp, applies info's permissions and modification time, and
+// syncs and closes tmp. The sync matters because src is removed afterwards.
+func fillTempFile(tmp *os.File, in io.Reader, info os.FileInfo) error {
+	defer func() { _ = tmp.Close() }()
+
+	if _, err := io.Copy(tmp, in); err != nil {
+		return err
+	}
+
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Chtimes(tmp.Name(), info.ModTime(), info.ModTime())
 }
 
 func (*localProvider) Connect(_ context.Context) error {
