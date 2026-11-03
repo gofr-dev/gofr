@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -116,14 +117,44 @@ func (w *Connection) WriteMessage(messageType int, data []byte) error {
 //
 // This method is thread-safe and can be called concurrently with WriteMessage.
 func (w *Connection) ReadMessage() (messageType int, p []byte, err error) {
-	messageType, p, err = w.Conn.ReadMessage()
+	messageType, r, err := w.NextReader()
+	if err != nil {
+		return messageType, nil, err
+	}
+
+	p, err = io.ReadAll(r)
+	if err != nil {
+		w.readFailed.Store(true)
+	}
+
+	return messageType, p, err
+}
+
+// NextReader returns the next data message received from the peer.
+func (w *Connection) NextReader() (messageType int, r io.Reader, err error) {
+	messageType, r, err = w.Conn.NextReader()
 	if err != nil {
 		w.readFailed.Store(true)
 	} else {
 		w.readCount.Add(1)
 	}
 
-	return messageType, p, err
+	return messageType, r, err
+}
+
+// ReadJSON reads the next JSON-encoded message from the connection and stores it in the value pointed to by v.
+func (w *Connection) ReadJSON(v any) error {
+	_, r, err := w.NextReader()
+	if err != nil {
+		return err
+	}
+
+	err = json.NewDecoder(r).Decode(v)
+	if errors.Is(err, io.EOF) {
+		err = io.ErrUnexpectedEOF
+	}
+
+	return err
 }
 
 // ReadFailed reports whether reading from the connection has failed. A failed read is permanent: every
@@ -133,7 +164,8 @@ func (w *Connection) ReadFailed() bool {
 	return w.readFailed.Load()
 }
 
-// ReadCount returns the number of messages successfully read from the connection.
+// ReadCount returns the number of messages read from the connection through ReadMessage, NextReader, ReadJSON
+// and Bind. Reads made directly on the embedded *websocket.Conn bypass this wrapper and are not counted.
 func (w *Connection) ReadCount() uint64 {
 	return w.readCount.Load()
 }

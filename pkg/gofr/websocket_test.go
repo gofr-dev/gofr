@@ -649,6 +649,67 @@ func Test_WebSocket_HandlerErrorKeepsConnectionOpen(t *testing.T) {
 	assert.GreaterOrEqual(t, calls.Load(), int32(2))
 }
 
+func Test_WebSocket_HandlerErrorAfterReadingThroughConnectionKeepsConnectionOpen(t *testing.T) {
+	tests := []struct {
+		desc string
+		read func(conn *gofrWebsocket.Connection) (string, error)
+	}{
+		{
+			desc: "ReadJSON",
+			read: func(conn *gofrWebsocket.Connection) (string, error) {
+				var message string
+
+				err := conn.ReadJSON(&message)
+
+				return message, err
+			},
+		},
+		{
+			desc: "NextReader",
+			read: func(conn *gofrWebsocket.Connection) (string, error) {
+				_, r, err := conn.NextReader()
+				if err != nil {
+					return "", err
+				}
+
+				data, err := io.ReadAll(r)
+
+				return strings.Trim(string(data), `"`), err
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+				message, err := tc.read(ctx.Request.(*gofrWebsocket.Connection))
+				if err != nil {
+					return nil, err
+				}
+
+				if message == "bad" {
+					return nil, errInvalidPayload
+				}
+
+				return message, nil
+			})
+
+			ws := dialWebSocket(t, app, wsURL)
+
+			for _, payload := range []string{`"bad"`, `"good"`} {
+				require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte(payload)))
+			}
+
+			require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+			_, message, err := ws.ReadMessage()
+			require.NoError(t, err)
+
+			assert.Equal(t, "good", string(message))
+		})
+	}
+}
+
 func Test_WebSocket_HandlerErrorBeforeReadingStopsLoop(t *testing.T) {
 	var calls atomic.Int32
 
