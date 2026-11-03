@@ -344,13 +344,19 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 		prefix += "/"
 	}
 
-	objects, _, listErr := c.Provider.ListDir(ctx, prefix)
+	objects, prefixes, listErr := c.Provider.ListDir(ctx, prefix)
 	if listErr != nil {
 		msg = fmt.Sprintf("failed to stat %q: %v", name, listErr)
 		return nil, listErr
 	}
 
-	if len(objects) > 0 {
+	// A prefix holding only subfolders lists no objects, just their prefixes.
+	if len(objects) > 0 || len(prefixes) > 0 {
+		var lastModified time.Time
+		if len(objects) > 0 {
+			lastModified = objects[0].LastModified
+		}
+
 		st = StatusSuccess
 		msg = fmt.Sprintf("Stat %q successful (directory)", name)
 
@@ -358,14 +364,25 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 			name:         name,
 			size:         0,
 			contentType:  dirContentType,
-			lastModified: objects[0].LastModified,
+			lastModified: lastModified,
 			isDir:        true,
 		}, nil
 	}
 
-	msg = fmt.Sprintf("file or directory %q not found", name)
+	st = missingStatus(err)
+	msg = fmt.Sprintf("file or directory %q not found: %v", name, err)
 
 	return nil, ErrFileNotFound
+}
+
+// missingStatus labels a failed lookup NOT_FOUND when the provider reported the object missing,
+// so dashboards don't count misses as failures; any other error stays ERROR.
+func missingStatus(err error) string {
+	if errors.Is(err, os.ErrNotExist) {
+		return StatusNotFound
+	}
+
+	return StatusError
 }
 
 // ChDir is not supported for cloud storage (no concept of "current directory").
@@ -434,7 +451,9 @@ func (c *CommonFileSystem) Open(name string) (File, error) {
 	// Get metadata first (efficient HEAD request)
 	info, err := c.Provider.StatObject(ctx, name)
 	if err != nil {
+		st = missingStatus(err)
 		msg = fmt.Sprintf("file %q not found: %v", name, err)
+
 		return nil, ErrFileNotFound
 	}
 
