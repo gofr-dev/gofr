@@ -23,6 +23,9 @@ var (
 	// errWriteAtNotSupported is returned when WriteAt is called on cloud storage.
 	errWriteAtNotSupported = errors.New("WriteAt not supported for cloud storage")
 
+	// errSeekNotSupported is returned when Seek is called on a file being written to cloud storage.
+	errSeekNotSupported = errors.New("seek not supported for files being written to cloud storage")
+
 	// errWriterNil is returned when NewWriter returns nil.
 	errWriterNil = errors.New("NewWriter returned nil")
 )
@@ -53,6 +56,8 @@ type CommonFile struct {
 	body       io.ReadCloser
 	writer     io.WriteCloser
 	currentPos int64
+	// closed is set by Close, so that Seek and ReadAt do not re-open the file through the provider.
+	closed bool
 
 	logger   datasource.Logger
 	metrics  StorageMetrics
@@ -139,9 +144,24 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 
 	defer f.observe(OpReadAt, startTime, &st, &msg)
 
+	if f.closed {
+		msg = fmt.Sprintf("ReadAt on closed file %q", f.name)
+		return 0, os.ErrClosed
+	}
+
+	// A file opened on the local disk reads it directly, like os.File.ReadAt.
+	if ra := f.readerAt(); ra != nil {
+		return f.readAtOpenFile(ra, p, off, &st, &msg)
+	}
+
 	if off < 0 || off >= f.size {
 		msg = fmt.Sprintf("offset %d out of range [0, %d]", off, f.size)
 		return 0, ErrOutOfRange
+	}
+
+	if f.provider == nil {
+		msg = "no storage provider to read from"
+		return 0, errProviderNil
 	}
 
 	ctx := context.Background()
@@ -164,6 +184,21 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	msg = fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.name, off)
 
 	return n, nil
+}
+
+// readAtOpenFile reads from an open file with the io.ReaderAt contract: io.EOF along with
+// the bytes read when the read reaches the end of the file.
+func (f *CommonFile) readAtOpenFile(ra io.ReaderAt, p []byte, off int64, st, msg *string) (int, error) {
+	n, err := ra.ReadAt(p, off)
+	if err != nil && !errors.Is(err, io.EOF) {
+		*msg = fmt.Sprintf("ReadAt failed: %v", err)
+		return n, err
+	}
+
+	*st = StatusSuccess
+	*msg = fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.name, off)
+
+	return n, err
 }
 
 // Write implements io.Writer.
@@ -233,6 +268,28 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 
 	defer f.observe(OpSeek, startTime, &st, &msg)
 
+	if f.closed {
+		msg = fmt.Sprintf("Seek on closed file %q", f.name)
+		return 0, os.ErrClosed
+	}
+
+	// A file opened on the local disk seeks it directly, which moves the offset that
+	// both Read and Write use.
+	if s := f.seeker(); s != nil {
+		return f.seekOpenFile(s, offset, whence, &st, &msg)
+	}
+
+	// A cloud storage writer only appends, so its write offset cannot move.
+	if f.body == nil && f.writer != nil {
+		msg = "seek not supported on a file being written to cloud storage"
+		return 0, errSeekNotSupported
+	}
+
+	if f.provider == nil {
+		msg = "no storage provider to read from"
+		return 0, errProviderNil
+	}
+
 	// Calculate new position
 	newPos, err := ValidateSeekOffset(whence, offset, f.currentPos, f.size)
 	if err != nil {
@@ -265,6 +322,22 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	return newPos, nil
 }
 
+// seekOpenFile seeks in an open file and tracks the resulting position.
+func (f *CommonFile) seekOpenFile(s io.Seeker, offset int64, whence int, st, msg *string) (int64, error) {
+	pos, err := s.Seek(offset, whence)
+	if err != nil {
+		*msg = fmt.Sprintf("seek failed: %v", err)
+		return pos, err
+	}
+
+	f.currentPos = pos
+
+	*st = StatusSuccess
+	*msg = fmt.Sprintf("Sought to position %d in %q", pos, f.name)
+
+	return pos, nil
+}
+
 // Close implements io.Closer.
 func (f *CommonFile) Close() error {
 	var msg string
@@ -276,6 +349,9 @@ func (f *CommonFile) Close() error {
 
 	var errs []error
 
+	f.closed = true
+	closedBody := f.body
+
 	// Close reader
 	if f.body != nil {
 		if err := f.body.Close(); err != nil {
@@ -285,10 +361,12 @@ func (f *CommonFile) Close() error {
 		f.body = nil
 	}
 
-	// Close writer
+	// Close writer, unless it is the same open file as the reader closed above
 	if f.writer != nil {
-		if err := f.writer.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close writer: %w", err))
+		if !sharesFile(closedBody, f.writer) {
+			if err := f.writer.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to close writer: %w", err))
+			}
 		}
 
 		f.writer = nil
@@ -353,6 +431,47 @@ func (f *CommonFile) ReadAll() (RowReader, error) {
 // Sys returns nil (no underlying system-specific data for cloud storage).
 func (*CommonFile) Sys() any {
 	return nil
+}
+
+// seeker returns the open file to seek in when the reader or writer is one (for example
+// an *os.File on the local disk), or nil when seeking must go through the provider.
+func (f *CommonFile) seeker() io.Seeker {
+	if s, ok := f.body.(io.Seeker); ok {
+		return s
+	}
+
+	if s, ok := f.writer.(io.Seeker); ok {
+		return s
+	}
+
+	return nil
+}
+
+// readerAt returns the open file to read from when the reader or writer supports
+// io.ReaderAt (for example an *os.File on the local disk), or nil otherwise.
+func (f *CommonFile) readerAt() io.ReaderAt {
+	if ra, ok := f.body.(io.ReaderAt); ok {
+		return ra
+	}
+
+	if ra, ok := f.writer.(io.ReaderAt); ok {
+		return ra
+	}
+
+	return nil
+}
+
+// sharesFile reports whether body and writer are the same *os.File, which must be
+// closed only once.
+func sharesFile(body io.ReadCloser, writer io.WriteCloser) bool {
+	b, ok := body.(*os.File)
+	if !ok {
+		return false
+	}
+
+	w, ok := writer.(*os.File)
+
+	return ok && b == w
 }
 
 // observe records metrics and logs for file operations.

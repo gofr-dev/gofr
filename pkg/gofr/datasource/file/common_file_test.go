@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -581,4 +582,174 @@ func TestCommonFile_Seek_InvalidOffsetAndOldReaderClose(t *testing.T) {
 			require.ErrorIs(t, err, tt.expErr)
 		})
 	}
+}
+
+func TestCommonFile_Seek_LocalHandlesUseTheOpenFile(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	store := newLocalCommonFS()
+
+	// A Create handle: Seek moves the write offset, so the next Write overwrites.
+	f, err := store.Create("out.bin")
+	require.NoError(t, err)
+
+	_, err = f.Write([]byte("hello world"))
+	require.NoError(t, err)
+
+	end, err := f.Seek(0, io.SeekEnd)
+	require.NoError(t, err)
+	assert.Equal(t, int64(11), end)
+
+	pos, err := f.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), pos)
+
+	_, err = f.Write([]byte("HELLO"))
+	require.NoError(t, err)
+
+	// ReadAt reads what was written through the same handle.
+	buf := make([]byte, 5)
+	_, err = f.ReadAt(buf, 6)
+	require.NoError(t, err)
+	assert.Equal(t, "world", string(buf))
+	require.NoError(t, f.Close())
+
+	content, err := os.ReadFile("out.bin")
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO world", string(content))
+
+	// An Open handle keeps reading the file it opened after the path is replaced.
+	require.NoError(t, os.WriteFile("cfg.txt", []byte("OLD-0123456789"), 0o600))
+
+	r, err := store.Open("cfg.txt")
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile("cfg.tmp", []byte("NEW-abcdefghij"), 0o600))
+	require.NoError(t, os.Rename("cfg.tmp", "cfg.txt"))
+
+	_, err = r.Seek(4, io.SeekStart)
+	require.NoError(t, err)
+
+	rest, err := io.ReadAll(r)
+	require.NoError(t, err)
+	assert.Equal(t, "0123456789", string(rest))
+
+	buf = make([]byte, 4)
+	_, err = r.ReadAt(buf, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "OLD-", string(buf))
+	require.NoError(t, r.Close())
+}
+
+func TestCommonFile_Seek_CloudWriterNotSupported(t *testing.T) {
+	writer := &bufWriteCloser{}
+	f := &CommonFile{name: "upload.bin", writer: writer}
+
+	_, err := f.Write([]byte("data"))
+	require.NoError(t, err)
+
+	pos, err := f.Seek(0, io.SeekStart)
+
+	require.ErrorIs(t, err, errSeekNotSupported)
+	assert.Equal(t, int64(0), pos)
+	assert.Equal(t, "data", writer.String())
+}
+
+func TestCommonFile_SeekAndReadAt_WithoutProvider(t *testing.T) {
+	f := &CommonFile{name: "f.txt", size: 10, body: io.NopCloser(strings.NewReader("0123456789"))}
+
+	_, err := f.Seek(1, io.SeekStart)
+	require.ErrorIs(t, err, errProviderNil)
+
+	_, err = f.ReadAt(make([]byte, 2), 1)
+	require.ErrorIs(t, err, errProviderNil)
+}
+
+func TestCommonFile_SeekAndReadAt_OpenFileErrors(t *testing.T) {
+	osFile, err := os.Create(filepath.Join(t.TempDir(), "f.txt"))
+	require.NoError(t, err)
+
+	_, err = osFile.WriteString("abc")
+	require.NoError(t, err)
+
+	f := &CommonFile{name: "f.txt", body: osFile, writer: osFile}
+
+	// Reading past the end reports io.EOF with the bytes that were read.
+	buf := make([]byte, 5)
+	n, err := f.ReadAt(buf, 1)
+	require.ErrorIs(t, err, io.EOF)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, "bc", string(buf[:n]))
+
+	_, err = f.Seek(0, 42)
+	require.Error(t, err)
+
+	require.NoError(t, f.Close())
+
+	// The os errors are returned when the open file fails underneath the handle.
+	f = &CommonFile{name: "f.txt", body: osFile}
+
+	_, err = f.ReadAt(buf, 0)
+	require.ErrorIs(t, err, os.ErrClosed)
+
+	_, err = f.Seek(0, io.SeekStart)
+	require.ErrorIs(t, err, os.ErrClosed)
+}
+
+func TestCommonFile_SeekAndReadAt_AfterClose(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("data.txt", []byte("hello world"), 0o600))
+
+	store := newLocalCommonFS()
+
+	opens := map[string]func() (File, error){
+		"Open": func() (File, error) { return store.Open("data.txt") },
+		"OpenFile O_RDWR": func() (File, error) {
+			return store.OpenFile("data.txt", os.O_RDWR, DefaultFileMode)
+		},
+	}
+
+	for name, open := range opens {
+		t.Run(name, func(t *testing.T) {
+			f, err := open()
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+
+			// A closed handle must not re-open the file through the provider.
+			_, err = f.Seek(0, io.SeekStart)
+			require.ErrorIs(t, err, os.ErrClosed)
+
+			_, err = f.ReadAt(make([]byte, 5), 0)
+			require.ErrorIs(t, err, os.ErrClosed)
+
+			_, err = f.Read(make([]byte, 5))
+			require.ErrorIs(t, err, errFileNotOpenForReading)
+
+			require.NoError(t, f.Close())
+		})
+	}
+}
+
+func TestSharesFile(t *testing.T) {
+	a, err := os.Create(filepath.Join(t.TempDir(), "a"))
+	require.NoError(t, err)
+
+	defer a.Close()
+
+	b, err := os.Create(filepath.Join(t.TempDir(), "b"))
+	require.NoError(t, err)
+
+	defer b.Close()
+
+	assert.True(t, sharesFile(a, a))
+	assert.False(t, sharesFile(a, b))
+	assert.False(t, sharesFile(io.NopCloser(strings.NewReader("")), a))
+	assert.False(t, sharesFile(a, &bufWriteCloser{}))
+	assert.False(t, sharesFile(nil, nil))
+}
+
+// newLocalCommonFS returns a CommonFileSystem over the local provider, so that tests
+// exercise CommonFile on local files whatever the local store itself returns.
+func newLocalCommonFS() *CommonFileSystem {
+	return &CommonFileSystem{Provider: &localProvider{}, Location: localLocation}
 }
