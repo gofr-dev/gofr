@@ -415,30 +415,7 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			metrics := &recordingMetrics{}
 			fs.Metrics = metrics
 
-			if tt.statErr != nil {
-				mockProvider.EXPECT().
-					StatObject(gomock.Any(), tt.fileName).
-					Return(nil, tt.statErr)
-
-				prefix := tt.fileName
-				if !strings.HasSuffix(prefix, "/") {
-					prefix += "/"
-				}
-
-				if tt.listErr != nil {
-					mockProvider.EXPECT().
-						ListDir(gomock.Any(), prefix).
-						Return(nil, nil, tt.listErr)
-				} else {
-					mockProvider.EXPECT().
-						ListDir(gomock.Any(), prefix).
-						Return(tt.listObjects, tt.listDirs, nil)
-				}
-			} else {
-				mockProvider.EXPECT().
-					StatObject(gomock.Any(), tt.fileName).
-					Return(tt.statInfo, nil)
-			}
+			expectStatLookup(mockProvider, tt.fileName, tt.statInfo, tt.statErr, tt.listObjects, tt.listDirs, tt.listErr)
 
 			fileInfo, err := fs.Stat(tt.fileName)
 
@@ -453,6 +430,24 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			assert.Equal(t, []string{tt.wantStatus}, metrics.statuses())
 		})
 	}
+}
+
+// expectStatLookup sets the provider calls Stat makes: StatObject, then ListDir on the
+// name's prefix when StatObject fails.
+func expectStatLookup(mockProvider *MockStorageProvider, name string, info *ObjectInfo, statErr error,
+	objects []ObjectInfo, dirs []string, listErr error) {
+	mockProvider.EXPECT().StatObject(gomock.Any(), name).Return(info, statErr)
+
+	if statErr == nil {
+		return
+	}
+
+	prefix := name
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	mockProvider.EXPECT().ListDir(gomock.Any(), prefix).Return(objects, dirs, listErr)
 }
 
 func TestCommonFileSystem_ChDir(t *testing.T) {
