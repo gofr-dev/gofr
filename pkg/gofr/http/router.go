@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -128,6 +129,10 @@ func NewRouter() *Router {
 func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	normalizePath(r)
 
+	if r.Method == http.MethodHead && rou.serveHead(w, r) {
+		return
+	}
+
 	if rou.useTrie {
 		rou.serveTrie(w, r)
 
@@ -136,6 +141,92 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Delegate to the underlying Gorilla Mux router.
 	rou.Router.ServeHTTP(w, r)
+}
+
+// serveHead uses GET only when the original HEAD request matches no route other than
+// GoFr's error catch-all. Matching a copy preserves HEAD for handlers, middleware and net/http.
+// Keeping GET's declared methods unchanged preserves explicit HEAD precedence and MCP discovery.
+func (rou *Router) serveHead(w http.ResponseWriter, r *http.Request) bool {
+	var headMatch mux.RouteMatch
+
+	matched := rou.matchRequest(r, &headMatch)
+	if matched && !routemark.IsCatchAll(headMatch.Route) {
+		rou.serveHeadMatch(w, r, &headMatch)
+
+		return true
+	}
+
+	getRequest := *r
+	getRequest.Method = http.MethodGet
+
+	var getMatch mux.RouteMatch
+
+	if rou.matchRequest(&getRequest, &getMatch) && getMatch.MatchErr == nil {
+		methods, _ := getMatch.Route.GetMethods()
+		if slices.Contains(methods, http.MethodGet) {
+			rou.serveHeadMatch(w, r, &getMatch)
+
+			return true
+		}
+	}
+
+	if matched {
+		rou.serveHeadMatch(w, r, &headMatch)
+
+		return true
+	}
+
+	return false
+}
+
+func (rou *Router) matchRequest(r *http.Request, match *mux.RouteMatch) bool {
+	var matched bool
+
+	if rou.useTrie {
+		matched = rou.index().match(r, match)
+	} else {
+		matched = rou.Router.Match(r, match)
+	}
+
+	return matched && match.Route != nil && match.Handler != nil && !rou.isSubrouterMethodError(match)
+}
+
+// isSubrouterMethodError identifies a method error returned through a subrouter's container route.
+// The parent can clear ErrMethodMismatch, so MatchErr alone cannot identify that error handler.
+func (rou *Router) isSubrouterMethodError(match *mux.RouteMatch) bool {
+	if match.Route.GetHandler() != nil || match.MatchErr != nil && !errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
+		return false
+	}
+
+	var container bool
+
+	// An ordinary methodless route can supply a handler through MatcherFunc. Only a route that
+	// contains subroutes and has no handler of its own represents the subrouter's method error.
+	_ = rou.Router.Walk(func(_ *mux.Route, _ *mux.Router, ancestors []*mux.Route) error {
+		container = container || slices.Contains(ancestors, match.Route)
+
+		return nil
+	})
+
+	return container
+}
+
+func (rou *Router) serveHeadMatch(w http.ResponseWriter, r *http.Request, match *mux.RouteMatch) {
+	if rou.useTrie {
+		rou.serveMatched(w, r, match)
+
+		return
+	}
+
+	// Let mux populate its private route/vars context keys from the match already selected.
+	// This adapter performs no second route search and keeps mux.CurrentRoute working in middleware.
+	dispatch := mux.NewRouter().SkipClean(true)
+	dispatch.MatcherFunc(func(_ *http.Request, selected *mux.RouteMatch) bool {
+		*selected = *match
+
+		return true
+	})
+	dispatch.ServeHTTP(w, r)
 }
 
 // normalizePath canonicalizes r.URL.Path in place so routing sees a clean path
@@ -446,6 +537,7 @@ func isDotSegment(p string, idx int) bool {
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler.
+// HEAD falls back to GET when no HEAD route matches; net/http suppresses the body on the wire.
 //
 // HTTP semconv attributes (http.method, http.route, http.status_code) are
 // recorded on the request span by the framework's Tracer middleware
@@ -515,6 +607,10 @@ func (rou *Router) AllowedMethods(r *http.Request) []string {
 				allowed = append(allowed, m)
 			}
 		}
+	}
+
+	if slices.Contains(allowed, http.MethodGet) && !slices.Contains(allowed, http.MethodHead) {
+		allowed = append(allowed, http.MethodHead)
 	}
 
 	sort.Strings(allowed)
