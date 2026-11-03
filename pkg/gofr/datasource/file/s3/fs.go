@@ -1,48 +1,28 @@
 package s3
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
-	"mime"
-	"os"
-	"path"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	file "gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 const (
-	typeFile      = "file"
-	typeDirectory = "directory"
+	defaultTimeout = 10 * time.Second
+	retryInterval  = time.Minute
 )
 
-var (
-	errIncorrectFileType = errors.New("incorrect file type")
-)
-
-// client struct embeds the *s3.Client.
-type client struct {
-	*s3.Client
-}
-
-type FileSystem struct {
-	s3File    S3File
-	conn      s3Client
-	presigner s3Presigner
-	config    *Config
-	logger    Logger
-	metrics   Metrics
+type fileSystem struct {
+	*file.CommonFileSystem
+	adapter *storageAdapter
 }
 
 // Config represents the s3 configuration.
 type Config struct {
-	EndPoint        string // AWS S3 base endpoint
+	// EndPoint is the S3 base endpoint. It is optional on Amazon S3, where the SDK resolves
+	// the regional endpoint from Region; set it for S3-compatible services and local emulators.
+	EndPoint        string
 	BucketName      string // AWS Bucket name
 	Region          string // AWS Region
 	AccessKeyID     string // Aws configs
@@ -64,7 +44,7 @@ type Config struct {
 	UsePathStyle *bool
 }
 
-// New initializes a new instance of the S3 fileSystem with the provided configuration.
+// New initializes a new instance of the S3 file system with the provided configuration.
 //
 // It returns a file.CloudFileSystem, so callers get compile-time access to the
 // cloud-specific capabilities (GenerateSignedURL, CreateWithOptions) in addition to
@@ -74,319 +54,81 @@ func New(config *Config) file.CloudFileSystem {
 		config = &Config{}
 	}
 
-	return &FileSystem{config: config}
-}
+	adapter := &storageAdapter{cfg: config}
 
-// UseLogger sets the Logger interface for the S3 file system.
-func (f *FileSystem) UseLogger(logger any) {
-	if l, ok := logger.(Logger); ok {
-		f.logger = l
+	return &fileSystem{
+		CommonFileSystem: &file.CommonFileSystem{
+			Provider:     adapter,
+			Location:     config.BucketName,
+			ProviderName: "S3", // Set provider name for observability
+		},
+		adapter: adapter,
 	}
 }
 
-// UseMetrics sets the Metrics interface.
-func (f *FileSystem) UseMetrics(metrics any) {
-	if m, ok := metrics.(Metrics); ok {
-		f.metrics = m
+// UseLogger sets the logger on both the common file system and the storage adapter.
+func (f *fileSystem) UseLogger(logger any) {
+	f.CommonFileSystem.UseLogger(logger)
+
+	if l, ok := logger.(datasource.Logger); ok {
+		f.adapter.logger = l
 	}
 }
 
-// Connect initializes and validates the connection to the S3 service.
-//
-// This method sets up the S3 client using the provided configuration, including access key, secret key, region, and base endpoint.
-// It loads the AWS configuration and creates an S3 client and assigns it to the `fileSystem` struct.
-// This method also logs the outcome of the connection attempt.
-func (f *FileSystem) Connect() {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "CONNECT",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	f.logger.Debugf("connecting to S3 bucket: %s", f.config.BucketName)
-
-	// Resolve provider-specific defaults (addressing style, signing region, checksum
-	// behavior) for the configured Flavor before building the client.
-	prof := resolveProfile(f.config)
-
-	// Load the AWS configuration
-	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
-		awsConfig.WithRegion(prof.region(f.config)),
-		awsConfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(
-				f.config.AccessKeyID,
-				f.config.SecretAccessKey,
-				f.config.SessionToken)),
-	)
-	if err != nil {
-		f.logger.Errorf("failed to load configuration: %v", err)
+// Connect tries a single immediate connect; on failure it starts a background retry.
+func (f *fileSystem) Connect() {
+	if f.IsConnected() {
 		return
 	}
 
-	// Create the S3 client from config
-	s3Client := s3.NewFromConfig(cfg, applyClientOptions(prof, f.config.EndPoint))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
 
-	f.conn = client{s3Client}
-	f.presigner = s3.NewPresignClient(s3Client)
-	st = statusSuccess
-	msg = "S3 Client connected."
+	if err := f.CommonFileSystem.Connect(ctx); err != nil {
+		if f.Logger != nil {
+			f.Logger.Errorf("S3 bucket %s not available, starting background retry: %v", f.Location, err)
+		}
 
-	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
+		go f.startRetryConnect()
+
+		return
+	}
+
+	if f.Logger != nil {
+		f.Logger.Infof("S3 connection established to bucket %s", f.Location)
+	}
 }
 
-// applyClientOptions returns the s3.Options mutator that translates a resolved
-// Flavor profile into concrete client settings: addressing style, base endpoint,
-// and upload-checksum behavior. It is separated from Connect so the flavor→SDK
-// wiring can be asserted in a unit test without a live S3 endpoint.
-func applyClientOptions(prof profile, endpoint string) func(*s3.Options) {
-	return func(o *s3.Options) {
-		o.UsePathStyle = prof.usePathStyle
-		o.BaseEndpoint = &endpoint
+// startRetryConnect retries the connection every minute until it succeeds.
+func (f *fileSystem) startRetryConnect() {
+	if f.IsConnected() || f.IsRetryDisabled() {
+		return
+	}
 
-		// Several S3-compatible providers reject the CRC32 checksum that
-		// aws-sdk-go-v2 adds to uploads by default; only calculate it when the
-		// request actually requires one.
-		if prof.disableUploadChecksum {
-			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+	ticker := time.NewTicker(retryInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if f.IsConnected() || f.IsRetryDisabled() {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+
+		err := f.CommonFileSystem.Connect(ctx)
+
+		cancel()
+
+		if err == nil {
+			if f.Logger != nil {
+				f.Logger.Infof("S3 connection restored to bucket %s", f.Location)
+			}
+
+			return
+		}
+
+		if f.Logger != nil {
+			f.Logger.Debugf("S3 retry failed, will try again: %v", err)
 		}
 	}
-}
-
-// Create creates a new file in the S3 bucket.
-//
-// This method creates an empty file at the specified path in the S3 bucket. S3 has no real
-// directories — a prefix springs into existence with the first object stored under it — so the
-// parent path is not required to pre-exist and no parent-directory check is performed. After
-// creating the file, it retrieves the file metadata and returns a `file` object representing the
-// newly created file.
-func (f *FileSystem) Create(name string) (file.File, error) {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "CREATE FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	// S3 has no directories: a prefix comes into existence with the first
-	// object stored under it, so no parent path needs to pre-exist.
-	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String(f.config.BucketName),
-		Key:         aws.String(name),
-		Body:        bytes.NewReader(make([]byte, 0)),
-		ContentType: aws.String(mime.TypeByExtension(path.Ext(name))),
-		// this specifies the file must be downloaded before being opened
-		ContentDisposition: aws.String("attachment"),
-	})
-	if err != nil {
-		f.logger.Errorf("Failed to create the file: %v", err)
-		return nil, err
-	}
-
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(name),
-	})
-	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
-		return nil, err
-	}
-
-	st = statusSuccess
-	msg = "File creation on S3 successful."
-
-	f.logger.Logf("File with name %s created.", name)
-
-	return f.newS3File(name, res), nil
-}
-
-// newS3File builds an S3File from a GetObject response. ContentType,
-// LastModified and ContentLength are modeled by the SDK as pointers because
-// the corresponding response headers are optional; S3-compatible backends
-// (e.g. Cloudflare R2) may omit them, so each is dereferenced only when set to
-// avoid a nil-pointer panic.
-func (f *FileSystem) newS3File(name string, res *s3.GetObjectOutput) *S3File {
-	s3File := &S3File{
-		conn:    f.conn,
-		name:    path.Join(f.config.BucketName, name),
-		logger:  f.logger,
-		metrics: f.metrics,
-		body:    res.Body,
-	}
-
-	if res.ContentType != nil {
-		s3File.contentType = *res.ContentType
-	}
-
-	if res.LastModified != nil {
-		s3File.lastModified = *res.LastModified
-	}
-
-	if res.ContentLength != nil {
-		s3File.size = *res.ContentLength
-	} else {
-		// A backend that omits Content-Length (e.g. some Cloudflare R2 responses)
-		// leaves size at 0, which makes offset-bounded operations such as ReadAt
-		// and Seek treat the handle as empty. Surface it so the degraded handle is
-		// diagnosable rather than silently unusable.
-		f.logger.Warnf("S3 object %q returned no Content-Length; size is unknown and "+
-			"offset-bounded reads (ReadAt/Seek) will treat it as empty", name)
-	}
-
-	return s3File
-}
-
-// Remove deletes a file from the S3 bucket.
-//
-// This method deletes the specified file from the S3 bucket. Currently, it supports the deletion of unversioned files
-// from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
-func (f *FileSystem) Remove(name string) error {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "REMOVE FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(name),
-	})
-	if err != nil {
-		f.logger.Errorf("Error while deleting file: %v", err)
-		return err
-	}
-
-	st = statusSuccess
-	msg = "File deletion on S3 successful"
-
-	f.logger.Logf("File with path %q deleted", name)
-
-	return nil
-}
-
-// Open retrieves a file from the S3 bucket and returns a `file` object representing it.
-//
-// This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
-// If the file cannot be retrieved, it returns an error.
-func (f *FileSystem) Open(name string) (file.File, error) {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "OPEN FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(name),
-	})
-	if err != nil {
-		f.logger.Errorf("failed to retrieve %q: %v", name, err)
-		return nil, err
-	}
-
-	st = statusSuccess
-	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
-
-	return f.newS3File(name, res), nil
-}
-
-// OpenFile is a wrapper for the Open method to comply with the generic FileSystem interface.
-//
-// This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
-// FileSystem interface requirements in the GoFr framework.
-func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
-	return f.Open(name)
-}
-
-// Rename changes the name of a file or directory within the S3 bucket.
-//
-// This method handles both files and directories. It ensures that:
-// - The new name does not move the file to a different directory.
-// - The file types of the old and new names match.
-//
-// If the old and new names are the same, no operation is performed.
-func (f *FileSystem) Rename(oldname, newname string) error {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "RENAME",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	// check if they have the same name or not
-	if oldname == newname {
-		st = statusSuccess
-		msg = "Old and new names are identical, no operation performed"
-
-		f.logger.Logf("%q & %q are same", oldname, newname)
-
-		return nil
-	}
-
-	// check if both exist at same location or not
-	if path.Dir(oldname) != path.Dir(newname) {
-		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
-		return fmt.Errorf("%w: renaming as well as moving file to different location is not allowed", ErrOperationNotPermitted)
-	}
-
-	// check if it is a directory
-	if path.Ext(oldname) == "" {
-		return f.renameDirectory(&st, &msg, oldname, newname)
-	}
-
-	// check if they are of the same type or not
-	if path.Ext(oldname) != path.Ext(newname) {
-		f.logger.Errorf("new file must be same as the old file type")
-		return fmt.Errorf("%w: new filename must match the old file's type", errIncorrectFileType)
-	}
-
-	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		// The source object can be up to 5 GB.
-		// If the source object is an object that was uploaded by using a multipart upload, the object copy
-		// will be a single part object after the source object is copied to the destination bucket.
-		CopySource:         aws.String(f.config.BucketName + "/" + oldname),
-		Key:                aws.String(newname),
-		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
-		ContentDisposition: aws.String("attachment"),
-	})
-	if err != nil {
-		msg = fmt.Sprintf("Error while copying file: %v", err)
-		return err
-	}
-
-	err = f.Remove(oldname)
-	if err != nil {
-		msg = fmt.Sprintf("failed to remove old file %s", oldname)
-		return err
-	}
-
-	st = statusSuccess
-	msg = "File renamed successfully"
-
-	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
-
-	return nil
 }
