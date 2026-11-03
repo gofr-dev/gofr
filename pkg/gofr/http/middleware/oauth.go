@@ -66,11 +66,16 @@ type OauthConfigs struct {
 }
 
 // NewOAuth creates a PublicKeyProvider that periodically fetches and updates public keys from a JWKS endpoint.
+// If config.RefreshInterval is not positive, the keys are fetched once and never refreshed.
 func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
 	go func() {
 		publicKeys.updateKeys(config)
+
+		if config.RefreshInterval <= 0 {
+			return
+		}
 
 		ticker := time.NewTicker(config.RefreshInterval)
 		defer ticker.Stop()
