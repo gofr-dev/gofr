@@ -15,6 +15,7 @@ import (
 )
 
 var errScyllaConn = errors.New("error connecting to ScyllaDB")
+var errScyllaInner = errors.New("scylla inner migrator error")
 
 type panicLogger struct{}
 
@@ -99,48 +100,70 @@ func TestScyllaCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func TestScyllaGetLastMigration(t *testing.T) {
-	migratorWithScylla, mockScylla, mockContainer := scyllaSetup(t)
-
+func TestScyllaGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc      string
-		err       error
-		versions  []int64
-		expectedV int64
+		desc        string
+		versions    []int64
+		queryErr    error
+		baseApplied map[int64]struct{}
+		baseErr     error
+		expApplied  map[int64]struct{}
+		expErr      error
 	}{
-		{"no error with multiple versions", nil, []int64{1, 3, 9, 4}, 9},
-		{"query failed", errScyllaConn, nil, -1},
-		{"empty result", nil, []int64{}, 0},
+		{
+			desc:        "scylla versions are unioned with inner migrator versions",
+			versions:    []int64{1, 3, 4},
+			baseApplied: map[int64]struct{}{2: {}},
+			expApplied:  map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc:        "empty scylla table returns only inner versions",
+			versions:    []int64{},
+			baseApplied: map[int64]struct{}{5: {}},
+			expApplied:  map[int64]struct{}{5: {}},
+		},
+		{desc: "scylla query error", queryErr: errScyllaConn, expErr: errScyllaConn},
+		{desc: "inner migrator error", versions: []int64{2}, baseErr: errScyllaInner, expErr: errScyllaInner},
 	}
 
-	for i, tc := range testCases {
-		var rows []migrationRow
-		for _, v := range tc.versions {
-			rows = append(rows, migrationRow{Version: v})
-		}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-		mockScylla.EXPECT().
-			Query(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(dest any, _ string, _ ...any) error {
-				if tc.err != nil {
-					return tc.err
-				}
+			m := scyllaMigrator{ScyllaDB: mocks.ScyllaDB, migrator: mockMigrator}
 
-				ptr := dest.(*[]migrationRow)
-				*ptr = rows
+			mocks.ScyllaDB.EXPECT().Query(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(dest any, _ string, _ ...any) error {
+					if tc.queryErr != nil {
+						return tc.queryErr
+					}
 
-				return nil
-			})
+					rows := make([]migrationRow, 0, len(tc.versions))
+					for _, v := range tc.versions {
+						rows = append(rows, migrationRow{Version: v})
+					}
 
-		got, err := migratorWithScylla.getLastMigration(mockContainer)
+					*(dest.(*[]migrationRow)) = rows
 
-		assert.Equal(t, tc.expectedV, got, "TEST[%v] %s failed", i, tc.desc)
+					return nil
+				})
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v] %s failed", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v] %s failed", i, tc.desc)
-		}
+			if tc.queryErr == nil {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.baseApplied, tc.baseErr)
+			}
+
+			applied, err := m.getAppliedMigrations(mockContainer)
+
+			assert.Equal(t, tc.expApplied, applied)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
@@ -229,42 +252,6 @@ func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 
 	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
-}
-
-func TestScyllaGetLastMigration_BaseMigrator(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		baseResp   int64
-		baseErr    error
-		expVersion int64
-		expErr     error
-	}{
-		{desc: "base version greater than scylla", baseResp: 7, expVersion: 7},
-		{desc: "base migrator error", baseErr: errScyllaConn, expVersion: -1, expErr: errScyllaConn},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			m := scyllaMigrator{ScyllaDB: mocks.ScyllaDB, migrator: mockMigrator}
-
-			mocks.ScyllaDB.EXPECT().Query(gomock.Any(), gomock.Any()).
-				DoAndReturn(func(dest any, _ string, _ ...any) error {
-					*(dest.(*[]migrationRow)) = []migrationRow{{Version: 2}}
-
-					return nil
-				})
-			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
-
-			got, err := m.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, got)
-			assert.Equal(t, tc.expErr, err)
-		})
-	}
 }
 
 func TestScyllaMigrator_LockUnlockName(t *testing.T) {

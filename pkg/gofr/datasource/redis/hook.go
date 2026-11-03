@@ -87,7 +87,13 @@ func (r *redisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmd)
-		r.sendOperationStats(start, cmd.Name(), cmd.Args()...)
+
+		args := cmd.Args()
+		if r.config.hideArgs {
+			args = maskCmdArgs(args)
+		}
+
+		r.sendOperationStats(start, cmd.Name(), args...)
 
 		return err
 	}
@@ -98,8 +104,46 @@ func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Pr
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
-		r.sendOperationStats(start, queryPipeline, cmds[:len(cmds)-1])
+
+		logged := cmds[:len(cmds)-1]
+		if r.config.hideArgs {
+			r.sendOperationStats(start, queryPipeline, maskPipeline(logged))
+		} else {
+			r.sendOperationStats(start, queryPipeline, logged)
+		}
 
 		return err
 	}
+}
+
+// maskCmdArgs keeps the command name (the first argument) and replaces every
+// other argument with a fixed mask, so the count stays visible.
+func maskCmdArgs(args []any) []any {
+	masked := make([]any, len(args))
+	for i := range masked {
+		masked[i] = redactedArg
+	}
+
+	if len(args) > 0 {
+		masked[0] = args[0]
+	}
+
+	return masked
+}
+
+// maskPipeline renders each pipelined command as its name followed by one mask
+// per argument, e.g. "set ***** *****".
+func maskPipeline(cmds []redis.Cmder) []string {
+	masked := make([]string, len(cmds))
+
+	for i, cmd := range cmds {
+		parts := make([]string, len(cmd.Args()))
+		for j, arg := range maskCmdArgs(cmd.Args()) {
+			parts[j] = fmt.Sprint(arg)
+		}
+
+		masked[i] = strings.Join(parts, " ")
+	}
+
+	return masked
 }

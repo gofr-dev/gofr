@@ -19,8 +19,9 @@ func TestDgraphMigratorOmitted_RefusesToMigrate(t *testing.T) {
 
 	require.ErrorIs(t, dm.checkAndCreateMigrationTable(nil), errDgraphMigratorOmitted)
 
-	_, err := dm.getLastMigration(nil)
+	applied, err := dm.getAppliedMigrations(nil)
 	require.ErrorIs(t, err, errDgraphMigratorOmitted)
+	assert.Nil(t, applied)
 
 	require.ErrorIs(t, dm.commitMigration(nil, &transactionData{}), errDgraphMigratorOmitted)
 }

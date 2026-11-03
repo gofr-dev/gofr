@@ -36,37 +36,38 @@ type redisData struct {
 	Duration  int64     `json:"duration"`
 }
 
-func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
+func (m redisMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
-		return -1, fmt.Errorf("redis: %w", err)
+		return nil, fmt.Errorf("redis: %w", err)
 	}
+
+	versions := make([]int64, 0, len(table))
 
 	for key, value := range table {
 		integerValue, _ := strconv.ParseInt(key, 10, 64)
-
-		if integerValue > lastMigration {
-			lastMigration = integerValue
-		}
+		versions = append(versions, integerValue)
 
 		var data redisData
 
 		err = json.Unmarshal([]byte(value), &data)
 		if err != nil {
-			return -1, fmt.Errorf("redis: %w", err)
+			return nil, fmt.Errorf("redis: %w", err)
 		}
 	}
 
-	c.Debugf("Redis last migration fetched value is: %v", lastMigration)
+	c.Debugf("Redis applied migrations fetched: %v", versions)
 
-	last, err := m.migrator.getLastMigration(c)
+	applied, err := m.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, last), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (m redisMigrator) beginTransaction(c *container.Container) transactionData {

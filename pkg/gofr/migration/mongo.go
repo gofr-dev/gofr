@@ -67,34 +67,30 @@ func (mg mongoMigrator) checkAndCreateMigrationTable(c *container.Container) err
 	return mg.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		lastMigration int64
-		migrations    []struct {
-			Version int64 `bson:"version"`
-		}
-	)
+func (mg mongoMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var migrations []struct {
+		Version int64 `bson:"version"`
+	}
 
 	filter := make(map[string]any)
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		return -1, fmt.Errorf("mongo: %w", err)
+		return nil, fmt.Errorf("mongo: %w", err)
 	}
 
-	// Identify the highest migration version.
-	for _, migration := range migrations {
-		lastMigration = max(lastMigration, migration.Version)
-	}
+	c.Debugf("MongoDB applied migrations fetched: %v", len(migrations))
 
-	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
-
-	lm2, err := mg.migrator.getLastMigration(c)
+	applied, err := mg.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, migration := range migrations {
+		applied[migration.Version] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
