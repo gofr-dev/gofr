@@ -22,24 +22,42 @@ const telemetryFlushTimeout = 10 * time.Second
 // the process exits, which for a CLI invocation is every window and every batch.
 // The flush is bounded by telemetryFlushTimeout so an unreachable collector
 // cannot hang the invocation.
+//
+// If the command failed, runCMD then exits the process with exitCodeFailure,
+// after the flush and after the logger is closed. Because that is os.Exit, functions
+// deferred in the application's main() do not run on the failure path; cleanup that
+// must happen either way should not rely on a defer in main().
 func (a *App) runCMD() {
-	a.cmd.Run(a.container)
+	failed := a.cmd.Run(a.container)
 
-	if a.container != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
-		defer cancel()
-
-		if err := a.container.ShutdownMetrics(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush metrics: %v", err)
-		}
-
-		if err := a.shutdownTraces(flushCtx); err != nil {
-			a.Logger().Errorf("failed to flush traces: %v", err)
-		}
-	}
+	a.flushCMDTelemetry()
 
 	if closer, ok := a.container.Logger.(io.Closer); ok {
 		closer.Close()
+	}
+
+	if failed {
+		a.exitProcess(exitCodeFailure)
+	}
+}
+
+// flushCMDTelemetry flushes the final metric window and pending span batch after a
+// CMD app's handler returns. Kept separate so its deferred cancel runs before
+// runCMD exits the process on the failure path.
+func (a *App) flushCMDTelemetry() {
+	if a.container == nil {
+		return
+	}
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), telemetryFlushTimeout)
+	defer cancel()
+
+	if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush metrics: %v", err)
+	}
+
+	if err := a.shutdownTraces(flushCtx); err != nil {
+		a.Logger().Errorf("failed to flush traces: %v", err)
 	}
 }
 
@@ -69,10 +87,20 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Both steps have already released what startup opened by the time they report anything but
+	// Each step has already released what startup opened by the time it reports anything but
 	// startupOK. What is left is deciding what the abandonment means to the process, which happens
 	// in one place rather than inside each step. See finishAbandonedStartup.
+	//
+	// The RBAC route check in prepareHTTPServer runs after the OnStart hooks, because a hook can
+	// still register a route, and before the MCP port is claimed, so a refused start has one thing
+	// fewer to release.
 	if outcome := a.handleStartupHooks(ctx); outcome != startupOK {
+		a.finishAbandonedStartup(outcome)
+
+		return
+	}
+
+	if outcome := a.prepareHTTPServer(); outcome != startupOK {
 		a.finishAbandonedStartup(outcome)
 
 		return
@@ -119,7 +147,7 @@ const (
 // decides the exit status.
 func (a *App) finishAbandonedStartup(outcome startupOutcome) {
 	if outcome == startupFailed {
-		a.abortStartup()
+		a.exitProcess(exitCodeFailure)
 	}
 }
 
@@ -282,6 +310,41 @@ func (a *App) bindMCPServer(ctx context.Context) startupOutcome {
 	return outcome
 }
 
+// prepareHTTPServer registers GoFr's built-in routes and then checks the RBAC config against the
+// complete route table, before any server starts. The application adds its routes after calling
+// EnableRBAC, and the built-in ones are added only here, so this is the first point at which a rule
+// that matches no route can be told apart from one whose route is still to come.
+//
+// What a mismatch does is set by GOFR_RBAC_ROUTE_CHECK: logged as an error while the app keeps
+// starting (warn, the default), logged and startup abandoned like a failed OnStart hook (fail), or
+// not looked for at all (off).
+func (a *App) prepareHTTPServer() startupOutcome {
+	if !a.httpRegistered {
+		return startupOK
+	}
+
+	a.httpServerSetup()
+
+	if len(a.rbacConfigs) == 0 {
+		return startupOK
+	}
+
+	mode := a.rbacRouteCheckMode()
+	if mode == rbacRouteCheckOff {
+		return startupOK
+	}
+
+	if !a.checkRBACRoutes() || mode != rbacRouteCheckFail {
+		return startupOK
+	}
+
+	a.Logger().Errorf("Stopping startup: the RBAC route check failed and %s=%s.", rbacRouteCheckKey, rbacRouteCheckFail)
+
+	a.shutdownAfterFailedStartup()
+
+	return startupFailed
+}
+
 // shutdownAfterFailedStartup releases what startup has already opened when the run is abandoned
 // before any server is up — a failed startup hook, or an MCP port that cannot be claimed. Run
 // returns normally afterwards, so without this the datasource connections opened by the container
@@ -343,7 +406,10 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	if a.httpRegistered {
 		wg.Add(1)
-		a.httpServerSetup()
+
+		if a.container.Logger != nil {
+			a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
+		}
 
 		go func(s *httpServer) {
 			defer wg.Done()

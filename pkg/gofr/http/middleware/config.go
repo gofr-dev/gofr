@@ -12,6 +12,21 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+// CORS configuration keys. MaxAge and AllowCredentials have a defined value syntax,
+// and are therefore validated before being emitted as response headers.
+const (
+	keyAccessControlAllowOrigin      = "ACCESS_CONTROL_ALLOW_ORIGIN"
+	keyAccessControlMaxAge           = "ACCESS_CONTROL_MAX_AGE"
+	keyAccessControlAllowCredentials = "ACCESS_CONTROL_ALLOW_CREDENTIALS"
+)
+
+// Metrics configuration keys.
+const keyMetricsUnmatchedLimit = "METRICS_UNMATCHED_LIMIT"
+
+// allowCredentialsTrue is the only value the Fetch standard recognizes for
+// Access-Control-Allow-Credentials.
+const allowCredentialsTrue = "true"
+
 type Config struct {
 	CorsHeaders map[string]string
 	LogProbes   LogProbes
@@ -21,6 +36,13 @@ type Config struct {
 	// disagree. Zero or negative means unlimited. The Metrics middleware sizes its
 	// caller-controlled label budget from it; see WithCardinalityLimit.
 	MetricsCardinalityLimit int
+
+	// MetricsUnmatchedLimit is METRICS_UNMATCHED_LIMIT: the most caller-controlled
+	// label sets the Metrics middleware records verbatim before collapsing them.
+	// Nil means the key is unset, and the Metrics middleware keeps its default
+	// budget, so a Config built by hand keeps today's behavior. The middleware only
+	// ever lets it lower the budget; see WithUnmatchedLimit.
+	MetricsUnmatchedLimit *int
 }
 
 type LogProbes struct {
@@ -28,23 +50,43 @@ type LogProbes struct {
 	Paths    []string
 }
 
-func GetConfigs(c config.Config) Config {
+// configLogger is the logging surface GetConfigs needs to report a misconfigured
+// value. The container's logger, held at the call site, satisfies it.
+type configLogger interface {
+	Warnf(format string, args ...any)
+}
+
+// GetConfigs reads the middleware configuration from c. CORS values with a defined
+// syntax are validated: one a browser would read the same way is rewritten to its
+// canonical form, and one it cannot read is dropped. Either is reported through the
+// optional logger instead of being emitted as a malformed response header.
+func GetConfigs(c config.Config, logger ...configLogger) Config {
 	middlewareConfigs := Config{
 		CorsHeaders: make(map[string]string),
 	}
 
+	var warnLogger configLogger
+	if len(logger) > 0 {
+		warnLogger = logger[0]
+	}
+
 	allowedCORSHeaders := []string{
-		"ACCESS_CONTROL_ALLOW_ORIGIN",
+		keyAccessControlAllowOrigin,
 		"ACCESS_CONTROL_ALLOW_METHODS",
 		"ACCESS_CONTROL_ALLOW_HEADERS",
-		"ACCESS_CONTROL_ALLOW_CREDENTIALS",
+		keyAccessControlAllowCredentials,
 		"ACCESS_CONTROL_EXPOSE_HEADERS",
-		"ACCESS_CONTROL_MAX_AGE",
+		keyAccessControlMaxAge,
 	}
 
 	for _, v := range allowedCORSHeaders {
-		if val := c.Get(v); val != "" {
-			middlewareConfigs.CorsHeaders[convertHeaderNames(v)] = val
+		val := c.Get(v)
+		if val == "" {
+			continue
+		}
+
+		if headerVal, ok := corsHeaderValue(v, val, warnLogger); ok {
+			middlewareConfigs.CorsHeaders[convertHeaderNames(v)] = headerVal
 		}
 	}
 
@@ -59,8 +101,92 @@ func GetConfigs(c config.Config) Config {
 	}
 
 	middlewareConfigs.MetricsCardinalityLimit = container.MetricsCardinalityLimit(c)
+	middlewareConfigs.MetricsUnmatchedLimit = metricsUnmatchedLimit(c, warnLogger)
 
 	return middlewareConfigs
+}
+
+// metricsUnmatchedLimit reads METRICS_UNMATCHED_LIMIT. Unset returns nil, which
+// keeps the default budget. Unlike METRICS_CARDINALITY_LIMIT, which
+// container.MetricsCardinalityLimit parses, it is parsed here because it needs the
+// warn logger that GetConfigs receives. A value that is negative or not an
+// integer is treated as 0, so a typo fails toward fewer series rather than more;
+// the warning names the key but not the value, which is never echoed to the logs.
+func metricsUnmatchedLimit(c config.Config, logger configLogger) *int {
+	val := strings.TrimSpace(c.Get(keyMetricsUnmatchedLimit))
+	if val == "" {
+		return nil
+	}
+
+	n, err := strconv.Atoi(val)
+	if err == nil && n >= 0 {
+		return &n
+	}
+
+	if logger != nil {
+		logger.Warnf("invalid value for config %s, expected a non-negative integer: treated as 0", keyMetricsUnmatchedLimit)
+	}
+
+	zero := 0
+
+	return &zero
+}
+
+// corsHeaderValue returns the header value to send for a CORS configuration key, and
+// whether to send it. A value a browser cannot read is dropped and reported; keys
+// without a defined value syntax pass through unchanged.
+func corsHeaderValue(key, val string, logger configLogger) (string, bool) {
+	var expected string
+
+	switch key {
+	case keyAccessControlMaxAge:
+		if maxAge, ok := canonicalMaxAge(val, logger); ok {
+			return maxAge, true
+		}
+
+		expected = "a whole number of seconds"
+	case keyAccessControlAllowCredentials:
+		// The Fetch standard matches this header against the literal "true", so the other
+		// spellings strconv.ParseBool accepts (1, t, TRUE) are discarded by the browser.
+		if val == allowCredentialsTrue {
+			return val, true
+		}
+
+		// "false" is an explicit opt-out rather than a mistake, so it is not reported:
+		// omitting the header is exactly what the browser does with that value anyway.
+		if val == "false" {
+			return "", false
+		}
+
+		expected = `exactly "true" or "false"`
+	default:
+		return val, true
+	}
+
+	if logger != nil {
+		logger.Warnf("invalid value %q for config %s, expected %s: dropping the header", val, key, expected)
+	}
+
+	return "", false
+}
+
+// canonicalMaxAge rewrites an integer Access-Control-Max-Age to the canonical decimal
+// form the Fetch standard defines: a negative value becomes 0, which also disables
+// preflight caching, and "0600" or "+600" become 600. It reports false for a value
+// that is not an integer.
+func canonicalMaxAge(val string, logger configLogger) (string, bool) {
+	seconds, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return "", false
+	}
+
+	canonical := strconv.FormatInt(max(seconds, 0), 10)
+	if canonical != val && logger != nil {
+		logger.Warnf("value %q for config %s is not in canonical form: sending %q instead",
+			val, keyAccessControlMaxAge, canonical)
+	}
+
+	return canonical, true
 }
 
 func convertHeaderNames(header string) string {

@@ -152,9 +152,12 @@ func (c *Container) runHealthChecks(ctx context.Context, timeout time.Duration) 
 }
 
 // waitForChecks blocks until every check has finished or until ctx is done, and reports which of the
-// two happened. Checks still outstanding at a timeout are abandoned rather than canceled: the
-// health methods of SQL, Redis and PubSub take no context, so there is nothing to cancel them with.
-// They keep writing into the collector afterwards, which is why only a snapshot ever leaves it.
+// two happened. Datasources whose health check honors its context are canceled by the same deadline
+// and return promptly; once every outstanding check has returned, the next round probes afresh
+// instead of reporting a stalled one. Checks that cannot be canceled -- the health methods of SQL,
+// Redis and PubSub take no context, and some datasources ignore the one they get -- are abandoned
+// rather than canceled and keep writing into the collector afterwards, which is why only a
+// snapshot ever leaves it.
 // On a timeout it also returns a channel closed when those abandoned checks eventually do finish,
 // so the caller can release the round claim then rather than starting a second goroutine of its own
 // to wait for the same WaitGroup. It is nil whenever there is nothing left to wait for.

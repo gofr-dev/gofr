@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"strings"
 )
 
@@ -43,12 +42,10 @@ func NewBasicAuthConfig(username, password string) (Options, error) {
 }
 
 func (c *BasicAuthConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
+	headers = cloneHeaders(headers)
 
-	if value, exists := headers[AuthHeader]; exists {
-		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, AuthHeader)}
+	if _, exists := headers[AuthHeader]; exists {
+		return headers, AuthErr{Message: headerExistsMessage(AuthHeader)}
 	}
 
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(c.UserName + ":" + c.Password))

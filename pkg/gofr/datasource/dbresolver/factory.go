@@ -38,6 +38,7 @@ var (
 	errEmptyCredentials         = errors.New("replica has empty credentials")
 	errInvalidPort              = errors.New("invalid port for replica")
 	errAllReplicasFailed        = errors.New("all replicas failed to connect")
+	errReplicaNotInitialized    = errors.New("replica SQL connection could not be initialized")
 )
 
 // Config holds resolver configuration.
@@ -148,6 +149,9 @@ func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metr
 	replicas, err := connectReplicas(&p.cfg, p.app.Config, logger, metrics)
 	if err != nil {
 		logger.Errorf("Failed to create replicas: %v", err)
+
+		// Keep serving from the primary; a nil resolver would make AddDBResolver drop SQL entirely.
+		p.resolver = p.app.GetSQL()
 
 		return nil
 	}
@@ -288,6 +292,11 @@ func createReplicaConnection(cfg config.Config, host, port, user, password strin
 	}
 
 	db := gofrSQL.NewSQL(newReplicaConfig(cfg, host, port, user, password), logger, metrics)
+	// Return an untyped nil: a nil *DB stored in container.DB is a non-nil interface that
+	// would enter the replica pool and panic on the first query routed to it.
+	if db == nil {
+		return nil, errReplicaNotInitialized
+	}
 
 	return db, nil
 }

@@ -222,19 +222,59 @@ func TestOptimizedOpenConnections_AboveMax(t *testing.T) {
 	assert.Equal(t, "20", result)
 }
 
-func TestCreateReplicaConnection_NoDBName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestCreateReplicaConnection(t *testing.T) {
+	tests := []struct {
+		name    string
+		configs map[string]string
+		wantErr error
+	}{
+		{
+			name:    "missing DB name",
+			configs: map[string]string{},
+			wantErr: errDBNameRequired,
+		},
+		{
+			// NewSQL returns a nil *DB when the dialect is unset; it must not reach the pool as a typed nil.
+			name:    "SQL not initialized",
+			configs: map[string]string{"DB_NAME": "testdb"},
+			wantErr: errReplicaNotInitialized,
+		},
+		{
+			name: "initialized",
+			configs: map[string]string{
+				"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+				"DB_DIALECT": "sqlite",
+			},
+		},
+	}
 
-	mockConfig := config.NewMockConfig(map[string]string{})
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 
-	replica, err := createReplicaConnection(mockConfig, "host", "3306", "user", "pass", mockLogger, mockMetrics)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+			expectSQLInit(mockLogger, mockMetrics)
 
-	require.Error(t, err)
-	assert.Nil(t, replica)
-	assert.ErrorIs(t, err, errDBNameRequired)
+			replica, err := createReplicaConnection(config.NewMockConfig(tc.configs), "localhost", "3307", "user", "pass",
+				mockLogger, mockMetrics)
+
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				// assert.Nil accepts a typed nil, so compare the interface itself.
+				if replica != nil {
+					t.Errorf("replica = %#v, want an untyped nil", replica)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, replica)
+
+			t.Cleanup(func() { _ = replica.Close() })
+		})
+	}
 }
 
 func TestResolverProvider_UseTracer(t *testing.T) {
@@ -277,7 +317,7 @@ func TestResolverProvider_Connect_InvalidMetrics(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockConfig := config.NewMockConfig(map[string]string{})
 
-	app := gofr.New()
+	app := newSQLiteApp(t)
 	app.Config = mockConfig
 
 	mockLogger.EXPECT().Errorf("Invalid logger or metrics type").Times(1)
@@ -567,7 +607,8 @@ func TestConnectReplicas_EmptyConfig(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -587,10 +628,12 @@ func TestConnectReplicas_ValidSingleReplica(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	mockLogger.EXPECT().Logf("Created DB replica connection to %s", "localhost:3307").Times(1)
 
@@ -616,10 +659,12 @@ func TestConnectReplicas_MultipleReplicas(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(3)
 
@@ -643,7 +688,8 @@ func TestConnectReplicas_InvalidHostFormat(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -666,7 +712,8 @@ func TestConnectReplicas_EmptyCredentials(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -709,7 +756,8 @@ func TestConnectReplicas_InvalidPort(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
@@ -732,10 +780,12 @@ func TestConnectReplicas_PasswordWithCommas(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(1)
 
@@ -761,10 +811,12 @@ func TestConnectReplicas_PartialFailures(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	// Both replicas will succeed in creation (gofrSQL.NewSQL doesn't validate connectivity)
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(2)
@@ -788,10 +840,12 @@ func TestConnectReplicas_AllReplicasFail(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	// Both replicas will succeed in creation
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(2)
@@ -815,10 +869,12 @@ func TestConnectReplicas_HostWithWhitespace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_NAME": "testdb",
+		"DB_NAME":    filepath.Join(t.TempDir(), "replica.db"),
+		"DB_DIALECT": "sqlite",
 	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	expectSQLInit(mockLogger, mockMetrics)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(1)
 
@@ -835,19 +891,34 @@ func TestConnectReplicas_HostWithWhitespace(t *testing.T) {
 	assert.Len(t, replicas, 1)
 }
 
-func TestCreateReplicaConnection_MissingDBName(t *testing.T) {
+func TestConnectReplicas_ReplicaNotInitialized(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockConfig := config.NewMockConfig(map[string]string{})
+	// No DB_DIALECT: NewSQL returns nil, so the replica must count as failed, not as connected.
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	replica, err := createReplicaConnection(mockConfig, "localhost", "3307", "user", "pass", mockLogger, mockMetrics)
+	// Declared before expectSQLInit's catch-all Warnf so that gomock matches it first.
+	mockLogger.EXPECT().Warnf("Failed to connect to replica #%d (%s): %v", 1, "localhost:3307", errReplicaNotInitialized).Times(1)
 
-	require.Error(t, err)
-	assert.Nil(t, replica)
-	assert.ErrorIs(t, err, errDBNameRequired)
+	expectSQLInit(mockLogger, mockMetrics)
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(0)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "localhost:3307", User: "user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.ErrorIs(t, err, errAllReplicasFailed)
+	assert.Empty(t, replicas)
 }
 
 // newSQLiteApp creates a gofr app whose primary SQL datasource is an in-process SQLite database.
@@ -888,7 +959,16 @@ func TestResolverProvider_Connect(t *testing.T) {
 			setupMocks: func(l *MockLogger) {
 				l.EXPECT().Errorf("Failed to create replicas: %v", gomock.Any())
 			},
-			expType: nil,
+			expType: &gofrSQL.DB{},
+		},
+		{
+			desc:     "invalid replica port keeps the primary",
+			newApp:   newSQLiteApp,
+			replicas: []ReplicaCredential{{Host: "localhost:notaport", User: "user", Password: "pass"}},
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("Failed to create replicas: %v", gomock.Any())
+			},
+			expType: &gofrSQL.DB{},
 		},
 	}
 
@@ -900,13 +980,18 @@ func TestResolverProvider_Connect(t *testing.T) {
 
 			tc.setupMocks(mockLogger)
 
-			provider := NewDBResolverProvider(tc.newApp(t), &Config{Replicas: tc.replicas})
+			app := tc.newApp(t)
+			primary := app.GetSQL()
+
+			provider := NewDBResolverProvider(app, &Config{Replicas: tc.replicas})
 			provider.UseLogger(mockLogger)
 			provider.UseMetrics(mockMetrics)
 
 			provider.Connect()
 
+			require.NotNil(t, provider.GetResolver())
 			assert.IsType(t, tc.expType, provider.GetResolver())
+			assert.Same(t, primary, provider.GetResolver())
 		})
 	}
 }
@@ -1001,4 +1086,15 @@ func TestOptimizedConnections_NonPositiveValue(t *testing.T) {
 			assert.Equal(t, tc.expected, optimizedIdleConnections(mockConfig))
 		})
 	}
+}
+
+// expectSQLInit permits the log lines and gauge updates gofrSQL.NewSQL emits while setting up a connection
+// for a configured DB_DIALECT; the replica-connect tests do not assert on them.
+func expectSQLInit(l *MockLogger, m *MockMetrics) {
+	m.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	l.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	l.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	l.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
+	l.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 }

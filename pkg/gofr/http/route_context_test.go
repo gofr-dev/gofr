@@ -4,10 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/internal/routemark"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // TestRouteTemplate_ResolvesUnderBothRouters is the guard for the accessor the
@@ -57,12 +63,73 @@ func TestRouteTemplate_EmptyWhenUnmatched(t *testing.T) {
 	assert.Empty(t, RouteTemplate(req), "no template should be reported for an unrouted request")
 }
 
-// TestWithRouteTemplate_EmptyIsNoOp verifies that recording an empty template
-// does not copy the request — unmatched requests must not pay for a context
-// allocation.
-func TestWithRouteTemplate_EmptyIsNoOp(t *testing.T) {
+// TestWithRoute_NilIsNoOp verifies that recording no route does not copy the
+// request — unmatched requests must not pay for a context allocation.
+func TestWithRoute_NilIsNoOp(t *testing.T) {
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", http.NoBody)
 
-	assert.Same(t, req, withRouteTemplate(req, ""), "empty template must not copy the request")
-	assert.NotSame(t, req, withRouteTemplate(req, "/x/{id}"), "a real template must be recorded")
+	assert.Same(t, req, withRoute(req, nil), "no route must not copy the request")
+	assert.NotSame(t, req, withRoute(req, mux.NewRouter().Path("/x/{id}")), "a real route must be recorded")
+}
+
+// TestCatchAllAnswered tells GoFr's marked catch-all apart from a route or a static directory
+// registered at "/": all of them have the template "/", under both routers.
+func TestCatchAllAnswered(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	testCases := []struct {
+		desc    string
+		useTrie bool
+		static  bool
+		path    string
+		want    bool
+	}{
+		{"mux: route at /", false, false, "/", false},
+		{"trie: route at /", true, false, "/", false},
+		{"mux: catch-all", false, false, "/nowhere", true},
+		{"trie: catch-all", true, false, "/nowhere", true},
+		{"mux: route with a parameter", false, false, "/users/42", false},
+		{"trie: route with a parameter", true, false, "/users/42", false},
+		{"mux: static directory at /", false, true, "/a.txt", false},
+		{"trie: static directory at /", true, true, "/a.txt", false},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var got bool
+
+			r := NewRouter()
+			r.useTrie = tc.useTrie
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					got = routemark.CatchAllAnswered(req)
+
+					next.ServeHTTP(w, req)
+				})
+			})
+			r.Add(http.MethodGet, "/", ok)
+			r.Add(http.MethodGet, "/users/{id}", ok)
+
+			if tc.static {
+				dir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o600))
+				r.AddStaticFiles(logging.NewMockLogger(logging.ERROR), "/", dir)
+			}
+
+			routemark.MarkCatchAll(r.PathPrefix("/")).Handler(ok)
+
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, tc.path, http.NoBody)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.want, got, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+
+	t.Run("unrouted request", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+
+		assert.False(t, routemark.CatchAllAnswered(req))
+	})
 }

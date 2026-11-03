@@ -56,6 +56,10 @@ type Config struct {
 	PubSubBufferSize    int           // Message buffer size for channels (default: 100)
 	PubSubQueryTimeout  time.Duration // Default query timeout (default: 5s)
 	PubSubQueryLimit    int           // Default query message limit (default: 10)
+
+	// hideArgs masks command arguments in the debug query log and drops
+	// db.statement from trace spans (REDIS_REDACT_ARGS=true).
+	hideArgs bool
 }
 
 // StreamsConfig holds configuration for Redis Streams.
@@ -138,21 +142,22 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
-	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	// No caller context exists at construction time; the ping is bounded by redisPingTimeout.
+	ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
 	defer cancel()
 
 	stopSignal := make(chan struct{})
 
 	if err := rc.Ping(ctx).Err(); err == nil {
-		if err = otel.InstrumentTracing(rc); err != nil {
+		if err = otel.InstrumentTracing(rc, tracingOptions(redisConfig)...); err != nil {
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s on database %d", redisConfig.addr(), redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, logger, stopSignal)
+		go retryConnect(rc, redisConfig, logger, defaultRetryTimeout, stopSignal)
 	}
 
 	r := &Redis{
@@ -165,13 +170,25 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	return r
 }
 
-// retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-chan struct{}) {
+// tracingOptions returns the redisotel options derived from the config. With
+// hideArgs set, spans omit db.statement, which would otherwise carry the full
+// command including keys and values.
+func tracingOptions(cfg *Config) []otel.TracingOption {
+	if cfg.hideArgs {
+		return []otel.TracingOption{otel.WithDBStatement(false)}
+	}
+
+	return nil
+}
+
+// retryConnect pings Redis every interval until it answers, then adds tracing instrumentation.
+func retryConnect(client *redis.Client, redisConfig *Config, logger datasource.Logger, interval time.Duration,
+	stopSignal <-chan struct{}) {
 	for {
 		select {
 		case <-stopSignal:
 			return
-		case <-time.After(defaultRetryTimeout):
+		case <-time.After(interval):
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
@@ -180,7 +197,7 @@ func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-c
 		cancel()
 
 		if err == nil {
-			if err = otel.InstrumentTracing(client); err != nil {
+			if err = otel.InstrumentTracing(client, tracingOptions(redisConfig)...); err != nil {
 				logger.Errorf("could not add tracing instrumentation, error: %s", err)
 			}
 
@@ -189,7 +206,7 @@ func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-c
 			return
 		}
 
-		logger.Errorf("could not connect to redis, error: %s", err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 	}
 }
 
@@ -230,19 +247,20 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 
 	ps := newPubSub(rc, redisConfig, logger, metrics)
 
-	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	// Tie the initial ping to the PubSub lifecycle, like the retry loop below.
+	ctx, cancel := context.WithTimeout(ps.ctx, redisPingTimeout)
 	defer cancel()
 
 	if err := rc.Ping(ctx).Err(); err == nil {
-		if err = otel.InstrumentTracing(rc); err != nil {
+		if err = otel.InstrumentTracing(rc, tracingOptions(redisConfig)...); err != nil {
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s on database %d", redisConfig.addr(), redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s' on database %d, error: %s", redisConfig.addr(), redisConfig.DB, err)
 
-		go retryConnect(rc, logger, ps.ctx.Done())
+		go retryConnect(rc, redisConfig, logger, defaultRetryTimeout, ps.ctx.Done())
 	}
 
 	return ps
