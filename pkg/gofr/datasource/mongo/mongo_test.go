@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 )
@@ -26,12 +27,13 @@ func TestClient_Connect(t *testing.T) {
 		expDBSet    bool
 	}{
 		{
-			desc:   "invalid config registers metrics and leaves database nil",
+			desc:   "invalid config registers metrics, keeps the database label and leaves database nil",
 			config: Config{Host: "mongo", Database: "test"},
 			setupMocks: func(l *MockLogger, m *MockMetrics) {
 				m.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
 				l.EXPECT().Errorf("error generating MongoDB URI: %v", gomock.Any())
 			},
+			expDatabase: "test",
 		},
 		{
 			desc:   "server unreachable registers metrics and keeps the client",
@@ -935,14 +937,62 @@ func TestClient_ServerUnreachable(t *testing.T) {
 }
 
 func TestClient_HealthCheck_NotConnected(t *testing.T) {
-	client := New(Config{})
+	tests := []struct {
+		desc        string
+		config      Config
+		expDatabase string
+	}{
+		{desc: "never connected", config: Config{}},
+		{desc: "invalid config", config: Config{Host: "mongo", Database: "test"}, expDatabase: "test"},
+	}
 
-	health, err := client.HealthCheck(t.Context())
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			logger := NewMockLogger(ctrl)
+			metrics := NewMockMetrics(ctrl)
 
-	require.ErrorIs(t, err, errNotConnected)
-	require.Equal(t, &Health{Status: statusDown, Details: map[string]any{
-		"host":     "",
-		"database": "",
-		"error":    errNotConnected.Error(),
-	}}, health)
+			metrics.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+			logger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+
+			client := New(tc.config)
+			client.UseLogger(logger)
+			client.UseMetrics(metrics)
+			client.Connect()
+
+			health, err := client.HealthCheck(t.Context())
+
+			// Both DOWN paths return the same error; the reason is in the details.
+			require.ErrorIs(t, err, errStatusDown)
+			require.Equal(t, &Health{Status: statusDown, Details: map[string]any{
+				"host":     "",
+				"database": tc.expDatabase,
+				"error":    errNotConnected.Error(),
+			}}, health)
+		})
+	}
+}
+
+// A driver error from StartSession returns no session, so a caller that ignores the error cannot use a wrapper
+// around a nil session. The driver errors only for a client that was never connected.
+func TestClient_StartSession_DriverError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := NewMockLogger(ctrl)
+	metrics := NewMockMetrics(ctrl)
+
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(),
+		"hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+	logger.EXPECT().Debug(gomock.Any())
+
+	//nolint:staticcheck // NewClient is deprecated, but it is the only way to build a client that never connected.
+	unconnected, err := mongo.NewClient(options.Client().ApplyURI("mongodb://127.0.0.1:1"))
+	require.NoError(t, err)
+
+	client := Client{Database: unconnected.Database("test"), logger: logger, metrics: metrics,
+		tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
+
+	sess, err := client.StartSession()
+
+	require.ErrorIs(t, err, mongo.ErrClientDisconnected)
+	require.Nil(t, sess)
 }

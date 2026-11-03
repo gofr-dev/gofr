@@ -106,6 +106,9 @@ func (c *Client) Connect() {
 	}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in microseconds.", mongoBuckets...)
 
+	// Set before the URI is validated, so the database label and health details are filled even when it is not.
+	c.database = c.config.Database
+
 	uri, host, err := generateMongoURI(c.config)
 	if err != nil {
 		c.logger.Errorf("error generating MongoDB URI: %v", err)
@@ -114,7 +117,6 @@ func (c *Client) Connect() {
 
 	// Only the host is stored, never the full URI, as it may contain credentials.
 	c.uri = host
-	c.database = c.config.Database
 
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
@@ -461,7 +463,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		h.Status = statusDown
 		h.Details["error"] = err.Error()
 
-		return &h, err
+		return &h, errStatusDown
 	}
 
 	err = db.Client().Ping(ctx, readpref.Primary())
@@ -487,9 +489,11 @@ func (c *Client) StartSession() (any, error) {
 	}
 
 	s, err := db.Client().StartSession()
-	ses := &session{s}
+	if err != nil {
+		return nil, err
+	}
 
-	return ses, err
+	return &session{s}, nil
 }
 
 type session struct {
