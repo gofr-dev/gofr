@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,38 @@ import (
 )
 
 var errTest = fmt.Errorf("test error")
+
+// recordingMetrics records the status label of every app_file_stats observation.
+type recordingMetrics struct {
+	mu     sync.Mutex
+	labels [][]string
+}
+
+func (*recordingMetrics) NewHistogram(string, string, ...float64) {}
+
+func (m *recordingMetrics) RecordHistogram(_ context.Context, _ string, _ float64, labels ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.labels = append(m.labels, labels)
+}
+
+func (m *recordingMetrics) statuses() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var out []string
+
+	for _, l := range m.labels {
+		for i := 0; i+1 < len(l); i += 2 {
+			if l[i] == "status" {
+				out = append(out, l[i+1])
+			}
+		}
+	}
+
+	return out
+}
 
 // setupCommonFS is a helper function to set up common test dependencies.
 func setupCommonFS(t *testing.T) (*gomock.Controller, *MockStorageProvider, *CommonFileSystem) {
@@ -309,9 +342,11 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 		statInfo    *ObjectInfo
 		statErr     error
 		listObjects []ObjectInfo
+		listDirs    []string
 		listErr     error
 		expectError bool
 		expectedDir bool
+		wantStatus  string
 	}{
 		{
 			name:     "successful stat for file",
@@ -325,6 +360,7 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			},
 			expectError: false,
 			expectedDir: false,
+			wantStatus:  StatusSuccess,
 		},
 		{
 			name:     "file not found, but directory exists",
@@ -335,6 +371,16 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			},
 			expectError: false,
 			expectedDir: true,
+			wantStatus:  StatusSuccess,
+		},
+		{
+			name:        "prefix holding only subfolders is a directory",
+			fileName:    "parent",
+			statErr:     fmt.Errorf("head parent: %w", os.ErrNotExist),
+			listDirs:    []string{"parent/child/"},
+			expectError: false,
+			expectedDir: true,
+			wantStatus:  StatusSuccess,
 		},
 		{
 			name:        "file not found, directory also not found",
@@ -342,6 +388,14 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			statErr:     errTest,
 			listObjects: []ObjectInfo{},
 			expectError: true,
+			wantStatus:  StatusError,
+		},
+		{
+			name:        "missing object and empty prefix is recorded as not found",
+			fileName:    "missing",
+			statErr:     fmt.Errorf("head missing: %w", os.ErrNotExist),
+			expectError: true,
+			wantStatus:  StatusNotFound,
 		},
 		{
 			name:        "stat error and list error",
@@ -349,6 +403,7 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			statErr:     errTest,
 			listErr:     errTest,
 			expectError: true,
+			wantStatus:  StatusError,
 		},
 	}
 
@@ -356,6 +411,9 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl, mockProvider, fs := setupCommonFS(t)
 			defer ctrl.Finish()
+
+			metrics := &recordingMetrics{}
+			fs.Metrics = metrics
 
 			if tt.statErr != nil {
 				mockProvider.EXPECT().
@@ -374,7 +432,7 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 				} else {
 					mockProvider.EXPECT().
 						ListDir(gomock.Any(), prefix).
-						Return(tt.listObjects, nil, nil)
+						Return(tt.listObjects, tt.listDirs, nil)
 				}
 			} else {
 				mockProvider.EXPECT().
@@ -391,6 +449,8 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 				assert.NotNil(t, fileInfo)
 				assert.Equal(t, tt.expectedDir, fileInfo.IsDir())
 			}
+
+			assert.Equal(t, []string{tt.wantStatus}, metrics.statuses())
 		})
 	}
 }
@@ -655,16 +715,38 @@ func TestCommonFileSystem_Open_Success(t *testing.T) {
 }
 
 func TestCommonFileSystem_Open_StatObjectError(t *testing.T) {
-	ctrl, mockProvider, fs := setupCommonFS(t)
-	defer ctrl.Finish()
+	tests := []struct {
+		name       string
+		statErr    error
+		wantStatus string
+	}{
+		{name: "provider error is recorded as error", statErr: errTest, wantStatus: StatusError},
+		{
+			name:       "missing object is recorded as not found",
+			statErr:    fmt.Errorf("head missing.txt: %w", os.ErrNotExist),
+			wantStatus: StatusNotFound,
+		},
+	}
 
-	mockProvider.EXPECT().
-		StatObject(gomock.Any(), "missing.txt").
-		Return(nil, errTest)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl, mockProvider, fs := setupCommonFS(t)
+			defer ctrl.Finish()
 
-	_, err := fs.Open("missing.txt")
-	require.Error(t, err)
-	assert.Equal(t, ErrFileNotFound, err)
+			metrics := &recordingMetrics{}
+			fs.Metrics = metrics
+
+			mockProvider.EXPECT().
+				StatObject(gomock.Any(), "missing.txt").
+				Return(nil, tt.statErr)
+
+			_, err := fs.Open("missing.txt")
+
+			require.Error(t, err)
+			assert.Equal(t, ErrFileNotFound, err)
+			assert.Equal(t, []string{tt.wantStatus}, metrics.statuses())
+		})
+	}
 }
 
 func TestCommonFileSystem_Open_NewReaderError(t *testing.T) {

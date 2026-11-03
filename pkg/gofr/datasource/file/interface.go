@@ -197,8 +197,10 @@ var (
 )
 
 const (
-	StatusSuccess   = "SUCCESS"
-	StatusError     = "ERROR"
+	StatusSuccess = "SUCCESS"
+	StatusError   = "ERROR"
+	// StatusNotFound marks an operation on an object that does not exist, so a miss is not counted as a failure.
+	StatusNotFound  = "NOT_FOUND"
 	MsgWriterClosed = "Writer closed successfully"
 	MsgReaderClosed = "Reader closed successfully"
 )
