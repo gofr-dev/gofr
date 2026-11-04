@@ -217,8 +217,30 @@ func TestMuxClean(t *testing.T) {
 }
 
 // serveMux saves three allocations per matched request against mux.Router.ServeHTTP: the
-// RouteMatch, one of the two context values and one of the two request copies.
+// RouteMatch, one of the two context values and one of the two request copies. A route mux has
+// to decide (here, a regexp variable) still gets that much.
 func TestServeMux_Allocations(t *testing.T) {
+	if raceEnabled {
+		t.Skip("allocation counts are not stable under the race detector")
+	}
+
+	t.Setenv(RouterEnvVar, MatcherMux)
+
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users/{id:[0-9]+}", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/1", http.NoBody)
+	w := httptest.NewRecorder()
+
+	viaMux := testing.AllocsPerRun(100, func() { r.Router.ServeHTTP(w, req) })
+	viaServeMux := testing.AllocsPerRun(100, func() { r.ServeHTTP(w, req) })
+
+	assert.InDelta(t, viaMux-3, viaServeMux, 0.01, "mux %.0f, serveMux %.0f", viaMux, viaServeMux)
+}
+
+// A route fastMatch decides costs the muxState and one request copy, and nothing for its vars
+// until they are read: no submatch indexes and no map.
+func TestServeMux_FastMatchAllocations(t *testing.T) {
 	if raceEnabled {
 		t.Skip("allocation counts are not stable under the race detector")
 	}
@@ -234,5 +256,5 @@ func TestServeMux_Allocations(t *testing.T) {
 	viaMux := testing.AllocsPerRun(100, func() { r.Router.ServeHTTP(w, req) })
 	viaServeMux := testing.AllocsPerRun(100, func() { r.ServeHTTP(w, req) })
 
-	assert.InDelta(t, viaMux-3, viaServeMux, 0.01, "mux %.0f, serveMux %.0f", viaMux, viaServeMux)
+	assert.InDelta(t, 2, viaServeMux, 0.01, "mux %.0f, serveMux %.0f", viaMux, viaServeMux)
 }

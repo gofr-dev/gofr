@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"path"
+	"sync"
 
 	"github.com/gorilla/mux"
 )
@@ -69,10 +70,15 @@ func init() { //nolint:gochecknoinits // validates muxVarsKey and muxRouteKey on
 }
 
 // muxState is the request context serveMux installs: its parent plus the RouteMatch mux
-// matched into, read back for mux's two keys.
+// matched into, read back for mux's two keys. When fastMatch decided the request, fast is the
+// route it chose and path the path it matched; the vars map is then built on first read.
 type muxState struct {
 	context.Context
 	match mux.RouteMatch
+
+	fast *fastRoute
+	path string
+	once sync.Once
 }
 
 // Value answers mux's keys as the two context values mux stores would: the vars map and the
@@ -80,12 +86,24 @@ type muxState struct {
 func (s *muxState) Value(key any) any {
 	switch key {
 	case muxVarsKey:
+		if s.fast != nil {
+			s.once.Do(s.buildVars)
+		}
+
 		return s.match.Vars
 	case muxRouteKey:
 		return s.match.Route
 	}
 
 	return s.Context.Value(key)
+}
+
+// buildVars builds the map mux would have: one entry per variable, a later name overwriting an
+// earlier one, and an empty map, not nil, for a route without variables.
+func (s *muxState) buildVars() {
+	vars := make(map[string]string, len(s.fast.names))
+	s.fast.match(s.path, vars)
+	s.match.Vars = vars
 }
 
 // serveMux is mux.Router.ServeHTTP with the match and its context state in one allocation.
@@ -103,7 +121,7 @@ func (rou *Router) serveMux(w http.ResponseWriter, r *http.Request) {
 
 	var handler http.Handler
 
-	if rou.Router.Match(r, &s.match) {
+	if rou.fastMatch(r, s) || rou.Router.Match(r, &s.match) {
 		handler = s.match.Handler
 		r = r.WithContext(s)
 	}

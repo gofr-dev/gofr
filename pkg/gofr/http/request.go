@@ -124,7 +124,10 @@ var (
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
 // to create applications without being aware of the transport. cmd.Request is another such abstraction.
 type Request struct {
-	req        *http.Request
+	req *http.Request
+	// pathParams, when set, is read in place of mux.Vars. RequestFor leaves it nil: the vars are
+	// read from the request's context when a handler asks for one, so a request that never does
+	// costs nothing for them.
 	pathParams map[string]string
 }
 
@@ -142,10 +145,7 @@ func NewRequest(r *http.Request) *Request {
 // Returning a value lets the caller place it in that same allocation instead of
 // taking a second one. Callers needing a pointer keep using NewRequest.
 func RequestFor(r *http.Request) Request {
-	return Request{
-		req:        r,
-		pathParams: mux.Vars(r),
-	}
+	return Request{req: r}
 }
 
 // Param returns the query parameter with the given key.
@@ -160,7 +160,11 @@ func (r *Request) Context() context.Context {
 
 // PathParam retrieves a path parameter from the request.
 func (r *Request) PathParam(key string) string {
-	return r.pathParams[key]
+	if r.pathParams != nil {
+		return r.pathParams[key]
+	}
+
+	return mux.Vars(r.req)[key]
 }
 
 // Bind parses the request body and binds it to the provided interface. The

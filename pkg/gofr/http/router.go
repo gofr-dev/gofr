@@ -114,6 +114,9 @@ type Router struct {
 	// dispatching records that dispatch has been handed to mux.
 	dispatching bool
 
+	// fast is fastMatch's scan list (see mux_fast.go).
+	fast fastState
+
 	// logger is optional and set by the server. Nothing on the request path uses
 	// it; it exists so Use can report a late registration.
 	logger logging.Logger
