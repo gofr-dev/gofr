@@ -30,6 +30,7 @@ var (
 	errEmptyQuery        = errors.New("query cannot be empty")
 	errEmptyOperations   = errors.New("operations cannot be empty")
 	errHealthCheckFailed = errors.New("elasticsearch health check failed")
+	errNotConnected      = errors.New("elasticsearch client is not connected")
 	errOperation         = errors.New("elasticsearch operation error")
 	errMarshaling        = errors.New("error marshaling data")
 	errParsingResponse   = errors.New("error parsing response")
@@ -88,6 +89,14 @@ func (c *Client) Connect() {
 		Password:  c.config.Password,
 	}
 
+	// Register the histogram first so it exists even if the client cannot be created below.
+	var responseTimeBuckets = []float64{
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+	}
+
+	c.metrics.NewHistogram("es_request_duration_ms", "Duration of Elasticsearch requests in milliseconds", responseTimeBuckets...)
+
 	c.logger.Debugf("connecting to Elasticsearch at %v", c.config.Addresses)
 
 	client, err := es.NewClient(cfg)
@@ -99,13 +108,6 @@ func (c *Client) Connect() {
 
 	c.client = client
 
-	var responseTimeBuckets = []float64{
-		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
-		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
-	}
-
-	c.metrics.NewHistogram("es_request_duration_ms", "Duration of Elasticsearch requests in milliseconds", responseTimeBuckets...)
-
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("Elasticsearch health check failed: %v", err)
 		return
@@ -116,6 +118,10 @@ func (c *Client) Connect() {
 
 // CreateIndex creates an index in Elasticsearch with the specified settings.
 func (c *Client) CreateIndex(ctx context.Context, index string, settings map[string]any) error {
+	if c.client == nil {
+		return errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return errEmptyIndex
 	}
@@ -151,6 +157,10 @@ func (c *Client) CreateIndex(ctx context.Context, index string, settings map[str
 }
 
 func (c *Client) DeleteIndex(ctx context.Context, index string) error {
+	if c.client == nil {
+		return errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return errEmptyIndex
 	}
@@ -182,6 +192,10 @@ func (c *Client) DeleteIndex(ctx context.Context, index string) error {
 // Search executes a query against one or more indices.
 // Returns the entire response JSON as a map.
 func (c *Client) Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error) {
+	if c.client == nil {
+		return nil, errNotConnected
+	}
+
 	if len(indices) == 0 {
 		return nil, errEmptyIndex
 	}
@@ -229,6 +243,10 @@ func (c *Client) Search(ctx context.Context, indices []string, query map[string]
 // Each entry in `operations` should be a JSON‑serializable object
 // following the Elasticsearch bulk API format.
 func (c *Client) Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error) {
+	if c.client == nil {
+		return nil, errNotConnected
+	}
+
 	if len(operations) == 0 {
 		return nil, errEmptyOperations
 	}
@@ -280,6 +298,13 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{Details: make(map[string]any)}
 	h.Details["addresses"] = c.config.Addresses
 	h.Details["username"] = c.config.Username
+
+	if c.client == nil {
+		h.Status = statusDown
+		h.Details["error"] = errNotConnected.Error()
+
+		return &h, errNotConnected
+	}
 
 	// 1) Ping with a 2s timeout
 	pingCtx, cancel := context.WithTimeout(ctx, defaultTimeout)

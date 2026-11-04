@@ -13,6 +13,10 @@ import (
 
 // IndexDocument indexes (creates or replaces) a single document.
 func (c *Client) IndexDocument(ctx context.Context, index, id string, document any) error {
+	if c.client == nil {
+		return errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return errEmptyIndex
 	}
@@ -55,6 +59,10 @@ func (c *Client) IndexDocument(ctx context.Context, index, id string, document a
 
 // GetDocument retrieves a document by its ID.
 func (c *Client) GetDocument(ctx context.Context, index, id string) (map[string]any, error) {
+	if c.client == nil {
+		return nil, errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return nil, errEmptyIndex
 	}
@@ -95,6 +103,10 @@ func (c *Client) GetDocument(ctx context.Context, index, id string) (map[string]
 
 // UpdateDocument applies a partial update to an existing document.
 func (c *Client) UpdateDocument(ctx context.Context, index, id string, update map[string]any) error {
+	if c.client == nil {
+		return errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return errEmptyIndex
 	}
@@ -142,6 +154,10 @@ func (c *Client) UpdateDocument(ctx context.Context, index, id string, update ma
 
 // DeleteDocument removes a document by ID.
 func (c *Client) DeleteDocument(ctx context.Context, index, id string) error {
+	if c.client == nil {
+		return errNotConnected
+	}
+
 	if strings.TrimSpace(index) == "" {
 		return errEmptyIndex
 	}

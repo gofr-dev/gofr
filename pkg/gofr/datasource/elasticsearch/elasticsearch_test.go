@@ -1016,3 +1016,64 @@ func TestClient_OperationsWithoutTracer(t *testing.T) {
 		})
 	}
 }
+
+// newUnconnectedClient returns a client whose Connect failed because the address has no scheme.
+func newUnconnectedClient(t *testing.T) (*Client, *MockMetrics) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf("error creating Elasticsearch client: %v", gomock.Any())
+
+	client := New(Config{Addresses: []string{"127.0.0.1:9200"}})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	return client, mockMetrics
+}
+
+func TestClient_Connect_ClientCreationFails(t *testing.T) {
+	client, mockMetrics := newUnconnectedClient(t)
+
+	mockMetrics.EXPECT().NewHistogram("es_request_duration_ms", gomock.Any(), gomock.Any()).Times(1)
+
+	client.Connect()
+
+	require.Nil(t, client.client)
+}
+
+func TestClient_NotConnected(t *testing.T) {
+	client, mockMetrics := newUnconnectedClient(t)
+
+	mockMetrics.EXPECT().NewHistogram("es_request_duration_ms", gomock.Any(), gomock.Any()).AnyTimes()
+
+	client.Connect()
+
+	ctx := t.Context()
+
+	h, err := client.HealthCheck(ctx)
+	require.ErrorIs(t, err, errNotConnected)
+
+	health, ok := h.(*Health)
+	require.True(t, ok)
+	require.Equal(t, statusDown, health.Status)
+
+	require.ErrorIs(t, client.CreateIndex(ctx, "idx", nil), errNotConnected)
+	require.ErrorIs(t, client.DeleteIndex(ctx, "idx"), errNotConnected)
+	require.ErrorIs(t, client.IndexDocument(ctx, "idx", "1", map[string]any{}), errNotConnected)
+	require.ErrorIs(t, client.UpdateDocument(ctx, "idx", "1", map[string]any{"a": 1}), errNotConnected)
+	require.ErrorIs(t, client.DeleteDocument(ctx, "idx", "1"), errNotConnected)
+
+	_, err = client.GetDocument(ctx, "idx", "1")
+	require.ErrorIs(t, err, errNotConnected)
+
+	_, err = client.Search(ctx, []string{"idx"}, map[string]any{"query": map[string]any{}})
+	require.ErrorIs(t, err, errNotConnected)
+
+	_, err = client.Bulk(ctx, []map[string]any{{"index": map[string]any{}}})
+	require.ErrorIs(t, err, errNotConnected)
+}
