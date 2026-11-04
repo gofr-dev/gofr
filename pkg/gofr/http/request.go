@@ -164,6 +164,13 @@ func (r *Request) PathParam(key string) string {
 		return r.pathParams[key]
 	}
 
+	// A route the router decided itself answers without building mux's vars map.
+	if s, ok := r.req.Context().(*muxState); ok {
+		if v, ok := s.pathParam(key); ok {
+			return v
+		}
+	}
+
 	return mux.Vars(r.req)[key]
 }
 

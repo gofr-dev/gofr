@@ -258,3 +258,26 @@ func TestServeMux_FastMatchAllocations(t *testing.T) {
 
 	assert.InDelta(t, 2, viaServeMux, 0.01, "mux %.0f, serveMux %.0f", viaMux, viaServeMux)
 }
+
+// Reading a path parameter of a route fastMatch decided builds no vars map.
+func TestServeMux_FastPathParamAllocations(t *testing.T) {
+	if raceEnabled {
+		t.Skip("allocation counts are not stable under the race detector")
+	}
+
+	t.Setenv(RouterEnvVar, MatcherMux)
+
+	var id string
+
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users/{id}", http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		pr := Request{req: req}
+		id = pr.PathParam("id")
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/1", http.NoBody)
+	w := httptest.NewRecorder()
+
+	assert.InDelta(t, 2, testing.AllocsPerRun(100, func() { r.ServeHTTP(w, req) }), 0.01)
+	assert.Equal(t, "1", id)
+}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -78,9 +79,10 @@ type muxState struct {
 	context.Context
 	match mux.RouteMatch
 
-	fast *fastRoute
-	path string
-	once sync.Once
+	fast  *fastRoute
+	path  string
+	once  sync.Once
+	built atomic.Bool
 
 	// qs holds the request span when Tracer, the handler serveMux calls, claims it (see
 	// quietspan.Host).
@@ -125,6 +127,18 @@ func (s *muxState) buildVars() {
 	vars := make(map[string]string, len(s.fast.names))
 	s.fast.match(s.path, vars)
 	s.match.Vars = vars
+	s.built.Store(true)
+}
+
+// pathParam answers one variable of the route fastMatch decided, without building the vars map.
+// It can only while nobody has read the map, and so possibly changed it: ok is false otherwise,
+// and for a request mux decided, and the caller must read the map.
+func (s *muxState) pathParam(key string) (string, bool) {
+	if s.fast == nil || s.built.Load() {
+		return "", false
+	}
+
+	return s.fast.value(s.path, key), true
 }
 
 // serveMux is mux.Router.ServeHTTP with the match and its context state in one allocation.

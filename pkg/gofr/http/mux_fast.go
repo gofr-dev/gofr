@@ -83,6 +83,29 @@ func (f *fastRoute) match(path string, vars map[string]string) bool {
 	return p == ""
 }
 
+// value is the value path, which f matches, gives variable key in the map match fills: the last
+// variable of that name, or "" when there is none.
+func (f *fastRoute) value(path, key string) string {
+	var v string
+
+	p := path[len(f.lits[0]):]
+
+	for i, lit := range f.lits[1:] {
+		end := strings.IndexByte(p, '/')
+		if end < 0 {
+			end = len(p)
+		}
+
+		if f.names[i] == key {
+			v = p[:end]
+		}
+
+		p = p[end+len(lit):]
+	}
+
+	return v
+}
+
 // muxFields reads the lengths of mux.Router's unexported route and middleware lists. Reading a
 // length through reflect is allowed on an unexported field; nothing here reads or writes the
 // elements.

@@ -326,7 +326,67 @@ func FuzzFastMatch(f *testing.F) {
 		require.NoError(t, want.MatchErr)
 		require.Same(t, want.Route, s.match.Route)
 
+		for _, name := range append([]string{"missing"}, s.fast.names...) {
+			v, ok := s.pathParam(name)
+			require.True(t, ok)
+			require.Equal(t, want.Vars[name], v, name)
+		}
+
 		s.buildVars()
 		require.Equal(t, want.Vars, s.match.Vars)
+
+		_, ok := s.pathParam("missing")
+		require.False(t, ok, "once the map exists it is the answer")
 	})
+}
+
+// PathParam reads each variable as mux.Vars would, for every route fastMatch decides, before
+// and after the vars map is built, and sees a change made through mux.Vars.
+func TestFastMatch_PathParamSameAsVars(t *testing.T) {
+	for _, target := range fastTargets {
+		for _, method := range fastMethods {
+			req := httptest.NewRequestWithContext(t.Context(), method, target, http.NoBody)
+			normalizePath(req)
+
+			var want mux.RouteMatch
+			if !fastRouter(t, nil).Router.Match(req, &want) || want.MatchErr != nil {
+				continue
+			}
+
+			names := []string{"missing", "id", "post", "a", "name", "n", "x", "f"}
+			got := map[string]string{}
+
+			r := NewRouter()
+			for _, rt := range fastTemplates {
+				r.Add(rt.method, rt.tpl, http.HandlerFunc(func(_ http.ResponseWriter, hr *http.Request) {
+					pr := NewRequest(hr)
+					for _, n := range names {
+						got[n] = pr.PathParam(n)
+					}
+				}))
+			}
+
+			r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), method, target, http.NoBody))
+
+			for _, n := range names {
+				assert.Equal(t, want.Vars[n], got[n], "%s %s %s", method, target, n)
+			}
+		}
+	}
+}
+
+func TestFastMatch_PathParamSeesVarsChange(t *testing.T) {
+	r := fastRouter(t, nil)
+	r.Add(http.MethodGet, "/m/{id}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		pr := NewRequest(req)
+		before := pr.PathParam("id")
+		mux.Vars(req)["id"] = "changed"
+
+		fmt.Fprint(w, before, " ", pr.PathParam("id")) //nolint:gosec // test echo
+	}))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/m/9", http.NoBody))
+
+	assert.Equal(t, "9 changed", w.Body.String())
 }
