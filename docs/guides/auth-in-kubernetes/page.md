@@ -20,7 +20,7 @@ Three authentication categories are exposed on the App, all verified in `pkg/gof
 - `EnableBasicAuthWithValidator(fn)` — custom validator with access to the container.
 - `EnableAPIKeyAuth(keys...)` — `X-Api-Key` header check.
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.
-- `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh; returns an error (and installs nothing) on an invalid JWKS URL.
+- `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh; returns an error (and installs nothing) on an invalid JWKS URL or a refresh interval that is not a positive number of seconds.
 
 A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Both endpoints are deliberately minimal, so the exemption does not expose anything sensitive.
 
@@ -53,7 +53,7 @@ if err := app.EnableOAuth("http://keycloak.iam.svc.cluster.local:8080/realms/pro
 }
 ```
 
-The JWKS fetch is cheap, and the `refreshInterval` controls how stale your key cache can be. A typical value is 600–3600 seconds. After key rotation by the IdP, requests with old tokens fail until the cache refreshes.
+The JWKS fetch is cheap, and the `refreshInterval` controls how stale your key cache can be. It must be greater than 0. A typical value is 600–3600 seconds. After key rotation by the IdP, requests with old tokens fail until the cache refreshes.
 
 ## Storing API keys: Vault
 
