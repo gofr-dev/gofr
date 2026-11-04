@@ -771,6 +771,48 @@ func TestEnableBasicAuth_EmptyCredentialsGRPCFailClosed(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
+func TestEnableAPIKeyAuth_EmptyKeyGRPCFailClosed(t *testing.T) {
+	tests := []struct {
+		desc    string
+		keys    []string
+		header  string
+		wantErr bool
+	}{
+		{desc: "only an empty key rejects an empty header", keys: []string{""}, wantErr: true},
+		{desc: "empty key beside a valid one rejects an empty header", keys: []string{"real-key", ""}, wantErr: true},
+		{desc: "valid key still works beside an empty one", keys: []string{"real-key", ""}, header: "real-key"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			var app *App
+
+			logs := testutil.StderrOutputForFunc(func() {
+				app = New()
+				app.EnableAPIKeyAuth(tc.keys...)
+			})
+
+			assert.Contains(t, logs, errEmptyAPIKey.Error())
+			require.Len(t, app.grpcServer.interceptors, defaultInterceptorCount+1)
+
+			ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"x-api-key": []string{tc.header}})
+			unary := app.grpcServer.interceptors[defaultInterceptorCount]
+
+			_, err := unary(ctx, nil, &grpc.UnaryServerInfo{}, func(context.Context, any) (any, error) { return nil, nil })
+
+			if tc.wantErr {
+				assert.Equal(t, codes.Unauthenticated, status.Code(err))
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestStartGRPCServer_Registered(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
 	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
