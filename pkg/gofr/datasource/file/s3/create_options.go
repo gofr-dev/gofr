@@ -24,6 +24,10 @@ const defaultContentDisposition = "attachment"
 // When opts is nil the behavior matches Create: the Content-Type is inferred from
 // the file extension and the Content-Disposition defaults to "attachment".
 func (f *FileSystem) CreateWithOptions(ctx context.Context, name string, opts *file.FileOptions) (file.File, error) {
+	if f.conn == nil {
+		return nil, ErrNotConnected
+	}
+
 	var msg string
 
 	st := statusErr
