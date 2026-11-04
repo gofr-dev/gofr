@@ -18,7 +18,8 @@ var fs embed.FS
 const (
 	OpenAPIJSON = "openapi.json"
 
-	// swaggerFileNameParam is used by direct callers of SwaggerUIHandler.
+	// swaggerFileNameParam is retained for external callers of SwaggerUIHandler.
+	// GoFr's registered Swagger routes do not set this path parameter.
 	swaggerFileNameParam = "name"
 )
 
@@ -38,7 +39,8 @@ func OpenAPIHandler(c *Context) (any, error) {
 }
 
 // SwaggerUIHandler serves the Swagger UI index. It also supports an explicit
-// filename path parameter for callers that invoke the handler directly.
+// filename path parameter for backward compatibility with direct callers;
+// the registered /.well-known/swagger route does not set that parameter.
 func SwaggerUIHandler(c *Context) (any, error) {
 	fileName := c.PathParam(swaggerFileNameParam)
 	if fileName == "" {

@@ -154,8 +154,7 @@ func TestSwaggerRoutesOnlyOwnEmbeddedAssets(t *testing.T) {
 			app.httpRegistered = true // Avoid port availability checks during route setup.
 			app.checkAndAddOpenAPIDocumentation()
 
-			// The router must not have a Swagger route for unrelated well-known
-			// resources, even if a future request or handler could return 404.
+			// No Swagger route matches these unrelated well-known paths.
 			for _, path := range []string{
 				"/.well-known/security.txt",
 				"/.well-known/assetlinks.json",
@@ -186,12 +185,14 @@ func TestSwaggerRoutesOnlyOwnEmbeddedAssets(t *testing.T) {
 				})
 			}
 
-			// Check every embedded web asset, not just one CSS/JS example.
+			// Check every embedded non-Go file independently of isSwaggerUIAsset.
+			// If a future Swagger release adds a new asset extension, this test
+			// must fail until the asset is actually served by an exact route.
 			entries, err := fs.ReadDir("static")
 			require.NoError(t, err)
 
 			for _, entry := range entries {
-				if entry.IsDir() || !isSwaggerUIAsset(entry.Name()) {
+				if entry.IsDir() || filepath.Ext(entry.Name()) == ".go" {
 					continue
 				}
 
