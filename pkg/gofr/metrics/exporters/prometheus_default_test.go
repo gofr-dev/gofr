@@ -24,7 +24,7 @@ func TestBuild_prometheusReaderIsAlwaysObservable(t *testing.T) {
 
 	defer func() { _ = shutdown(context.Background()) }()
 
-	h, err := meter.Float64Histogram("v8_reader_proof_seconds")
+	h, err := meter.Float64Histogram("reader_observability_proof_seconds")
 	require.NoError(t, err)
 
 	h.Record(context.Background(), 0.01)
@@ -35,7 +35,7 @@ func TestBuild_prometheusReaderIsAlwaysObservable(t *testing.T) {
 	found := false
 
 	for _, f := range families {
-		if f.GetName() == "v8_reader_proof_seconds" {
+		if f.GetName() == "reader_observability_proof_seconds" {
 			found = true
 		}
 	}

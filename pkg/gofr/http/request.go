@@ -160,7 +160,7 @@ func (r *Request) Context() context.Context {
 
 // PathParam retrieves a path parameter from the request.
 func (r *Request) PathParam(key string) string {
-	if r.pathParams != nil {
+	if r.pathParams != nil || r.req == nil {
 		return r.pathParams[key]
 	}
 

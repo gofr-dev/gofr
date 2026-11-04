@@ -1226,3 +1226,8 @@ func TestAcceptedQueryMediaTypes(t *testing.T) {
 	assert.Contains(t, types, contentTypeOctetStream)
 	assert.NotContains(t, types, contentTypeBinary, "binary/octet-stream is an internal alias, do not advertise it")
 }
+
+// A zero Request has no path parameters, as before the router answered them itself.
+func TestRequest_PathParamOnZeroRequest(t *testing.T) {
+	assert.Empty(t, (&Request{}).PathParam("id"))
+}

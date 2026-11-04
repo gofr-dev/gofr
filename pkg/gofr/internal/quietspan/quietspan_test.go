@@ -159,8 +159,12 @@ func TestStart_OneAllocation(t *testing.T) {
 
 	parent := parents(t)["sampled"]
 
-	assert.InDelta(t, 1, testing.AllocsPerRun(100, func() { _ = Start(parent, tp) }), 0.01)
+	// The result is kept, as Tracer keeps it: a discarded span from an inlined Start would never
+	// reach the heap.
+	assert.InDelta(t, 1, testing.AllocsPerRun(100, func() { startSink = Start(parent, tp) }), 0.01)
 }
+
+var startSink context.Context //nolint:gochecknoglobals // keeps Start's result reachable in TestStart_OneAllocation.
 
 // hostCtx is a request context holding a Host, as GoFr's router builds one.
 type hostCtx struct {

@@ -127,8 +127,12 @@ var muxRouterFields = func() *muxFields {
 	return &muxFields{routes: routes.Index, middlewares: mws.Index}
 }()
 
+// routeMatchersIdx and routeBuildOnlyIdx are mux.Route's matcher list and buildOnly flag.
+//
 //nolint:gochecknoglobals // field indexes into mux.Route, resolved once.
-var muxRouteFields = func() (matchers, buildOnly []int) {
+var routeMatchersIdx, routeBuildOnlyIdx = muxRouteFields()
+
+func muxRouteFields() (matchers, buildOnly []int) {
 	t := reflect.TypeFor[mux.Route]()
 
 	m, ok1 := t.FieldByName("matchers")
@@ -182,12 +186,11 @@ func (rou *Router) fastList() *fastRoutes {
 }
 
 func buildFastRoutes(r *mux.Router, routes int) *fastRoutes {
-	matchersIdx, buildOnlyIdx := muxRouteFields()
 	l := &fastRoutes{routes: routes, entries: make([]*fastRoute, 0, routes)}
 
 	_ = r.Walk(func(route *mux.Route, _ *mux.Router, ancestors []*mux.Route) error {
 		if len(ancestors) == 0 {
-			l.entries = append(l.entries, newFastRoute(route, matchersIdx, buildOnlyIdx))
+			l.entries = append(l.entries, newFastRoute(route))
 		}
 
 		return nil
@@ -203,9 +206,9 @@ func buildFastRoutes(r *mux.Router, routes int) *fastRoutes {
 }
 
 // newFastRoute returns the scan entry for route, or nil if fastMatch cannot decide it.
-func newFastRoute(route *mux.Route, matchersIdx, buildOnlyIdx []int) *fastRoute {
+func newFastRoute(route *mux.Route) *fastRoute {
 	h, ok := route.GetHandler().(*ownedHandler)
-	if !ok || !isMethodAndPath(route, matchersIdx, buildOnlyIdx) {
+	if !ok || !isMethodAndPath(route) {
 		return nil
 	}
 
@@ -236,14 +239,23 @@ func newFastRoute(route *mux.Route, matchersIdx, buildOnlyIdx []int) *fastRoute 
 
 // isMethodAndPath reports whether route can match, and has exactly two matchers: Add's method
 // and path.
-func isMethodAndPath(route *mux.Route, matchersIdx, buildOnlyIdx []int) bool {
-	if matchersIdx == nil || route.GetError() != nil {
+func isMethodAndPath(route *mux.Route) bool {
+	if routeMatchersIdx == nil || route.GetError() != nil {
 		return false
 	}
 
 	v := reflect.ValueOf(route).Elem()
 
-	return !v.FieldByIndex(buildOnlyIdx).Bool() && v.FieldByIndex(matchersIdx).Len() == 2
+	return !v.FieldByIndex(routeBuildOnlyIdx).Bool() && v.FieldByIndex(routeMatchersIdx).Len() == 2
+}
+
+// unchanged reports whether f's route is still as it was when f was built. The list is rebuilt
+// only when the route count changes, but a route can also be changed in place through mux's
+// own methods. Every one of them that changes what the route matches adds a matcher, sets its
+// error or sets buildOnly, so they only narrow it: a route the scan skipped still loses, and
+// only the route that won needs this check.
+func (f *fastRoute) unchanged() bool {
+	return isMethodAndPath(f.route) && f.route.GetHandler() == http.Handler(f.handler)
 }
 
 // parseFastTemplate splits tpl into literals and whole-segment {name} variables, or returns nil.
@@ -353,6 +365,12 @@ func (rou *Router) fastMatch(r *http.Request, s *muxState) bool {
 
 		if f.method != method || !f.match(path, nil) {
 			continue
+		}
+
+		if !f.unchanged() {
+			rou.fast.list.Store(nil)
+
+			return false
 		}
 
 		s.match.Route = f.route

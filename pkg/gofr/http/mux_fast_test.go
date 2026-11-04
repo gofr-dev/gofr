@@ -211,6 +211,38 @@ func TestFastMatch_RouteAddedAfterServing(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "late")
 }
 
+// A route changed in place after serving keeps the route count, so the scan list is not rebuilt
+// for it; the route that wins is re-checked instead.
+func TestFastMatch_RouteChangedInPlaceAfterServing(t *testing.T) {
+	for name, change := range map[string]func(*mux.Route){
+		"build only": func(rt *mux.Route) { rt.BuildOnly() },
+		"queries":    func(rt *mux.Route) { rt.Queries("x", "1") },
+		"headers":    func(rt *mux.Route) { rt.Headers("X-Need", "1") },
+		"schemes":    func(rt *mux.Route) { rt.Schemes("https") },
+		"methods":    func(rt *mux.Route) { rt.Methods(http.MethodPost) },
+		"path":       func(rt *mux.Route) { rt.Path("/other/{id}") },
+		"handler":    func(rt *mux.Route) { rt.Handler(observe("replaced")) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := fastRouter(t, nil)
+			assertSameAsMux(t, r)
+
+			_ = r.Router.Walk(func(rt *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+				tpl, _ := rt.GetPathTemplate()
+				methods, _ := rt.GetMethods()
+
+				if tpl == "/users/{id}" && len(methods) == 1 && methods[0] == http.MethodGet {
+					change(rt)
+				}
+
+				return nil
+			})
+
+			assertSameAsMux(t, r)
+		})
+	}
+}
+
 // Without any middleware the matched handler is the route's own, as with mux.
 func TestFastMatch_NoMiddleware(t *testing.T) {
 	t.Setenv(RouterEnvVar, MatcherMux)

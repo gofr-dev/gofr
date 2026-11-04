@@ -150,9 +150,14 @@ type Hoster interface {
 
 // Claimant is implemented by the handler Tracer returns. A Host's owner arms the slot only when
 // the handler it is about to call is one.
+// Its method takes a ClaimToken, which code outside gofr.dev/pkg/gofr cannot name, so an
+// application handler cannot become one by accident or on purpose.
 type Claimant interface {
-	ClaimsQuietHost()
+	ClaimsQuietHost(ClaimToken)
 }
+
+// ClaimToken is the parameter type of Claimant's method.
+type ClaimToken struct{}
 
 // Arm makes the slot claimable once.
 func (h *Host) Arm() { h.armed = true }

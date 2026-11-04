@@ -271,7 +271,7 @@ type tracerHandler struct {
 	inner http.Handler
 }
 
-func (*tracerHandler) ClaimsQuietHost() {}
+func (*tracerHandler) ClaimsQuietHost(quietspan.ClaimToken) {}
 
 func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	inner := t.inner
