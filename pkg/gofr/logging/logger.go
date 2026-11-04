@@ -106,13 +106,20 @@ func (l *logger) logf(level Level, format string, args ...any) {
 		entry.Message = fmt.Sprintf(format, filteredArgs...)
 	}
 
+	l.write(&entry, out)
+}
+
+// write emits entry in the logger's format. Neither path keeps entry: each takes a copy where it
+// would, so the caller's entry need not leave its stack.
+func (l *logger) write(entry *logEntry, out io.Writer) {
 	if l.isTerminal {
-		l.prettyPrint(&entry, out)
+		e := *entry
+		l.prettyPrint(&e, out)
 
 		return
 	}
 
-	l.encodeJSON(&entry, out)
+	l.encodeJSON(entry, out)
 }
 
 // maxPooledLine is the largest line buffer kept for reuse. A service that once logs a very large
@@ -139,7 +146,10 @@ func (l *logger) encodeJSON(entry *logEntry, out io.Writer) {
 	if ok {
 		_, _ = out.Write(line)
 	} else {
-		_ = json.NewEncoder(out).Encode(entry)
+		// Encode keeps what it is given reachable from the heap, so it gets a copy: the entry the
+		// fast path reads can then stay on its caller's stack.
+		e := *entry
+		_ = json.NewEncoder(out).Encode(&e)
 	}
 
 	// io.Writer must not retain the slice, so the buffer is free again here.
@@ -285,13 +295,7 @@ func (l *logger) logEntry(level Level, msg any) {
 		GofrVersion: version.Framework,
 	}
 
-	if l.isTerminal {
-		l.prettyPrint(&entry, out)
-
-		return
-	}
-
-	l.encodeJSON(&entry, out)
+	l.write(&entry, out)
 }
 
 func (l *logger) Logf(format string, args ...any) {

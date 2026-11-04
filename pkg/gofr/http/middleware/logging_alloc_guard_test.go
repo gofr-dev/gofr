@@ -40,7 +40,8 @@ func (*discardWriter) WriteHeader(int)             {}
 // regression. Reverting either optimization takes this from 6 to 7. The JSON
 // fast path in internal/logjson (no reflection for the request log line)
 // accounts for the two allocations below the earlier 8, and building the IDs,
-// the entry and its start time in one requestRecord for two more below 5.
+// the entry and its start time in one requestRecord for two more below 5, and
+// keeping the logger's own entry on the stack for one more.
 //
 // The span context is valid on purpose. GoFr installs an SDK provider with
 // NeverSample when no exporter is configured, so a default deployment really
@@ -54,7 +55,7 @@ func TestLoggingChainAllocationsDoNotRegress(t *testing.T) {
 	// only thing that moves this number is a Go or dependency upgrade, and that is
 	// worth a human looking at rather than absorbing silently. If this fails after
 	// such an upgrade, re-measure and update the constant in the same commit.
-	const wantAllocs = 3
+	const wantAllocs = 2
 
 	tid, err := trace.TraceIDFromHex("0af7651916cd43dd8448eb211c80319c")
 	if err != nil {
