@@ -2149,3 +2149,85 @@ func BenchmarkFormatStartTime(b *testing.B) {
 		}
 	})
 }
+
+// The entry Logging hands the logger lives inside the request's record. A logger that keeps it
+// past the request still reads the values it was given: nothing writes the record afterwards,
+// and the next request builds its own.
+func TestLogging_RetainedEntryIsStable(t *testing.T) {
+	var kept []*RequestLog
+
+	sink := newLogSink(retainingLogger{keep: func(v any) { kept = append(kept, v.(*RequestLog)) }})
+	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder()}
+
+	starts := []time.Time{
+		time.Date(2026, 1, 2, 3, 4, 5, 6, time.UTC),
+		time.Date(2026, 7, 8, 9, 10, 11, 0, time.FixedZone("x", 5*3600+1800)),
+	}
+
+	for i, st := range starts {
+		var rec requestRecord
+
+		tid, sid, _ := rec.ids.render(trace.SpanContext{})
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, fmt.Sprintf("/r%d", i), http.NoBody)
+		rec.log(srw, req, st, tid, sid, sink)
+	}
+
+	require.Len(t, kept, 2)
+
+	for i, st := range starts {
+		assert.Equal(t, st.Format(startTimeLayout), kept[i].StartTime)
+		assert.Equal(t, fmt.Sprintf("/r%d", i), kept[i].URI)
+	}
+}
+
+type retainingLogger struct{ keep func(any) }
+
+func (l retainingLogger) Log(v ...any)   { l.keep(v[0]) }
+func (l retainingLogger) Error(v ...any) { l.keep(v[0]) }
+
+// A logger whose level discards the entry when the request starts still gets a complete entry
+// for a server error, and for a request during which its level was raised.
+func TestLogging_EntryBuiltLateWhenLevelWasOff(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		status  int
+		enable  bool
+		wantErr bool
+	}{
+		{"server error", http.StatusInternalServerError, false, true},
+		{"level raised", http.StatusOK, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l := &gatedLogger{}
+			h := Logging(LogProbes{}, l)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				l.enabled = tc.enable
+				w.WriteHeader(tc.status)
+			}))
+
+			before := time.Now()
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/late", http.NoBody)
+
+			h.ServeHTTP(httptest.NewRecorder(), req)
+
+			require.NotNil(t, l.got)
+			assert.Equal(t, tc.wantErr, l.isErr)
+			assert.Equal(t, "/late", l.got.URI)
+			assert.Equal(t, tc.status, l.got.Response)
+			assert.Equal(t, zeroTraceID, l.got.TraceID)
+
+			st, err := time.Parse(startTimeLayout, l.got.StartTime)
+			require.NoError(t, err)
+			assert.False(t, st.Before(before.Truncate(time.Second)))
+		})
+	}
+}
+
+type gatedLogger struct {
+	enabled bool
+	got     *RequestLog
+	isErr   bool
+}
+
+func (l *gatedLogger) LogEnabled() bool { return l.enabled }
+func (l *gatedLogger) Log(v ...any)     { l.got = v[0].(*RequestLog) }
+func (l *gatedLogger) Error(v ...any)   { l.got, l.isErr = v[0].(*RequestLog), true }

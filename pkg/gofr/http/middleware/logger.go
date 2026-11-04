@@ -301,7 +301,8 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// whose entry the level gate discards pays for 16 bytes it does not
 			// use. That costs no extra allocation -- one buffer covers both -- and
 			// saves one on every request that IS logged, which is the default.
-			traceID, spanID, correlation := traceSpanIDs(sc)
+			rec, ids := sink.newRecord()
+			traceID, spanID, correlation := ids.render(sc)
 
 			// Assigned rather than Set: Header.Set canonicalizes its key on
 			// every call, and "X-Correlation-ID" is not already in canonical
@@ -321,7 +322,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, spanID, sink)
+			defer rec.log(srw, r, start, traceID, spanID, sink)
 
 			inner.ServeHTTP(srw, r)
 		})
@@ -336,17 +337,53 @@ const startTimeLayout = "2006-01-02T15:04:05.999999999-07:00"
 // layouts, so this formats with RFC3339Nano and respells its "Z" (written for a zero
 // offset, and only then) as "+00:00".
 func formatStartTime(t time.Time) string {
-	var buf [len(time.RFC3339Nano) + 8]byte
+	var buf [startTimeSize]byte
 
-	b := t.AppendFormat(buf[:0], time.RFC3339Nano)
-	if n := len(b); n > 0 && b[n-1] == 'Z' {
+	return string(appendStartTime(buf[:0], t))
+}
+
+// startTimeSize holds any start time of a four-digit year.
+const startTimeSize = len(time.RFC3339Nano) + 8
+
+func appendStartTime(dst []byte, t time.Time) []byte {
+	b := t.AppendFormat(dst, time.RFC3339Nano)
+	if n := len(b); n > len(dst) && b[n-1] == 'Z' {
 		b = append(b[:n-1], "+00:00"...)
 	}
 
-	return string(b)
+	return b
+}
+
+// requestRecord is what Logging builds for one request, in one allocation: the rendered IDs, the
+// log entry, and the bytes the entry's start time is written into. The logger gets the entry as a
+// pointer into the record, which keeps the whole record alive for as long as the logger holds
+// it, and nothing in the record is written again once the entry is handed over, so the strings
+// backed by it never change.
+type requestRecord struct {
+	ids   requestIDs
+	entry RequestLog
+	start [startTimeSize]byte
+}
+
+// newRecord returns the request's record, and the IDs to render into it. When the logger already
+// says the entry will be discarded, only the IDs are allocated, and log builds a record should the
+// entry be wanted after all (a server error, or a level changed during the request).
+func (s *logSink) newRecord() (*requestRecord, *requestIDs) {
+	if s.enabler != nil && !s.enabler.LogEnabled() {
+		return nil, new(requestIDs)
+	}
+
+	rec := new(requestRecord)
+
+	return rec, &rec.ids
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time,
+	traceID, spanID string, sink *logSink) {
+	new(requestRecord).log(srw, r, start, traceID, spanID, sink)
+}
+
+func (rec *requestRecord) log(srw *StatusResponseWriter, r *http.Request, start time.Time,
 	traceID, spanID string, sink *logSink) {
 	status := srw.Status()
 
@@ -359,10 +396,17 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		}
 	}
 
-	l := &RequestLog{
+	if rec == nil {
+		rec = new(requestRecord)
+	}
+
+	st := appendStartTime(rec.start[:0], start)
+
+	l := &rec.entry
+	*l = RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
-		StartTime:    formatStartTime(start),
+		StartTime:    unsafe.String(unsafe.SliceData(st), len(st)),
 		ResponseTime: time.Since(start).Nanoseconds() / 1000,
 		Method:       r.Method,
 		UserAgent:    r.UserAgent(),
@@ -491,6 +535,19 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 // no extra allocation -- the one buffer covers both -- and it buys an allocation
 // on every request that IS logged, which is the default configuration.
 func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string, correlation []string) {
+	return new(requestIDs).render(sc)
+}
+
+// requestIDs holds a request's rendered trace and span IDs and the X-Correlation-ID header value
+// that carries the trace ID, so all three cost one allocation. The header value has len == cap
+// == 1, as []string{traceID} has, so a later Header.Add appends into a new array.
+type requestIDs struct {
+	header [1]string
+	hex    [len(zeroTraceID) + len(zeroSpanID)]byte
+}
+
+// render is traceSpanIDs writing into ids.
+func (ids *requestIDs) render(sc trace.SpanContext) (traceID, spanID string, correlation []string) {
 	if !sc.IsValid() {
 		return zeroTraceID, zeroSpanID, []string{zeroTraceID}
 	}
@@ -502,8 +559,6 @@ func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string, correlation []s
 	// what hex.Encode reports it wrote, not from restating a constant: editing
 	// either constant then changes the buffer and the offset together instead of
 	// silently moving one slice bound past the other.
-	ids := new(requestIDs)
-
 	n := hex.Encode(ids.hex[:], tid[:])
 	hex.Encode(ids.hex[n:], sid[:])
 
@@ -512,12 +567,4 @@ func traceSpanIDs(sc trace.SpanContext) (traceID, spanID string, correlation []s
 	ids.header[0] = s[:n]
 
 	return s[:n], s[n:], ids.header[:]
-}
-
-// requestIDs holds a request's rendered trace and span IDs and the X-Correlation-ID header value
-// that carries the trace ID, so all three cost one allocation. The header value has len == cap
-// == 1, as []string{traceID} has, so a later Header.Add appends into a new array.
-type requestIDs struct {
-	header [1]string
-	hex    [len(zeroTraceID) + len(zeroSpanID)]byte
 }
