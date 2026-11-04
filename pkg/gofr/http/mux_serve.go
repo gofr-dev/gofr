@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/internal/quietspan"
 )
 
 // mux.Router.ServeHTTP stores the matched route's vars and the route itself in two context
@@ -79,7 +81,22 @@ type muxState struct {
 	fast *fastRoute
 	path string
 	once sync.Once
+
+	// qs holds the request span when Tracer, the handler serveMux calls, claims it (see
+	// quietspan.Host).
+	qs quietspan.Host
 }
+
+// armFor arms the span slot when h is Tracer: only the handler serveMux calls, and nothing outside
+// it, holds the request carrying s, so the span may be filled in place.
+func (s *muxState) armFor(h http.Handler) {
+	if _, ok := h.(quietspan.Claimant); ok {
+		s.qs.Arm()
+	}
+}
+
+// QuietHost implements quietspan.Hoster.
+func (s *muxState) QuietHost() *quietspan.Host { return &s.qs }
 
 // Value answers mux's keys as the two context values mux stores would: the vars map and the
 // route, typed, even when nil.
@@ -93,6 +110,10 @@ func (s *muxState) Value(key any) any {
 		return s.match.Vars
 	case muxRouteKey:
 		return s.match.Route
+	}
+
+	if v, ok := s.qs.Lookup(key); ok {
+		return v
 	}
 
 	return s.Context.Value(key)
@@ -124,6 +145,8 @@ func (rou *Router) serveMux(w http.ResponseWriter, r *http.Request) {
 	if rou.fastMatch(r, s) || rou.Router.Match(r, &s.match) {
 		handler = s.match.Handler
 		r = r.WithContext(s)
+
+		s.armFor(handler)
 	}
 
 	//nolint:errorlint,err113 // mux compares with ==; errors.Is would answer a wrapped error differently.

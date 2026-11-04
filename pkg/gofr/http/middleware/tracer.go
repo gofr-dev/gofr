@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/textproto"
 	"reflect"
@@ -261,75 +262,97 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // under load. It is looked up in the handler rather than here so that a handler
 // the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tp := otel.GetTracerProvider()
-		ctx := r.Context()
+	return &tracerHandler{inner: inner}
+}
 
-		// extract the traceID and spanID from the headers and create a new context for the same
-		// this context will make a new span using the traceID and link the incoming SpanID as
-		// its parentID, thus connecting two spans
-		ctx = otel.GetTextMapPropagator().Extract(ctx, headerCarrier(r.Header))
+// tracerHandler is the handler Tracer returns. It is a quietspan.Claimant: GoFr's router arms the
+// span slot in the request context it builds when this is the handler it calls.
+type tracerHandler struct {
+	inner http.Handler
+}
 
-		// GoFr's own NeverSample provider (no TRACE_EXPORTER): its span records nothing, so the
-		// name, attributes and status it would be given are never read. quietspan starts the same
-		// span in one allocation instead of the SDK's three.
-		if quietspan.Owns(ctx, tp) {
-			inner.ServeHTTP(w, r.WithContext(quietspan.Start(ctx, tp.(*sdktrace.TracerProvider))))
+func (*tracerHandler) ClaimsQuietHost() {}
+
+func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	inner := t.inner
+
+	tp := otel.GetTracerProvider()
+	ctx := r.Context()
+
+	// extract the traceID and spanID from the headers and create a new context for the same
+	// this context will make a new span using the traceID and link the incoming SpanID as
+	// its parentID, thus connecting two spans
+	ctx = otel.GetTextMapPropagator().Extract(ctx, headerCarrier(r.Header))
+
+	// GoFr's own NeverSample provider (no TRACE_EXPORTER): its span records nothing, so the
+	// name, attributes and status it would be given are never read. quietspan starts the same
+	// span in one allocation instead of the SDK's three.
+	if quietspan.Owns(ctx, tp) {
+		p, _ := tp.(*sdktrace.TracerProvider)
+
+		// The router armed the slot in r's own context, and no propagation header added a
+		// context above it: the span goes into that slot and r already carries it.
+		if hc, ok := r.Context().(quietspan.Hoster); ok && ctx == context.Context(hc) && quietspan.Claim(hc, p) {
+			inner.ServeHTTP(w, r)
 
 			return
 		}
 
-		tr := frameworkTracer(tp)
+		inner.ServeHTTP(w, r.WithContext(quietspan.Start(ctx, p)))
 
-		method := strings.ToUpper(r.Method)
-		// Prefer the gorilla/mux route template (e.g. "/users/{id}") so the
-		// span name and http.route attribute do not explode to one unique
-		// value per concrete path (e.g. "/users/42"). Fall back to URL.Path
-		// when no route matched (404 / unknown route).
-		route, templated := routeTemplate(r)
-		meta := spanMetaFor(method, route, templated)
+		return
+	}
 
-		// The attribute slice is passed to Start, not applied afterwards: a
-		// sampler can read attributes when deciding, so moving them after the
-		// span exists would change sampling for anyone sampling on http.route.
-		ctxOut, span := tr.Start(ctx, meta.name, meta.startOpts...)
-		defer span.End()
+	tr := frameworkTracer(tp)
 
-		// The response status is only ever read to put it on the span, so the
-		// writer is only wrapped when the span will keep it.
-		//
-		// Tracer is the outermost middleware, so the wrapper Logging installs
-		// does not exist yet and this type assertion always failed -- meaning a
-		// StatusResponseWriter was allocated on every request and, on the
-		// default deployment, never read. GoFr installs an SDK provider with
-		// NeverSample when no TRACE_EXPORTER is configured, so no span records.
-		//
-		// Recording spans are unaffected: they still get the wrapper and the
-		// attribute, pinned by TestTracerStatusAttributeStillRecorded.
-		//
-		// The cost of this is that the ResponseWriter reaching the next middleware
-		// now depends on whether the span records. GoFr's own chain is unaffected --
-		// Logging wraps immediately after and Metrics reuses that wrapper -- but a
-		// user middleware inserted between Tracer and Logging that type-asserts
-		// *StatusResponseWriter will see it on a sampled request and not on an
-		// unsampled one. That is a hard bug to find from the symptom, so it is worth
-		// knowing before inserting anything at that position.
-		if span.IsRecording() {
-			srw, ok := w.(*StatusResponseWriter)
-			if !ok {
-				srw = &StatusResponseWriter{ResponseWriter: w}
-				w = srw
-			}
+	method := strings.ToUpper(r.Method)
+	// Prefer the gorilla/mux route template (e.g. "/users/{id}") so the
+	// span name and http.route attribute do not explode to one unique
+	// value per concrete path (e.g. "/users/42"). Fall back to URL.Path
+	// when no route matched (404 / unknown route).
+	route, templated := routeTemplate(r)
+	meta := spanMetaFor(method, route, templated)
 
-			// Status() normalizes the zero-default to http.StatusOK when the
-			// handler called neither WriteHeader nor Write -- net/http emits an
-			// implicit 200 in that case, so the span attribute must report 200
-			// rather than be omitted, or worse recorded as 0.
-			defer func(s trace.Span, rw *StatusResponseWriter) {
-				s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
-			}(span, srw)
+	// The attribute slice is passed to Start, not applied afterwards: a
+	// sampler can read attributes when deciding, so moving them after the
+	// span exists would change sampling for anyone sampling on http.route.
+	ctxOut, span := tr.Start(ctx, meta.name, meta.startOpts...)
+	defer span.End()
+
+	// The response status is only ever read to put it on the span, so the
+	// writer is only wrapped when the span will keep it.
+	//
+	// Tracer is the outermost middleware, so the wrapper Logging installs
+	// does not exist yet and this type assertion always failed -- meaning a
+	// StatusResponseWriter was allocated on every request and, on the
+	// default deployment, never read. GoFr installs an SDK provider with
+	// NeverSample when no TRACE_EXPORTER is configured, so no span records.
+	//
+	// Recording spans are unaffected: they still get the wrapper and the
+	// attribute, pinned by TestTracerStatusAttributeStillRecorded.
+	//
+	// The cost of this is that the ResponseWriter reaching the next middleware
+	// now depends on whether the span records. GoFr's own chain is unaffected --
+	// Logging wraps immediately after and Metrics reuses that wrapper -- but a
+	// user middleware inserted between Tracer and Logging that type-asserts
+	// *StatusResponseWriter will see it on a sampled request and not on an
+	// unsampled one. That is a hard bug to find from the symptom, so it is worth
+	// knowing before inserting anything at that position.
+	if span.IsRecording() {
+		srw, ok := w.(*StatusResponseWriter)
+		if !ok {
+			srw = &StatusResponseWriter{ResponseWriter: w}
+			w = srw
 		}
 
-		inner.ServeHTTP(w, r.WithContext(ctxOut))
-	})
+		// Status() normalizes the zero-default to http.StatusOK when the
+		// handler called neither WriteHeader nor Write -- net/http emits an
+		// implicit 200 in that case, so the span attribute must report 200
+		// rather than be omitted, or worse recorded as 0.
+		defer func(s trace.Span, rw *StatusResponseWriter) {
+			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
+		}(span, srw)
+	}
+
+	inner.ServeHTTP(w, r.WithContext(ctxOut))
 }

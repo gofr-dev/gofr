@@ -161,3 +161,41 @@ func TestStart_OneAllocation(t *testing.T) {
 
 	assert.InDelta(t, 1, testing.AllocsPerRun(100, func() { _ = Start(parent, tp) }), 0.01)
 }
+
+// hostCtx is a request context holding a Host, as GoFr's router builds one.
+type hostCtx struct {
+	context.Context
+	h Host
+}
+
+func (c *hostCtx) QuietHost() *Host { return &c.h }
+
+func (c *hostCtx) Value(key any) any {
+	if v, ok := c.h.Lookup(key); ok {
+		return v
+	}
+
+	return c.Context.Value(key)
+}
+
+// The hazard of putting the span into a context that already exists: anything holding that
+// context before Tracer claimed the slot sees the span afterwards, where a context of the span's
+// own would have left it untouched. This is why only an armed slot can be claimed, and why the
+// router arms it only when Tracer is the handler it calls.
+func TestHost_ClaimIsVisibleToEveryHolder(t *testing.T) {
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
+	ctx := &hostCtx{Context: context.Background()}
+	heldOutside := context.Context(ctx)
+
+	assert.False(t, Claim(ctx, tp), "an unarmed slot is never claimed")
+	assert.False(t, trace.SpanContextFromContext(heldOutside).IsValid())
+
+	ctx.h.Arm()
+	require.True(t, Claim(ctx, tp))
+	assert.False(t, Claim(ctx, tp), "a slot is claimed once")
+
+	assert.True(t, trace.SpanContextFromContext(heldOutside).IsValid(), "the holder now sees the span")
+	assert.Same(t, tp, trace.SpanFromContext(ctx).TracerProvider())
+	assert.False(t, trace.SpanFromContext(ctx).IsRecording())
+	assert.False(t, Claim(context.Background(), tp), "a context without a slot")
+}

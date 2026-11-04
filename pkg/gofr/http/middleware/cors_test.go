@@ -19,9 +19,9 @@ type MockHandlerForCORS struct {
 }
 
 // ServeHTTP is used for testing different panic recovery cases.
-func (r *MockHandlerForCORS) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(r.statusCode)
-	_, _ = w.Write([]byte(r.response))
+func (m *MockHandlerForCORS) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(m.statusCode)
+	_, _ = w.Write([]byte(m.response))
 }
 
 func Test_CORS(t *testing.T) {

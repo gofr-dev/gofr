@@ -107,6 +107,11 @@ func roundTrips() bool {
 // Start returns ctx carrying a new span from tp, as tp's tracer would start it under ctx. tp
 // must be the registered provider.
 func Start(ctx context.Context, tp *sdktrace.TracerProvider) context.Context {
+	return &span{Context: ctx, tp: tp, sc: childSpanContext(ctx)}
+}
+
+// childSpanContext is the span context tp's tracer gives a span started under ctx.
+func childSpanContext(ctx context.Context) trace.SpanContext {
 	psc := trace.SpanContextFromContext(ctx)
 
 	tid := psc.TraceID()
@@ -114,16 +119,70 @@ func Start(ctx context.Context, tp *sdktrace.TracerProvider) context.Context {
 		tid = newTraceID()
 	}
 
-	return &span{
-		Context: ctx,
-		tp:      tp,
-		sc: trace.NewSpanContext(trace.SpanContextConfig{
-			TraceID:    tid,
-			SpanID:     newSpanID(),
-			TraceFlags: psc.TraceFlags() &^ trace.FlagsSampled,
-			TraceState: psc.TraceState(),
-		}),
+	return trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    tid,
+		SpanID:     newSpanID(),
+		TraceFlags: psc.TraceFlags() &^ trace.FlagsSampled,
+		TraceState: psc.TraceState(),
+	})
+}
+
+// Host is a span slot inside a request context another package allocates, so that Start's span
+// can live in that allocation and need no context of its own, nor a copy of the request to carry
+// one. The context embeds a Host, answers Value through Lookup first, and implements Hoster.
+//
+// Its owner arms it only when nothing but Tracer can see the request it gives the context to:
+// Tracer is the handler it calls, so no layer outside Tracer holds the request, and the owner
+// reads nothing from it afterwards. Before Claim the slot answers nothing, so the context reads
+// exactly as its parent does; after it, the context reads as Start's context would have, since
+// Start's node would have delegated every other key to it.
+type Host struct {
+	sp      span
+	armed   bool
+	claimed bool
+}
+
+// Hoster is a request context holding a Host.
+type Hoster interface {
+	context.Context
+	QuietHost() *Host
+}
+
+// Claimant is implemented by the handler Tracer returns. A Host's owner arms the slot only when
+// the handler it is about to call is one.
+type Claimant interface {
+	ClaimsQuietHost()
+}
+
+// Arm makes the slot claimable once.
+func (h *Host) Arm() { h.armed = true }
+
+// Claim starts tp's span in ctx's own slot, when ctx is a Hoster whose slot is armed and not yet
+// claimed, and reports whether it did. ctx then carries the span Start(ctx, tp) would have.
+func Claim(ctx context.Context, tp *sdktrace.TracerProvider) bool {
+	hc, ok := ctx.(Hoster)
+	if !ok {
+		return false
 	}
+
+	h := hc.QuietHost()
+	if h == nil || !h.armed || h.claimed {
+		return false
+	}
+
+	h.sp = span{Context: hc, tp: tp, sc: childSpanContext(hc)}
+	h.claimed = true
+
+	return true
+}
+
+// Lookup answers the span key with the claimed span, as Start's node would.
+func (h *Host) Lookup(key any) (any, bool) {
+	if h.claimed && key == spanKey {
+		return trace.Span(&h.sp), true
+	}
+
+	return nil, false
 }
 
 func newTraceID() trace.TraceID {
