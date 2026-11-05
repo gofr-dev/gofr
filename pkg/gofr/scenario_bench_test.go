@@ -44,14 +44,19 @@ func newScenarioApp(b *testing.B, logLevel string, middlewares int) http.Handler
 		b.Fatal(err)
 	}
 
+	b.Cleanup(func() { devNull.Close() })
+
+	return newScenarioAppTo(b, logLevel, middlewares, devNull)
+}
+
+// newScenarioAppTo is newScenarioApp with the app's stdout, and so its request log, sent to out.
+func newScenarioAppTo(b *testing.B, logLevel string, middlewares int, out *os.File) http.Handler {
+	b.Helper()
+
 	stdout := os.Stdout
-	os.Stdout = devNull
+	os.Stdout = out
 
-	b.Cleanup(func() {
-		os.Stdout = stdout
-
-		devNull.Close()
-	})
+	b.Cleanup(func() { os.Stdout = stdout })
 
 	b.Setenv("HTTP_PORT", "0")
 	b.Setenv("METRICS_PORT", "0")
