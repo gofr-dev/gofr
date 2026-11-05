@@ -28,7 +28,7 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 
 
-- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: `/.well-known/alive`) at the specified interval. When the service is deemed healthy again, the circuit breaker transitions directly from **Open** to **Closed**, allowing requests to resume.
+- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: `/.well-known/alive`) at the specified interval. If `Interval` is not set (or is zero/negative), it defaults to 5 seconds. When the service is deemed healthy again, the circuit breaker transitions directly from **Open** to **Closed**, allowing requests to resume.
 
 > GoFr's circuit breaker implementation does not use a **Half-Open** state. Instead, it relies on periodic asynchronous health checks to determine service recovery.
 
