@@ -24,6 +24,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
@@ -1504,4 +1505,103 @@ func TestErrorLogEntry_Char_PrettyPrint(t *testing.T) {
 	(&ErrorLogEntry{TraceID: "abc123", Error: "went wrong"}).PrettyPrint(&buf)
 
 	assert.Equal(t, "\u001B[38;5;8mabc123 \u001B[38;5;202mwent wrong \n", buf.String())
+}
+
+var errDriverDetail = errors.New("dial tcp 10.0.3.7:5432: connect: connection refused")
+
+// marshaledServerError is an app error that declares 500 and adds custom fields to the response.
+type marshaledServerError struct{}
+
+func (marshaledServerError) Error() string   { return "pq: relation users does not exist" }
+func (marshaledServerError) StatusCode() int { return http.StatusInternalServerError }
+
+func (marshaledServerError) Response() map[string]any {
+	return map[string]any{"code": "DB_UNAVAILABLE", "message": "ignored"}
+}
+
+func TestHandler_HideInternalErrors(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		hide       bool
+		data       any
+		err        error
+		statusCode int
+		body       string
+	}{
+		{"switch off keeps the original message", false, nil, errDriverDetail,
+			http.StatusInternalServerError, `{"error":{"message":"dial tcp 10.0.3.7:5432: connect: connection refused"}}`},
+		{"unclassified error is hidden", true, nil, errDriverDetail,
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
+		{"datasource.ErrorDB is hidden", true, nil, datasource.ErrorDB{Err: errDriverDetail, Message: "query failed"},
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
+		{"wrapped gofr error is unclassified and hidden", true, nil,
+			fmt.Errorf("lookup: %w", gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "7"}),
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
+		{"4xx error keeps its message", true, nil, gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "7"},
+			http.StatusNotFound, `{"error":{"message":"No entity found with id: 7"}}`},
+		{"503 error keeps its message", true, nil, gofrHTTP.ErrorServiceUnavailable{Dependency: "redis", ErrorMessage: "timeout"},
+			http.StatusServiceUnavailable, `{"error":{"message":"Service unavailable due to error: timeout from dependency redis"}}`},
+		{"unclassified error with data is 206 and hidden", true, "partial", errDriverDetail,
+			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
+		{"classified 400 with data keeps its message", true, "partial", gofrHTTP.ErrorInvalidParam{Params: []string{"id"}},
+			http.StatusPartialContent, `{"data":"partial","error":{"message":"'1' invalid parameter(s): id"}}`},
+		{"ResponseMarshaller 500 keeps custom fields, hides message", true, nil, marshaledServerError{},
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error","code":"DB_UNAVAILABLE"}}`},
+	}
+
+	for i, tc := range testCases {
+		w := httptest.NewRecorder()
+
+		logs := testutil.StderrOutputForFunc(func() {
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+
+			handler{
+				function:           func(*Context) (any, error) { return tc.data, tc.err },
+				container:          container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "DEBUG"})),
+				hideInternalErrors: tc.hide,
+			}.ServeHTTP(w, r)
+		})
+
+		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.JSONEq(t, tc.body, w.Body.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		if tc.hide && !strings.Contains(tc.body, tc.err.Error()) {
+			assert.NotContains(t, w.Body.String(), tc.err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, logs, tc.err.Error(), "TEST[%d], the server log must keep the original error.\n%s", i, tc.desc)
+		}
+	}
+}
+
+func TestApp_HideInternalErrorsConfig(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		value   string
+		message string
+		warned  bool
+	}{
+		{"unset keeps the original message", "", errDriverDetail.Error(), false},
+		{"false keeps the original message", "false", errDriverDetail.Error(), false},
+		{"true hides the message", "true", "Internal Server Error", false},
+		{"invalid value warns and keeps the original message", "yes", errDriverDetail.Error(), true},
+	}
+
+	for i, tc := range testCases {
+		testutil.NewServerConfigs(t)
+		t.Setenv("HTTP_HIDE_INTERNAL_ERRORS", tc.value)
+
+		w := httptest.NewRecorder()
+
+		logs := testutil.StdoutOutputForFunc(func() {
+			app := New()
+			app.GET("/fail", func(*Context) (any, error) { return nil, errDriverDetail })
+
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/fail", http.NoBody)
+			app.httpServer.router.ServeHTTP(w, r)
+		})
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.JSONEq(t, `{"error":{"message":"`+tc.message+`"}}`, w.Body.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.warned, strings.Contains(logs, "invalid value of config HTTP_HIDE_INTERNAL_ERRORS"),
+			"TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }
