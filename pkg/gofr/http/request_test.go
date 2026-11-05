@@ -1226,3 +1226,25 @@ func TestAcceptedQueryMediaTypes(t *testing.T) {
 	assert.Contains(t, types, contentTypeOctetStream)
 	assert.NotContains(t, types, contentTypeBinary, "binary/octet-stream is an internal alias, do not advertise it")
 }
+
+// TestRequest_Bind_TypedNilPointer pins that a nil pointer of a concrete type is
+// rejected with an error rather than silently dropping the body: Bind decodes
+// into the pointer it was given, and encoding/json refuses a nil one. Decoding
+// through &i (the earlier code) hid the nil behind an `any` and returned nil.
+func TestRequest_Bind_TypedNilPointer(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/",
+		strings.NewReader(`{"name":"x"}`)))
+	req.req.Header.Set("Content-Type", "application/json")
+
+	var p *payload
+
+	err := req.Bind(p)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Unmarshal(nil *http.payload)")
+	assert.Nil(t, p)
+}

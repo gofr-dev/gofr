@@ -58,7 +58,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26','1.25', '1.24']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -257,7 +257,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26','1.25', '1.24']
       fail-fast: false
 
     steps:
