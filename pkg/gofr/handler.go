@@ -94,6 +94,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !isWebSocket && h.requestTimeout == 0 {
+		defer h.removeMultipartFiles(r)
+
 		result, err = h.serveInline(c, spanCtx)
 	} else {
 		result, err = h.serveWithGoroutine(c, spanCtx, r)
@@ -196,6 +198,10 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	watchCtx := c.Context
 
 	go func() {
+		// The handler may outlive the request timeout and still read its upload, so its temporary files are
+		// removed here, once it returns or panics, rather than when ServeHTTP returns.
+		defer h.removeMultipartFiles(r)
+
 		defer func() {
 			panicRecoveryHandler(recover(), h.container.Logger, panicked)
 		}()
@@ -226,6 +232,20 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	}
 
 	return result, err
+}
+
+// removeMultipartFiles deletes the temporary files that binding a multipart form spooled to disk, the parts above
+// its in-memory limit. net/http does this only for the request it passed to the server's handler, and the request
+// GoFr's handler sees is a derived copy (the tracer's WithContext, the router's path variables), so without this
+// every large upload would leave its file in the temp directory until the process exits.
+func (h handler) removeMultipartFiles(r *http.Request) {
+	if r.MultipartForm == nil {
+		return
+	}
+
+	if err := r.MultipartForm.RemoveAll(); err != nil {
+		h.container.Logger.Errorf("failed to remove the temporary files of a multipart upload: %v", err)
+	}
 }
 
 func liveHandler(*Context) (any, error) {
