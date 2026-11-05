@@ -89,6 +89,12 @@ import "gofr.dev/pkg/gofr/http"
 err := http.ErrorMissingParam{Params: []string{"id"}}
 ```
 
+When returning data together with an error implementing `StatusCode() int`, ordinary JSON responses
+use the error's status and preserve its message, including when the data is a zero-valued struct.
+For example, `Order{}` with `http.ErrorEntityNotFound` returns `404`, with both the order and error
+in the response envelope. Previously, data could override the error's status with `206`, and a
+zero-valued struct could replace the error with a generic `500`.
+
 ## Database Errors
 Database errors in GoFr, represented in the `datasource` package, encapsulate errors related to database operations such
 as database connection, query failure, availability etc. The `ErrorDB` struct can be used to populate `error` as well as 
