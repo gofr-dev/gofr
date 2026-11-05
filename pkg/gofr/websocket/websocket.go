@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,6 +25,9 @@ type Connection struct {
 
 	// Mutex to prevent race conditions on write operations
 	writeMutex sync.Mutex
+
+	readFailed atomic.Bool
+	readCount  atomic.Uint64
 }
 
 // ErrorConnection is the connection error that occurs when websocket connection cannot be established.
@@ -83,7 +88,7 @@ func (*Connection) PathParam(_ string) string {
 }
 
 func (w *Connection) Bind(v any) error {
-	_, message, err := w.Conn.ReadMessage()
+	_, message, err := w.ReadMessage()
 	if err != nil {
 		return err
 	}
@@ -112,7 +117,57 @@ func (w *Connection) WriteMessage(messageType int, data []byte) error {
 //
 // This method is thread-safe and can be called concurrently with WriteMessage.
 func (w *Connection) ReadMessage() (messageType int, p []byte, err error) {
-	return w.Conn.ReadMessage()
+	messageType, r, err := w.NextReader()
+	if err != nil {
+		return messageType, nil, err
+	}
+
+	p, err = io.ReadAll(r)
+	if err != nil {
+		w.readFailed.Store(true)
+	}
+
+	return messageType, p, err
+}
+
+// NextReader returns the next data message received from the peer.
+func (w *Connection) NextReader() (messageType int, r io.Reader, err error) {
+	messageType, r, err = w.Conn.NextReader()
+	if err != nil {
+		w.readFailed.Store(true)
+	} else {
+		w.readCount.Add(1)
+	}
+
+	return messageType, r, err
+}
+
+// ReadJSON reads the next JSON-encoded message from the connection and stores it in the value pointed to by v.
+func (w *Connection) ReadJSON(v any) error {
+	_, r, err := w.NextReader()
+	if err != nil {
+		return err
+	}
+
+	err = json.NewDecoder(r).Decode(v)
+	if errors.Is(err, io.EOF) {
+		err = io.ErrUnexpectedEOF
+	}
+
+	return err
+}
+
+// ReadFailed reports whether reading from the connection has failed. A failed read is permanent: every
+// later read returns the same error, so there is nothing left to read from this connection.
+// This includes a read deadline timeout, so a read deadline cannot be used to poll and recover.
+func (w *Connection) ReadFailed() bool {
+	return w.readFailed.Load()
+}
+
+// ReadCount returns the number of messages read from the connection through ReadMessage, NextReader, ReadJSON
+// and Bind. Reads made directly on the embedded *websocket.Conn bypass this wrapper and are not counted.
+func (w *Connection) ReadCount() uint64 {
+	return w.readCount.Load()
 }
 
 // SetReadDeadline sets the read deadline for the websocket connection.
