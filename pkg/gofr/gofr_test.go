@@ -27,6 +27,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
@@ -2237,7 +2238,216 @@ func Test_HTTPMethodNotAllowed_OptionsListedOnce(t *testing.T) {
 	app.httpServer.router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	assert.Equal(t, "GET, OPTIONS", w.Header().Get("Allow"))
+	assert.Equal(t, "GET, HEAD, OPTIONS", w.Header().Get("Allow"))
+}
+
+func Test_HTTPHEAD(t *testing.T) {
+	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+			t.Setenv(gofrHTTP.RouterEnvVar, matcher)
+
+			app := New()
+			app.GET("/users/{id}", func(c *Context) (any, error) {
+				return response.Response{Data: c.PathParam("id"), Headers: map[string]string{"ETag": `"user-42"`}}, nil
+			})
+			app.GET("/failure", func(*Context) (any, error) { return nil, gofrHTTP.ErrorEntityNotFound{} })
+			app.POST("/post-only", func(*Context) (any, error) { return "created", nil })
+
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("static content"), 0600))
+			app.AddStaticFiles("/static", dir)
+			app.httpServerSetup()
+
+			server := httptest.NewServer(app.httpServer.router)
+			defer server.Close()
+
+			tests := []struct {
+				path   string
+				status int
+			}{
+				{"/users/42", http.StatusOK},
+				{"/.well-known/alive", http.StatusOK},
+				{"/.well-known/health", http.StatusOK},
+				{"/failure", http.StatusNotFound},
+				{"/missing", http.StatusNotFound},
+				{"/post-only", http.StatusMethodNotAllowed},
+				{"/static", http.StatusOK},
+				{"/static/missing", http.StatusNotFound},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.path, func(t *testing.T) {
+					assertHTTPHEAD(t, server, tc.path, tc.status)
+				})
+			}
+
+			app.AddReadinessCheck(func(*Context) error { return errFrameworkChecks }, ReplaceFrameworkChecks())
+			t.Run("not ready", func(t *testing.T) {
+				assertHTTPHEAD(t, server, "/.well-known/health", http.StatusServiceUnavailable)
+			})
+		})
+	}
+}
+
+func assertHTTPHEAD(t *testing.T, server *httptest.Server, path string, status int) {
+	t.Helper()
+
+	var getHeader http.Header
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		req, err := http.NewRequestWithContext(t.Context(), method, server.URL+path, http.NoBody)
+		require.NoError(t, err)
+		req.Header.Set("Origin", "https://example.com")
+
+		res, err := server.Client().Do(req)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(res.Body)
+		closeErr := res.Body.Close()
+
+		require.NoError(t, err)
+		require.NoError(t, closeErr)
+		assert.Equal(t, status, res.StatusCode, "%s %s", method, path)
+		assert.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, res.Header.Get("Access-Control-Allow-Methods"), http.MethodHead)
+		assert.NotEmpty(t, res.Header.Get("X-Correlation-ID"))
+
+		if method == http.MethodGet {
+			getHeader = res.Header
+
+			assert.NotEmpty(t, body)
+
+			continue
+		}
+
+		assert.Empty(t, body, "HEAD must not transmit a response body")
+
+		for _, header := range []string{"Content-Type", "Content-Length", "ETag", "Last-Modified", "Allow"} {
+			assert.Equal(t, getHeader.Get(header), res.Header.Get(header), header)
+		}
+	}
+}
+
+func Test_HTTPHEAD_SubrouterRBAC(t *testing.T) {
+	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			testutil.NewServerConfigs(t)
+			t.Setenv(gofrHTTP.RouterEnvVar, matcher)
+
+			app := New()
+			sub := app.httpServer.router.PathPrefix("/api").Subrouter()
+			sub.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			})
+			sub.Handle("/users", handler{
+				function:  func(*Context) (any, error) { return "GET secret", nil },
+				container: app.container,
+			}).Methods(http.MethodGet)
+
+			const rbacConfig = `{"roleHeader":"X-User-Role","roles":[{"name":"reader","permissions":["users:read"]}],` +
+				`"endpoints":[{"path":"/api/users","methods":["GET"],"requiredPermissions":["users:read"]},` +
+				`{"path":"/api/users","methods":["HEAD"],"public":true}]}`
+
+			require.NoError(t, app.EnableRBAC(writeRBACConfig(t, t.TempDir(), "rbac.json", rbacConfig)))
+			app.httpServerSetup()
+
+			for _, tc := range []struct {
+				method, role string
+				status       int
+			}{
+				{http.MethodGet, "", http.StatusUnauthorized},
+				{http.MethodHead, "", http.StatusUnauthorized},
+				{http.MethodHead, "reader", http.StatusOK},
+				{http.MethodPost, "", http.StatusMethodNotAllowed},
+			} {
+				req := httptest.NewRequestWithContext(t.Context(), tc.method, "/api/users", http.NoBody)
+				req.Header.Set("X-User-Role", tc.role)
+
+				rec := httptest.NewRecorder()
+				app.httpServer.router.ServeHTTP(rec, req)
+
+				assert.Equal(t, tc.status, rec.Code, "%s role=%q", tc.method, tc.role)
+
+				if tc.status == http.StatusOK {
+					assert.JSONEq(t, `{"data":"GET secret"}`, rec.Body.String())
+				} else {
+					assert.NotContains(t, rec.Body.String(), "GET secret")
+				}
+			}
+		})
+	}
+}
+
+func Test_HTTPHEAD_RBACPolicy(t *testing.T) {
+	tests := []struct {
+		name         string
+		explicitHEAD bool
+		headFirst    bool
+		publicGET    bool
+		role         string
+		status       int
+		handler      string
+	}{
+		{"fallback cannot use a public HEAD rule", false, false, false, "", http.StatusUnauthorized, ""},
+		{"fallback requires GET permission", false, false, false, "head", http.StatusForbidden, ""},
+		{"GET permission allows fallback", false, false, false, "get", http.StatusOK, "GET"},
+		{"public HEAD after GET selects HEAD", true, false, false, "", http.StatusOK, "HEAD"},
+		{"public HEAD before GET selects HEAD", true, true, false, "", http.StatusOK, "HEAD"},
+		{"protected HEAD after GET requires identity", true, false, true, "", http.StatusUnauthorized, ""},
+		{"GET permission cannot authorize explicit HEAD", true, false, true, "get", http.StatusForbidden, ""},
+		{"HEAD permission selects explicit HEAD", true, false, true, "head", http.StatusOK, "HEAD"},
+		{"public GET fallback uses GET policy", false, false, true, "", http.StatusOK, "GET"},
+	}
+
+	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
+		for _, tc := range tests {
+			t.Run(matcher+"/"+tc.name, func(t *testing.T) {
+				testutil.NewServerConfigs(t)
+				t.Setenv(gofrHTTP.RouterEnvVar, matcher)
+
+				app := New()
+				registerHEAD := func() {
+					app.add(http.MethodHead, "/users", func(*Context) (any, error) {
+						return response.Response{Data: "HEAD", Headers: map[string]string{"X-Handler": "HEAD"}}, nil
+					})
+				}
+
+				if tc.explicitHEAD && tc.headFirst {
+					registerHEAD()
+				}
+
+				app.GET("/users", func(*Context) (any, error) {
+					return response.Response{Data: "GET secret", Headers: map[string]string{"X-Handler": "GET"}}, nil
+				})
+
+				if tc.explicitHEAD && !tc.headFirst {
+					registerHEAD()
+				}
+
+				getRule, headRule := `"requiredPermissions":["get:read"]`, `"public":true`
+				if tc.publicGET {
+					getRule, headRule = `"public":true`, `"requiredPermissions":["head:read"]`
+				}
+
+				rbacConfig := fmt.Sprintf(`{"roleHeader":"X-User-Role","roles":[`+
+					`{"name":"get","permissions":["get:read"]},{"name":"head","permissions":["head:read"]}],`+
+					`"endpoints":[{"path":"/users","methods":["GET"],%s},{"path":"/users","methods":["HEAD"],%s}]}`,
+					getRule, headRule)
+				require.NoError(t, app.EnableRBAC(writeRBACConfig(t, t.TempDir(), "rbac.json", rbacConfig)))
+				app.httpServerSetup()
+
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodHead, "/users", http.NoBody)
+				req.Header.Set("X-User-Role", tc.role)
+
+				rec := httptest.NewRecorder()
+				app.httpServer.router.ServeHTTP(rec, req)
+
+				assert.Equal(t, tc.status, rec.Code)
+				assert.Equal(t, tc.handler, rec.Header().Get("X-Handler"))
+			})
+		}
+	}
 }
 
 // Test_HTTPMethodNotAllowed_And_NotFound covers #3853 through the app's real router, middleware
@@ -2284,17 +2494,16 @@ func methodNotAllowedCases() []methodNotAllowedCase {
 		{"GET registered route returns 200", http.MethodGet, "/thing", http.StatusOK, "", `{"data":"ok"}`},
 		{
 			"POST on GET-only route returns 405 with Allow header", http.MethodPost, "/thing",
-			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+			http.StatusMethodNotAllowed, "GET, HEAD, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
 			"DELETE on GET-only route returns 405 with Allow header", http.MethodDelete, "/thing",
-			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+			http.StatusMethodNotAllowed, "GET, HEAD, OPTIONS", `{"error":{"message":"method not allowed"}}`,
 		},
 		{
-			// A GET route does not imply HEAD here; a HEAD request to a GET-only path answers 405
-			// naming GET, not 404, and not 200. Health probes that send HEAD see this.
-			"HEAD on GET-only route returns 405 with Allow header", http.MethodHead, "/thing",
-			http.StatusMethodNotAllowed, "GET, OPTIONS", `{"error":{"message":"method not allowed"}}`,
+			// Direct recorder tests retain the GET-equivalent body. Test_HTTPHEAD checks the wire.
+			"HEAD on GET-only route returns 200", http.MethodHead, "/thing",
+			http.StatusOK, "", `{"data":"ok"}`,
 		},
 		{
 			"GET on multi-method route returns 405 with the methods sorted", http.MethodGet, "/multi",
@@ -2386,16 +2595,16 @@ func assertMethodNotAllowedMatrix(t *testing.T, matcherEnv string) {
 	assert.Contains(t, logs, `"response":404`, "a 404 was not access-logged")
 }
 
-// rbacGuardingAdmin guards GET /admin with a permission and configures no other method on it, so a
-// wrong method is a (method, path) pair RBAC does not enforce.
+// rbacGuardingAdmin guards GET /admin and its implicit HEAD with a permission, so other methods
+// are (method, path) pairs RBAC does not enforce.
 const rbacGuardingAdmin = `{"roleHeader":"X-User-Role",` +
 	`"roles":[{"name":"admin","permissions":["admin:read"]}],` +
 	`"endpoints":[{"path":"/admin","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
 
 // Test_HTTPMethodNotAllowed_UnderRBAC pins the by-design interaction between RBAC and the 405
-// catch-all. RBAC enforces only the (method, path) pairs it is configured for; a request whose
-// method it does not configure passes through to route matching, by design. So a wrong method on an
-// RBAC-guarded path is answered by the catch-all exactly as on any other registered path: 405 with
+// catch-all. HEAD fallback uses GET's policy; other unconfigured methods pass through to route matching
+// by design. A wrong method on an RBAC-guarded path is answered by the catch-all exactly as on
+// any other registered path: 405 with
 // an Allow header. RBAC governs authorization, not path concealment -- a caller refused the guarded
 // method already learns the path exists from the 401, and the 405 adds no authorization bypass.
 func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
@@ -2407,12 +2616,18 @@ func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
 		name          string
 		method        string
 		path          string
+		role          string
 		expectedCode  int
 		expectedAllow string
 	}{
-		{"the guarded method unauthenticated is denied", http.MethodGet, "/admin", http.StatusUnauthorized, ""},
-		{"a wrong method on the guarded path is 405 with Allow", http.MethodPost, "/admin", http.StatusMethodNotAllowed, "GET, OPTIONS"},
-		{"an unregistered path is 404", http.MethodPost, "/nope", http.StatusNotFound, ""},
+		{"the guarded method unauthenticated is denied", http.MethodGet, "/admin", "", http.StatusUnauthorized, ""},
+		{"HEAD inherits GET authorization", http.MethodHead, "/admin", "", http.StatusUnauthorized, ""},
+		{"authorized HEAD reaches the GET handler", http.MethodHead, "/admin", "admin", http.StatusOK, ""},
+		{
+			"a wrong method on the guarded path is 405 with Allow", http.MethodPost, "/admin", "",
+			http.StatusMethodNotAllowed, "GET, HEAD, OPTIONS",
+		},
+		{"an unregistered path is 404", http.MethodPost, "/nope", "", http.StatusNotFound, ""},
 	}
 
 	type result struct {
@@ -2432,6 +2647,8 @@ func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
 
 		for i, tc := range tests {
 			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			req.Header.Set("X-User-Role", tc.role)
+
 			w := httptest.NewRecorder()
 			app.httpServer.router.ServeHTTP(w, req)
 

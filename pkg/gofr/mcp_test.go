@@ -21,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/ai/mcp"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -84,6 +85,30 @@ func TestRouterTools_List_ReadOnlyAccess(t *testing.T) {
 	specs := rt.List()
 	require.Len(t, specs, 1)
 	assert.Equal(t, ai.ReadOnly, specs[0].Access)
+}
+
+func TestRouterTools_ExplicitHEAD(t *testing.T) {
+	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(gofrHTTP.RouterEnvVar, matcher)
+
+			app, rt := testRouterTools(t)
+			app.GET("/items", func(*Context) (any, error) { return "GET", nil })
+			assert.Equal(t, []string{"get_items"}, toolNames(rt.List()))
+
+			_, err := rt.Call(t.Context(), "head_items", nil)
+			require.ErrorIs(t, err, ai.ErrToolNotFound)
+
+			app.add(http.MethodHead, "/items", func(*Context) (any, error) { return "HEAD", nil })
+			assert.ElementsMatch(t, []string{"get_items", "head_items"}, toolNames(rt.List()))
+
+			result, err := rt.Call(t.Context(), "head_items", nil)
+			require.NoError(t, err)
+			data, err := result.JSON()
+			require.NoError(t, err)
+			assert.JSONEq(t, `{"data":"HEAD"}`, string(data))
+		})
+	}
 }
 
 func TestRouterTools_Call_DispatchesThroughRouter(t *testing.T) {
