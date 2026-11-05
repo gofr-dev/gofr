@@ -3,7 +3,9 @@ package gofr
 import (
 	"bytes"
 	"context"
+
 	"mime"
+
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,6 +22,16 @@ import (
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+
+func TestOpenAPIHandler(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
+	require.NoError(t, os.MkdirAll(filepath.Dir(openAPIFilePath), 0700))
+
+	openAPIContent := []byte(`{"swagger": "2.0", "info": {"version": "1.0.0", "title": "Sample API"}}`)
+	require.NoError(t, os.WriteFile(openAPIFilePath, openAPIContent, 0600))
 
 func setupOpenAPIStaticFile(t *testing.T, content []byte) {
 	t.Helper()
@@ -66,6 +78,9 @@ func TestOpenAPIHandler_Error(t *testing.T) {
 
 	result, err := OpenAPIHandler(ctx)
 
+
+	assert.Nil(t, result, "Expected result to be nil")
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Nil(t, result, "Expected result to be nil")
 	require.ErrorIs(t, err, os.ErrNotExist, "Expected file not found error")
 }
@@ -116,6 +131,9 @@ func TestSwaggerUIHandler_Error(t *testing.T) {
 
 	resp, err := SwaggerUIHandler(ctx)
 
+
+	assert.Nil(t, resp)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Nil(t, resp)
 
 	var notFound gofrHTTP.ErrorEntityNotFound
@@ -123,6 +141,7 @@ func TestSwaggerUIHandler_Error(t *testing.T) {
 	assert.Equal(t, "file", notFound.Name)
 	assert.Equal(t, "abc.abc", notFound.Value)
 	assert.Equal(t, http.StatusNotFound, notFound.StatusCode())
+ 
 }
 
 func TestSwaggerUIHandler_NoFileExtension(t *testing.T) {
