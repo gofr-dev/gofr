@@ -166,7 +166,11 @@ app.AddFileStore(s3.New(&s3.Config{
 > **S3 semantics to be aware of:**
 > - **`Create` does not require a parent "directory".** S3 has no real directories — a prefix comes into existence with the first object stored under it — so `Create("uploads/2026/report.txt")` succeeds even when nothing else exists under `uploads/`. Unlike the local filesystem, no parent-directory check is performed and no `ErrOperationNotPermitted` is returned for a missing parent.
 > - **A file handle is for streaming reads _or_ `ReadAll()`, not both.** `Read`/`ReadAt` stream bytes from the object, while `ReadAll()` decodes the whole object as CSV/JSON/text. Mixing them on the same handle — e.g. a `Read` followed by `ReadAll()` — is not supported, because `ReadAll()` consumes from wherever the last `Read` left off. Open a fresh handle for each mode.
-> - **Backends that omit `Content-Length`.** Some S3-compatible responses (notably certain Cloudflare R2 responses) omit the object size. Such a handle streams fine via `Read`, but offset-bounded operations (`ReadAt`, `Seek`) treat it as empty because the size is unknown; a warning is logged when this happens.
+> - **Backends that omit `Content-Length`.** Some S3-compatible responses (notably certain Cloudflare R2 responses) omit the object size. `Read` streams such an object and `ReadAt` works through the range read, so the missing size no longer blocks it. Size-dependent operations such as `Seek` relative to the end still treat the size as unknown.
+> - **Shared file-store behavior.** The S3 store runs on the same shared layer as GCS and Azure, so it follows their rules: `Stat` on a name with no extension is a folder only if keys exist under `name/`; `Rename` copies and deletes across folders and extensions; `ReadDir` entries are named by their last path element; `Getwd` returns the bucket name. The old S3-only rule that treated names starting with `0` as binary files is gone.
+> - **Observability.** Every operation is recorded in the `app_file_stats` histogram (provider label `S3`) and logged at `DEBUG` level. A missing object is recorded with `status=NOT_FOUND` instead of `ERROR`. The earlier `AWS_S3` log lines are no longer emitted.
+> - **`EndPoint` is optional on AWS.** Leave `Config.EndPoint` empty and the SDK resolves the regional endpoint from `Region`. Set it only for S3-compatible services or a local emulator.
+> - **Writes stream as a multipart upload.** Data written to a created file is sent in 5 MiB parts as each part fills, so memory is bounded to one part per open file. `Close` uploads the last part and completes the object, and returns any upload error; if a part fails the upload is aborted and later `Write` and `Close` calls return that error. An object smaller than one part is sent with a single request on `Close`.
 
 ### Google Cloud Storage (GCS) Bucket as File-Store
 
@@ -480,6 +484,8 @@ if err != nil {
 }
 ```
 
+> Note: For GCS, Azure and FTP, `ReadAt` follows `io.ReaderAt`: when it fills fewer than `len(b)` bytes it returns an error. That error is `io.EOF` when the read reached the end of the object, or the storage error (for example a dropped connection) otherwise, together with the bytes read before it.
+
 ### Getting Information of the file/directory
 
 Stat retrieves details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
@@ -495,12 +501,7 @@ if entry.IsDir() {
 fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n", entryType, entry.Name(), entry.Size(), entry.ModTime())
 ```
 
-> Note: In S3 and GCS:
->
-> - Names without a file extension are treated as directories by default.
-> - Names starting with "0" are interpreted as binary files, with the "0" prefix removed (S3 specific behavior).
->
-> For directories, the method calculates the total size of all contained objects and returns the most recent modification time. For files, it directly returns the file's size and last modified time.
+> Note: In S3 and GCS, `Stat` looks for an object with the exact name first. If none exists, the name is a folder only when keys exist under `name/`, whether or not it has a file extension. A missing name returns an error. A folder reports a size of 0, and its modification time comes from the first object under it.
 >
 > Azure File Storage supports native file and directory structures, so `Stat` returns accurate metadata for both files and directories.
 

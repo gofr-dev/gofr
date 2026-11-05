@@ -2,918 +2,672 @@ package s3
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
-	"os"
-	"path/filepath"
+	"net/http"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
-var errMock = errors.New("mocked error")
-
-// testMocks contains all the mock objects needed for tests.
-type testMocks struct {
-	mockS3      *Mocks3Client
-	mockLogger  *MockLogger
-	mockMetrics *MockMetrics
+// testLogger is a datasource.Logger that records the format of every error line.
+type testLogger struct {
+	mu     sync.Mutex
+	errors []string
 }
 
-// setupTestMocks creates and returns all mock objects needed for testing.
-func setupTestMocks(ctrl *gomock.Controller) *testMocks {
-	return &testMocks{
-		mockS3:      NewMocks3Client(ctrl),
-		mockLogger:  NewMockLogger(ctrl),
-		mockMetrics: NewMockMetrics(ctrl),
-	}
+func (l *testLogger) recordError(msg string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.errors = append(l.errors, msg)
 }
 
-// defaultTestConfig returns a default Config for testing.
-func defaultTestConfig() *Config {
-	return &Config{
-		EndPoint:        "https://example.com",
-		BucketName:      "test-bucket",
-		Region:          "us-east-1",
-		AccessKeyID:     "dummy-access-key",
-		SecretAccessKey: "dummy-secret-key",
-	}
+func (*testLogger) Debug(...any)          {}
+func (*testLogger) Debugf(string, ...any) {}
+func (*testLogger) Info(...any)           {}
+func (*testLogger) Infof(string, ...any)  {}
+func (*testLogger) Warn(...any)           {}
+func (*testLogger) Warnf(string, ...any)  {}
+func (l *testLogger) Error(...any)        { l.recordError("error") }
+func (l *testLogger) Errorf(f string, _ ...any) {
+	l.recordError(f)
 }
 
-// setupTestFileSystem creates and returns a FileSystem with all required dependencies.
-func setupTestFileSystem(mocks *testMocks, config *Config) *FileSystem {
-	if config == nil {
-		config = defaultTestConfig()
-	}
+func (l *testLogger) errorLines() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	f := S3File{
-		logger:  mocks.mockLogger,
-		metrics: mocks.mockMetrics,
-		conn:    mocks.mockS3,
-	}
-
-	return &FileSystem{
-		s3File:  f,
-		conn:    mocks.mockS3,
-		logger:  mocks.mockLogger,
-		config:  config,
-		metrics: mocks.mockMetrics,
-	}
+	return append([]string(nil), l.errors...)
 }
 
-// Test_applyClientOptions asserts the flavor→SDK wiring that Connect relies on:
-// each resolved profile must set path-style addressing, the base endpoint, and the
-// upload-checksum behavior on the concrete *s3.Options. This is what an
-// end-to-end connect would otherwise silently depend on.
-func Test_applyClientOptions(t *testing.T) {
-	const endpoint = "https://example.r2.cloudflarestorage.com"
+// testMetrics records histogram creation and every recorded sample's labels.
+type testMetrics struct {
+	mu         sync.Mutex
+	histograms []string
+	samples    [][]string
+}
 
-	tests := []struct {
-		name                string
-		config              *Config
-		wantPathStyle       bool
-		wantChecksumWhenReq bool
-	}{
-		{
-			name:                "AWS default keeps path-style and default checksum",
-			config:              &Config{Region: "us-east-1"},
-			wantPathStyle:       true,
-			wantChecksumWhenReq: false,
-		},
-		{
-			name:                "R2 disables upload checksum",
-			config:              &Config{Flavor: FlavorR2, Region: "us-east-1"},
-			wantPathStyle:       true,
-			wantChecksumWhenReq: true,
-		},
-		{
-			name:                "Spaces uses virtual-hosted addressing",
-			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3"},
-			wantPathStyle:       false,
-			wantChecksumWhenReq: false,
-		},
-		{
-			name:                "explicit UsePathStyle override wins",
-			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3", UsePathStyle: boolPtr(true)},
-			wantPathStyle:       true,
-			wantChecksumWhenReq: false,
-		},
+func (m *testMetrics) NewHistogram(name, _ string, _ ...float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.histograms = append(m.histograms, name)
+}
+
+func (m *testMetrics) RecordHistogram(_ context.Context, name string, _ float64, labels ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.samples = append(m.samples, append([]string{name}, labels...))
+}
+
+func (m *testMetrics) registered() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return append([]string(nil), m.histograms...)
+}
+
+func (m *testMetrics) hasSample(labels ...string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, s := range m.samples {
+		if containsAll(s, labels) {
+			return true
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			o := &s3.Options{}
-			applyClientOptions(resolveProfile(tt.config), endpoint)(o)
+	return false
+}
 
-			assert.Equal(t, tt.wantPathStyle, o.UsePathStyle, "UsePathStyle")
-			require.NotNil(t, o.BaseEndpoint)
-			assert.Equal(t, endpoint, *o.BaseEndpoint, "BaseEndpoint")
+func containsAll(have, want []string) bool {
+	for _, w := range want {
+		found := false
 
-			if tt.wantChecksumWhenReq {
-				assert.Equal(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
-					"checksum should be calculated only when required")
-			} else {
-				assert.NotEqual(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
-					"checksum behavior should stay at the SDK default")
+		for _, h := range have {
+			if h == w {
+				found = true
+				break
 			}
-		})
-	}
-}
+		}
 
-func Test_CreateFile_TxtFile_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body:          io.NopCloser(strings.NewReader("test file content")),
-		ContentLength: aws.Int64(int64(len("test file content"))),
-		ContentType:   aws.String("text/plain"),
-		LastModified:  aws.Time(time.Now()),
-	}, nil)
-
-	_, err := fs.Create("abc.txt")
-	require.NoError(t, err, "Failed to create file")
-}
-
-// Test_CreateFile_FreshPrefix_Success guards the defect-2 fix: creating the
-// first object under a brand-new prefix must succeed without any parent
-// "directory" existing. S3 prefixes need not pre-exist, so Create must not
-// probe with ListObjectsV2 — it writes the object directly.
-func Test_CreateFile_FreshPrefix_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	// No ListObjectsV2 expectation: Create must not check for a parent prefix.
-	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body:          io.NopCloser(strings.NewReader("test file content")),
-		ContentLength: aws.Int64(int64(len("test file content"))),
-		ContentType:   aws.String("text/plain"),
-		LastModified:  aws.Time(time.Now()),
-	}, nil)
-
-	_, err := fs.Create("uploads/3f2a-uuid/report.pdf")
-	require.NoError(t, err, "Create under a fresh prefix should succeed")
-}
-
-func Test_OpenFile(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body:          io.NopCloser(strings.NewReader("mock file content")),
-		ContentType:   aws.String("text/plain"),
-		LastModified:  aws.Time(time.Now()),
-		ContentLength: aws.Int64(123),
-	}, nil).AnyTimes()
-
-	_, err := fs.OpenFile("abc.json", 0, os.ModePerm)
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to open file")
-}
-
-func Test_MakingDirectories(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().
-		PutObject(gomock.Any(), gomock.Any()).
-		Return(&s3.PutObjectOutput{}, nil).Times(3)
-
-	err := fs.MkdirAll("abc/bcd/cfg", os.ModePerm)
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating directory")
-}
-
-func Test_RenameDirectory(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	config := defaultTestConfig()
-	config.BucketName = "mock-bucket"
-	fs := setupTestFileSystem(mocks, config)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().
-		ListObjectsV2(gomock.Any(), gomock.Any()).
-		Return(&s3.ListObjectsV2Output{
-			Contents: []types.Object{
-				{
-					Key: aws.String("old-dir/file1.txt"),
-				},
-				{
-					Key: aws.String("old-dir/file2.txt"),
-				},
-			},
-		}, nil).Times(1)
-
-	mocks.mockS3.EXPECT().
-		CopyObject(gomock.Any(), gomock.Any()).
-		Return(&s3.CopyObjectOutput{}, nil).Times(1)
-
-	mocks.mockS3.EXPECT().
-		CopyObject(gomock.Any(), gomock.Any()).
-		Return(&s3.CopyObjectOutput{}, nil).Times(1)
-
-	mocks.mockS3.EXPECT().
-		ListObjectsV2(gomock.Any(), gomock.Any()).
-		Return(&s3.ListObjectsV2Output{
-			Contents: []types.Object{
-				{
-					Key: aws.String("old-dir/file1.txt"),
-				},
-				{
-					Key: aws.String("old-dir/file2.txt"),
-				},
-			},
-		}, nil).Times(1)
-
-	mocks.mockS3.EXPECT().
-		DeleteObjects(gomock.Any(), gomock.Any()).
-		Return(&s3.DeleteObjectsOutput{}, nil).Times(1)
-
-	err := fs.Rename("old-dir", "new-dir")
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to rename directory")
-}
-
-type result struct {
-	Name  string
-	Size  int64
-	IsDir bool
-}
-
-func Test_ReadDir(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	tests := []struct {
-		name            string
-		dirPath         string
-		expectedResults []result
-		setupMock       func()
-	}{
-		{
-			name:    "Valid directory path with files and subdirectory",
-			dirPath: "abc/efg",
-			expectedResults: []result{
-				{"file.txt", 1, false},
-				{"hij", 0, true},
-			},
-			setupMock: func() {
-				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-					Contents: []types.Object{
-						{Key: aws.String("abc/efg/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-						{Key: aws.String("abc/efg/file.txt"), Size: aws.Int64(1), LastModified: aws.Time(time.Now())},
-						{Key: aws.String("abc/efg/hij/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-					},
-				}, nil)
-			},
-		},
-		{
-			name:    "Valid directory path with only subdirectory",
-			dirPath: "abc",
-			expectedResults: []result{
-				{"efg", 0, true},
-			},
-			setupMock: func() {
-				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-					Contents: []types.Object{
-						{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-						{Key: aws.String("abc/efg/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-					},
-				}, nil)
-			},
-		},
+		if !found {
+			return false
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runReadDirTest(t, fs, tt.dirPath, tt.expectedResults, tt.setupMock)
-		})
-	}
+	return true
 }
 
-func Test_ReadDir_OneLevelListing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	tests := []struct {
-		name            string
-		dirPath         string
-		expectedResults []result
-		setupMock       func()
-	}{
-		{
-			name:    "Returns only one-level entries using common prefixes",
-			dirPath: "abc",
-			expectedResults: []result{
-				{"root.txt", 10, false},
-				{"efg", 0, true},
-			},
-			setupMock: func() {
-				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
-						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
-						// The fix must request a one-level listing: a delimiter is set so nested
-						// keys are collapsed into CommonPrefixes instead of streaming every object.
-						require.NotNil(t, in.Delimiter, "ReadDir must set a Delimiter for one-level listing")
-						require.Equal(t, string(filepath.Separator), *in.Delimiter)
-						require.Equal(t, "abc/", *in.Prefix)
-
-						return &s3.ListObjectsV2Output{
-							Contents: []types.Object{
-								{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-								{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
-							},
-							CommonPrefixes: []types.CommonPrefix{
-								{Prefix: aws.String("abc/efg/")},
-							},
-						}, nil
-					})
-			},
-		},
-		{
-			name:    "Root directory lists from bucket root and skips nil prefixes",
-			dirPath: ".",
-			expectedResults: []result{
-				{"root.txt", 5, false},
-				{"efg", 0, true},
-			},
-			setupMock: func() {
-				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
-						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
-						require.Empty(t, *in.Prefix, "ReadDir(\".\") must list from the bucket root")
-
-						return &s3.ListObjectsV2Output{
-							Contents: []types.Object{
-								{Key: aws.String("root.txt"), Size: aws.Int64(5), LastModified: aws.Time(time.Now())},
-							},
-							CommonPrefixes: []types.CommonPrefix{
-								{Prefix: nil},
-								{Prefix: aws.String("efg/")},
-							},
-						}, nil
-					})
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runReadDirTest(t, fs, tt.dirPath, tt.expectedResults, tt.setupMock)
-		})
-	}
+// memS3 is a minimal in-memory S3 (path-style), enough for end-to-end tests.
+type memS3 struct {
+	mu   sync.Mutex
+	objs map[string][]byte
 }
 
-func runReadDirTest(t *testing.T, fs *FileSystem, dirPath string, expectedResults []result, setupMock func()) {
+func newMemS3(t *testing.T) (*memS3, *fakeS3) {
 	t.Helper()
 
-	if setupMock != nil {
-		setupMock()
+	m := &memS3{objs: map[string][]byte{}}
+
+	return m, newFakeS3(t, m.serve)
+}
+
+func (m *memS3) keys() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	keys := make([]string, 0, len(m.objs))
+	for k := range m.objs {
+		keys = append(keys, k)
 	}
 
-	res, err := fs.ReadDir(dirPath)
-	require.NoError(t, err, "Error reading directory")
+	sort.Strings(keys)
 
-	results := make([]result, 0, len(res))
-
-	for _, entry := range res {
-		results = append(results, result{entry.Name(), entry.Size(), entry.IsDir()})
-	}
-
-	assert.Equal(t, expectedResults, results, "Mismatch in results for path: %v", dirPath)
+	return keys
 }
 
-func TestRemove(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func (m *memS3) put(key, body string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any())
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	name := "testfile.txt"
-
-	mocks.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(&s3.DeleteObjectOutput{}, nil).Times(1)
-
-	err := fs.Remove(name)
-	require.NoError(t, err, "Remove() failed")
+	m.objs[key] = []byte(body)
 }
 
-func Test_RenameFile_ToNewName_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func (m *memS3) body(key string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().CopyObject(gomock.Any(), gomock.Any()).Return(&s3.CopyObjectOutput{}, nil).Times(1)
-	mocks.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(&s3.DeleteObjectOutput{}, nil).Times(1)
-
-	err := fs.Rename("abcd.json", "abc.json")
-	require.NoError(t, err, "Unexpected error when renaming file to new name")
+	return string(m.objs[key])
 }
 
-func Test_RenameFile_ToSameName_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	err := fs.Rename("abcd.json", "abcd.json")
-	require.NoError(t, err, "Unexpected error when renaming file to same name")
+type listContent struct {
+	Key  string `xml:"Key"`
+	Size int    `xml:"Size"`
 }
 
-func Test_RenameFile_WithDifferentExtension_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	err := fs.Rename("abcd.json", "abcd.txt")
-	require.Error(t, err, "Expected error when renaming file with different extension")
+type listPrefix struct {
+	Prefix string `xml:"Prefix"`
 }
 
-func Test_RenameFile_ToDirectoryPath_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	err := fs.Rename("abcd.json", "abc/abcd.json")
-	require.Error(t, err, "Expected error when renaming file to directory path")
+type listResult struct {
+	XMLName  xml.Name      `xml:"ListBucketResult"`
+	Contents []listContent `xml:"Contents"`
+	Prefixes []listPrefix  `xml:"CommonPrefixes"`
 }
 
-func Test_StatFile(t *testing.T) {
-	tm := time.Now()
+func (m *memS3) serve(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	type result struct {
-		name  string
-		size  int64
-		isDir bool
-	}
+	key := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/"+testBucket), "/")
 
-	expectedResponse := result{
-		name:  "file.txt",
-		size:  1,
-		isDir: false,
-	}
+	switch {
+	case key == "" && r.Method == http.MethodHead:
+		w.WriteHeader(http.StatusOK)
+	case key == "" && r.Method == http.MethodGet:
+		m.list(w, r)
+	case r.Method == http.MethodPut && r.Header.Get("X-Amz-Copy-Source") != "":
+		src := strings.TrimPrefix(r.Header.Get("X-Amz-Copy-Source"), testBucket+"/")
+		body, ok := m.objs[src]
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-		Contents: []types.Object{
-			{
-				Key:          aws.String("file.txt"),
-				Size:         aws.Int64(1),
-				LastModified: aws.Time(tm),
-			},
-		},
-	}, nil).AnyTimes()
-
-	res, err := fs.Stat("dir1/dir2/file.txt")
-
-	response := result{res.Name(), res.Size(), res.IsDir()}
-
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting file info")
-	assert.Equal(t, expectedResponse, response, "Mismatch in results for path: %v", expectedResponse.name)
-}
-
-func Test_StatDirectory(t *testing.T) {
-	type result struct {
-		name  string
-		size  int64
-		isDir bool
-	}
-
-	expectedResponse := result{
-		name:  "dir2",
-		size:  1,
-		isDir: true,
-	}
-
-	ctrl := gomock.NewController(t)
-	mocks := setupTestMocks(ctrl)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-
-	cfg := &Config{
-		EndPoint:        "http://localhost:4566",
-		BucketName:      "gofr-bucket-2",
-		Region:          "us-east-1",
-		AccessKeyID:     "test",
-		SecretAccessKey: "test",
-	}
-	fs := setupTestFileSystem(mocks, cfg)
-
-	mocks.mockS3.EXPECT().ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String("gofr-bucket-2"),
-		Prefix: aws.String("dir1/dir2"),
-	}).Return(&s3.ListObjectsV2Output{
-		Contents: []types.Object{
-			{
-				Key:          aws.String("dir1/dir2/"),
-				Size:         aws.Int64(0),
-				LastModified: aws.Time(time.Now()),
-			},
-			{
-				Key:          aws.String("dir1/dir2/file.txt"),
-				Size:         aws.Int64(1),
-				LastModified: aws.Time(time.Now()),
-			},
-		},
-	}, nil)
-
-	res, err := fs.Stat("dir1/dir2")
-
-	response := result{res.Name(), res.Size(), res.IsDir()}
-
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting directory stats")
-	assert.Equal(t, expectedResponse, response, "Mismatch in results for path: %v", expectedResponse.name)
-}
-
-func Test_CreateFile_PutObjectFails_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
-
-	_, err := fs.Create("folder/test.txt")
-	require.Error(t, err, "Expected error when PutObject fails")
-}
-
-func Test_CreateFile_GetObjectFails_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
-
-	_, err := fs.Create("folder/test.txt")
-	require.Error(t, err, "Expected error when GetObject fails after PutObject success")
-}
-
-func Test_Open_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body:          io.NopCloser(strings.NewReader("test content")),
-		ContentType:   aws.String("application/json"),
-		LastModified:  aws.Time(time.Now()),
-		ContentLength: aws.Int64(12),
-	}, nil).Times(1)
-
-	_, err := fs.Open("test.json")
-	require.NoError(t, err, "Unexpected error when opening file")
-}
-
-// Test_Open_NilOptionalMetadata_NoPanic guards the defect-3 fix. ContentType,
-// LastModified and ContentLength are optional response headers; a backend such
-// as Cloudflare R2 may omit them, leaving the SDK's pointers nil. Open must not
-// dereference them unconditionally.
-func Test_Open_NilOptionalMetadata_NoPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
-	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body: io.NopCloser(strings.NewReader("content")),
-		// ContentType, LastModified and ContentLength deliberately left nil.
-	}, nil)
-
-	f, err := fs.Open("no-metadata.bin")
-	require.NoError(t, err, "Open must not panic when optional metadata is absent")
-	assert.Empty(t, f.(*S3File).contentType, "missing content type defaults to empty string")
-	assert.Zero(t, f.(*S3File).size, "missing content length defaults to zero")
-}
-
-// Test_CreateFile_NilOptionalMetadata_NoPanic is the Create-side counterpart to
-// Test_Open_NilOptionalMetadata_NoPanic.
-func Test_CreateFile_NilOptionalMetadata_NoPanic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
-	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body: io.NopCloser(strings.NewReader("")),
-		// ContentType, LastModified and ContentLength deliberately left nil.
-	}, nil)
-
-	_, err := fs.Create("no-ext-key")
-	require.NoError(t, err, "Create must not panic when optional metadata is absent")
-}
-
-func Test_Open_GetObjectFails_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Errorf("failed to retrieve %q: %v", "missing.json", errMock).Times(1)
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
-	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock).Times(1)
-
-	_, err := fs.Open("missing.json")
-	require.Error(t, err, "Expected error when GetObject fails")
-	require.Contains(t, err.Error(), "mocked error", "Expected error to contain mocked error")
-}
-
-func Test_RenameDirectory_ListObjectsV2Fails_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(nil, errMock)
-
-	err := fs.Rename("old-dir", "new-dir")
-	require.Error(t, err, "Expected error when ListObjectsV2 fails in renameDirectory")
-	require.Contains(t, err.Error(), "mocked error", "Expected error to contain mocked error")
-}
-
-func Test_Stat_ListObjectsV2Fails_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(nil, errMock)
-
-	_, err := fs.Stat("test-file.txt")
-	require.Error(t, err, "Expected error when ListObjectsV2 fails")
-	require.Contains(t, err.Error(), "mocked error", "Expected error to contain mocked error")
-}
-
-// Test_RenameFile_ToSameName_LogsSuccess guards against the same-name no-op
-// being reported as an ERROR by observability while returning nil to the caller.
-func Test_RenameFile_ToSameName_LogsSuccess(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	logs := make([]FileLog, 0)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().Do(func(args ...any) {
-		if fl, ok := args[0].(*FileLog); ok {
-			logs = append(logs, *fl)
+		if !ok {
+			writeS3Error(w, http.StatusNotFound, "NoSuchKey")
+			return
 		}
-	})
 
-	require.NoError(t, fs.Rename("abcd.json", "abcd.json"))
+		m.objs[key] = body
+		_, _ = io.WriteString(w, `<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>`)
+	case r.Method == http.MethodPut:
+		body, _ := io.ReadAll(r.Body)
+		m.objs[key] = body
+	case r.Method == http.MethodDelete:
+		delete(m.objs, key)
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		m.object(w, r, key)
+	}
+}
 
-	require.Len(t, logs, 1)
-	require.Equal(t, "RENAME", logs[0].Operation)
-	require.Equal(t, statusSuccess, *logs[0].Status)
+func (m *memS3) object(w http.ResponseWriter, r *http.Request, key string) {
+	body, ok := m.objs[key]
+	if !ok {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		writeS3Error(w, http.StatusNotFound, "NoSuchKey")
+
+		return
+	}
+
+	w.Header().Set("Last-Modified", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC).Format(http.TimeFormat))
+
+	rng := r.Header.Get("Range")
+	if rng == "" || r.Method != http.MethodGet {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+
+		if r.Method == http.MethodGet {
+			_, _ = w.Write(body)
+		}
+
+		return
+	}
+
+	parts := strings.SplitN(strings.TrimPrefix(rng, "bytes="), "-", 2)
+	start, _ := strconv.Atoi(parts[0])
+	end, _ := strconv.Atoi(parts[1])
+
+	if start >= len(body) {
+		writeS3Error(w, http.StatusRequestedRangeNotSatisfiable, "InvalidRange")
+		return
+	}
+
+	if end >= len(body) {
+		end = len(body) - 1
+	}
+
+	w.Header().Set("Content-Range", "bytes "+strconv.Itoa(start)+"-"+strconv.Itoa(end)+"/"+strconv.Itoa(len(body)))
+	w.Header().Set("Content-Length", strconv.Itoa(end-start+1))
+	w.WriteHeader(http.StatusPartialContent)
+	_, _ = w.Write(body[start : end+1])
+}
+
+func (m *memS3) list(w http.ResponseWriter, r *http.Request) {
+	prefix := r.URL.Query().Get("prefix")
+	delimiter := r.URL.Query().Get("delimiter")
+
+	var res listResult
+
+	seen := map[string]bool{}
+
+	keys := make([]string, 0, len(m.objs))
+	for k := range m.objs {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+
+		rest := strings.TrimPrefix(k, prefix)
+
+		if i := strings.Index(rest, delimiter); delimiter != "" && i >= 0 {
+			p := prefix + rest[:i+1]
+			if !seen[p] {
+				seen[p] = true
+
+				res.Prefixes = append(res.Prefixes, listPrefix{Prefix: p})
+			}
+
+			continue
+		}
+
+		res.Contents = append(res.Contents, listContent{Key: k, Size: len(m.objs[k])})
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+
+	out, _ := xml.Marshal(res)
+	_, _ = w.Write(out)
+}
+
+func testConfig(endpoint string) *Config {
+	return &Config{
+		EndPoint: endpoint, BucketName: testBucket, Region: "us-east-1",
+		AccessKeyID: "AKID", SecretAccessKey: "secret", Flavor: FlavorMinIO,
+	}
+}
+
+// newConnectedFS returns a connected S3 file system backed by an in-memory fake.
+func newConnectedFS(t *testing.T) (*fileSystem, *memS3, *testMetrics) {
+	t.Helper()
+
+	mem, srv := newMemS3(t)
+	metrics := &testMetrics{}
+
+	fs := New(testConfig(srv.URL)).(*fileSystem)
+	fs.UseLogger(&testLogger{})
+	fs.UseMetrics(metrics)
+	fs.Connect()
+
+	require.True(t, fs.IsConnected(), "fake S3 must accept the connection")
+
+	return fs, mem, metrics
+}
+
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     *Config
+		wantBucket string
+	}{
+		{name: "nil config is safe", config: nil, wantBucket: ""},
+		{name: "bucket becomes the location", config: &Config{BucketName: "my-bucket"}, wantBucket: "my-bucket"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := New(tt.config)
+
+			require.NotNil(t, fs)
+
+			impl, ok := fs.(*fileSystem)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantBucket, impl.Location)
+			assert.Equal(t, "S3", impl.ProviderName)
+			assert.NotNil(t, impl.adapter)
+		})
+	}
 }
 
 func TestFileSystem_UseLogger(t *testing.T) {
-	logger := NewMockLogger(gomock.NewController(t))
-
 	tests := []struct {
-		name      string
-		logger    any
-		expLogger Logger
+		name       string
+		logger     any
+		wantLogger bool
 	}{
-		{name: "valid logger is set", logger: logger, expLogger: logger},
-		{name: "invalid logger is ignored", logger: "not a logger", expLogger: nil},
+		{name: "valid logger reaches fs and adapter", logger: &testLogger{}, wantLogger: true},
+		{name: "wrong type is ignored", logger: "not a logger", wantLogger: false},
+		{name: "nil is ignored", logger: nil, wantLogger: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := &FileSystem{config: defaultTestConfig()}
+			fs := New(&Config{}).(*fileSystem)
 
 			fs.UseLogger(tt.logger)
 
-			assert.Equal(t, tt.expLogger, fs.logger)
+			assert.Equal(t, tt.wantLogger, fs.Logger != nil)
+			assert.Equal(t, tt.wantLogger, fs.adapter.logger != nil)
 		})
 	}
 }
 
 func TestFileSystem_UseMetrics(t *testing.T) {
-	metrics := NewMockMetrics(gomock.NewController(t))
-
 	tests := []struct {
-		name       string
-		metrics    any
-		expMetrics Metrics
+		name        string
+		metrics     any
+		wantMetrics bool
 	}{
-		{name: "valid metrics is set", metrics: metrics, expMetrics: metrics},
-		{name: "invalid metrics is ignored", metrics: "not metrics", expMetrics: nil},
+		{name: "valid metrics", metrics: &testMetrics{}, wantMetrics: true},
+		{name: "wrong type is ignored", metrics: 42, wantMetrics: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := &FileSystem{config: defaultTestConfig()}
+			fs := New(&Config{}).(*fileSystem)
 
 			fs.UseMetrics(tt.metrics)
 
-			assert.Equal(t, tt.expMetrics, fs.metrics)
+			assert.Equal(t, tt.wantMetrics, fs.Metrics != nil)
 		})
 	}
 }
 
-func TestFileSystem_Connect_LoadConfigFails(t *testing.T) {
-	dir := t.TempDir()
-
-	// Point the SDK at empty shared config files and select a profile that does not exist,
-	// which makes LoadDefaultConfig fail without any network access.
-	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "config"))
-	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
-	t.Setenv("AWS_PROFILE", "gofr-profile-that-does-not-exist")
-
-	mocks := setupTestMocks(gomock.NewController(t))
-	fs := &FileSystem{config: defaultTestConfig(), logger: mocks.mockLogger}
-
-	mocks.mockLogger.EXPECT().Debugf("connecting to S3 bucket: %s", "test-bucket")
-	mocks.mockLogger.EXPECT().Errorf("failed to load configuration: %v", gomock.Any())
-	mocks.mockLogger.EXPECT().Debug(gomock.Any())
-
-	fs.Connect()
-
-	assert.Nil(t, fs.conn)
-}
-
-func TestRemove_DeleteObjectFails_Error(t *testing.T) {
-	mocks := setupTestMocks(gomock.NewController(t))
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Debug(gomock.Any())
-	mocks.mockLogger.EXPECT().Errorf("Error while deleting file: %v", errMock)
-	mocks.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
-
-	require.ErrorIs(t, fs.Remove("abc.json"), errMock)
-}
-
-func Test_RenameFile_Errors(t *testing.T) {
+func TestFileSystem_Connect(t *testing.T) {
 	tests := []struct {
-		name      string
-		setupMock func(m *testMocks)
-		expErr    error
+		name          string
+		status        int
+		wantConnected bool
+		wantRetryLog  bool
 	}{
-		{
-			name: "copy object fails",
-			setupMock: func(m *testMocks) {
-				m.mockS3.EXPECT().CopyObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
-			},
-			expErr: errMock,
-		},
-		{
-			name: "removing old file fails",
-			setupMock: func(m *testMocks) {
-				m.mockS3.EXPECT().CopyObject(gomock.Any(), gomock.Any()).Return(&s3.CopyObjectOutput{}, nil)
-				m.mockS3.EXPECT().DeleteObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
-				m.mockLogger.EXPECT().Errorf("Error while deleting file: %v", errMock)
-				m.mockLogger.EXPECT().Debug(gomock.Any())
-			},
-			expErr: errMock,
-		},
+		{name: "reachable bucket connects", status: http.StatusOK, wantConnected: true},
+		{name: "failure starts the background retry", status: http.StatusForbidden, wantRetryLog: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mocks := setupTestMocks(gomock.NewController(t))
-			fs := setupTestFileSystem(mocks, nil)
+			srv := newFakeS3(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(tt.status) })
+			logger, metrics := &testLogger{}, &testMetrics{}
 
-			mocks.mockLogger.EXPECT().Debug(gomock.Any())
-			tt.setupMock(mocks)
+			fs := New(testConfig(srv.URL)).(*fileSystem)
+			fs.UseLogger(logger)
+			fs.UseMetrics(metrics)
 
-			err := fs.Rename("abcd.json", "abc.json")
+			// Stops the retry goroutine at its first tick so it does not outlive the test.
+			defer fs.SetDisableRetry(true)
 
-			require.ErrorIs(t, err, tt.expErr)
+			fs.Connect()
+
+			assert.Equal(t, tt.wantConnected, fs.IsConnected())
+			assert.Equal(t, []string{file.AppFileStats}, metrics.registered(), "histogram registered once")
+			assert.True(t, metrics.hasSample(file.AppFileStats, "S3"))
+
+			lines := logger.errorLines()
+
+			if tt.wantRetryLog {
+				require.NotEmpty(t, lines)
+				assert.Contains(t, lines[0], "starting background retry")
+			} else {
+				assert.Empty(t, lines)
+			}
 		})
 	}
 }
+
+func TestFileSystem_Connect_Idempotent(t *testing.T) {
+	fs, _, _ := newConnectedFS(t)
+
+	fs.Connect()
+
+	assert.True(t, fs.IsConnected())
+}
+
+func TestFileSystem_Read(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		bufLen  int
+		wantN   int
+	}{
+		{name: "buffer larger than object reports n and EOF", content: "hello", bufLen: 10, wantN: 5},
+		{name: "buffer smaller than object", content: "hello", bufLen: 3, wantN: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs, mem, _ := newConnectedFS(t)
+			mem.put("dir/a.txt", tt.content)
+
+			f, err := fs.Open("dir/a.txt")
+			require.NoError(t, err)
+
+			defer f.Close()
+
+			buf := make([]byte, tt.bufLen)
+			n, err := f.Read(buf)
+
+			assert.Equal(t, tt.wantN, n)
+			assert.Equal(t, tt.content[:tt.wantN], string(buf[:n]))
+
+			if err != nil {
+				require.ErrorIs(t, err, io.EOF)
+			}
+
+			rest, err := io.ReadAll(f)
+			require.NoError(t, err)
+			assert.Equal(t, tt.content[tt.wantN:], string(rest))
+		})
+	}
+}
+
+func TestFileSystem_Create(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		content string
+	}{
+		{name: "fresh prefix needs no parent (3805 regression)", key: "fresh/prefix/a.txt", content: "payload"},
+		{name: "top level key", key: "top.json", content: `{"a":1}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs, mem, _ := newConnectedFS(t)
+
+			f, err := fs.Create(tt.key)
+			require.NoError(t, err)
+
+			_, err = f.Write([]byte(tt.content))
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+
+			assert.Equal(t, []string{tt.key}, mem.keys())
+			assert.Equal(t, tt.content, mem.body(tt.key))
+		})
+	}
+}
+
+func TestFileSystem_CreateWithOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		opts *file.FileOptions
+	}{
+		{name: "nil options (3805 regression)", opts: nil},
+		{name: "with metadata", opts: &file.FileOptions{ContentType: "text/csv", Metadata: map[string]string{"k": "v"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs, mem, _ := newConnectedFS(t)
+
+			f, err := fs.CreateWithOptions(context.Background(), "out/a.csv", tt.opts)
+			require.NoError(t, err)
+			require.NoError(t, f.Close())
+
+			assert.Equal(t, []string{"out/a.csv"}, mem.keys())
+		})
+	}
+}
+
+func TestFileSystem_Stat(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    string
+		wantDir   bool
+		wantSize  int64
+		wantErr   error
+		wantLabel string
+	}{
+		{name: "file", target: "dir/a.txt", wantSize: 5},
+		{name: "extensionless folder with keys under it", target: "dir", wantDir: true},
+		{name: "folder holding only subfolders", target: "top", wantDir: true},
+		{name: "missing object is NOT_FOUND", target: "nope.txt", wantErr: file.ErrFileNotFound, wantLabel: file.StatusNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs, mem, metrics := newConnectedFS(t)
+			mem.put("dir/a.txt", "hello")
+			mem.put("top/sub/b.txt", "x")
+
+			info, err := fs.Stat(tt.target)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.True(t, metrics.hasSample(file.AppFileStats, tt.wantLabel))
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantDir, info.IsDir())
+			assert.Equal(t, tt.wantSize, info.Size())
+		})
+	}
+}
+
+func TestFileSystem_ReadDir(t *testing.T) {
+	fs, mem, _ := newConnectedFS(t)
+	mem.put("d/a.txt", "1")
+	mem.put("d/sub/b.txt", "2")
+
+	entries, err := fs.ReadDir("d/")
+
+	require.NoError(t, err)
+
+	got := map[string]bool{}
+	for _, e := range entries {
+		got[e.Name()] = e.IsDir()
+	}
+
+	assert.Equal(t, map[string]bool{"a.txt": false, "sub": true}, got)
+}
+
+func TestFileSystem_Rename(t *testing.T) {
+	tests := []struct {
+		name     string
+		from, to string
+		wantKeys []string
+	}{
+		{name: "same folder", from: "d/a.txt", to: "d/b.txt", wantKeys: []string{"d/b.txt"}},
+		{name: "across folders and extensions", from: "d/a.txt", to: "e/f/a.csv", wantKeys: []string{"e/f/a.csv"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs, mem, _ := newConnectedFS(t)
+			mem.put("d/a.txt", "1")
+
+			require.NoError(t, fs.Rename(tt.from, tt.to))
+			assert.Equal(t, tt.wantKeys, mem.keys())
+		})
+	}
+}
+
+func TestFileSystem_Remove(t *testing.T) {
+	fs, mem, _ := newConnectedFS(t)
+	mem.put("d/a.txt", "1")
+
+	require.NoError(t, fs.Remove("d/a.txt"))
+	assert.Empty(t, mem.keys())
+}
+
+func TestFileSystem_Getwd(t *testing.T) {
+	fs, _, _ := newConnectedFS(t)
+
+	wd, err := fs.Getwd()
+
+	require.NoError(t, err)
+	assert.Equal(t, testBucket, wd)
+}
+
+func TestFileSystem_GenerateSignedURL(t *testing.T) {
+	fs, _, _ := newConnectedFS(t)
+
+	got, err := fs.GenerateSignedURL(context.Background(), "d/a.txt", time.Hour, nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, got, "/"+testBucket+"/d/a.txt")
+	assert.Contains(t, got, "X-Amz-Signature=")
+}
+
+// TestFileSystem_ReadAt_Parallel reads one open file from 32 goroutines at once; run with -race.
+func TestFileSystem_ReadAt_Parallel(t *testing.T) {
+	const workers = 32
+
+	fs, mem, _ := newConnectedFS(t)
+
+	var content strings.Builder
+
+	for i := range workers {
+		content.WriteString(strings.Repeat(string(rune('a'+i%26)), 8))
+	}
+
+	mem.put("big.bin", content.String())
+
+	f, err := fs.Open("big.bin")
+	require.NoError(t, err)
+
+	defer f.Close()
+
+	var wg sync.WaitGroup
+
+	errs := make(chan error, workers)
+
+	for i := range workers {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			buf := make([]byte, 8)
+			want := strings.Repeat(string(rune('a'+i%26)), 8)
+
+			n, err := f.ReadAt(buf, int64(i*8))
+			if err != nil && !errors.Is(err, io.EOF) {
+				errs <- err
+				return
+			}
+
+			if n != 8 || string(buf) != want {
+				errs <- fmt.Errorf("%w at offset %d: %q", errWrongBytes, i*8, buf[:n])
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+var errWrongBytes = errors.New("wrong bytes")
