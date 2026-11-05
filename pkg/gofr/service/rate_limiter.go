@@ -37,7 +37,8 @@ func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 
 // AddOption allows RateLimiterConfig to be used as a service.Options.
 func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
-	// Validate always succeeds  - it auto-corrects invalid values
+	// Validate auto-corrects invalid values, so the option still applies when it returns an error. The error is
+	// not logged because an Options value is not handed a logger here.
 	_ = config.Validate()
 
 	// Assume cfg is already validated via constructor
