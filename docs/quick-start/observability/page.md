@@ -200,6 +200,12 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
+- app_file_stats
+- histogram
+- Response time of file-store operations in microseconds, labeled by `type` (the operation), `provider` and `status` (`SUCCESS`, `ERROR`, or `NOT_FOUND` when the object does not exist)
+
+---
+
 - app_pubsub_publish_total_count
 - counter
 - Number of total publish operations

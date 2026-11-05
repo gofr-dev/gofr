@@ -139,7 +139,11 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 
 	defer f.observe(OpReadAt, startTime, &st, &msg)
 
-	if off < 0 || off >= f.size {
+	// A size of 0 on a file means the provider did not report one (e.g. no Content-Length),
+	// so only a known size bounds the offset; otherwise the range read decides.
+	sizeKnown := f.size > 0 || f.isDir
+
+	if off < 0 || (sizeKnown && off >= f.size) {
 		msg = fmt.Sprintf("offset %d out of range [0, %d]", off, f.size)
 		return 0, ErrOutOfRange
 	}
@@ -154,16 +158,22 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	}
 	defer reader.Close()
 
+	// io.ReaderAt requires a non-nil error whenever n < len(p): io.EOF when the object ended,
+	// the storage error otherwise.
 	n, err := io.ReadFull(reader, p)
-	if err != nil && errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		msg = fmt.Sprintf("ReadAt failed: %v", err)
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		err = io.EOF
+	}
+
+	if err != nil && !errors.Is(err, io.EOF) {
+		msg = fmt.Sprintf("ReadAt failed after %d bytes: %v", n, err)
 		return n, err
 	}
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.name, off)
 
-	return n, nil
+	return n, err
 }
 
 // Write implements io.Writer.
