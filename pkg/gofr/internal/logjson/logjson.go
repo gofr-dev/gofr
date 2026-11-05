@@ -148,7 +148,7 @@ func AppendTime(dst []byte, t time.Time) ([]byte, bool) {
 	}
 
 	dst = append(dst, '"')
-	dst = t.AppendFormat(dst, time.RFC3339Nano)
+	dst = AppendRFC3339Nano(dst, t)
 
 	return append(dst, '"'), true
 }

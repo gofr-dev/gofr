@@ -346,7 +346,7 @@ func formatStartTime(t time.Time) string {
 const startTimeSize = len(time.RFC3339Nano) + 8
 
 func appendStartTime(dst []byte, t time.Time) []byte {
-	b := t.AppendFormat(dst, time.RFC3339Nano)
+	b := logjson.AppendRFC3339Nano(dst, t)
 	if n := len(b); n > len(dst) && b[n-1] == 'Z' {
 		b = append(b[:n-1], "+00:00"...)
 	}
