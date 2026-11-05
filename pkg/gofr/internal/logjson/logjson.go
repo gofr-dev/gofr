@@ -69,6 +69,9 @@ func AppendString(dst []byte, s string) ([]byte, bool) {
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
+		if plain[c] {
+			continue
+		}
 
 		var esc string
 
@@ -98,6 +101,25 @@ func AppendString(dst []byte, s string) ([]byte, bool) {
 
 	return append(dst, '"'), true
 }
+
+// firstPrintable and del bound printable ASCII: [0x20, 0x7f).
+const (
+	firstPrintable = 0x20
+	del            = 0x7f
+)
+
+// plain marks the bytes AppendString copies as they are: printable ASCII except the five it
+// escapes. One table load per byte replaces the comparisons in AppendString's switch, which the
+// common log string (IDs, times, paths, user agents) never reaches.
+//
+//nolint:gochecknoglobals // a constant table, built once and only read.
+var plain = func() (t [256]bool) {
+	for c := byte(firstPrintable); c < del; c++ {
+		t[c] = c != '"' && c != '\\' && c != '<' && c != '>' && c != '&'
+	}
+
+	return t
+}()
 
 // AppendInt appends n as encoding/json writes an integer.
 func AppendInt(dst []byte, n int64) []byte {

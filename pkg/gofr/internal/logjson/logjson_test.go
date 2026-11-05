@@ -57,6 +57,42 @@ func TestAppendStringFallsBackOutsidePrintableASCII(t *testing.T) {
 	}
 }
 
+// TestAppendStringEveryByte checks each of the 256 byte values alone and between plain bytes: the
+// fast path either writes exactly what encoding/json writes or falls back, and it falls back for
+// precisely the control bytes, DEL and non-ASCII.
+func TestAppendStringEveryByte(t *testing.T) {
+	for c := range 256 {
+		for _, s := range []string{string([]byte{byte(c)}), "ab" + string([]byte{byte(c)}) + "cdefghij"} {
+			got, ok := AppendString(nil, s)
+			assert.Equal(t, c >= 0x20 && c < 0x7f, ok, "byte 0x%02x in %q", c, s)
+
+			if ok {
+				assert.Equal(t, encodingJSON(t, s), string(got), "byte 0x%02x in %q", c, s)
+			}
+		}
+	}
+}
+
+// BenchmarkAppendString encodes the strings of one request log line: IDs, time, method, user agent,
+// address and path, none of which needs an escape.
+func BenchmarkAppendString(b *testing.B) {
+	in := []string{
+		"0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331", "2026-11-05T09:00:00.123456789+05:30", "GET",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+		"10.12.13.14:53422", "/api/v1/users/42?x=1",
+	}
+	buf := make([]byte, 0, 512)
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		buf = buf[:0]
+		for _, s := range in {
+			buf, _ = AppendString(buf, s)
+		}
+	}
+}
+
 func FuzzAppendString(f *testing.F) {
 	for _, s := range stringCorpus() {
 		f.Add(s)
