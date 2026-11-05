@@ -20,6 +20,9 @@ const (
 	keyAccessControlAllowCredentials = "ACCESS_CONTROL_ALLOW_CREDENTIALS"
 )
 
+// Metrics configuration keys.
+const keyMetricsUnmatchedLimit = "METRICS_UNMATCHED_LIMIT"
+
 // allowCredentialsTrue is the only value the Fetch standard recognizes for
 // Access-Control-Allow-Credentials.
 const allowCredentialsTrue = "true"
@@ -33,6 +36,13 @@ type Config struct {
 	// disagree. Zero or negative means unlimited. The Metrics middleware sizes its
 	// caller-controlled label budget from it; see WithCardinalityLimit.
 	MetricsCardinalityLimit int
+
+	// MetricsUnmatchedLimit is METRICS_UNMATCHED_LIMIT: the most caller-controlled
+	// label sets the Metrics middleware records verbatim before collapsing them.
+	// Nil means the key is unset, and the Metrics middleware keeps its default
+	// budget, so a Config built by hand keeps today's behavior. The middleware only
+	// ever lets it lower the budget; see WithUnmatchedLimit.
+	MetricsUnmatchedLimit *int
 }
 
 type LogProbes struct {
@@ -91,8 +101,35 @@ func GetConfigs(c config.Config, logger ...configLogger) Config {
 	}
 
 	middlewareConfigs.MetricsCardinalityLimit = container.MetricsCardinalityLimit(c)
+	middlewareConfigs.MetricsUnmatchedLimit = metricsUnmatchedLimit(c, warnLogger)
 
 	return middlewareConfigs
+}
+
+// metricsUnmatchedLimit reads METRICS_UNMATCHED_LIMIT. Unset returns nil, which
+// keeps the default budget. Unlike METRICS_CARDINALITY_LIMIT, which
+// container.MetricsCardinalityLimit parses, it is parsed here because it needs the
+// warn logger that GetConfigs receives. A value that is negative or not an
+// integer is treated as 0, so a typo fails toward fewer series rather than more;
+// the warning names the key but not the value, which is never echoed to the logs.
+func metricsUnmatchedLimit(c config.Config, logger configLogger) *int {
+	val := strings.TrimSpace(c.Get(keyMetricsUnmatchedLimit))
+	if val == "" {
+		return nil
+	}
+
+	n, err := strconv.Atoi(val)
+	if err == nil && n >= 0 {
+		return &n
+	}
+
+	if logger != nil {
+		logger.Warnf("invalid value for config %s, expected a non-negative integer: treated as 0", keyMetricsUnmatchedLimit)
+	}
+
+	zero := 0
+
+	return &zero
 }
 
 // corsHeaderValue returns the header value to send for a CORS configuration key, and

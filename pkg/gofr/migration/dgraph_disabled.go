@@ -52,8 +52,8 @@ func (dgraphMigrator) checkAndCreateMigrationTable(*container.Container) error {
 	return errDgraphMigratorOmitted
 }
 
-func (dgraphMigrator) getLastMigration(*container.Container) (int64, error) {
-	return 0, errDgraphMigratorOmitted
+func (dgraphMigrator) getAppliedMigrations(*container.Container) (map[int64]struct{}, error) {
+	return nil, errDgraphMigratorOmitted
 }
 
 func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionData {

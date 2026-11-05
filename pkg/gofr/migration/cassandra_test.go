@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errCassandraInner = errors.New("cassandra inner migrator error")
 
 func cassandraSetup(t *testing.T) (migrator, *container.MockCassandraWithContext, *container.Container) {
 	t.Helper()
@@ -51,32 +54,74 @@ func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_CassandraGetLastMigration(t *testing.T) {
-	migratorWithCassandra, mockCassandra, mockContainer := cassandraSetup(t)
-
+func Test_CassandraGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc string
-		err  error
-		resp int64
+		desc        string
+		versions    []int64
+		queryErr    error
+		baseApplied map[int64]struct{}
+		baseErr     error
+		expApplied  map[int64]struct{}
+		expErr      error
 	}{
-		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, -1},
+		{
+			desc:        "cassandra versions are unioned with inner migrator versions",
+			versions:    []int64{1, 3, 4},
+			baseApplied: map[int64]struct{}{2: {}},
+			expApplied:  map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc:        "empty cassandra table returns only inner versions",
+			versions:    []int64{},
+			baseApplied: map[int64]struct{}{5: {}},
+			expApplied:  map[int64]struct{}{5: {}},
+		},
+		{
+			desc:     "cassandra query error",
+			queryErr: sql.ErrConnDone,
+			expErr:   sql.ErrConnDone,
+		},
+		{
+			desc:     "inner migrator error",
+			versions: []int64{2},
+			baseErr:  errCassandraInner,
+			expErr:   errCassandraInner,
+		},
 	}
 
-	var lastMigration []int64
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-	for i, tc := range testCases {
-		mockCassandra.EXPECT().QueryWithCtx(gomock.Any(), &lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
+			m := cassandraMigrator{CassandraWithContext: mocks.Cassandra, migrator: mockMigrator}
 
-		resp, err := migratorWithCassandra.getLastMigration(mockContainer)
+			mocks.Cassandra.EXPECT().QueryWithCtx(gomock.Any(), gomock.Any(), getCassandraGoFrMigrationVersions).
+				DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
+					if tc.queryErr != nil {
+						return tc.queryErr
+					}
 
-		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+					*(dest.(*[]int64)) = tc.versions
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		}
+					return nil
+				})
+
+			if tc.queryErr == nil {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.baseApplied, tc.baseErr)
+			}
+
+			applied, err := m.getAppliedMigrations(mockContainer)
+
+			assert.Equal(t, tc.expApplied, applied)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
@@ -138,60 +183,6 @@ func Test_CassandraCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 
 	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
-}
-
-func Test_CassandraGetLastMigration_Chained(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		versions   []int64
-		baseResp   int64
-		baseErr    error
-		expVersion int64
-		expErr     error
-	}{
-		{
-			desc:       "highest cassandra version is picked",
-			versions:   []int64{3, 9, 5},
-			baseResp:   4,
-			expVersion: 9,
-		},
-		{
-			desc:       "base version greater than cassandra",
-			versions:   []int64{2},
-			baseResp:   6,
-			expVersion: 6,
-		},
-		{
-			desc:       "base migrator error",
-			versions:   []int64{2},
-			baseErr:    sql.ErrConnDone,
-			expVersion: -1,
-			expErr:     sql.ErrConnDone,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			m := cassandraMigrator{CassandraWithContext: mocks.Cassandra, migrator: mockMigrator}
-
-			mocks.Cassandra.EXPECT().QueryWithCtx(gomock.Any(), gomock.Any(), getLastCassandraGoFrMigration).
-				DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
-					*(dest.(*[]int64)) = tc.versions
-
-					return nil
-				})
-			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
-
-			resp, err := m.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, resp)
-			assert.Equal(t, tc.expErr, err)
-		})
-	}
 }
 
 func Test_CassandraMigratorDelegation(t *testing.T) {
