@@ -37,6 +37,10 @@ func getLocation(bucket string) string {
 // Since S3 uses a flat storage structure, directories are represented by object keys with trailing slashes.
 // The method processes the path segments and ensures that each segment (directory) exists in S3.
 func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
+	if f.conn == nil {
+		return ErrNotConnected
+	}
+
 	var msg string
 
 	st := statusErr
@@ -80,6 +84,10 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 // S3 treats paths as part of object keys, so creating a directory is functionally equivalent to creating an
 // object with a specific prefix.
 func (f *FileSystem) MkdirAll(name string, perm os.FileMode) error {
+	if f.conn == nil {
+		return ErrNotConnected
+	}
+
 	return f.Mkdir(name, perm)
 }
 
@@ -89,6 +97,10 @@ func (f *FileSystem) MkdirAll(name string, perm os.FileMode) error {
 // and will return an error if a file path (as indicated by a file extension) is provided. The method lists all objects
 // under the specified directory prefix and deletes them in a single batch operation.
 func (f *FileSystem) RemoveAll(name string) error {
+	if f.conn == nil {
+		return ErrNotConnected
+	}
+
 	if path.Ext(name) != "" {
 		return f.Remove(name)
 	}
@@ -150,6 +162,10 @@ func (f *FileSystem) RemoveAll(name string) error {
 //   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
 //     only one level deep from the specified directory.
 func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
+	if f.conn == nil {
+		return nil, ErrNotConnected
+	}
+
 	var filePath, msg string
 
 	st := statusErr
@@ -297,6 +313,10 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 // For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
 // time among them. For files, it returns the file's size and last modified time.
 func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
+	if f.conn == nil {
+		return nil, ErrNotConnected
+	}
+
 	var msg string
 
 	st := statusErr
