@@ -92,6 +92,9 @@ type Cassandra interface {
 	// Returns true if the query is applied otherwise false.
 	// Returns false and error if any error occur while executing the query.
 	// Accepts only pointer to struct and built-in types as the dest parameter.
+	// A scalar dest only works for a single-column condition; when the LWT is not applied (e.g.
+	// INSERT ... IF NOT EXISTS returns the whole row), a scalar dest fails with
+	// "not enough columns to scan into" - use a struct or one pointer per column instead.
 	//
 	// Example:
 	//
@@ -152,6 +155,9 @@ type CassandraBatch interface {
 	// Returns true if the query is applied otherwise false.
 	// Returns false and error if any error occur while executing the query.
 	// Accepts only pointer to struct and built-in types as the dest parameter.
+	// A scalar dest only works for a single-column condition; when the LWT is not applied (e.g.
+	// INSERT ... IF NOT EXISTS returns the whole row), a scalar dest fails with
+	// "not enough columns to scan into" - use a struct or one pointer per column instead.
 	//
 	// Example:
 	//
@@ -654,6 +660,9 @@ type ScyllaDB interface {
 	// Returns true if the query is applied otherwise false.
 	// Returns false and error if any error occur while executing the query.
 	// Accepts only pointer to struct and built-in types as the dest parameter.
+	// A scalar dest only works for a single-column condition; when the LWT is not applied (e.g.
+	// INSERT ... IF NOT EXISTS returns the whole row), a scalar dest fails with
+	// "not enough columns to scan into" - use a struct or one pointer per column instead.
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 	// NewBatch initializes a new batch operation with the specified name and batch type.
 	NewBatch(name string, batchType int) error
