@@ -120,7 +120,7 @@ Echo leaves datasource wiring to you. With GoFr, SQL and Redis are auto-initiali
 app.AddMongo(mongo.New(mongo.Config{/* ... */}))
 ```
 
-You then access them via `c.SQL`, `c.Redis`, `c.Mongo` in handlers. SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), Redis, Mongo, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph, SurrealDB are supported, with first-class migrations for SQL/Mongo/Redis/Dgraph. See [datasources](/docs/datasources).
+You then access them via `c.SQL`, `c.Redis`, `c.Mongo` in handlers. SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), Redis, Mongo, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph, SurrealDB are supported, with first-class migrations for SQL/Mongo/Redis/Dgraph. See [datasources](/docs/datasources/getting-started).
 
 ## Observability
 
