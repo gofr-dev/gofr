@@ -66,6 +66,11 @@ func (a APIKeyAuthProvider) verifyAPIKey(apiKey string) bool {
 	}
 
 	for _, key := range a.APIKeys {
+		// An empty key must never match, or an empty header value would authenticate.
+		if key == "" {
+			continue
+		}
+
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(key)) == 1 {
 			return true
 		}

@@ -158,6 +158,10 @@ func Test_validateAPIKey(t *testing.T) {
 		{apiKeys: apiKeys, apiKey: validKey1, result: true},
 		{apiKeys: apiKeys, apiKey: "wrong-key", result: false},
 		{apiKey: validKey1, result: false},
+
+		{apiKeys: []string{""}, apiKey: "", result: false},
+		{apiKeys: []string{validKey1, ""}, apiKey: "", result: false},
+		{apiKeys: []string{validKey1, ""}, apiKey: validKey1, result: true},
 	}
 
 	for i, tc := range testCases {

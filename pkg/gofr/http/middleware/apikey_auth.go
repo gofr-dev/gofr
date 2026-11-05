@@ -70,6 +70,11 @@ func (a *APIKeyAuthProvider) validateAPIKey(apiKey string) bool {
 		return a.ValidateFunc(apiKey)
 	default:
 		for _, key := range a.APIKeys {
+			// An empty key must never match, or an empty header value would authenticate.
+			if key == "" {
+				continue
+			}
+
 			// Use constant time compare to mitigate timing attacks
 			if subtle.ConstantTimeCompare([]byte(apiKey), []byte(key)) == 1 {
 				return true

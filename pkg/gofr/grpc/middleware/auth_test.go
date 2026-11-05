@@ -461,3 +461,32 @@ func TestAuthStreamInterceptors(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIKeyAuthUnaryInterceptor_EmptyKey(t *testing.T) {
+	tests := []struct {
+		desc    string
+		keys    []string
+		header  string
+		wantErr bool
+	}{
+		{desc: "empty header against only an empty key", keys: []string{""}, header: "", wantErr: true},
+		{desc: "empty header beside a valid key", keys: []string{"valid-key", ""}, header: "", wantErr: true},
+		{desc: "valid key still works beside an empty one", keys: []string{"valid-key", ""}, header: "valid-key"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{APIKeys: tc.keys})
+			ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{"x-api-key": []string{tc.header}})
+
+			_, err := interceptor(ctx, nil, nil, func(context.Context, any) (any, error) { return nil, nil })
+
+			if tc.wantErr {
+				assert.Equal(t, codes.Unauthenticated, status.Code(err))
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}

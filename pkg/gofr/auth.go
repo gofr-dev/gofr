@@ -23,6 +23,7 @@ var (
 	errNoBasicAuthCredentials   = errors.New("no credentials provided for basic auth")
 	errOddBasicAuthCredentials  = errors.New("invalid number of arguments for basic auth: expected username/password pairs")
 	errEmptyBasicAuthCredential = errors.New("empty username or password for basic auth")
+	errEmptyAPIKey              = errors.New("empty API key provided for API key auth")
 	errInvalidJWKSEndpoint      = errors.New("invalid JWKS endpoint URL")
 	errInvalidRefreshInterval   = errors.New("invalid JWKS refresh interval: expected a positive number of seconds")
 )
@@ -99,9 +100,25 @@ func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Contai
 // EnableAPIKeyAuth enables API key authentication for the application.
 //
 // It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
+// Empty keys are ignored and logged as an error, so an unset config value or a stray separator in a key list
+// never lets a request without a key through. The middleware is still installed with the remaining keys;
+// if none remain, every request is rejected.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
-	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{APIKeys: apiKeys})
+	keys := make([]string, 0, len(apiKeys))
+
+	for _, key := range apiKeys {
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+
+	if len(keys) != len(apiKeys) {
+		a.Logger().Errorf("%v. These keys are ignored; with no valid key left, every request is rejected. "+
+			"Check the keys passed to EnableAPIKeyAuth", errEmptyAPIKey)
+	}
+
+	a.addAuthMiddleware(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, keys...))
+	a.addGRPCAPIKeyAuth(middleware.APIKeyAuthProvider{APIKeys: keys})
 }
 
 // EnableAPIKeyAuthWithFunc enables API key authentication for the application with a custom validation function.
