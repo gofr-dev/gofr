@@ -304,6 +304,7 @@ func Test_getPublicKeyFunc(t *testing.T) {
 		{err: errEmptyProvider},
 		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
 		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}},
+		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -318,6 +319,8 @@ func Test_getPublicKeyFunc(t *testing.T) {
 			token := &jwt.Token{}
 			if i == 2 { // Test case 2 is emptyPublicKeyProvider
 				token.Header = map[string]any{"kid": "test-key-id"}
+			} else if i == 3 { // Test case 3 has no kid in header
+				token.Header = map[string]any{}
 			}
 
 			response, err := function(token)
@@ -361,6 +364,51 @@ type emptyPublicKeyProvider struct{}
 
 func (emptyPublicKeyProvider) Get(_ string) *rsa.PublicKey {
 	return nil
+}
+
+func Test_PublicKeys_Get_MissingOrEmptyKid(t *testing.T) {
+	singleKey := &rsa.PublicKey{N: big.NewInt(65537), E: 65537}
+	anotherKey := &rsa.PublicKey{N: big.NewInt(12345), E: 3}
+
+	tests := []struct {
+		desc     string
+		keys     map[string]*rsa.PublicKey
+		kid      string
+		expected *rsa.PublicKey
+	}{
+		{
+			desc:     "single key in JWKS with empty ID matches empty kid",
+			keys:     map[string]*rsa.PublicKey{"": singleKey},
+			kid:      "",
+			expected: singleKey,
+		},
+		{
+			desc:     "single key in JWKS with named ID fallback for missing kid in token",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey},
+			kid:      "",
+			expected: singleKey,
+		},
+		{
+			desc:     "multiple keys in JWKS does not match empty kid",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey, "key-2": anotherKey},
+			kid:      "",
+			expected: nil,
+		},
+		{
+			desc:     "explicit kid lookup matches corresponding key",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey, "key-2": anotherKey},
+			kid:      "key-2",
+			expected: anotherKey,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			p := &PublicKeys{keys: tc.keys}
+			res := p.Get(tc.kid)
+			assert.Equal(t, tc.expected, res)
+		})
+	}
 }
 
 type MockJWKSProvider struct {
