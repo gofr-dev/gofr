@@ -424,7 +424,10 @@ for _, entry := range entries {
 ### Creating and Save a File with Content
 
 ```go
-file, _ := ctx.File.Create("my_file.text")
+file, err := ctx.File.Create("my_file.text")
+if err != nil {
+	return nil, err
+}
 
 _, _ = file.Write([]byte("Hello World!"))
 
@@ -513,6 +516,8 @@ To move file from one location to another provide current location as source and
 ```go
 err := ctx.File.Rename("old_name.text", "new_name.text")
 ```
+
+> Note: On the local file system, `Rename` behaves like `os.Rename` and also creates any missing parent directories of the destination. A file moved to a different filesystem is copied and the original removed.
 
 ### Deleting Files
 
