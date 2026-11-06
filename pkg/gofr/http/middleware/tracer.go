@@ -262,6 +262,10 @@ func frameworkTracer(tp trace.TracerProvider) trace.Tracer {
 // under load. It is looked up in the handler rather than here so that a handler
 // the router builds once per route still follows a provider installed later.
 func Tracer(inner http.Handler) http.Handler {
+	if f := fuseFramework(inner); f != nil {
+		return f
+	}
+
 	return &tracerHandler{inner: inner}
 }
 
@@ -274,8 +278,28 @@ type tracerHandler struct {
 func (*tracerHandler) ClaimsQuietHost(quietspan.ClaimToken) {}
 
 func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	inner := t.inner
+	r, span, srw := startSpan(w, r)
+	if span != nil {
+		defer span.End()
 
+		if srw != nil {
+			w = srw
+
+			defer setStatusAttribute(span, srw)
+		}
+	}
+
+	t.inner.ServeHTTP(w, r)
+}
+
+// startSpan does Tracer's work before the next handler runs, and returns the request to pass on.
+// span is nil when the span needs no End: GoFr's own NeverSample provider, whose span quietspan
+// holds. srw is non-nil when the span records: the writer to pass on in place of w, whose status
+// setStatusAttribute puts on the span once the next handler returns.
+//
+// The caller defers span.End and then setStatusAttribute, so the attribute is set before the span
+// ends, and both run after everything the next handler deferred.
+func startSpan(w http.ResponseWriter, r *http.Request) (_ *http.Request, span trace.Span, srw *StatusResponseWriter) {
 	tp := otel.GetTracerProvider()
 	ctx := r.Context()
 
@@ -293,14 +317,10 @@ func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// The router armed the slot in r's own context, and no propagation header added a
 		// context above it: the span goes into that slot and r already carries it.
 		if hc, ok := r.Context().(quietspan.Hoster); ok && ctx == context.Context(hc) && quietspan.Claim(hc, p) {
-			inner.ServeHTTP(w, r)
-
-			return
+			return r, nil, nil
 		}
 
-		inner.ServeHTTP(w, r.WithContext(quietspan.Start(ctx, p)))
-
-		return
+		return r.WithContext(quietspan.Start(ctx, p)), nil, nil
 	}
 
 	tr := frameworkTracer(tp)
@@ -317,7 +337,6 @@ func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// sampler can read attributes when deciding, so moving them after the
 	// span exists would change sampling for anyone sampling on http.route.
 	ctxOut, span := tr.Start(ctx, meta.name, meta.startOpts...)
-	defer span.End()
 
 	// The response status is only ever read to put it on the span, so the
 	// writer is only wrapped when the span will keep it.
@@ -339,20 +358,23 @@ func (t *tracerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// unsampled one. That is a hard bug to find from the symptom, so it is worth
 	// knowing before inserting anything at that position.
 	if span.IsRecording() {
-		srw, ok := w.(*StatusResponseWriter)
+		var ok bool
+
+		srw, ok = w.(*StatusResponseWriter)
 		if !ok {
 			srw = &StatusResponseWriter{ResponseWriter: w}
-			w = srw
 		}
-
-		// Status() normalizes the zero-default to http.StatusOK when the
-		// handler called neither WriteHeader nor Write -- net/http emits an
-		// implicit 200 in that case, so the span attribute must report 200
-		// rather than be omitted, or worse recorded as 0.
-		defer func(s trace.Span, rw *StatusResponseWriter) {
-			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
-		}(span, srw)
 	}
 
-	inner.ServeHTTP(w, r.WithContext(ctxOut))
+	return r.WithContext(ctxOut), span, srw
+}
+
+// setStatusAttribute puts the response status on a recording span.
+//
+// Status() normalizes the zero-default to http.StatusOK when the
+// handler called neither WriteHeader nor Write -- net/http emits an
+// implicit 200 in that case, so the span attribute must report 200
+// rather than be omitted, or worse recorded as 0.
+func setStatusAttribute(span trace.Span, srw *StatusResponseWriter) {
+	span.SetAttributes(attribute.Int("http.response.status_code", srw.Status()))
 }

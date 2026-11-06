@@ -124,43 +124,67 @@ func Metrics(metrics metrics, opts ...MetricsOption) func(inner http.Handler) ht
 
 	untemplatedLimit := newMetricsOptions(opts...).untemplatedLimit()
 
+	l := &metricsLayer{recorder: recorder, untemplatedLimit: untemplatedLimit}
+
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If an outer middleware (Logging) has already wrapped w in a
-			// StatusResponseWriter, reuse it instead of double-wrapping. Both
-			// middlewares only read status — a single wrapper captures it for
-			// both, saving one allocation per request.
-			srw, ok := w.(*StatusResponseWriter)
-			if !ok {
-				srw = &StatusResponseWriter{ResponseWriter: w}
-			}
-
-			path, templated := metricsPath(r)
-
-			// Skip recording for /graphql — it has its own dedicated metrics
-			// (app_graphql_*). time.Now() (vDSO call) is deferred past this
-			// branch so /graphql does not pay for a timestamp we throw away.
-			if path == graphqlPath {
-				inner.ServeHTTP(srw, r)
-				return
-			}
-
-			start := time.Now()
-
-			// this has to be called in the end so that status code is populated.
-			// res.Status() normalizes a zero internal status (handler wrote
-			// nothing, net/http implicit-200) to http.StatusOK so neither the
-			// histogram nor any status cache is poisoned with status=0.
-			defer func(res *StatusResponseWriter, req *http.Request) {
-				status := res.Status()
-				pathLabel, methodLabel := metricLabels(path, req.Method, status, templated, untemplatedLimit)
-				recorder.record(pathLabel, methodLabel, status,
-					time.Since(start).Seconds(), templated)
-			}(srw, r)
-
-			inner.ServeHTTP(srw, r)
-		})
+		return &metricsHandler{layer: l, inner: inner}
 	}
+}
+
+// metricsLayer is what one Metrics call shares across every handler it builds.
+type metricsLayer struct {
+	recorder         histogramRecorder
+	untemplatedLimit int64
+}
+
+// metricsHandler is the handler Metrics returns.
+type metricsHandler struct {
+	layer *metricsLayer
+	inner http.Handler
+}
+
+// ServeHTTP is Metrics' request path. frameHandler.ServeHTTP runs the same steps in the same
+// order; a change here belongs there too.
+func (h *metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	srw, path, templated := metricsBegin(w, r)
+
+	// Skip recording for /graphql — it has its own dedicated metrics
+	// (app_graphql_*). time.Now() (vDSO call) is deferred past this
+	// branch so /graphql does not pay for a timestamp we throw away.
+	if path == graphqlPath {
+		h.inner.ServeHTTP(srw, r)
+		return
+	}
+
+	// this has to be called in the end so that status code is populated.
+	defer h.layer.record(srw, r, path, templated, time.Now())
+
+	h.inner.ServeHTTP(srw, r)
+}
+
+// metricsBegin returns the writer that captures the status, and the request's path label.
+func metricsBegin(w http.ResponseWriter, r *http.Request) (srw *StatusResponseWriter, path string, templated bool) {
+	// If an outer middleware (Logging) has already wrapped w in a
+	// StatusResponseWriter, reuse it instead of double-wrapping. Both
+	// middlewares only read status — a single wrapper captures it for
+	// both, saving one allocation per request.
+	srw, ok := w.(*StatusResponseWriter)
+	if !ok {
+		srw = &StatusResponseWriter{ResponseWriter: w}
+	}
+
+	path, templated = metricsPath(r)
+
+	return srw, path, templated
+}
+
+// record records the request's duration. res.Status() normalizes a zero internal status (handler
+// wrote nothing, net/http implicit-200) to http.StatusOK so neither the histogram nor any status
+// cache is poisoned with status=0.
+func (l *metricsLayer) record(res *StatusResponseWriter, req *http.Request, path string, templated bool, start time.Time) {
+	status := res.Status()
+	pathLabel, methodLabel := metricLabels(path, req.Method, status, templated, l.untemplatedLimit)
+	l.recorder.record(pathLabel, methodLabel, status, time.Since(start).Seconds(), templated)
 }
 
 // The labels recorded for a request whose path or method is caller-controlled

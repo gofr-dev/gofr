@@ -100,18 +100,39 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 		fixed, methods = buildFixedHeaders(configs, *routes)
 	}
 
+	// serve sets the CORS headers, and answers a preflight request itself: it reports whether the
+	// request still goes to the next handler.
+	l := &corsLayer{serve: func(w http.ResponseWriter, r *http.Request) bool {
+		once.Do(build)
+		setMiddlewareHeaders(w, r.Header.Get("Origin"), allowedOrigins, fixed, methods)
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return false
+		}
+
+		return true
+	}}
+
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			once.Do(build)
-			setMiddlewareHeaders(w, r.Header.Get("Origin"), allowedOrigins, fixed, methods)
+		return &corsHandler{layer: l, inner: inner}
+	}
+}
 
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
+// corsLayer is what one CORS call shares across every handler it builds.
+type corsLayer struct {
+	serve func(w http.ResponseWriter, r *http.Request) (next bool)
+}
 
-			inner.ServeHTTP(w, r)
-		})
+// corsHandler is the handler CORS returns.
+type corsHandler struct {
+	layer *corsLayer
+	inner http.Handler
+}
+
+func (h *corsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.layer.serve(w, r) {
+		h.inner.ServeHTTP(w, r)
 	}
 }
 

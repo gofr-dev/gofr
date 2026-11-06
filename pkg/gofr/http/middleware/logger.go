@@ -256,77 +256,114 @@ func newLogSink(l logger) *logSink {
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
 //
 // The StatusResponseWriter wrapper allocated per request is pooled in a
-// closure-owned sync.Pool — the pool is constructed once per Logging()
-// invocation (typically once per app) and tied to this middleware's
-// lifetime, not the package, so we avoid a shared global. Reset() zeros
-// the writer fields before Put so a stale ResponseWriter pointer can
+// sync.Pool owned by this Logging call — the pool is constructed once per
+// Logging() invocation (typically once per app) and tied to this middleware's
+// lifetime, not the package, so we avoid a shared global. release clears the
+// writer's ResponseWriter before Put so a stale ResponseWriter pointer can
 // never leak across requests.
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
-	pool := sync.Pool{
-		New: func() any { return &StatusResponseWriter{} },
+	l := &loggingLayer{
+		pool: sync.Pool{
+			New: func() any { return &StatusResponseWriter{} },
+		},
+		// The optional interfaces are resolved once, here, from what the logger
+		// supports. The per-request path then carries none of that branching.
+		sink:   newLogSink(logger),
+		probes: probes,
 	}
-
-	// The optional interfaces are resolved once, here, from what the logger
-	// supports. The per-request path then carries none of that branching.
-	sink := newLogSink(logger)
 
 	registerRequestLogJSON.Do(func() { logjson.Register(appendRequestLogJSON) })
 
 	return func(inner http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			srw := pool.Get().(*StatusResponseWriter)
-			srw.ResponseWriter = w
-			srw.status = 0
-			srw.wroteHeader = false
-
-			// Only the ResponseWriter pointer is cleared on Put — leaving it
-			// dangling would keep the previous request's writer (and its
-			// underlying *http.response, headers, etc.) alive until the pool
-			// entry is next claimed. status/wroteHeader are reset on the next
-			// Get above; resetting them here too is redundant.
-			defer func() {
-				srw.ResponseWriter = nil
-				pool.Put(srw)
-			}()
-
-			// Fetch the SpanContext once. GoFr installs an SDK provider with NeverSample
-			// when no exporter is configured, so the default deployment has a VALID span
-			// context and both IDs are real -- the zero-string constants below are for
-			// the genuinely absent case, not the common one.
-			sc := trace.SpanFromContext(r.Context()).SpanContext()
-
-			// Both IDs are resolved here, in one allocation. The trace ID is
-			// needed before the handler runs, for the X-Correlation-ID response
-			// header; the span ID is only used inside the log entry, so a request
-			// whose entry the level gate discards pays for 16 bytes it does not
-			// use. That costs no extra allocation -- one buffer covers both -- and
-			// saves one on every request that IS logged, which is the default.
-			rec, ids := sink.newRecord()
-			traceID, spanID, correlation := ids.render(sc)
-
-			// Assigned rather than Set: Header.Set canonicalizes its key on
-			// every call, and "X-Correlation-ID" is not already in canonical
-			// form ("Id", not "ID"), so each request paid for building the
-			// canonical string. The wire format is unchanged -- net/http emits
-			// the canonical spelling either way.
-			srw.Header()[canonicalCorrelationID] = correlation
-
-			defer func() { panicRecovery(recover(), srw, sink.logger) }()
-
-			// Skip logging for default probe paths if log probes are disabled.
-			// time.Now() (vDSO call) is deferred past this so probe paths do
-			// not pay for a timestamp that is then thrown away.
-			if isLogProbeDisabled(probes, r.URL.Path) {
-				inner.ServeHTTP(w, r)
-				return
-			}
-
-			start := time.Now()
-			defer rec.log(srw, r, start, traceID, spanID, sink)
-
-			inner.ServeHTTP(srw, r)
-		})
+		return &loggingHandler{layer: l, inner: inner}
 	}
+}
+
+// loggingLayer is what one Logging call shares across every handler it builds.
+type loggingLayer struct {
+	pool   sync.Pool
+	sink   *logSink
+	probes LogProbes
+}
+
+// loggingHandler is the handler Logging returns.
+type loggingHandler struct {
+	layer *loggingLayer
+	inner http.Handler
+}
+
+// ServeHTTP is Logging's request path. frameHandler.ServeHTTP runs the same steps in the same
+// order; a change here belongs there too.
+func (h *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := h.layer
+
+	srw, rec, traceID, spanID := l.begin(w, r)
+
+	defer l.release(srw)
+
+	defer func() { panicRecovery(recover(), srw, l.sink.logger) }()
+
+	// Skip logging for default probe paths if log probes are disabled.
+	// time.Now() (vDSO call) is deferred past this so probe paths do
+	// not pay for a timestamp that is then thrown away.
+	if isLogProbeDisabled(l.probes, r.URL.Path) {
+		h.inner.ServeHTTP(w, r)
+		return
+	}
+
+	start := time.Now()
+	defer rec.log(srw, r, start, traceID, spanID, l.sink)
+
+	h.inner.ServeHTTP(srw, r)
+}
+
+// begin takes the request's pooled writer and its log record, and sets the X-Correlation-ID
+// response header. The caller defers release(srw) first, then panicRecovery.
+func (l *loggingLayer) begin(w http.ResponseWriter, r *http.Request) (srw *StatusResponseWriter,
+	rec *requestRecord, traceID, spanID string) {
+	srw = l.pool.Get().(*StatusResponseWriter)
+	srw.ResponseWriter = w
+	srw.status = 0
+	srw.wroteHeader = false
+
+	// Fetch the SpanContext once. GoFr installs an SDK provider with NeverSample
+	// when no exporter is configured, so the default deployment has a VALID span
+	// context and both IDs are real -- the zero-string constants below are for
+	// the genuinely absent case, not the common one.
+	sc := trace.SpanFromContext(r.Context()).SpanContext()
+
+	// Both IDs are resolved here, in one allocation. The trace ID is
+	// needed before the handler runs, for the X-Correlation-ID response
+	// header; the span ID is only used inside the log entry, so a request
+	// whose entry the level gate discards pays for 16 bytes it does not
+	// use. That costs no extra allocation -- one buffer covers both -- and
+	// saves one on every request that IS logged, which is the default.
+	rec, ids := l.sink.newRecord()
+
+	var correlation []string
+
+	traceID, spanID, correlation = ids.render(sc)
+
+	// Assigned rather than Set: Header.Set canonicalizes its key on
+	// every call, and "X-Correlation-ID" is not already in canonical
+	// form ("Id", not "ID"), so each request paid for building the
+	// canonical string. The wire format is unchanged -- net/http emits
+	// the canonical spelling either way.
+	srw.Header()[canonicalCorrelationID] = correlation
+
+	return srw, rec, traceID, spanID
+}
+
+// release returns srw to the pool.
+//
+// Only the ResponseWriter pointer is cleared on Put — leaving it
+// dangling would keep the previous request's writer (and its
+// underlying *http.response, headers, etc.) alive until the pool
+// entry is next claimed. status/wroteHeader are reset on the next
+// Get in begin; resetting them here too is redundant.
+func (l *loggingLayer) release(srw *StatusResponseWriter) {
+	srw.ResponseWriter = nil
+	l.pool.Put(srw)
 }
 
 // startTimeLayout is the request log's start_time layout: RFC3339Nano, except that a zero
