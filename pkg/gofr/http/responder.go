@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/internal/jsonenc"
 	"gofr.dev/pkg/gofr/internal/logjson"
 )
 
@@ -139,10 +140,12 @@ func (r Responder) Respond(data any, err error) {
 	// json.Encoder.Encode appends a trailing newline, exactly matching the
 	// previous json.Marshal(resp) followed by a separate Write of "\n". It also
 	// uses the same default HTML escaping as json.Marshal, so the bytes on the
-	// wire are identical to before. A plain string skips the encoder for the
-	// same bytes.
+	// wire are identical to before. A plain string, and then any value jsonenc
+	// covers, skip the encoder for the same bytes.
 	if b, ok := appendStringEnvelope(buf.AvailableBuffer(), data, errorObj); ok {
 		buf.Write(b)
+	} else if b, ok := jsonenc.Append(buf.AvailableBuffer(), resp); ok {
+		buf.Write(append(b, '\n'))
 	} else if encodeErr := re.enc.Encode(resp); encodeErr != nil {
 		putRespBuf(re)
 
