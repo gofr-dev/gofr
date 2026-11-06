@@ -1,14 +1,14 @@
 ---
-description: "Initialize a new GoFr project with the standard layout and a Hello World starter program using the gofr init command."
+description: "Create a go.mod and a Hello World main.go for a new GoFr project using the gofr init command."
 nextjs:
   metadata:
     title: "gofr init — Initialize a New GoFr Project"
-    description: "Initialize a new GoFr project with the standard layout and a Hello World starter program using the gofr init command."
+    description: "Create a go.mod and a Hello World main.go for a new GoFr project using the gofr init command."
 ---
 
 # gofr init
 
-The init command initializes a new GoFr project. It sets up the foundational structure for the project and generates a basic "Hello World!" program as a starting point. This allows developers to quickly dive into building their application with a ready-made structure.
+The init command creates a `go.mod` and a "Hello World!" `main.go` for a new GoFr project. This gives developers a starting point to build their application from.
 
 ## Command Usage
 ```bash
