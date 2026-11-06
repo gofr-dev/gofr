@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -315,8 +316,8 @@ type rpcMetricKey struct {
 }
 
 type rpcOptionCache struct {
-	sync.RWMutex
-	options map[rpcMetricKey][]metric.RecordOption
+	options sync.Map // rpcMetricKey -> []metric.RecordOption
+	size    atomic.Int64
 }
 
 const maxRPCMetricOptions = 1024
@@ -325,11 +326,9 @@ const maxRPCMetricOptions = 1024
 var rpcMetricOptions rpcOptionCache
 
 func (c *rpcOptionCache) get(key rpcMetricKey) []metric.RecordOption {
-	c.RLock()
-	opts, ok := c.options[key]
-	c.RUnlock()
+	if v, ok := c.options.Load(key); ok {
+		opts, _ := v.([]metric.RecordOption)
 
-	if ok {
 		return opts
 	}
 
@@ -341,21 +340,20 @@ func (c *rpcOptionCache) get(key rpcMetricKey) []metric.RecordOption {
 		attrs = append(attrs, attribute.String("stream_type", key.streamType))
 	}
 
-	opts = []metric.RecordOption{metric.WithAttributes(attrs...)}
+	opts := []metric.RecordOption{metric.WithAttributes(attrs...)}
 
-	c.Lock()
-	defer c.Unlock()
+	if c.size.Add(1) > maxRPCMetricOptions {
+		c.size.Add(-1)
 
-	if cached, exists := c.options[key]; exists {
-		return cached
+		return opts
 	}
 
-	if len(c.options) < maxRPCMetricOptions {
-		if c.options == nil {
-			c.options = make(map[rpcMetricKey][]metric.RecordOption)
-		}
+	if v, loaded := c.options.LoadOrStore(key, opts); loaded {
+		c.size.Add(-1)
 
-		c.options[key] = opts
+		cached, _ := v.([]metric.RecordOption)
+
+		return cached
 	}
 
 	return opts

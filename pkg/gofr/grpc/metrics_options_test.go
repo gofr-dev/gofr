@@ -77,7 +77,7 @@ func TestRPCOptionCacheBound(t *testing.T) {
 	}
 
 	workers.Wait()
-	assert.Len(t, cache.options, maxRPCMetricOptions)
+	assert.EqualValues(t, maxRPCMetricOptions, cache.size.Load())
 }
 
 type legacyMetrics struct{ Metrics }
