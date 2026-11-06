@@ -11,7 +11,8 @@
 // MarshalJSON or MarshalText method (other than time.Time), json.Number, a byte slice (base64), an
 // array, a recursive type, a NaN or infinite float, a non-ASCII string, and nesting deeper than
 // maxDepth. The rules this package copies are those of encoding/json in Go 1.26 (encode.go,
-// BSD-style license, Copyright 2010 The Go Authors); each copied rule says where it comes from.
+// Copyright 2010 The Go Authors, under the BSD-style license at https://go.dev/LICENSE); each
+// copied rule says where it comes from.
 package jsonenc
 
 import (
