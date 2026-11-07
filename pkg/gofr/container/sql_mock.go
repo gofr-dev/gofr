@@ -15,15 +15,19 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-type health datasource.Health
+// health is the result an ExpectHealthCheck expectation returns. A nil value makes HealthCheck return nil.
+type health struct {
+	value *datasource.Health
+}
 
 type dialect string
 
-// expectedQuery stores the mock expectations till the method call.
+// expectedQuery stores the mock expectations till the method call. It stores pointers, so the handles the
+// Expect* methods return stay valid when later expectations are added.
 type expectedQuery struct {
-	queryWithArgs       []queryWithArgs
-	expectedDialect     []dialect
-	expectedHealthCheck []health
+	queryWithArgs       []*queryWithArgs
+	expectedDialect     []*dialect
+	expectedHealthCheck []*health
 }
 
 type queryWithArgs struct {
@@ -114,7 +118,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...an
 
 	defer emptyExpectation(&m)
 
-	expected := m.queryWithArgs[0]
+	expected := *m.queryWithArgs[0]
 
 	if !m.matchesCall(expected, query, args) {
 		return
@@ -173,14 +177,16 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 		return nil
 	}
 
-	expectedString := m.expectedHealthCheck[0]
-	d := datasource.Health(expectedString)
+	expected := m.expectedHealthCheck[0]
+	m.expectedHealthCheck = m.expectedHealthCheck[1:]
 
-	if len(m.expectedHealthCheck) > 0 {
-		m.expectedHealthCheck = m.expectedHealthCheck[1:]
+	if expected.value == nil {
+		return nil
 	}
 
-	return &d
+	h := *expected.value
+
+	return &h
 }
 
 func (m sqlMockDB) Dialect() string {
@@ -189,13 +195,10 @@ func (m sqlMockDB) Dialect() string {
 		return ""
 	}
 
-	expectedString := m.expectedDialect[0]
+	expected := m.expectedDialect[0]
+	m.expectedDialect = m.expectedDialect[1:]
 
-	if len(m.expectedDialect) > 0 {
-		m.expectedDialect = m.expectedDialect[1:]
-	}
-
-	return string(expectedString)
+	return string(*expected)
 }
 
 func (m sqlMockDB) finish(t *testing.T) {
@@ -212,7 +215,7 @@ func (m sqlMockDB) finish(t *testing.T) {
 // Hence, it expects the user to already provide the populated data interface field,
 // which can then be used within the functions implemented by the user.
 func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...any) *queryWithArgs {
-	qr := queryWithArgs{queryText: query, arguments: args}
+	qr := &queryWithArgs{queryText: query, arguments: args}
 
 	if reflect.ValueOf(value).Kind() == reflect.Pointer {
 		qr.value = value
@@ -220,7 +223,7 @@ func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args 
 
 	m.queryWithArgs = append(m.queryWithArgs, qr)
 
-	return &m.queryWithArgs[len(m.queryWithArgs)-1]
+	return qr
 }
 
 func (q *queryWithArgs) ReturnsResponse(value any) {
@@ -240,23 +243,31 @@ func (q *queryWithArgs) ReturnsResponse(value any) {
 }
 
 func (m *mockSQL) ExpectHealthCheck() *health {
-	hc := health{}
+	hc := &health{value: &datasource.Health{}}
 
 	m.expectedHealthCheck = append(m.expectedHealthCheck, hc)
 
-	return &m.expectedHealthCheck[len(m.expectedHealthCheck)-1]
+	return hc
 }
 
+// WillReturnHealthCheck sets the result of the expected HealthCheck call. Passing nil makes HealthCheck return nil.
 func (d *health) WillReturnHealthCheck(dh *datasource.Health) {
-	*d = health(*dh)
+	if dh == nil {
+		d.value = nil
+
+		return
+	}
+
+	h := *dh
+	d.value = &h
 }
 
 func (m *mockSQL) ExpectDialect() *dialect {
-	d := dialect("")
+	d := new(dialect)
 
 	m.expectedDialect = append(m.expectedDialect, d)
 
-	return &m.expectedDialect[len(m.expectedDialect)-1]
+	return d
 }
 
 func (*mockSQL) NewResult(lastInsertID, rowsAffected int64) sql.Result {
