@@ -13,6 +13,7 @@ type Logger interface {
 type Log struct {
 	Timestamp     time.Time `json:"timestamp"`
 	ResponseTime  int64     `json:"latency"`
+	LatencyUnit   string    `json:"latency_unit,omitempty"`
 	CorrelationID string    `json:"correlationId"`
 	ResponseCode  int       `json:"responseCode"`
 	HTTPMethod    string    `json:"httpMethod"`
