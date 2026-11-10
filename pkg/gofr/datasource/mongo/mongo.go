@@ -120,12 +120,7 @@ func (c *Client) Connect() {
 
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
-	timeout := c.config.ConnectionTimeout
-	if timeout == 0 {
-		timeout = defaultTimeout
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.connectionTimeout())
 	defer cancel()
 
 	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
@@ -147,6 +142,15 @@ func (c *Client) Connect() {
 	}
 
 	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.config.Database)
+}
+
+// connectionTimeout returns the configured ConnectionTimeout, or defaultTimeout when it is not set.
+func (c *Client) connectionTimeout() time.Duration {
+	if c.config == nil || c.config.ConnectionTimeout == 0 {
+		return defaultTimeout
+	}
+
+	return c.config.ConnectionTimeout
 }
 
 // db returns the underlying driver database, or errNotConnected when Connect failed before creating it.
@@ -465,6 +469,11 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 		return &h, errStatusDown
 	}
+
+	// Bound the ping by the connection timeout: while the server is unreachable the driver would otherwise wait for
+	// its server-selection timeout (30 s by default), longer than a health probe or REQUEST_TIMEOUT allows.
+	ctx, cancel := context.WithTimeout(ctx, c.connectionTimeout())
+	defer cancel()
 
 	err = db.Client().Ping(ctx, readpref.Primary())
 	if err != nil {

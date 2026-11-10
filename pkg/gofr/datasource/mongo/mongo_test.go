@@ -996,3 +996,52 @@ func TestClient_StartSession_DriverError(t *testing.T) {
 	require.ErrorIs(t, err, mongo.ErrClientDisconnected)
 	require.Nil(t, sess)
 }
+
+// With the server unreachable and no deadline from the caller, HealthCheck must answer DOWN within the connection
+// timeout instead of waiting for the driver's 30 s server-selection timeout.
+func TestClient_HealthCheck_UnreachableIsBounded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := NewMockLogger(ctrl)
+	metrics := NewMockMetrics(ctrl)
+
+	metrics.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+	logger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any())
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+
+	client := New(Config{URI: "mongodb://127.0.0.1:1/test", Database: "test", ConnectionTimeout: 200 * time.Millisecond})
+	client.UseLogger(logger)
+	client.UseMetrics(metrics)
+	client.Connect()
+
+	t.Cleanup(func() { _ = client.Client().Disconnect(context.Background()) })
+
+	start := time.Now()
+	health, err := client.HealthCheck(context.Background())
+	elapsed := time.Since(start)
+
+	require.ErrorIs(t, err, errStatusDown)
+	assert.Less(t, elapsed, 5*time.Second)
+
+	h, ok := health.(*Health)
+	require.True(t, ok)
+	assert.Equal(t, statusDown, h.Status)
+	assert.Contains(t, h.Details["error"], "server selection error")
+}
+
+func TestClient_connectionTimeout(t *testing.T) {
+	tests := []struct {
+		desc   string
+		client *Client
+		exp    time.Duration
+	}{
+		{desc: "no config", client: &Client{}, exp: defaultTimeout},
+		{desc: "not set", client: New(Config{}), exp: defaultTimeout},
+		{desc: "set", client: New(Config{ConnectionTimeout: 2 * time.Second}), exp: 2 * time.Second},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, tc.client.connectionTimeout())
+		})
+	}
+}
