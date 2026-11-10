@@ -46,12 +46,13 @@ type Metrics interface {
 }
 
 type gRPCLog struct {
-	ID           string `json:"id"`
-	StartTime    string `json:"startTime"`
-	ResponseTime int64  `json:"responseTime"`
-	Method       string `json:"method"`
-	StatusCode   int32  `json:"statusCode"`
-	StreamType   string `json:"streamType,omitempty"`
+	ID               string `json:"id"`
+	StartTime        string `json:"startTime"`
+	ResponseTime     int64  `json:"responseTime"`
+	ResponseTimeUnit string `json:"response_time_unit,omitempty"`
+	Method           string `json:"method"`
+	StatusCode       int32  `json:"statusCode"`
+	StreamType       string `json:"streamType,omitempty"`
 }
 
 //nolint:revive // We intend to keep it non-exported for ease in future changes without any breaking change.
@@ -214,11 +215,12 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 	duration := time.Since(start)
 
 	logEntry := gRPCLog{
-		ID:           getTraceID(ctx),
-		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-		ResponseTime: duration.Microseconds(),
-		Method:       method,
-		StreamType:   streamType,
+		ID:               getTraceID(ctx),
+		StartTime:        start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime:     duration.Microseconds(),
+		ResponseTimeUnit: "µs",
+		Method:           method,
+		StreamType:       streamType,
 	}
 
 	if err != nil {
@@ -237,10 +239,11 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	duration := time.Since(start)
 
 	logEntry := gRPCLog{
-		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
-		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-		ResponseTime: duration.Microseconds(),
-		Method:       method,
+		ID:               trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		StartTime:        start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime:     duration.Microseconds(),
+		ResponseTimeUnit: "µs",
+		Method:           method,
 	}
 
 	if err != nil {
