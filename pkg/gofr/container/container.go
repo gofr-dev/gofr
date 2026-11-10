@@ -149,7 +149,10 @@ func (c *Container) Create(conf config.Config) {
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
-	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+	// Assign only a non-nil *redis.Redis: storing a nil pointer in the Redis interface makes c.Redis == nil false.
+	if rc := redis.NewClient(conf, c.Logger, c.metricsManager); rc != nil {
+		c.Redis = rc
+	}
 
 	// Assign only a non-nil *sql.DB: storing a nil pointer in the DB interface makes c.SQL == nil false.
 	if db := sql.NewSQL(conf, c.Logger, c.metricsManager); db != nil {

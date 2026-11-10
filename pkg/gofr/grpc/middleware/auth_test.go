@@ -123,6 +123,55 @@ func TestBasicAuthUnaryInterceptor(t *testing.T) {
 	})
 }
 
+func TestBasicAuthInterceptors_EmptyCredentials(t *testing.T) {
+	tests := []struct {
+		desc   string
+		users  map[string]string
+		header string
+	}{
+		// "Og==" is base64 of ":", an empty username and password.
+		{desc: "empty username and password", users: map[string]string{"": ""}, header: "Basic Og=="},
+		{desc: "empty stored password", users: map[string]string{"admin": ""},
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:"))},
+		// The stored password is set, so only the empty username check rejects ":pass".
+		{desc: "empty username", users: map[string]string{"": "pass"},
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte(":pass"))},
+	}
+
+	for _, tc := range tests {
+		provider := BasicAuthProvider{Users: tc.users}
+		unary := BasicAuthUnaryInterceptor(provider)
+		stream := BasicAuthStreamInterceptor(provider)
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{tc.header}})
+
+		t.Run("unary "+tc.desc, func(t *testing.T) {
+			var called bool
+
+			_, err := unary(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+				called = true
+
+				return nil, nil
+			})
+
+			assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+			assert.False(t, called)
+		})
+
+		t.Run("stream "+tc.desc, func(t *testing.T) {
+			var called bool
+
+			err := stream(nil, &mockServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, func(_ any, _ grpc.ServerStream) error {
+				called = true
+
+				return nil
+			})
+
+			assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+			assert.False(t, called)
+		})
+	}
+}
+
 func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
 	t.Run("Custom Validation Function Success", func(t *testing.T) {
 		validateFunc := func(username, password string) bool {

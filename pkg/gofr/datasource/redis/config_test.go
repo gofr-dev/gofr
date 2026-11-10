@@ -248,6 +248,48 @@ func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
 	require.NotNil(t, conf.PubSubStreamsConfig)
 }
 
+func TestGetRedisConfig_RedactArgs(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		redisURL     string
+		redactArgs   string
+		wantHideArgs bool
+		wantWarn     bool
+	}{
+		{desc: "unset shows args", redactArgs: "", wantHideArgs: false},
+		{desc: "false shows args", redactArgs: "false", wantHideArgs: false},
+		{desc: "true hides args", redactArgs: "true", wantHideArgs: true},
+		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
+		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
+		{desc: "invalid value shows args and warns", redactArgs: "maybe", wantHideArgs: false, wantWarn: true},
+		{desc: "REDIS_URL with unset shows args", redisURL: "redis://localhost:6379", wantHideArgs: false},
+		{desc: "REDIS_URL with true hides args", redisURL: "redis://localhost:6379", redactArgs: "true", wantHideArgs: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var conf *Config
+
+			env := map[string]string{"REDIS_HOST": "localhost", "REDIS_REDACT_ARGS": tc.redactArgs}
+			if tc.redisURL != "" {
+				env = map[string]string{"REDIS_URL": tc.redisURL, "REDIS_REDACT_ARGS": tc.redactArgs}
+			}
+
+			out := testutil.StdoutOutputForFunc(func() {
+				conf = getRedisConfig(config.NewMockConfig(env), logging.NewMockLogger(logging.WARN))
+			})
+
+			assert.Equal(t, tc.wantHideArgs, conf.hideArgs)
+
+			if tc.wantWarn {
+				assert.Contains(t, out, `invalid REDIS_REDACT_ARGS "maybe"`)
+			} else {
+				assert.Empty(t, out)
+			}
+		})
+	}
+}
+
 // writeTestCACert writes a self-signed CA certificate to a temporary file and returns its path.
 func writeTestCACert(t *testing.T) string {
 	t.Helper()
