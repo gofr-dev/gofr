@@ -9,7 +9,7 @@ nextjs:
 # Production Tracing for GoFr
 
 {% answer %}
-GoFr ships built-in OpenTelemetry tracing — every HTTP request, gRPC call, and datasource operation is traced automatically. Configure the exporter via `TRACE_EXPORTER` (`otlp`, `jaeger`, `zipkin`, or `gofr`) and `TRACER_URL`, set `TRACER_RATIO` for head-based sampling, and W3C Trace Context propagation flows through GoFr's HTTP service client without extra code.
+GoFr ships built-in OpenTelemetry tracing — every HTTP request, gRPC call, and datasource operation is traced automatically. Configure the exporter via `TRACE_EXPORTER` (`otlp`, `jaeger`, `gcp`, `zipkin`, or `gofr`) and `TRACER_URL`, set `TRACER_RATIO` for head-based sampling, and W3C Trace Context propagation flows through GoFr's HTTP service client without extra code.
 {% /answer %}
 
 {% howto name="Wire production tracing for a GoFr service" description="Configure OTLP gRPC tracing in GoFr, point it at Jaeger / Tempo / Honeycomb, and tune sampling for production." steps=[{"name": "Set TRACE_EXPORTER", "text": "Set TRACE_EXPORTER=otlp in configs/.env (or an env-based ConfigMap in K8s) — GoFr ships an OTLP gRPC exporter."}, {"name": "Set TRACER_URL", "text": "Set TRACER_URL to the collector endpoint on port 4317 for OTLP gRPC \u2014 https:// for a TLS-terminating backend, http:// or a bare host:port for plaintext; route to Jaeger collector, Tempo, or any OTLP backend."}, {"name": "Tune TRACER_RATIO", "text": "Set TRACER_RATIO to 1.0 in dev for full sampling; in prod step down to 0.1 or lower based on volume."}, {"name": "Add custom spans", "text": "Use ctx.Trace(name) inside handlers to mark sub-operations; existing HTTP, gRPC, and datasource spans are emitted automatically."}, {"name": "Verify in the backend", "text": "Hit a route, then open the Jaeger UI / Grafana Tempo and search for the service by APP_NAME — confirm spans show up with trace_id."}, {"name": "Propagate across services", "text": "GoFr injects W3C TraceContext on outbound calls via ctx.GetHTTPService — so two GoFr services share a single trace ID end to end."}] /%}
@@ -38,9 +38,9 @@ GoFr reads tracing config from environment variables. The relevant keys (verifie
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `TRACE_EXPORTER` | One of `otlp`, `jaeger`, `zipkin`, `gofr` | unset (tracing disabled) |
-| `TRACER_URL` | Endpoint for the chosen exporter | unset |
-| `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme | `true` |
+| `TRACE_EXPORTER` | One of `otlp`, `jaeger`, `gcp`, `zipkin`, `gofr` | unset (tracing disabled) |
+| `TRACER_URL` | Endpoint for the chosen exporter. `gcp` requires a schemeless `host:port` | unset |
+| `TRACER_INSECURE` | Plaintext transport for a schemeless `TRACER_URL` (`host:port`); `false` uses TLS. Ignored when `TRACER_URL` has a scheme — except for `gcp`, which rejects a scheme at startup rather than ignoring it | `true` |
 | `TRACER_HOST` | **Deprecated** — use `TRACER_URL` | unset |
 | `TRACER_PORT` | **Deprecated** — use `TRACER_URL` | `9411` |
 | `TRACER_RATIO` | Head-based sampling ratio (0.0–1.0) | `1` |
@@ -81,6 +81,10 @@ endpoint. `TRACER_INSECURE` is ignored (with a warning) when the URL already car
 GoFr warns when credentials from `TRACER_HEADERS`/`TRACER_AUTH_KEY` would travel over a plaintext
 connection.
 
+None of this applies to `gcp`, whose destination is always TLS on 443: there is no transport to
+select, so a scheme-bearing `TRACER_URL` is rejected at startup rather than interpreted. See the
+Google Cloud section below.
+
 Precedence is `TRACER_URL`'s scheme, then `TRACER_INSECURE`, then the OTel standard
 `OTEL_EXPORTER_OTLP_INSECURE` / `OTEL_EXPORTER_OTLP_TRACES_INSECURE`. The SDK applies its
 environment variables before any option GoFr passes, so a GoFr config always wins over them.
@@ -115,6 +119,40 @@ TRACER_AUTH_KEY: "Bearer YOUR_TOKEN"
 ```
 
 For a SaaS endpoint over the public internet, give `TRACER_URL` an `https://` scheme (or set `TRACER_INSECURE: "false"` on a schemeless one) so the connection is encrypted — see the TLS section above. A schemeless URL with no `TRACER_INSECURE` stays cleartext, and GoFr warns when credentials would travel over it.
+
+### Google Cloud (keyless)
+
+Export straight to Google Cloud's Telemetry (OTLP) API — no key file, no Collector sidecar. The
+exporter is an optional module, enabled by a blank import:
+
+```go
+import _ "gofr.dev/pkg/gofr/traces/exporters/gcp"
+```
+
+```yaml
+TRACE_EXPORTER: "gcp"
+TRACER_RATIO: "0.1"
+# TRACER_URL is optional; it defaults to telemetry.googleapis.com:443.
+# Set it to telemetry.<region>.rep.googleapis.com:443 for a regional endpoint.
+```
+
+Authentication uses Application Default Credentials, so on Cloud Run, GKE or GCE the attached
+service account is enough. Grant it `roles/telemetry.tracesWriter` on the project receiving the
+spans: `telemetry.googleapis.com` checks `telemetry.traces.write`, and that is the least-privilege
+predefined role carrying it. `roles/telemetry.writer` and `roles/cloudtrace.agent` carry it too and
+grant more besides — verified with `gcloud iam roles describe` on 2026-09-21.
+
+`TRACER_URL` must be a schemeless `host:port` here; a scheme is rejected at startup.
+
+With a service account attached, the quota project resolves automatically. User credentials do not
+carry one: grant `roles/serviceusage.serviceUsageConsumer` on the quota project and set
+`GOOGLE_CLOUD_QUOTA_PROJECT`.
+
+The token refresh is the reason this is a distinct exporter rather than a `TRACER_HEADERS` value:
+Google's tokens last about an hour, so a static header authenticates once and then stops.
+
+The destination project comes from the credentials, falling back to `GOOGLE_CLOUD_PROJECT`, and is
+published as the `gcp.project_id` resource attribute. See `examples/using-gcp-traces`.
 
 ## Sampling: head-based vs tail-based
 

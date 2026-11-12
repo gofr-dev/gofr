@@ -214,8 +214,8 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 			Stream:    name,
 			Subjects:  []string{name},
 			MaxBytes:  defaultMaxBytes,
-			Storage:   "file",
-			Retention: "limits",
+			Storage:   storageFile,
+			Retention: retentionLimits,
 			MaxAge:    365 * 24 * time.Hour,
 		})
 	}

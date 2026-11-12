@@ -332,7 +332,7 @@ func TestRollbackNoTransaction(t *testing.T) {
 
 	migrator := sqlMigrator{}
 
-	migrator.rollback(mockContainer, transactionData{})
+	migrator.rollback(mockContainer, &transactionData{})
 }
 
 func TestApply(t *testing.T) {
@@ -349,38 +349,82 @@ func TestApply(t *testing.T) {
 	require.Equal(t, mockMigrator, sqlMig.migrator, "Migrator field should match")
 }
 
-func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMigrator := NewMockmigrator(ctrl)
-	mockContainer, mocks := container.NewMockContainer(t)
+func TestSQLMigrator_getAppliedMigrations(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		setupSQL     func(mocks *container.Mocks)
+		callInner    bool
+		innerApplied map[int64]struct{}
+		innerErr     error
+		expected     map[int64]struct{}
+		expErr       error
+	}{
+		{
+			desc: "unions sql versions with inner migrator versions",
+			setupSQL: func(mocks *container.Mocks) {
+				mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+					WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(1).AddRow(3).AddRow(4))
+			},
+			callInner:    true,
+			innerApplied: map[int64]struct{}{2: {}},
+			expected:     map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc: "empty table returns only the inner set",
+			setupSQL: func(mocks *container.Mocks) {
+				mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+					WillReturnRows(mocks.SQL.NewRows([]string{"version"}))
+			},
+			callInner:    true,
+			innerApplied: map[int64]struct{}{5: {}},
+			expected:     map[int64]struct{}{5: {}},
+		},
+		{
+			desc: "query error",
+			setupSQL: func(mocks *container.Mocks) {
+				mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnError(errDB)
+			},
+			expErr: errDB,
+		},
+		{
+			desc: "inner migrator error",
+			setupSQL: func(mocks *container.Mocks) {
+				mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+					WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(2))
+			},
+			callInner: true,
+			innerErr:  errDB,
+			expErr:    errDB,
+		},
+	}
 
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
-		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(2))
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			mockContainer, mocks := container.NewMockContainer(t)
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
+			tc.setupSQL(mocks)
 
-	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+			if tc.callInner {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.innerApplied, tc.innerErr)
+			}
 
-	last, err := migrator.getLastMigration(mockContainer)
-	require.NoError(t, err)
-	require.Equal(t, int64(5), last, "Expected getLastMigration to return higher value from embedded migrator")
-}
+			m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMigrator := NewMockmigrator(ctrl)
-	mockContainer, mocks := container.NewMockContainer(t)
+			applied, err := m.getAppliedMigrations(mockContainer)
 
-	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
-		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(7))
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+				assert.Nil(t, applied)
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
+				return
+			}
 
-	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
-
-	last, err := migrator.getLastMigration(mockContainer)
-	require.NoError(t, err)
-	require.Equal(t, int64(7), last, "Should return SQL migration value as it's higher")
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, applied)
+		})
+	}
 }
 
 func TestBeginTransaction_ReplaceSQLTx(t *testing.T) {
@@ -607,9 +651,9 @@ func TestSQLMigrator_CommitMigration(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
 		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -636,9 +680,9 @@ func TestSQLMigrator_CommitMigration_Postgres(t *testing.T) {
 		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -666,7 +710,7 @@ func TestSQLMigrator_CommitMigration_ExecError(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
 		WillReturnError(testErr)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.Equal(t, testErr, err)
 }
 
@@ -696,7 +740,7 @@ func TestSQLMigrator_CommitMigration_CommitError(t *testing.T) {
 
 	mocks.SQL.ExpectCommit().WillReturnError(testErr)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.Equal(t, testErr, err)
 }
 
@@ -720,13 +764,13 @@ func TestSQLMigrator_RollbackSuccess(t *testing.T) {
 	}
 
 	mocks.SQL.ExpectRollback()
-	mockMigrator.EXPECT().rollback(mockContainer, data)
+	mockMigrator.EXPECT().rollback(mockContainer, &data)
 
 	// Fatalf is expected on rollback
 	mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
 
 	assert.NotPanics(t, func() {
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 }
 
@@ -812,9 +856,9 @@ func TestSQLMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	}
 
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
 
@@ -839,11 +883,133 @@ func TestSQLMigrator_CommitMigration_SkipInsert_StillCommitsTx(t *testing.T) {
 	// Should NOT expect INSERT.
 	// Should expect Commit — transaction must be closed even if empty.
 	mocks.SQL.ExpectCommit()
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	require.NoError(t, err)
 
 	err = mocks.SQL.ExpectationsWereMet()
 	require.NoError(t, err, "SQL transaction should have been committed even though SQL was not used")
+}
+
+func TestSQLMigrator_CommitMigration_PostgresExecError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	m := sqlMigrator{SQL: mockContainer.SQL, migrator: NewMockmigrator(ctrl)}
+
+	mocks.SQL.ExpectBegin()
+	tx, err := mockContainer.SQL.Begin()
+	require.NoError(t, err)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now().UTC(),
+		SQLTx:           tx,
+		UsedDatasources: map[string]bool{dsSQL: true},
+	}
+
+	mocks.SQL.ExpectDialect().WillReturnString("postgres")
+	mocks.SQL.ExpectExec(insertGoFrMigrationRowPostgres).
+		WithArgs(int64(1), "UP", data.StartTime, sqlmock.AnyArg()).WillReturnError(errSQLExec)
+
+	err = m.commitMigration(mockContainer, &data)
+
+	assert.Equal(t, errSQLExec, err)
+}
+
+func TestSQLMigrator_Lock_ContextCanceledWhileRetrying(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		dialect      string
+		cleanupQuery string
+		insertQuery  string
+	}{
+		{
+			desc:         "postgres",
+			dialect:      "postgres",
+			cleanupQuery: deleteExpiredLocksPostgres,
+			insertQuery:  insertLockPostgres,
+		},
+		{
+			desc:         "mysql",
+			dialect:      "mysql",
+			cleanupQuery: deleteExpiredLocksMySQL,
+			insertQuery:  insertLockMySQL,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			mockContainer.Logger = mockLogger
+
+			m := sqlMigrator{SQL: mockContainer.SQL, migrator: NewMockmigrator(ctrl)}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			mocks.SQL.ExpectDialect().WillReturnString(tc.dialect)
+			mocks.SQL.ExpectExec(tc.cleanupQuery).WithArgs(sqlmock.AnyArg()).WillReturnError(errDB)
+			mocks.SQL.ExpectExec(tc.insertQuery).WithArgs(lockKey, "owner-1", sqlmock.AnyArg()).
+				WillReturnError(errDuplicateKey)
+
+			mockLogger.EXPECT().Errorf("failed to clean up expired locks: %v", errDB)
+			// Cancel the context while the lock is being retried so the retry wait exits via ctx.Done.
+			mockLogger.EXPECT().Debugf("SQL lock already held, retrying in %v... (attempt %d)", defaultRetry, 1).
+				Do(func(string, ...any) { cancel() })
+
+			err := m.lock(ctx, cancel, mockContainer, "owner-1")
+
+			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
+func TestSQLMigrator_Unlock_Errors(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		dialect     string
+		deleteQuery string
+		result      sql.Result
+		expLog      string
+		expLogArgs  []any
+	}{
+		{
+			desc:        "postgres rows affected error",
+			dialect:     "postgres",
+			deleteQuery: deleteLockPostgres,
+			result:      sqlmock.NewErrorResult(errDB),
+			expLog:      "unable to check SQL lock release status: %v",
+			expLogArgs:  []any{errDB},
+		},
+		{
+			desc:        "mysql lock already released",
+			dialect:     "mysql",
+			deleteQuery: deleteLockMySQL,
+			result:      sqlmock.NewResult(0, 0),
+			expLog:      "failed to release SQL lock: lock was already released or stolen",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			mockContainer.Logger = mockLogger
+
+			m := sqlMigrator{SQL: mockContainer.SQL, migrator: NewMockmigrator(ctrl)}
+
+			mocks.SQL.ExpectDialect().WillReturnString(tc.dialect)
+			mocks.SQL.ExpectExec(tc.deleteQuery).WithArgs(lockKey, "owner-1").WillReturnResult(tc.result)
+			mockLogger.EXPECT().Errorf(tc.expLog, tc.expLogArgs...)
+
+			err := m.unlock(mockContainer, "owner-1")
+
+			assert.Equal(t, errLockReleaseFailed, err)
+		})
+	}
 }

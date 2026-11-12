@@ -1,0 +1,200 @@
+package gofr
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/testutil"
+)
+
+// newAuthTestApp returns an App whose router answers 200 on "/" so a test can tell
+// whether an auth middleware was installed by the status of an unauthenticated request.
+func newAuthTestApp(t *testing.T) *App {
+	t.Helper()
+
+	a := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   testutil.GetFreePort(t),
+		},
+		container: container.NewContainer(config.NewMockConfig(nil)),
+	}
+
+	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	return a
+}
+
+// unauthenticatedStatus sends a request carrying no credentials through the app's router.
+func unauthenticatedStatus(t *testing.T, a *App) int {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	a.httpServer.router.ServeHTTP(rec, req)
+
+	return rec.Code
+}
+
+func TestEnableBasicAuth_Errors(t *testing.T) {
+	tests := []struct {
+		desc       string
+		args       []string
+		wantErr    string
+		wantLog    string
+		wantStatus int
+	}{
+		{desc: "credential pairs install the middleware", args: []string{"user", "pass"}, wantStatus: http.StatusUnauthorized},
+		{desc: "no credentials", args: nil, wantErr: "no credentials provided",
+			wantLog: "Basic authentication is DISABLED", wantStatus: http.StatusOK},
+		{desc: "odd number of arguments", args: []string{"user", "pass", "orphan"}, wantErr: "invalid number of arguments",
+			wantLog: "Basic authentication is DISABLED", wantStatus: http.StatusOK},
+		{desc: "empty username", args: []string{"", "pass"}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty password", args: []string{"user", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty username and password", args: []string{"", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+		{desc: "empty credentials in a later pair", args: []string{"user", "pass", "", ""}, wantErr: "empty username or password",
+			wantLog: "rejects every request for those credentials", wantStatus: http.StatusUnauthorized},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				a   *App
+				err error
+			)
+
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				err = a.EnableBasicAuth(tc.args...)
+			})
+
+			if tc.wantErr == "" {
+				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, tc.wantLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestEnableBasicAuth_EmptyCredentialsFailClosed(t *testing.T) {
+	tests := []struct {
+		desc       string
+		args       []string
+		user       string
+		pass       string
+		wantStatus int
+	}{
+		{desc: "empty username and password reject Basic Og==", args: []string{"", ""}, wantStatus: http.StatusUnauthorized},
+		{desc: "empty password rejects the user", args: []string{"admin", ""}, user: "admin", wantStatus: http.StatusUnauthorized},
+		{desc: "empty username rejects the password", args: []string{"", "pass"}, pass: "pass", wantStatus: http.StatusUnauthorized},
+		{desc: "valid pair still works beside an empty one", args: []string{"user", "pass", "", ""},
+			user: "user", pass: "pass", wantStatus: http.StatusOK},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var a *App
+
+			testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				_ = a.EnableBasicAuth(tc.args...)
+			})
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.SetBasicAuth(tc.user, tc.pass)
+
+			rec := httptest.NewRecorder()
+
+			a.httpServer.router.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.wantStatus, rec.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestEnableOAuth_Errors(t *testing.T) {
+	jwks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	}))
+	defer jwks.Close()
+
+	tests := []struct {
+		desc       string
+		endpoint   string
+		wantErr    string
+		wantStatus int
+	}{
+		{desc: "valid endpoint installs the middleware", endpoint: jwks.URL + "/.well-known/jwks.json",
+			wantStatus: http.StatusUnauthorized},
+		{desc: "unparsable URL", endpoint: "://bad", wantErr: "invalid JWKS endpoint URL", wantStatus: http.StatusOK},
+		{desc: "empty URL", endpoint: "", wantErr: "missing scheme or host", wantStatus: http.StatusOK},
+		{desc: "path only", endpoint: "/.well-known/jwks.json", wantErr: "missing scheme or host", wantStatus: http.StatusOK},
+		{desc: "scheme without host", endpoint: "http://", wantErr: "missing scheme or host", wantStatus: http.StatusOK},
+		{desc: "unsupported scheme", endpoint: "ftp://host/.well-known/jwks.json",
+			wantErr: "unsupported scheme", wantStatus: http.StatusOK},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				a   *App
+				err error
+			)
+
+			logs := testutil.StderrOutputForFunc(func() {
+				a = newAuthTestApp(t)
+				err = a.EnableOAuth(tc.endpoint, 600)
+			})
+
+			if tc.wantErr == "" {
+				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotNil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.NotContains(t, logs, "DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Nil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Contains(t, logs, "OAuth authentication is DISABLED", "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
+			assert.Equal(t, tc.wantStatus, unauthenticatedStatus(t, a), "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestEnableOAuth_InvalidRefreshInterval(t *testing.T) {
+	for i, interval := range []int{0, -1} {
+		var (
+			a   *App
+			err error
+		)
+
+		logs := testutil.StderrOutputForFunc(func() {
+			a = newAuthTestApp(t)
+			err = a.EnableOAuth("http://localhost/.well-known/jwks.json", interval)
+		})
+
+		require.ErrorContains(t, err, "invalid JWKS refresh interval", "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Nil(t, a.container.GetHTTPService("gofr_oauth"), "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Contains(t, logs, "OAuth authentication is DISABLED", "TEST[%d], Failed.\ninterval %d", i, interval)
+		assert.Equal(t, http.StatusOK, unauthenticatedStatus(t, a), "TEST[%d], Failed.\ninterval %d", i, interval)
+	}
+}

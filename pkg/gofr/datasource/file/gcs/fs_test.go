@@ -224,3 +224,73 @@ func TestStartRetryConnect_Success(t *testing.T) {
 
 	<-done
 }
+
+func TestFileSystem_Connect_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockLogger := file.NewMockLogger(ctrl)
+	mockMetrics := file.NewMockMetrics(ctrl)
+	mockProvider := file.NewMockStorageProvider(ctrl)
+
+	fs := &fileSystem{
+		CommonFileSystem: &file.CommonFileSystem{
+			Provider: mockProvider,
+			Location: "test-bucket",
+			Logger:   mockLogger,
+			Metrics:  mockMetrics,
+		},
+	}
+
+	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
+	mockProvider.EXPECT().Connect(gomock.Any()).Return(nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockLogger.EXPECT().Infof("connected to %s", "test-bucket")
+	mockLogger.EXPECT().Infof("GCS connection established to bucket %s", "test-bucket")
+
+	fs.Connect()
+
+	assert.True(t, fs.CommonFileSystem.IsConnected())
+}
+
+func TestStartRetryConnect_ExitsImmediately(t *testing.T) {
+	tests := []struct {
+		desc      string
+		connected bool
+		disabled  bool
+	}{
+		{desc: "already connected", connected: true},
+		{desc: "retry disabled", disabled: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// A gomock provider with no expectations fails the test if a connect is attempted.
+			fs := &fileSystem{
+				CommonFileSystem: &file.CommonFileSystem{
+					Provider: file.NewMockStorageProvider(gomock.NewController(t)),
+					Location: "test-bucket",
+				},
+			}
+
+			fs.CommonFileSystem.SetConnected(tc.connected)
+			fs.CommonFileSystem.SetDisableRetry(tc.disabled)
+
+			done := make(chan struct{})
+
+			go func() {
+				fs.startRetryConnect()
+				close(done)
+			}()
+
+			// Without the early return, startRetryConnect blocks on its one-minute ticker.
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("startRetryConnect did not return immediately")
+			}
+
+			assert.Equal(t, tc.connected, fs.CommonFileSystem.IsConnected())
+		})
+	}
+}

@@ -39,6 +39,21 @@ func TestHTTPError(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			message:    "bad request, invalid value in 2 fields",
 		},
+		{
+			err:        NewUnauthorized("not allowed"),
+			statusCode: http.StatusForbidden,
+			message:    "not allowed",
+		},
+		{
+			err:        NewBadRequest([]Field{{key: "id", format: "numeric"}}),
+			statusCode: http.StatusBadRequest,
+			message:    "bad request, invalid value in 1 fields",
+		},
+		{
+			err:        NewInvalidConfigurationError("missing JWKS endpoint"),
+			statusCode: http.StatusInternalServerError,
+			message:    "invalid configuration missing JWKS endpoint - please contact administrator",
+		},
 	}
 
 	for i, tc := range testCases {

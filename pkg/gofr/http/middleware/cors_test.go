@@ -82,7 +82,7 @@ func Test_CORS(t *testing.T) {
 			handler := CORS(tc.config, tc.registeredRoutes)(
 				&MockHandlerForCORS{statusCode: http.StatusFound, response: "Sample Response"})
 
-			req := httptest.NewRequest(tc.method, "/hello", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/hello", http.NoBody)
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
 			}

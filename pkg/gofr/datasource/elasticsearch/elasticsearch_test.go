@@ -2,11 +2,14 @@ package elasticsearch
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/stretchr/testify/require"
@@ -117,6 +120,12 @@ func TestClient_CreateIndex_Errors(t *testing.T) {
 			index:      "",
 			settings:   map[string]any{},
 			errMessage: "index name cannot be empty",
+		},
+		{
+			name:       "unmarshalable settings",
+			index:      "test-index",
+			settings:   map[string]any{"invalid": make(chan int)},
+			errMessage: "error marshaling data: settings",
 		},
 		{
 			name:       "elasticsearch operation error",
@@ -595,6 +604,12 @@ func TestClient_Search_Errors(t *testing.T) {
 			response:    invalidJSONResp,
 			expectedMsg: "error parsing response",
 		},
+		{
+			name:        "unmarshalable query",
+			indices:     []string{"test-index"},
+			query:       map[string]any{"invalid": make(chan int)},
+			expectedMsg: "error marshaling data: query",
+		},
 	}
 
 	for _, tt := range tests {
@@ -748,4 +763,256 @@ func TestClient_Connect_Success(t *testing.T) {
 	client.Connect()
 
 	require.NotNil(t, client.client, "Elasticsearch client should be initialized")
+}
+
+func TestClient_HealthCheck_HonorsContext(t *testing.T) {
+	// release unblocks the info handler if the client never cancels the request, so a failing
+	// run ends instead of hanging on server.Close.
+	release := make(chan struct{})
+
+	var releaseOnce sync.Once
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Elastic-Product", "Elasticsearch")
+
+		if r.Method == http.MethodGet {
+			// Cluster info: answer only once the request is canceled.
+			select {
+			case <-r.Context().Done():
+			case <-release:
+			}
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	es, err := elasticsearch.NewClient(elasticsearch.Config{Addresses: []string{server.URL}})
+	require.NoError(t, err)
+
+	client := New(Config{Addresses: []string{server.URL}})
+	client.client = es
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tests := []struct {
+		name    string
+		ctx     func(t *testing.T) context.Context
+		wantErr error
+	}{
+		{
+			name:    "canceled context fails the ping",
+			ctx:     func(*testing.T) context.Context { return canceled },
+			wantErr: errHealthCheckFailed,
+		},
+		{
+			name: "deadline during cluster info returns promptly",
+			ctx: func(t *testing.T) context.Context {
+				t.Helper()
+
+				ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+				t.Cleanup(cancel)
+
+				return ctx
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			type result struct {
+				health any
+				err    error
+			}
+
+			done := make(chan result, 1)
+			ctx := tc.ctx(t)
+
+			go func() {
+				h, err := client.HealthCheck(ctx)
+				done <- result{health: h, err: err}
+			}()
+
+			var res result
+
+			select {
+			case res = <-done:
+			case <-time.After(2 * time.Second):
+				releaseOnce.Do(func() { close(release) })
+				t.Fatal("HealthCheck did not return after its context was done")
+			}
+
+			require.ErrorIs(t, res.err, tc.wantErr)
+
+			h, ok := res.health.(*Health)
+			require.True(t, ok)
+			require.NotContains(t, h.Details, "cluster_name")
+		})
+	}
+}
+
+func TestClient_Connect(t *testing.T) {
+	tests := []struct {
+		name         string
+		pingStatus   int
+		addresses    func(serverURL string) []string
+		setupMocks   func(l *MockLogger)
+		expClientSet bool
+	}{
+		{
+			name:       "invalid address fails client creation",
+			pingStatus: http.StatusOK,
+			addresses:  func(string) []string { return []string{"://invalid-address"} },
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("error creating Elasticsearch client: %v", gomock.Any())
+			},
+			expClientSet: false,
+		},
+		{
+			name:       "health check failure is logged",
+			pingStatus: http.StatusInternalServerError,
+			addresses:  func(serverURL string) []string { return []string{serverURL} },
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("Elasticsearch health check failed: %v", errHealthCheckFailed)
+			},
+			expClientSet: true,
+		},
+		{
+			name:       "successful connection",
+			pingStatus: http.StatusOK,
+			addresses:  func(serverURL string) []string { return []string{serverURL} },
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Logf("connected to Elasticsearch successfully at : %v", gomock.Any())
+			},
+			expClientSet: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("X-Elastic-Product", "Elasticsearch")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.pingStatus)
+
+				_, _ = w.Write([]byte(`{"cluster_name": "test-cluster", "version": {"number": "8.0.0"}}`))
+			}))
+			defer server.Close()
+
+			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().NewHistogram("es_request_duration_ms", gomock.Any(), gomock.Any()).AnyTimes()
+			tt.setupMocks(mockLogger)
+
+			client := New(Config{Addresses: tt.addresses(server.URL), Username: "elastic", Password: "changeme"})
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+
+			client.Connect()
+
+			require.Equal(t, tt.expClientSet, client.client != nil)
+		})
+	}
+}
+
+func TestClient_HealthCheck(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		httpErr    error
+		expErr     error
+		expStatus  string
+		expDetails map[string]any
+	}{
+		{
+			name:       "ping transport error",
+			statusCode: http.StatusOK,
+			httpErr:    errTestFailed,
+			expErr:     errHealthCheckFailed,
+			expStatus:  statusDown,
+			expDetails: map[string]any{"error": errTestFailed.Error()},
+		},
+		{
+			name:       "ping error response",
+			statusCode: http.StatusInternalServerError,
+			body:       `{}`,
+			expErr:     errHealthCheckFailed,
+			expStatus:  statusDown,
+			expDetails: map[string]any{"error": "[500 Internal Server Error] {}"},
+		},
+		{
+			name:       "healthy cluster with info",
+			statusCode: http.StatusOK,
+			body:       `{"cluster_name": "test-cluster", "version": {"number": "8.0.0"}}`,
+			expStatus:  statusUp,
+			expDetails: map[string]any{"cluster_name": "test-cluster", "version": "8.0.0"},
+		},
+		{
+			name:       "healthy cluster with undecodable info",
+			statusCode: http.StatusOK,
+			body:       `{"cluster_name": `,
+			expStatus:  statusUp,
+			expDetails: map[string]any{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, transport := setupTest(t)
+
+			transport.response = createMockResponse(tt.statusCode, tt.body)
+			defer transport.response.Body.Close()
+
+			transport.err = tt.httpErr
+
+			res, err := client.HealthCheck(t.Context())
+
+			require.ErrorIs(t, err, tt.expErr)
+
+			h, ok := res.(*Health)
+			require.True(t, ok)
+			require.Equal(t, tt.expStatus, h.Status)
+			require.Equal(t, client.config.Addresses, h.Details["addresses"])
+			require.Equal(t, client.config.Username, h.Details["username"])
+
+			for k, v := range tt.expDetails {
+				require.Equal(t, v, h.Details[k], k)
+			}
+		})
+	}
+}
+
+func TestClient_OperationsWithoutTracer(t *testing.T) {
+	tests := []struct {
+		name string
+		op   func(ctx context.Context, c *Client) error
+	}{
+		{
+			name: "delete index",
+			op:   func(ctx context.Context, c *Client) error { return c.DeleteIndex(ctx, "test-index") },
+		},
+		{
+			name: "create index",
+			op:   func(ctx context.Context, c *Client) error { return c.CreateIndex(ctx, "test-index", map[string]any{}) },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, transport := setupTest(t)
+			client.tracer = nil
+
+			transport.response = createMockResponse(200, `{"acknowledged": true}`)
+			defer transport.response.Body.Close()
+
+			require.NoError(t, tt.op(t.Context(), client))
+		})
+	}
 }

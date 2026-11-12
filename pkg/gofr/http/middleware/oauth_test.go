@@ -73,7 +73,7 @@ func TestOAuthProvider_extractAuthHeader(t *testing.T) {
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set(headerAuthorization, tc.header)
 			provider := &OAuthProvider{
 				publicKeyFunc: tc.publicKeyFunc,
@@ -282,6 +282,15 @@ func TestPublicKeys_updateKeys(t *testing.T) {
 			publicKeys.updateKeys(config)
 			assert.Len(t, publicKeys.keys, tc.updatedLength)
 		})
+	}
+}
+
+func TestNewOAuth_NonPositiveRefreshInterval(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Second} {
+		provider := NewOAuth(OauthConfigs{Provider: MockJWKSProvider{}, RefreshInterval: interval})
+
+		require.Eventually(t, func() bool { return provider.Get("111") != nil }, time.Second, 10*time.Millisecond,
+			"keys not loaded for interval %v", interval)
 	}
 }
 

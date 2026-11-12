@@ -71,7 +71,7 @@ func TestHTTPService_HealthCheckDifferentStatusCode(t *testing.T) {
 	resp := service.HealthCheck(t.Context())
 
 	assert.Equal(t, &Health{Status: serviceDown,
-		Details: map[string]any{"host": server.URL[7:], "error": "service down"}},
+		Details: map[string]any{"host": server.URL[7:], "error": serviceDownReason}},
 		resp, "TEST[%d], Failed.\n%s")
 }
 

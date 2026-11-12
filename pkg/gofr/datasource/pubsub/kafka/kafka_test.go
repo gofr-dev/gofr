@@ -179,6 +179,17 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 			},
 			expected: errUnsupportedSecurityProtocol,
 		},
+		{
+			name: "SSL without TLS configuration",
+			config: Config{
+				Brokers:          []string{"kafkabroker"},
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SSL",
+			},
+			expected: errUnsupportedSecurityProtocol,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1018,4 +1029,33 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 	wg.Wait()
 
 	// If we reach here without race detector complaints, the fix works
+}
+
+func TestKafkaClient_GetReadContext(t *testing.T) {
+	k := &kafkaClient{}
+
+	t.Run("no deadline: bounded, and cancel releases it before the timeout", func(t *testing.T) {
+		readCtx, cancel := k.getReadContext(t.Context())
+
+		deadline, ok := readCtx.Deadline()
+		require.True(t, ok, "a read without a caller deadline must be bounded")
+		assert.WithinDuration(t, time.Now().Add(defaultReadTimeout), deadline, time.Second)
+		require.NoError(t, readCtx.Err())
+
+		cancel()
+
+		assert.ErrorIs(t, readCtx.Err(), context.Canceled)
+	})
+
+	t.Run("caller deadline: context is reused and cancel leaves it alone", func(t *testing.T) {
+		parent, parentCancel := context.WithTimeout(t.Context(), time.Minute)
+		defer parentCancel()
+
+		readCtx, cancel := k.getReadContext(parent)
+		require.Equal(t, parent, readCtx)
+
+		cancel()
+
+		assert.NoError(t, parent.Err(), "cancel must not cancel the caller's context")
+	})
 }

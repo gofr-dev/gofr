@@ -230,6 +230,18 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
+- app_http_retry_wait_seconds
+- histogram
+- Time waited before each retry of an HTTP service call made with a `RetryConfig` that sets more than `MaxRetries`, in seconds
+
+---
+
+- app_http_retry_budget_exhausted_total
+- counter
+- Number of retries skipped because the HTTP service's retry budget was spent
+
+---
+
 - app_http_circuit_breaker_state
 - gauge
 - Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
@@ -300,6 +312,19 @@ limit is inclusive of that overflow slot, so a value of `n` keeps up to `n-1` re
 ```dotenv
 METRICS_CARDINALITY_LIMIT=5000
 ```
+
+HTTP metrics record requests that match no route (scanner paths such as `/.env` or `/wp-json`, and a known path
+called with a method it does not serve, which is answered 405) under their raw path until each process has
+seen 500 distinct label sets, then record them as `__unmatched__`. Short-lived instances rarely reach that
+budget, so across many instances the raw paths still pile up at the backend. Set
+`METRICS_UNMATCHED_LIMIT` to lower the budget; `0` records every unmatched request as `__unmatched__` from the
+first one, while registered routes keep their own series:
+
+```dotenv
+METRICS_UNMATCHED_LIMIT=0
+```
+
+At `0`, a route registered at `/` and static files are also recorded as `__unmatched__`.
 
 ### Example Dashboard
 
@@ -428,7 +453,35 @@ Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and
 
 
 
-#### 4. [GoFr Tracer](https://tracer.gofr.dev/):
+#### 4. [Google Cloud Trace](https://cloud.google.com/trace) (keyless):
+
+Exports spans straight to Google Cloud's Telemetry (OTLP) API — no key file and no Collector
+sidecar. Authentication uses Application Default Credentials, so on Cloud Run, GKE or GCE the
+attached service account is enough. The exporter lives in its own module, enabled by a blank import:
+
+```go
+import _ "gofr.dev/pkg/gofr/traces/exporters/gcp"
+```
+
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=gcp
+TRACER_RATIO=1.0
+# TRACER_URL is optional; it defaults to telemetry.googleapis.com:443
+```
+
+Grant the workload's service account `roles/telemetry.tracesWriter` on the project receiving the
+spans — the least-privilege predefined role carrying `telemetry.traces.write`, which is what
+`telemetry.googleapis.com` checks. Locally, run `gcloud auth application-default login` and set
+`GOOGLE_CLOUD_PROJECT`, since a user credential carries no project.
+
+`TRACER_URL` must be a schemeless `host:port` for `gcp`; a scheme is rejected at startup.
+
+See `examples/using-gcp-traces` for a full Cloud Run deployment.
+
+#### 5. [GoFr Tracer](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. Users can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service, available anywhere, anytime.

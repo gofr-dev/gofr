@@ -112,11 +112,12 @@ func (c *Client) Connect() {
 func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "exec", query)
 
-	err := c.conn.Exec(tracedCtx, query, args...)
-
+	// Before the call, not after it. `defer f(time.Now())` evaluates its arguments where the defer
+	// STATEMENT is, not where the call runs, so a defer placed below the driver call takes the start
+	// instant once the work has already finished and every duration it reports is ~0.
 	defer c.sendOperationStats(time.Now(), "Exec", query, "exec", span, args...)
 
-	return err
+	return c.conn.Exec(tracedCtx, query, args...)
 }
 
 // Select executes a SELECT query and scans the resulting rows into dest.
@@ -125,15 +126,14 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 func (c *Client) Select(ctx context.Context, dest any, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "select", query)
 
-	if reflect.TypeOf(dest).Kind() != reflect.Ptr || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
+	if reflect.TypeOf(dest).Kind() != reflect.Pointer || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
 		return errInvalidDestType
 	}
 
-	err := c.conn.Select(tracedCtx, dest, query, args...)
-
+	// See Exec: the start instant has to be taken before the driver call, not after it.
 	defer c.sendOperationStats(time.Now(), "Select", query, "select", span, args...)
 
-	return err
+	return c.conn.Select(tracedCtx, dest, query, args...)
 }
 
 // oracleTx wraps a sql.Tx to implement the Txn interface.
@@ -226,7 +226,7 @@ func scanRows(rows *sql.Rows) ([]map[string]any, error) {
 func (t *oracleTx) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
 	start := time.Now()
 
-	if reflect.TypeOf(dest).Kind() != reflect.Ptr || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
+	if reflect.TypeOf(dest).Kind() != reflect.Pointer || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
 		return errInvalidDestType
 	}
 

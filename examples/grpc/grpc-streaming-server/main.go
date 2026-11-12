@@ -1,3 +1,5 @@
+//go:build !gofr_nogrpc
+
 package main
 
 import (

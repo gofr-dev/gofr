@@ -1452,7 +1452,7 @@ func (mr *MockmigratorMockRecorder) checkAndCreateMigrationTable(c any) *gomock.
 }
 
 // commitMigration mocks base method.
-func (m *Mockmigrator) commitMigration(c *container.Container, data transactionData) error {
+func (m *Mockmigrator) commitMigration(c *container.Container, data *transactionData) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "commitMigration", c, data)
 	ret0, _ := ret[0].(error)
@@ -1465,19 +1465,19 @@ func (mr *MockmigratorMockRecorder) commitMigration(c, data any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "commitMigration", reflect.TypeOf((*Mockmigrator)(nil).commitMigration), c, data)
 }
 
-// getLastMigration mocks base method.
-func (m *Mockmigrator) getLastMigration(c *container.Container) (int64, error) {
+// getAppliedMigrations mocks base method.
+func (m *Mockmigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getLastMigration", c)
-	ret0, _ := ret[0].(int64)
+	ret := m.ctrl.Call(m, "getAppliedMigrations", c)
+	ret0, _ := ret[0].(map[int64]struct{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getLastMigration indicates an expected call of getLastMigration.
-func (mr *MockmigratorMockRecorder) getLastMigration(c any) *gomock.Call {
+// getAppliedMigrations indicates an expected call of getAppliedMigrations.
+func (mr *MockmigratorMockRecorder) getAppliedMigrations(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getLastMigration", reflect.TypeOf((*Mockmigrator)(nil).getLastMigration), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getAppliedMigrations", reflect.TypeOf((*Mockmigrator)(nil).getAppliedMigrations), c)
 }
 
 // lock mocks base method.
@@ -1509,7 +1509,7 @@ func (mr *MockmigratorMockRecorder) name() *gomock.Call {
 }
 
 // rollback mocks base method.
-func (m *Mockmigrator) rollback(c *container.Container, data transactionData) {
+func (m *Mockmigrator) rollback(c *container.Container, data *transactionData) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "rollback", c, data)
 }

@@ -1,14 +1,18 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -52,22 +56,104 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	assert.Containsf(t, testLogs, expectedLog, "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
 }
 
-func TestNewSQL_InvalidDialect(t *testing.T) {
-	ctrl := gomock.NewController(t)
+func TestNewSQL_ConnectTimeout(t *testing.T) {
+	testCases := []struct {
+		name     string
+		dialect  string
+		timeout  string
+		want     int
+		wantWarn bool
+	}{
+		{name: "unset means no timeout", dialect: dialectMysql},
+		{name: "zero means no timeout", dialect: dialectMysql, timeout: "0"},
+		{name: "mysql override", dialect: dialectMysql, timeout: "7", want: 7},
+		{name: "postgres override", dialect: dialectPostgres, timeout: "3", want: 3},
+		{name: "not a number warns and is ignored", dialect: dialectPostgres, timeout: "abc", wantWarn: true},
+		{name: "fractional warns and is ignored", dialect: dialectMysql, timeout: "1.5", wantWarn: true},
+		{name: "negative warns and is ignored", dialect: dialectMysql, timeout: "-5", wantWarn: true},
+		{name: "sqlite does not read it", dialect: sqlite, timeout: "abc"},
+	}
 
-	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_DIALECT": "abc",
-		"DB_HOST":    "localhost",
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Port 1 refuses the connection at once, so the networked cases fail fast.
+			conf := map[string]string{"DB_DIALECT": tc.dialect, "DB_HOST": "127.0.0.1", "DB_PORT": "1",
+				"DB_NAME": filepath.Join(t.TempDir(), "t.db")}
+			if tc.timeout != "" {
+				conf["DB_CONNECT_TIMEOUT"] = tc.timeout
+			}
 
-	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := logging.NewMockLogger(logging.ERROR)
-		mockMetrics := NewMockMetrics(ctrl)
+			var db *DB
 
-		NewSQL(mockConfig, mockLogger, mockMetrics)
-	})
+			logs := testutil.StdoutOutputForFunc(func() {
+				db = NewSQL(config.NewMockConfig(conf), logging.NewMockLogger(logging.DEBUG), newConnectorMetrics(t))
+				require.NotNil(t, db)
+				require.NoError(t, db.Close())
+			})
 
-	assert.Containsf(t, testLogs, errUnsupportedDialect.Error(), "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
+			assert.Equal(t, tc.want, db.config.connectTimeout)
+
+			if tc.wantWarn {
+				assert.Contains(t, logs, "invalid DB_CONNECT_TIMEOUT")
+			} else {
+				assert.NotContains(t, logs, "invalid DB_CONNECT_TIMEOUT")
+			}
+		})
+	}
+}
+
+func TestNewSQL_DialectLogs(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+		wantLog string
+	}{
+		{
+			desc:    "empty dialect with DB_HOST set",
+			configs: map[string]string{"DB_HOST": "localhost"},
+			wantLog: errMissingDialect.Error(),
+		},
+		{
+			desc:    "empty dialect with only DB_NAME set",
+			configs: map[string]string{"DB_NAME": "orders"},
+			wantLog: errMissingDialect.Error(),
+		},
+		{
+			desc:    "empty dialect with no DB settings",
+			configs: map[string]string{},
+		},
+		{
+			desc:    "unsupported dialect",
+			configs: map[string]string{"DB_DIALECT": "abc", "DB_HOST": "localhost"},
+			wantLog: errUnsupportedDialect.Error(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			var db *DB
+
+			// The real logger, not the mock: it writes JSON, which is where an error value logged as-is loses its text.
+			testLogs := testutil.StderrOutputForFunc(func() {
+				logger := logging.NewLogger(logging.ERROR)
+				mockMetrics := NewMockMetrics(ctrl)
+
+				db = NewSQL(config.NewMockConfig(tc.configs), logger, mockMetrics)
+			})
+
+			assert.Nil(t, db)
+
+			if tc.wantLog == "" {
+				assert.Empty(t, testLogs)
+
+				return
+			}
+
+			assert.Contains(t, testLogs, tc.wantLog)
+		})
+	}
 }
 
 func TestNewSQL_GetDBDialect(t *testing.T) {
@@ -183,6 +269,58 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 }
 
+func TestGetDBConfig_RedactArgs(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		redactArgs   string
+		wantHideArgs bool
+	}{
+		{desc: "unset shows args", redactArgs: "", wantHideArgs: false},
+		{desc: "FALSE shows args", redactArgs: "FALSE", wantHideArgs: false},
+		{desc: "TRUE hides args", redactArgs: "TRUE", wantHideArgs: true},
+		{desc: "padded true hides args", redactArgs: " true ", wantHideArgs: true},
+		{desc: "1 hides args", redactArgs: "1", wantHideArgs: true},
+		{desc: "invalid value shows args", redactArgs: "maybe", wantHideArgs: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
+
+			assert.Equal(t, tc.wantHideArgs, getDBConfig(mockConfig).hideArgs)
+		})
+	}
+}
+
+func TestWarnInvalidRedactArgs(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		redactArgs string
+		wantWarn   bool
+	}{
+		{desc: "unset", redactArgs: "", wantWarn: false},
+		{desc: "valid boolean", redactArgs: "True", wantWarn: false},
+		{desc: "padded boolean", redactArgs: " true ", wantWarn: false},
+		{desc: "invalid value", redactArgs: "maybe", wantWarn: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				mockConfig := config.NewMockConfig(map[string]string{"DB_REDACT_ARGS": tc.redactArgs})
+
+				warnInvalidRedactArgs(mockConfig, logging.NewMockLogger(logging.WARN))
+			})
+
+			if tc.wantWarn {
+				assert.Contains(t, out, `invalid DB_REDACT_ARGS "maybe"`)
+			} else {
+				assert.Empty(t, out)
+			}
+		})
+	}
+}
+
 func TestSQL_getDBConnectionString(t *testing.T) {
 	testCases := []struct {
 		desc    string
@@ -276,6 +414,70 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 
 			assert.Equal(t, tc.expOut, connString)
 			assert.Equal(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestSQL_getDBConnectionString_connectTimeout(t *testing.T) {
+	testCases := []struct {
+		dialect string
+		timeout int
+		want    string
+	}{
+		{"mysql", 7, "&timeout=7s"},
+		{"mysql", 0, ""},
+		{"postgres", 10, " connect_timeout=10"},
+		{"supabase", 3, " connect_timeout=3"},
+		{"cockroachdb", 4, " connect_timeout=4"},
+		{"postgres", 0, ""},
+		{"sqlite", 10, ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s/%d", tc.dialect, tc.timeout), func(t *testing.T) {
+			base := &DBConfig{Dialect: tc.dialect, HostName: "h", User: "u", Password: "p", Port: "1", Database: "d.db", SSLMode: "disable"}
+			want, err := getDBConnectionString(base)
+			require.NoError(t, err)
+
+			withTimeout := *base
+			withTimeout.connectTimeout = tc.timeout
+
+			got, err := getDBConnectionString(&withTimeout)
+
+			require.NoError(t, err)
+			assert.Equal(t, want+tc.want, got)
+		})
+	}
+}
+
+func TestSQL_getDBConnectionString_MySQLTLSParam(t *testing.T) {
+	const base = "user:password@tcp(host:3201)/test?charset=utf8&parseTime=True&loc=Local&interpolateParams=true"
+
+	testCases := []struct {
+		desc    string
+		sslMode string
+		expOut  string
+	}{
+		{desc: "require appends skip-verify tls param", sslMode: "require", expOut: base + "&tls=skip-verify"},
+		{desc: "verify-ca appends custom tls param", sslMode: sslModeVerifyCA, expOut: base + "&tls=custom"},
+		{desc: "preferred appends preferred tls param", sslMode: "preferred", expOut: base + "&tls=preferred"},
+		{desc: "disable adds no tls param", sslMode: sslModeDisable, expOut: base},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			connString, err := getDBConnectionString(&DBConfig{
+				Dialect:  "mysql",
+				HostName: "host",
+				User:     "user",
+				Password: "password",
+				Port:     "3201",
+				Database: "test",
+				SSLMode:  tc.sslMode,
+			})
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expOut, connString)
 		})
 	}
 }
@@ -475,6 +677,10 @@ func TestGetMySQLTLSParam(t *testing.T) {
 		{"verify-ca", "tls=custom"},
 		{"verify-full", "tls=custom"},
 		{"preferred", "tls=preferred"},
+		{"skip-verify", "tls=skip-verify"},
+		{"true", "tls=skip-verify"},
+		{"false", ""},
+		{"unknown-mode", ""},
 	}
 
 	for _, tt := range tests {
@@ -937,5 +1143,264 @@ func TestDBConfig_GoString_RedactsPassword(t *testing.T) {
 	} {
 		assert.Contains(t, got, redactedPassword)
 		assert.NotContains(t, got, "super-secret")
+	}
+}
+
+var errPingFailed = errors.New("ping failed")
+
+func TestRegisterMySQLTLSConfig_Errors(t *testing.T) {
+	tests := []struct {
+		name     string
+		setupEnv func(t *testing.T)
+		dialect  string
+		sslMode  string
+		expErr   error
+	}{
+		{
+			name:     "non mysql dialect skips tls registration",
+			setupEnv: func(*testing.T) {},
+			dialect:  dialectPostgres,
+			sslMode:  sslModeVerifyCA,
+		},
+		{
+			name:     "mysql without verify mode skips tls registration",
+			setupEnv: func(*testing.T) {},
+			dialect:  dialectMysql,
+			sslMode:  "skip-verify",
+		},
+		{
+			name:     "mysql verify-ca without CA cert falls back to system pool",
+			setupEnv: func(t *testing.T) { t.Helper(); t.Setenv("DB_TLS_CA_CERT", "") },
+			dialect:  dialectMysql,
+			sslMode:  sslModeVerifyCA,
+		},
+		{
+			name: "mysql verify-ca with missing CA cert file",
+			setupEnv: func(t *testing.T) {
+				t.Helper()
+				t.Setenv("DB_TLS_CA_CERT", t.TempDir()+"/missing-ca.pem")
+			},
+			dialect: dialectMysql,
+			sslMode: sslModeVerifyCA,
+			expErr:  fs.ErrNotExist,
+		},
+		{
+			name: "mysql verify-full with invalid CA cert content",
+			setupEnv: func(t *testing.T) {
+				t.Helper()
+				t.Setenv("DB_TLS_CA_CERT", createInvalidCert(t))
+			},
+			dialect: dialectMysql,
+			sslMode: sslModeVerifyFull,
+			expErr:  errFailedCACerts,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setupEnv(t)
+
+			dbConfig := &DBConfig{Dialect: tc.dialect, HostName: "127.0.0.1", SSLMode: tc.sslMode}
+
+			err := registerMySQLTLSConfig(dbConfig, logging.NewMockLogger(logging.DEBUG))
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestNewSQL_TLSRegistrationFailure(t *testing.T) {
+	tests := []struct {
+		desc    string
+		configs map[string]string
+		expLogs []string
+	}{
+		{
+			desc: "verify mode with unreadable CA cert returns nil",
+			configs: map[string]string{
+				"DB_DIALECT":  dialectMysql,
+				"DB_HOST":     "localhost",
+				"DB_SSL_MODE": sslModeVerifyCA,
+			},
+			expLogs: []string{"failed to register MySQL TLS config"},
+		},
+		{
+			desc: "empty host name is logged before tls failure",
+			configs: map[string]string{
+				"DB_DIALECT":  dialectMysql,
+				"DB_SSL_MODE": sslModeVerifyFull,
+			},
+			expLogs: []string{"connection to mysql failed: host name is empty.", "failed to register MySQL TLS config"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("DB_TLS_CA_CERT", t.TempDir()+"/missing-ca.pem")
+
+			var db *DB
+
+			logs := testutil.StderrOutputForFunc(func() {
+				db = NewSQL(config.NewMockConfig(tc.configs), logging.NewMockLogger(logging.DEBUG), NewMockMetrics(gomock.NewController(t)))
+			})
+
+			assert.Nil(t, db)
+
+			for _, l := range tc.expLogs {
+				assert.Contains(t, logs, l)
+			}
+		})
+	}
+}
+
+func TestNewSQL_SQLiteConnected(t *testing.T) {
+	dbName := t.TempDir() + "/gofr-test"
+
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
+
+	var db *DB
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		db = NewSQL(config.NewMockConfig(map[string]string{
+			"DB_DIALECT": sqlite,
+			"DB_NAME":    dbName,
+		}), logging.NewMockLogger(logging.DEBUG), mockMetrics)
+	})
+
+	require.NotNil(t, db)
+	t.Cleanup(func() { _ = db.Close() })
+
+	assert.Equal(t, sqlite, db.Dialect())
+	assert.Contains(t, logs, fmt.Sprintf("connected to '%s' database", dbName))
+	require.NoError(t, db.DB.PingContext(t.Context()))
+}
+
+func newPingMockDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
+	t.Helper()
+
+	rawDB, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = rawDB.Close() })
+
+	return &DB{
+		DB:         rawDB,
+		config:     &DBConfig{Dialect: dialectPostgres, HostName: "host", Port: "5432", User: "user", Database: "db"},
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		stopSignal: make(chan struct{}),
+	}, mock
+}
+
+func TestPingToTestConnection(t *testing.T) {
+	tests := []struct {
+		desc      string
+		setupMock func(mock sqlmock.Sqlmock)
+		capture   func(func()) string
+		expLog    string
+	}{
+		{
+			desc:      "successful ping logs connected",
+			setupMock: func(mock sqlmock.Sqlmock) { mock.ExpectPing() },
+			capture:   testutil.StdoutOutputForFunc,
+			expLog:    "connected to 'user' user to 'db' database at 'host:5432'",
+		},
+		{
+			desc:      "failed ping logs connection failure",
+			setupMock: func(mock sqlmock.Sqlmock) { mock.ExpectPing().WillReturnError(errPingFailed) },
+			capture:   testutil.StderrOutputForFunc,
+			expLog:    "could not connect 'user' user to 'db' database at 'host:5432', error: ping failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			database, mock := newPingMockDB(t)
+			tc.setupMock(mock)
+
+			var got *DB
+
+			logs := tc.capture(func() {
+				database.logger = logging.NewMockLogger(logging.DEBUG)
+				got = pingToTestConnection(database)
+			})
+
+			assert.Same(t, database, got)
+			assert.Contains(t, logs, tc.expLog)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestAttemptReconnection(t *testing.T) {
+	closedSignal := func() chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+
+		return ch
+	}
+
+	tests := []struct {
+		desc       string
+		setupMock  func(mock sqlmock.Sqlmock)
+		stopSignal func() chan struct{}
+		expResult  bool
+	}{
+		{
+			desc:       "ping succeeds on first attempt",
+			setupMock:  func(mock sqlmock.Sqlmock) { mock.ExpectPing() },
+			stopSignal: func() chan struct{} { return make(chan struct{}) },
+			expResult:  true,
+		},
+		{
+			desc: "ping fails then succeeds after retry duration",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPing().WillReturnError(errPingFailed)
+				mock.ExpectPing()
+			},
+			stopSignal: func() chan struct{} { return make(chan struct{}) },
+			expResult:  true,
+		},
+		{
+			desc:       "stop signal received before attempting",
+			setupMock:  func(sqlmock.Sqlmock) {},
+			stopSignal: closedSignal,
+			expResult:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			database, mock := newPingMockDB(t)
+			database.stopSignal = tc.stopSignal()
+			tc.setupMock(mock)
+
+			got := attemptReconnection(context.Background(), database, time.Millisecond)
+
+			assert.Equal(t, tc.expResult, got)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestRetryConnection_StopsWhileWaiting(t *testing.T) {
+	database, mock := newPingMockDB(t)
+	mock.ExpectPing()
+
+	done := make(chan struct{})
+
+	go func() {
+		retryConnection(context.Background(), database)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool { return mock.ExpectationsWereMet() == nil }, 5*time.Second, time.Millisecond)
+
+	close(database.stopSignal)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("retryConnection did not return after stop signal")
 	}
 }

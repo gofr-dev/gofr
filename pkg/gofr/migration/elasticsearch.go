@@ -22,16 +22,64 @@ type elasticsearchMigrator struct {
 const (
 	// elasticsearchMigrationIndex is the index used to track migrations.
 	elasticsearchMigrationIndex = "gofr_migrations"
+
+	// elasticsearchSourceField is the key of a hit's stored document.
+	elasticsearchSourceField = "_source"
+	// elasticsearchMappingType is the key naming a field's type in an index mapping.
+	elasticsearchMappingType = "type"
+
+	// elasticsearchMigrationPageSize is how many migration records one search returns. It is far below
+	// Elasticsearch's default index.max_result_window (10000), so an index configured with a smaller
+	// window still works.
+	elasticsearchMigrationPageSize = 1000
+	// elasticsearchSearchAfter is the search request key carrying the sort values of the last hit read.
+	elasticsearchSearchAfter = "search_after"
 )
 
-// getLastElasticsearchMigrationQuery fetches the most recent migration version.
-func getLastElasticsearchMigrationQuery() map[string]any {
+// getElasticsearchMigrationVersionsQuery builds the query for the first page of applied migration
+// versions, highest first. Later pages come from getElasticsearchMigrationVersionsPageQuery.
+func getElasticsearchMigrationVersionsQuery() map[string]any {
 	return map[string]any{
-		"size": 1,
+		"size": elasticsearchMigrationPageSize,
 		"sort": []map[string]any{
-			{"version": map[string]any{"order": "desc"}},
+			{migrationFieldVersion: map[string]any{"order": "desc"}},
 		},
-		"_source": []string{"version"},
+		elasticsearchSourceField: []string{migrationFieldVersion},
+	}
+}
+
+// getElasticsearchMigrationVersionsPageQuery builds the query for the page of versions below lastVersion.
+// The version is the document ID, so it is unique and needs no tiebreaker in the sort.
+func getElasticsearchMigrationVersionsPageQuery(lastVersion int64) map[string]any {
+	query := getElasticsearchMigrationVersionsQuery()
+	query[elasticsearchSearchAfter] = []any{lastVersion}
+
+	return query
+}
+
+// getElasticsearchMigrationVersions reads every applied migration version, one page at a time, so
+// neither the result window nor the size of the index can leave an applied version out.
+func getElasticsearchMigrationVersions(c *container.Container) ([]int64, error) {
+	var (
+		versions []int64
+		query    = getElasticsearchMigrationVersionsQuery()
+	)
+
+	for {
+		result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, query)
+		if err != nil {
+			return nil, err
+		}
+
+		page, hitCount := extractMigrationVersions(result)
+		versions = append(versions, page...)
+
+		// A short page is the last one. Stopping when no version was read guards against paging forever.
+		if hitCount < elasticsearchMigrationPageSize || len(page) == 0 {
+			return versions, nil
+		}
+
+		query = getElasticsearchMigrationVersionsPageQuery(page[len(page)-1])
 	}
 }
 
@@ -64,17 +112,17 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 			},
 			"mappings": map[string]any{
 				"properties": map[string]any{
-					"version": map[string]any{
-						"type": "long",
+					migrationFieldVersion: map[string]any{
+						elasticsearchMappingType: "long",
 					},
-					"method": map[string]any{
-						"type": "keyword",
+					migrationFieldMethod: map[string]any{
+						elasticsearchMappingType: "keyword",
 					},
-					"start_time": map[string]any{
-						"type": "date",
+					migrationFieldStartTime: map[string]any{
+						elasticsearchMappingType: "date",
 					},
-					"duration": map[string]any{
-						"type": "long",
+					migrationFieldDuration: map[string]any{
+						elasticsearchMappingType: "long",
 					},
 				},
 			},
@@ -91,54 +139,62 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 	return em.migrator.checkAndCreateMigrationTable(c)
 }
 
-// getLastMigration retrieves the latest migration version from Elasticsearch.
-func (em elasticsearchMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
-	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
+// getAppliedMigrations retrieves the applied migration versions from Elasticsearch.
+func (em elasticsearchMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	versions, err := getElasticsearchMigrationVersions(c)
 	if err != nil {
-		return -1, fmt.Errorf("elasticsearch: %w", err)
+		return nil, fmt.Errorf("elasticsearch: %w", err)
 	}
 
-	lastMigration = extractLastMigrationVersion(result)
-	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
+	c.Debugf("Elasticsearch applied migrations fetched: %v", versions)
 
-	lm2, err := em.migrator.getLastMigration(c)
+	applied, err := em.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
 }
 
-// extractLastMigrationVersion extracts the latest migration version from the Elasticsearch search result.
-func extractLastMigrationVersion(result map[string]any) int64 {
+// extractMigrationVersions extracts the migration versions from the Elasticsearch search result,
+// along with how many hits the result held.
+func extractMigrationVersions(result map[string]any) (versions []int64, hitCount int) {
 	hits, ok := result["hits"].(map[string]any)
 	if !ok {
-		return 0
+		return nil, 0
 	}
 
 	hitsList, ok := hits["hits"].([]any)
-	if !ok || len(hitsList) == 0 {
-		return 0
-	}
-
-	firstHit, ok := hitsList[0].(map[string]any)
 	if !ok {
-		return 0
+		return nil, 0
 	}
 
-	source, ok := firstHit["_source"].(map[string]any)
-	if !ok {
-		return 0
+	versions = make([]int64, 0, len(hitsList))
+
+	for _, h := range hitsList {
+		hit, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		source, ok := hit[elasticsearchSourceField].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		version, ok := source[migrationFieldVersion].(float64)
+		if !ok {
+			continue
+		}
+
+		versions = append(versions, int64(version))
 	}
 
-	version, ok := source["version"].(float64)
-	if !ok {
-		return 0
-	}
-
-	return int64(version)
+	return versions, len(hitsList)
 }
 
 // beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).
@@ -147,13 +203,13 @@ func (em elasticsearchMigrator) beginTransaction(c *container.Container) transac
 }
 
 // commitMigration records the migration in the tracking index.
-func (em elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (em elasticsearchMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsElasticsearch] {
 		migrationDoc := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime.Format(time.RFC3339),
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime.Format(time.RFC3339),
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		// Use the migration number as the document ID for idempotency
@@ -171,7 +227,7 @@ func (em elasticsearchMigrator) commitMigration(c *container.Container, data tra
 }
 
 // rollback is a no-op for Elasticsearch migrations.
-func (em elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
+func (em elasticsearchMigrator) rollback(c *container.Container, data *transactionData) {
 	em.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }

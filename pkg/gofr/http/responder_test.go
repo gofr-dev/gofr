@@ -127,6 +127,8 @@ func TestResponder_getStatusCode(t *testing.T) {
 		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
 		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
 			map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+		{"method not allowed error", http.MethodPost, nil, ErrorMethodNotAllowed{}, http.StatusMethodNotAllowed,
+			map[string]any{"message": ErrorMethodNotAllowed{}.Error()}},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
@@ -1439,14 +1441,100 @@ func TestResponder_ContentLengthSet(t *testing.T) {
 	}
 }
 
-// TestResponder_ContentLengthNotOverwritten pins that an existing Content-Length header is preserved.
-func TestResponder_ContentLengthNotOverwritten(t *testing.T) {
-	w := httptest.NewRecorder()
-	w.Header().Set("Content-Length", "999")
+// TestStatusWithoutBody pins which status codes must not carry Content-Length,
+// per RFC 9110 §8.6: all 1xx, 204, and 304.
+func TestStatusWithoutBody(t *testing.T) {
+	cases := map[int]bool{
+		http.StatusContinue:            true,
+		http.StatusNoContent:           true,
+		http.StatusNotModified:         true,
+		http.StatusOK:                  false,
+		http.StatusCreated:             false,
+		http.StatusNotFound:            false,
+		http.StatusInternalServerError: false,
+	}
 
-	NewResponder(w, http.MethodGet).Respond("hello", nil)
+	for status, want := range cases {
+		assert.Equal(t, want, statusWithoutBody(status), "status %d", status)
+	}
+}
 
-	assert.Equal(t, "999", w.Header().Get("Content-Length"))
+// TestResponder_ContentLength_FileAndXML pins that the File and XML paths set a
+// Content-Length equal to the exact body length. A len(v.Content)+1 mutation
+// fails here.
+func TestResponder_ContentLength_FileAndXML(t *testing.T) {
+	content := []byte("<note>hello</note>")
+
+	t.Run("file", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond(resTypes.File{Content: content, ContentType: "text/plain"}, nil)
+
+		assert.Equal(t, strconv.Itoa(len(content)), w.Header().Get("Content-Length"))
+	})
+
+	t.Run("xml", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond(resTypes.XML{Content: content}, nil)
+
+		assert.Equal(t, strconv.Itoa(len(content)), w.Header().Get("Content-Length"))
+	})
+}
+
+// respondHandler is an http.Handler that drives the Responder, for the real-server
+// Content-Length tests below.
+func respondHandler(data any, err error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		NewResponder(w, r.Method).Respond(data, err)
+	}
+}
+
+// TestResponder_NoContentLengthOn204_HTTP2 reproduces the reported bug: a DELETE
+// that returns nil answers 204, and over HTTP/2 the response must not carry a
+// Content-Length (RFC 9110 §8.6). Before the fix a client rejected the response.
+func TestResponder_NoContentLengthOn204_HTTP2(t *testing.T) {
+	srv := httptest.NewUnstartedServer(respondHandler(nil, nil))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+
+	defer srv.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, srv.URL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := srv.Client().Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, "HTTP/2.0", resp.Proto)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Empty(t, resp.Header.Get("Content-Length"), "204 must not carry Content-Length")
+}
+
+// TestResponder_ContentLengthOnLargeBody_RealServer pins that a body over 2 KB
+// gets an explicit Content-Length on a real server, rather than chunked transfer
+// encoding. net/http already sets it for smaller bodies, so this is the case the
+// explicit header actually changes.
+func TestResponder_ContentLengthOnLargeBody_RealServer(t *testing.T) {
+	large := strings.Repeat("x", 4096)
+
+	srv := httptest.NewServer(respondHandler(large, nil))
+	defer srv.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := srv.Client().Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Greater(t, len(body), 2048)
+	assert.Equal(t, strconv.Itoa(len(body)), resp.Header.Get("Content-Length"))
+	assert.NotContains(t, resp.TransferEncoding, "chunked")
 }
 
 // TestResponder_Char_EncodeFailure pins the fallback written when the payload

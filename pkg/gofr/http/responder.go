@@ -45,31 +45,36 @@ var respBufPool = sync.Pool{
 // Canonical keys and shared values for response headers, resolved once so no
 // response pays for canonicalization or a value-slice allocation.
 //
-//nolint:gochecknoglobals // immutable, process-wide header constants and lookup caches.
+//nolint:gochecknoglobals // immutable, process-wide header constants.
 var (
 	canonicalContentType   = textproto.CanonicalMIMEHeaderKey("Content-Type")
 	canonicalContentLength = textproto.CanonicalMIMEHeaderKey("Content-Length")
 	jsonContentType        = []string{contentTypeJSON}
-	smallContentLengths    = buildSmallContentLengthCache()
 )
 
-const maxSmallContentLength = 128
+const (
+	// defaultXMLContentType is the Content-Type of an XML response that does not set its own.
+	defaultXMLContentType = "application/xml"
+	// errorMessageKey is the key under which an error response carries the error's message.
+	errorMessageKey = "message"
+)
 
-func buildSmallContentLengthCache() [maxSmallContentLength][]string {
-	var cache [maxSmallContentLength][]string
-	for i := 0; i < maxSmallContentLength; i++ {
-		cache[i] = []string{strconv.Itoa(i)}
-	}
-
-	return cache
+// statusWithoutBody reports whether an HTTP status code must not carry a response
+// body, so it must not carry Content-Length either. RFC 9110 §8.6 forbids
+// Content-Length on 1xx, 204, and 304. net/http strips it on HTTP/1.1, but the
+// HTTP/2 server does not, so an explicit header has to be skipped here.
+func statusWithoutBody(status int) bool {
+	return status < http.StatusOK || status == http.StatusNoContent || status == http.StatusNotModified
 }
 
-func smallContentLengthSlice(n int) []string {
-	if n >= 0 && n < maxSmallContentLength {
-		return smallContentLengths[n]
+// setContentLength sets the Content-Length header for the File and XML paths,
+// which write through http.Header rather than the JSON path's header map. It is
+// skipped for an empty body, for a status that cannot carry one, and when a
+// handler already set the header itself.
+func setContentLength(w http.ResponseWriter, status, length int) {
+	if length > 0 && !statusWithoutBody(status) && w.Header().Get("Content-Length") == "" {
+		w.Header().Set("Content-Length", strconv.Itoa(length))
 	}
-
-	return []string{strconv.Itoa(n)}
 }
 
 // respEncoder pairs a reusable buffer with the encoder bound to it, plus the
@@ -159,7 +164,7 @@ func (r Responder) Respond(data any, err error) {
 
 		errBody := []byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n")
 		if len(header[canonicalContentLength]) == 0 {
-			header[canonicalContentLength] = smallContentLengthSlice(len(errBody))
+			header[canonicalContentLength] = []string{strconv.Itoa(len(errBody))}
 		}
 
 		r.w.WriteHeader(http.StatusInternalServerError)
@@ -170,8 +175,8 @@ func (r Responder) Respond(data any, err error) {
 	}
 
 	bodyBytes := buf.Bytes()
-	if len(header[canonicalContentLength]) == 0 {
-		header[canonicalContentLength] = smallContentLengthSlice(len(bodyBytes))
+	if !statusWithoutBody(statusCode) && len(header[canonicalContentLength]) == 0 {
+		header[canonicalContentLength] = []string{strconv.Itoa(len(bodyBytes))}
 	}
 
 	r.w.WriteHeader(statusCode)
@@ -234,9 +239,7 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
-		if len(v.Content) > 0 && r.w.Header().Get("Content-Length") == "" {
-			r.w.Header().Set("Content-Length", strconv.Itoa(len(v.Content)))
-		}
+		setContentLength(r.w, statusCode, len(v.Content))
 		r.w.WriteHeader(statusCode)
 		_, _ = r.w.Write(v.Content)
 
@@ -250,47 +253,55 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 		return true
 
 	case resTypes.XML:
-		contentType := v.ContentType
-
-		if contentType == "" {
-			contentType = "application/xml"
-		}
-
-		r.w.Header().Set("Content-Type", contentType)
-		if len(v.Content) > 0 && r.w.Header().Get("Content-Length") == "" {
-			r.w.Header().Set("Content-Length", strconv.Itoa(len(v.Content)))
-		}
-		r.w.WriteHeader(statusCode)
-
-		if len(v.Content) > 0 {
-			_, _ = r.w.Write(v.Content)
-		}
+		r.handleXML(v, statusCode)
 
 		return true
 
 	case resTypes.Redirect:
-		// Redirect status codes are determined by HTTP method, not error state.
-		// QUERY (RFC 10008 §3) gives 303 See Other an explicit meaning: "the original
-		// query can be accomplished via a normal retrieval request on the URI referenced
-		// by the Location response field." That is the one status code the RFC calls
-		// out for QUERY, so QUERY joins the 303 branch. 307 would preserve method+body,
-		// but GoFr's existing coarse redirect handling already drops the body on the
-		// GET (302) path too, so 303 keeps QUERY consistent with the framework rather
-		// than making it a special case — and satisfies the RFC's specific guidance.
-		redirectStatusCode := http.StatusFound
-
-		if r.method == http.MethodPost || r.method == http.MethodPut ||
-			r.method == http.MethodPatch || r.method == MethodQuery {
-			redirectStatusCode = http.StatusSeeOther
-		}
-
-		r.w.Header().Set("Location", v.URL)
-		r.w.WriteHeader(redirectStatusCode)
+		r.handleRedirect(v)
 
 		return true
 	}
 
 	return false
+}
+
+// handleXML writes an XML response, defaulting its Content-Type to application/xml.
+func (r Responder) handleXML(v resTypes.XML, statusCode int) {
+	contentType := v.ContentType
+
+	if contentType == "" {
+		contentType = defaultXMLContentType
+	}
+
+	r.w.Header().Set("Content-Type", contentType)
+	setContentLength(r.w, statusCode, len(v.Content))
+	r.w.WriteHeader(statusCode)
+
+	if len(v.Content) > 0 {
+		_, _ = r.w.Write(v.Content)
+	}
+}
+
+// handleRedirect writes a redirect to v.URL. Its status code is determined by the HTTP method,
+// not by error state.
+func (r Responder) handleRedirect(v resTypes.Redirect) {
+	// QUERY (RFC 10008 §3) gives 303 See Other an explicit meaning: "the original
+	// query can be accomplished via a normal retrieval request on the URI referenced
+	// by the Location response field." That is the one status code the RFC calls
+	// out for QUERY, so QUERY joins the 303 branch. 307 would preserve method+body,
+	// but GoFr's existing coarse redirect handling already drops the body on the
+	// GET (302) path too, so 303 keeps QUERY consistent with the framework rather
+	// than making it a special case — and satisfies the RFC's specific guidance.
+	redirectStatusCode := http.StatusFound
+
+	if r.method == http.MethodPost || r.method == http.MethodPut ||
+		r.method == http.MethodPatch || r.method == MethodQuery {
+		redirectStatusCode = http.StatusSeeOther
+	}
+
+	r.w.Header().Set("Location", v.URL)
+	r.w.WriteHeader(redirectStatusCode)
 }
 
 // getStatusCodeForSpecialResponse returns the appropriate status code for special response types.
@@ -409,11 +420,11 @@ type ResponseMarshaller interface {
 // createErrorResponse returns an error response that always contains a "message" field,
 // and if the error implements ResponseMarshaller, it merges custom fields into the response.
 func createErrorResponse(err error) map[string]any {
-	resp := map[string]any{"message": err.Error()}
+	resp := map[string]any{errorMessageKey: err.Error()}
 
 	if rm, ok := err.(ResponseMarshaller); ok {
 		for k, v := range rm.Response() {
-			if k == "message" {
+			if k == errorMessageKey {
 				continue // Skip to avoid overriding the Error() message
 			}
 

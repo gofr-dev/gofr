@@ -3,6 +3,10 @@ package arangodb
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
@@ -16,6 +20,7 @@ var (
 	errUserNotFound     = errors.New("user not found")
 	errDBNotFound       = errors.New("database not found")
 	errDocumentNotFound = errors.New("document not found")
+	errConnRefused      = errors.New("connection refused")
 )
 
 func setupDB(t *testing.T) (*Client, *MockClient, *MockUser, *MockLogger, *MockMetrics) {
@@ -41,25 +46,6 @@ func setupDB(t *testing.T) (*Client, *MockClient, *MockUser, *MockLogger, *MockM
 	client.client = mockArango
 
 	return client, mockArango, mockUser, mockLogger, mockMetrics
-}
-
-func Test_NewArangoClient_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	metrics := NewMockMetrics(ctrl)
-	logger := NewMockLogger(ctrl)
-
-	logger.EXPECT().Errorf("failed to verify connection: %v", gomock.Any())
-	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
-
-	client := New(Config{Host: "localhost", Port: 8529, Password: "root", User: "admin"})
-
-	client.UseLogger(logger)
-	client.UseMetrics(metrics)
-	client.Connect()
-
-	require.NotNil(t, client)
 }
 
 func TestClient_Query_Success(t *testing.T) {
@@ -190,18 +176,18 @@ func TestClient_HealthCheck_Error(t *testing.T) {
 	test := setupGraphTest(t)
 	defer test.Ctrl.Finish()
 
-	test.MockArango.EXPECT().Version(test.Ctx).Return(arangodb.VersionInfo{}, errStatusDown)
+	test.MockArango.EXPECT().Version(test.Ctx).Return(arangodb.VersionInfo{}, errConnRefused)
 
 	health, err := test.Client.HealthCheck(test.Ctx)
 
-	require.Error(t, err)
-	require.Equal(t, errStatusDown, err)
+	require.ErrorIs(t, err, errStatusDown)
 
 	h, ok := health.(*Health)
 	require.True(t, ok)
 
-	require.Equal(t, "DOWN", h.Status)
+	require.Equal(t, statusDown, h.Status)
 	require.Equal(t, test.Client.endpoint, h.Details["endpoint"])
+	require.Equal(t, errConnRefused.Error(), h.Details["error"])
 }
 
 type MockQueryCursor struct {
@@ -357,4 +343,243 @@ func TestClient_Query_InvalidResultType(t *testing.T) {
 	err := test.Client.Query(test.Ctx, dbName, query, bindVars, &result)
 	require.Error(t, err)
 	require.Equal(t, errInvalidResultType, err)
+}
+
+// errReadCursor is a query cursor whose reads always fail.
+type errReadCursor struct {
+	*MockQueryCursor
+}
+
+func (errReadCursor) ReadDocument(context.Context, any) (arangodb.DocumentMeta, error) {
+	return arangodb.DocumentMeta{}, errDocumentNotFound
+}
+
+func TestClient_Query_Errors(t *testing.T) {
+	const query = "FOR doc IN collection RETURN doc"
+
+	tests := []struct {
+		desc       string
+		options    []map[string]any
+		setupMocks func(m *arangoMocks)
+		expErr     string
+	}{
+		{
+			desc: "database lookup fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(nil, errDBNotFound)
+			},
+			expErr: errDBNotFound.Error(),
+		},
+		{
+			desc:    "options cannot be marshaled",
+			options: []map[string]any{{"batchSize": func() {}}},
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+			},
+			expErr: "unsupported type",
+		},
+		{
+			desc:    "options do not match query options",
+			options: []map[string]any{{"batchSize": "fifty"}},
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+			},
+			expErr: "cannot unmarshal",
+		},
+		{
+			desc: "query fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Query(gomock.Any(), query, gomock.Any()).Return(nil, errStatusDown)
+			},
+			expErr: errStatusDown.Error(),
+		},
+		{
+			desc: "reading a document fails",
+			setupMocks: func(m *arangoMocks) {
+				m.arango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).Return(m.db, nil)
+				m.db.EXPECT().Query(gomock.Any(), query, gomock.Any()).
+					Return(errReadCursor{NewMockQueryCursor(nil, nil)}, nil)
+			},
+			expErr: errDocumentNotFound.Error(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			client, m := newArangoTestClient(t)
+			tc.setupMocks(m)
+
+			var result []map[string]any
+
+			err := client.Query(t.Context(), "testDB", query, nil, &result, tc.options...)
+
+			require.ErrorContains(t, err, tc.expErr)
+			require.Empty(t, result)
+		})
+	}
+}
+
+func TestClient_Connect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"server":"arango","version":"3.11.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	downSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(downSrv.Close)
+
+	host, port := hostPort(t, srv.URL)
+	downHost, downPort := hostPort(t, downSrv.URL)
+
+	tests := []struct {
+		desc         string
+		config       Config
+		setupMocks   func(l *MockLogger, m *MockMetrics)
+		expEndpoint  string
+		expClientSet bool
+	}{
+		{
+			desc:   "invalid config registers metrics and leaves client nil",
+			config: Config{Host: "localhost"},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_arango_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Errorf("config validation error: %v", gomock.Any())
+			},
+		},
+		{
+			desc:   "server unreachable still registers metrics",
+			config: Config{Host: downHost, Port: downPort, User: "root", Password: "root"},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_arango_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Debugf("connecting to ArangoDB at %s", "http://"+downSrv.Listener.Addr().String())
+				l.EXPECT().Errorf("failed to verify connection: %v", gomock.Any())
+			},
+			expEndpoint:  "http://" + downSrv.Listener.Addr().String(),
+			expClientSet: true,
+		},
+		{
+			desc:   "connects and registers metrics",
+			config: Config{Host: host, Port: port, User: "root", Password: "root"},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_arango_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Debugf("connecting to ArangoDB at %s", "http://"+srv.Listener.Addr().String())
+				l.EXPECT().Logf("Connected to ArangoDB successfully at %s", "http://"+srv.Listener.Addr().String())
+			},
+			expEndpoint:  "http://" + srv.Listener.Addr().String(),
+			expClientSet: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			tc.setupMocks(mockLogger, mockMetrics)
+
+			client := New(tc.config)
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+
+			client.Connect()
+
+			require.Equal(t, tc.expEndpoint, client.endpoint)
+			require.Equal(t, tc.expClientSet, client.client != nil)
+		})
+	}
+}
+
+func hostPort(t *testing.T, rawURL string) (host string, port int) {
+	t.Helper()
+
+	u, err := url.Parse(rawURL)
+	require.NoError(t, err)
+
+	port, err = strconv.Atoi(u.Port())
+	require.NoError(t, err)
+
+	return u.Hostname(), port
+}
+
+func TestClient_NotConnected(t *testing.T) {
+	tests := []struct {
+		desc string
+		call func(ctx context.Context, c *Client) error
+	}{
+		{"Query", func(ctx context.Context, c *Client) error {
+			var res []map[string]any
+			return c.Query(ctx, "db", "RETURN 1", nil, &res)
+		}},
+		{"CreateDB", func(ctx context.Context, c *Client) error { return c.CreateDB(ctx, "db") }},
+		{"DropDB", func(ctx context.Context, c *Client) error { return c.DropDB(ctx, "db") }},
+		{"CreateCollection", func(ctx context.Context, c *Client) error { return c.CreateCollection(ctx, "db", "col", false) }},
+		{"DropCollection", func(ctx context.Context, c *Client) error { return c.DropCollection(ctx, "db", "col") }},
+		{"CreateGraph", func(ctx context.Context, c *Client) error { return c.CreateGraph(ctx, "db", "g", &EdgeDefinition{}) }},
+		{"DropGraph", func(ctx context.Context, c *Client) error { return c.DropGraph(ctx, "db", "g") }},
+		{"GetEdges", func(ctx context.Context, c *Client) error {
+			return c.GetEdges(ctx, "db", "g", "edges", "persons/1", &EdgeDetails{})
+		}},
+		{"CreateDocument", func(ctx context.Context, c *Client) error {
+			_, err := c.CreateDocument(ctx, "db", "col", map[string]any{})
+			return err
+		}},
+		{"GetDocument", func(ctx context.Context, c *Client) error {
+			return c.GetDocument(ctx, "db", "col", "id", &map[string]any{})
+		}},
+		{"UpdateDocument", func(ctx context.Context, c *Client) error {
+			return c.UpdateDocument(ctx, "db", "col", "id", map[string]any{})
+		}},
+		{"DeleteDocument", func(ctx context.Context, c *Client) error { return c.DeleteDocument(ctx, "db", "col", "id") }},
+		{"createUser", func(ctx context.Context, c *Client) error { return c.createUser(ctx, "u", UserOptions{}) }},
+		{"dropUser", func(ctx context.Context, c *Client) error { return c.dropUser(ctx, "u") }},
+		{"grantDB", func(ctx context.Context, c *Client) error { return c.grantDB(ctx, "db", "u", "rw") }},
+		{"grantCollection", func(ctx context.Context, c *Client) error {
+			return c.grantCollection(ctx, "db", "col", "u", "rw")
+		}},
+		{"user", func(ctx context.Context, c *Client) error {
+			_, err := c.user(ctx, "u")
+			return err
+		}},
+		{"database", func(ctx context.Context, c *Client) error {
+			_, err := c.database(ctx, "db")
+			return err
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+				gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			client := New(Config{})
+			client.UseLogger(mockLogger)
+			client.UseMetrics(mockMetrics)
+
+			err := tc.call(t.Context(), client)
+
+			require.ErrorIs(t, err, errNotConnected)
+		})
+	}
+}
+
+func TestClient_HealthCheck_NotConnected(t *testing.T) {
+	client := New(Config{})
+
+	health, err := client.HealthCheck(t.Context())
+
+	require.ErrorIs(t, err, errNotConnected)
+	require.Equal(t, &Health{Status: statusDown, Details: map[string]any{
+		"endpoint": "",
+		"error":    errNotConnected.Error(),
+	}}, health)
 }

@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,7 +37,7 @@ func TestRouter(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -67,7 +69,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -115,7 +117,7 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -215,7 +217,7 @@ func TestRouter_PathNormalization(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tc.input, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.input, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -263,7 +265,7 @@ func TestRouter_DoubleSlashPath_POST(t *testing.T) {
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(http.MethodPost, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -562,6 +564,48 @@ func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
 				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
+			}
+		})
+	}
+}
+
+// staticTestEndpoint is the normalized form every endpoint spelling below must converge to.
+// A const (rather than a repeated literal) keeps goconst quiet about the request paths.
+const staticTestEndpoint = "/static"
+
+// Test_StaticFileServing_EndpointForms covers the endpoint forms a direct caller can pass
+// to Router.AddStaticFiles. The route patterns are built from endpoint verbatim while
+// ServeHTTP normalizes incoming paths with path.Clean, so a leading or trailing slash
+// registers a pattern no request can ever match — every request under the endpoint 404s
+// even though registration logs success. (App.AddStaticFiles normalizes as well, so its
+// error logs agree on one form; this is the guarantee at the site where the patterns
+// are built.)
+func Test_StaticFileServing_EndpointForms(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"bare", "static"},
+		{"leading slash", "/static"},
+		{"trailing slash", "static/"},
+		{"leading and trailing slash", "/static/"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, path := range []string{staticTestEndpoint, staticTestEndpoint + "/index.html"} {
+				router := NewRouter()
+				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), tc.endpoint, tempDir)
+
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "endpoint %q: GET %s", tc.endpoint, path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "endpoint %q: GET %s", tc.endpoint, path)
 			}
 		})
 	}
@@ -883,7 +927,7 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 			router := NewRouter()
 			router.AddStaticFiles(logger, tc.staticServerPath, tempDir)
 
-			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
@@ -967,5 +1011,97 @@ func BenchmarkRouter_Get_PathParam(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		r.ServeHTTP(w, req)
+	}
+}
+
+func Test_Router_AllowedMethods(t *testing.T) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users", noopHandler())
+	r.Add(http.MethodPost, "/users", noopHandler())
+	r.Add(http.MethodPut, "/users/{id}", noopHandler())
+	r.Add(http.MethodDelete, "/users/{id}", noopHandler())
+	r.Add(http.MethodGet, "/orders/{id:[0-9]+}", noopHandler())
+	// Registered after the /orders route, so a mismatch it records must not leak into the next one.
+	r.Add(http.MethodPost, "/orders/new", noopHandler())
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		expected []string
+	}{
+		{"exact match with GET and POST", http.MethodPatch, "/users", []string{"GET", "POST"}},
+		{"path param match with PUT and DELETE", http.MethodPatch, "/users/123", []string{"DELETE", "PUT"}},
+		{"unregistered path", http.MethodPatch, "/unknown", nil},
+		{"regexp parameter that does not match is not the route", http.MethodPatch, "/orders/abc", nil},
+		{"regexp parameter that matches", http.MethodPatch, "/orders/42", []string{"GET"}},
+		{"only the route whose path matches is listed", http.MethodGet, "/orders/new", []string{"POST"}},
+		{"the request's own method is listed when registered", http.MethodGet, "/users", []string{"GET", "POST"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+			assert.Equal(t, tc.expected, r.AllowedMethods(req))
+		})
+	}
+}
+
+// countedRoutes registers n GET routes directly on mux, each counting how often it is asked to
+// match. The counter is the route's first matcher, so it sees every Match call on that route.
+func countedRoutes(r *Router, n int) *atomic.Int64 {
+	var calls atomic.Int64
+
+	for i := range n {
+		r.Router.NewRoute().MatcherFunc(func(*http.Request, *mux.RouteMatch) bool {
+			calls.Add(1)
+
+			return true
+		}).Methods(http.MethodGet).Path(fmt.Sprintf("/route-%d", i)).Handler(noopHandler())
+	}
+
+	return &calls
+}
+
+// Test_Router_AllowedMethods_DoesNotScanEveryRoute pins what keeps a 404 from costing two full
+// scans: mux has already walked every route to reject the request, and AllowedMethods must not
+// walk them again. It may only match the routes registered under the request's path.
+func Test_Router_AllowedMethods_DoesNotScanEveryRoute(t *testing.T) {
+	const routes = 500
+
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(RouterEnvVar, matcher)
+
+			r := NewRouter()
+			calls := countedRoutes(r, routes)
+
+			unknown := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nope", http.NoBody)
+			assert.Nil(t, r.AllowedMethods(unknown))
+			assert.Zero(t, calls.Load(), "an unregistered path must not match any route")
+
+			wrongMethod := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/route-7", http.NoBody)
+			assert.Equal(t, []string{http.MethodGet}, r.AllowedMethods(wrongMethod))
+			assert.EqualValues(t, 1, calls.Load(), "only the route registered at the path is matched")
+		})
+	}
+}
+
+// Benchmark_Router_AllowedMethods_Miss measures the lookup an unregistered path pays on top of
+// mux's own scan, at a route count where a second scan would show.
+func Benchmark_Router_AllowedMethods_Miss(b *testing.B) {
+	r := NewRouter()
+
+	for i := range 1000 {
+		r.Add(http.MethodGet, fmt.Sprintf("/route-%d/{id}", i), noopHandler())
+	}
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/nope", http.NoBody)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = r.AllowedMethods(req)
 	}
 }

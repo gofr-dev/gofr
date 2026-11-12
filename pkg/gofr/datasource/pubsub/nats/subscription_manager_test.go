@@ -15,6 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewSubscriptionManager(t *testing.T) {
@@ -247,4 +248,220 @@ func TestSubscriptionManager_Close(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Fatal("Context was not canceled")
 	}
+}
+
+func TestSubscriptionManager_Subscribe_EarlyReturns(t *testing.T) {
+	topic := "test.topic"
+	cfg := &Config{Consumer: "test-consumer", Stream: StreamConfig{Stream: "test-stream"}, MaxWait: time.Second}
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tests := []struct {
+		name       string
+		ctx        context.Context
+		jetStream  func(js *MockJetStream) jetstream.JetStream
+		setupMocks func(js *MockJetStream, cons *MockConsumer)
+		expErr     error
+	}{
+		{
+			name:       "jetstream missing",
+			ctx:        t.Context(),
+			jetStream:  func(*MockJetStream) jetstream.JetStream { return nil },
+			setupMocks: func(*MockJetStream, *MockConsumer) {},
+			expErr:     errJetStreamNotConfigured,
+		},
+		{
+			name:      "context canceled before a message arrives",
+			ctx:       canceled,
+			jetStream: func(js *MockJetStream) jetstream.JetStream { return js },
+			setupMocks: func(js *MockJetStream, cons *MockConsumer) {
+				js.EXPECT().CreateOrUpdateConsumer(gomock.Any(), "test-stream", gomock.Any()).Return(cons, nil)
+				cons.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(nil, context.Canceled).AnyTimes()
+			},
+			expErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			js := NewMockJetStream(ctrl)
+			cons := NewMockConsumer(ctrl)
+			metrics := NewMockMetrics(ctrl)
+
+			tt.setupMocks(js, cons)
+			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", topic)
+
+			sm := newSubscriptionManager(1)
+			defer sm.Close()
+
+			msg, err := sm.Subscribe(tt.ctx, topic, tt.jetStream(js), cfg, logging.NewMockLogger(logging.DEBUG), metrics)
+
+			assert.Nil(t, msg)
+			require.ErrorIs(t, err, tt.expErr)
+		})
+	}
+}
+
+func TestSubscriptionManager_handleFetchError(t *testing.T) {
+	topic := "test.topic"
+
+	tests := []struct {
+		name      string
+		err       error
+		expStderr string
+	}{
+		{
+			name:      "deadline exceeded is expected and not logged",
+			err:       context.DeadlineExceeded,
+			expStderr: "",
+		},
+		{
+			name:      "other errors are logged",
+			err:       errSubscriptionError,
+			expStderr: "Error fetching messages for topic test.topic: " + errSubscriptionError.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := newSubscriptionManager(1)
+
+			var err error
+
+			stderr := testutil.StderrOutputForFunc(func() {
+				err = sm.handleFetchError(tt.err, topic, logging.NewMockLogger(logging.DEBUG))
+			})
+
+			require.NoError(t, err, "fetch errors are swallowed so the consume loop keeps running")
+			assert.Contains(t, stderr, tt.expStderr)
+			assert.Equal(t, tt.expStderr == "", stderr == "")
+		})
+	}
+}
+
+func TestSubscriptionManager_processFetchedMessages(t *testing.T) {
+	topic := "test.topic"
+
+	tests := []struct {
+		name       string
+		bufferSize int
+		batchErr   error
+		expErr     error
+		expStdout  string
+		expStderr  string
+		expQueued  int
+	}{
+		{
+			name:       "message queued",
+			bufferSize: 1,
+			expErr:     nil,
+			expQueued:  1,
+		},
+		{
+			name:       "full buffer drops the message",
+			bufferSize: 0,
+			expErr:     nil,
+			expStdout:  "Message buffer is full for topic test.topic",
+			expQueued:  0,
+		},
+		{
+			name:       "batch error is returned",
+			bufferSize: 1,
+			batchErr:   errSubscriptionError,
+			expErr:     errSubscriptionError,
+			expStderr:  "Error in message batch for topic test.topic",
+			expQueued:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			msg := NewMockMsg(ctrl)
+			msg.EXPECT().Data().Return([]byte("payload")).AnyTimes()
+			msg.EXPECT().Headers().Return(nil).AnyTimes()
+
+			msgChan := make(chan jetstream.Msg, 1)
+			msgChan <- msg
+
+			close(msgChan)
+
+			batch := NewMockMessageBatch(ctrl)
+			batch.EXPECT().Messages().Return(msgChan)
+			batch.EXPECT().Error().Return(tt.batchErr)
+
+			sm := newSubscriptionManager(tt.bufferSize)
+			buffer := make(chan *pubsub.Message, tt.bufferSize)
+
+			var err error
+
+			var stdout string
+
+			stderr := testutil.StderrOutputForFunc(func() {
+				stdout = testutil.StdoutOutputForFunc(func() {
+					err = sm.processFetchedMessages(t.Context(), batch, topic, buffer, logging.NewMockLogger(logging.DEBUG))
+				})
+			})
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Contains(t, stdout, tt.expStdout)
+			assert.Contains(t, stderr, tt.expStderr)
+			assert.Len(t, buffer, tt.expQueued)
+		})
+	}
+}
+
+// TestSubscriptionManager_consumeMessages_LogsBatchError runs the loop synchronously: the fetch
+// cancels the context, so the loop logs the batch error once and then exits on its own.
+func TestSubscriptionManager_consumeMessages_LogsBatchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	batch := NewMockMessageBatch(ctrl)
+	batch.EXPECT().Messages().Return(closedMsgChan())
+	batch.EXPECT().Error().Return(errSubscriptionError)
+
+	cons := NewMockConsumer(ctrl)
+	cons.EXPECT().Fetch(1, gomock.Any()).DoAndReturn(func(int, ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
+		cancel()
+
+		return batch, nil
+	})
+
+	sm := newSubscriptionManager(1)
+
+	stderr := testutil.StderrOutputForFunc(func() {
+		sm.consumeMessages(ctx, cons, "test.topic", make(chan *pubsub.Message, 1), &Config{}, logging.NewMockLogger(logging.DEBUG))
+	})
+
+	assert.Contains(t, stderr, "Error fetching messages for topic test.topic: "+errSubscriptionError.Error())
+}
+
+// TestSubscriptionManager_fetchAndProcessMessages_FetchError pins that a failed fetch is absorbed
+// rather than surfaced, so the consume loop keeps polling.
+func TestSubscriptionManager_fetchAndProcessMessages_FetchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	cons := NewMockConsumer(ctrl)
+	cons.EXPECT().Fetch(1, gomock.Any()).Return(nil, context.DeadlineExceeded)
+
+	sm := newSubscriptionManager(1)
+
+	err := sm.fetchAndProcessMessages(t.Context(), cons, "test.topic", make(chan *pubsub.Message, 1),
+		&Config{MaxWait: time.Millisecond}, logging.NewMockLogger(logging.DEBUG))
+
+	require.NoError(t, err)
+}
+
+func closedMsgChan() chan jetstream.Msg {
+	ch := make(chan jetstream.Msg)
+	close(ch)
+
+	return ch
 }

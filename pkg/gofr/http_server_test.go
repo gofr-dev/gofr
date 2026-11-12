@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,17 +11,20 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/websocket"
@@ -548,6 +552,162 @@ func TestRouter_Matcher(t *testing.T) {
 		t.Run("GOFR_ROUTER="+env, func(t *testing.T) {
 			t.Setenv(gofrHTTP.RouterEnvVar, env)
 			assert.Equal(t, want, gofrHTTP.NewRouter().Matcher())
+		})
+	}
+}
+
+func TestHTTPServer_run_DoesNotServe(t *testing.T) {
+	tests := []struct {
+		desc       string
+		setup      func(t *testing.T) *httpServer
+		setupMocks func(l *container.MockLogger, port int)
+	}{
+		{
+			desc: "shut down before it started",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t), stopped: true}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Server was shut down before it started on port: %d", port)
+			},
+		},
+		{
+			desc: "certificate files missing",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: "missing-cert.pem", keyFile: "missing-key.pem"}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Error(fmt.Errorf("%w : %v", errInvalidCertificateFile, "missing-cert.pem"))
+			},
+		},
+		{
+			desc: "certificate files unparsable",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: testutil.GetFreePort(t),
+					certFile: createTempCertFile(t), keyFile: createTempKeyFile(t)}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to https server, err: %v", gomock.Any())
+			},
+		},
+		{
+			desc: "port already in use",
+			setup: func(t *testing.T) *httpServer {
+				t.Helper()
+
+				listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", ":0")
+				require.NoError(t, err)
+
+				t.Cleanup(func() { listener.Close() })
+
+				return &httpServer{router: gofrHTTP.NewRouter(), port: listener.Addr().(*net.TCPAddr).Port}
+			},
+			setupMocks: func(l *container.MockLogger, port int) {
+				l.EXPECT().Logf("Starting server on port: %d", port)
+				l.EXPECT().Errorf("error while listening to http server, err: %v", gomock.Any())
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := tc.setup(t)
+			s.ws = websocket.New()
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger, s.port)
+
+			// run returns on its own in every case: nothing is left listening.
+			s.run(&container.Container{Logger: logger})
+
+			require.NoError(t, s.Shutdown(t.Context()))
+		})
+	}
+}
+
+// TestNewHTTPServer_MetricsUnmatchedLimit builds the server the way Run does and reads the
+// recorded app_http_response paths back from the Prometheus registry, so it fails if the
+// METRICS_UNMATCHED_LIMIT wiring in newHTTPServer is removed.
+func TestNewHTTPServer_MetricsUnmatchedLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		configs  func() middleware.Config
+		target   string
+		expected string
+	}{
+		{
+			name: "METRICS_UNMATCHED_LIMIT=0 collapses a scanner path",
+			configs: func() middleware.Config {
+				return middleware.GetConfigs(config.NewMockConfig(map[string]string{"METRICS_UNMATCHED_LIMIT": "0"}))
+			},
+			target:   "/scanner-limit-zero/.env",
+			expected: "__unmatched__",
+		},
+		{
+			name:     "unset keeps the default budget and records the path",
+			configs:  func() middleware.Config { return middleware.GetConfigs(config.NewMockConfig(nil)) },
+			target:   "/scanner-limit-unset/.env",
+			expected: "/scanner-limit-unset/.env",
+		},
+		{
+			name:     "a zero-value Config keeps the default budget",
+			configs:  func() middleware.Config { return middleware.Config{} },
+			target:   "/scanner-zero-config/.env",
+			expected: "/scanner-zero-config/.env",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The Prometheus reader registers on the default registerer, which only the first
+			// container in the process can claim; give this one a registry of its own.
+			reg := prometheus.NewRegistry()
+			oldRegisterer, oldGatherer := prometheus.DefaultRegisterer, prometheus.DefaultGatherer
+			prometheus.DefaultRegisterer, prometheus.DefaultGatherer = reg, reg
+
+			t.Cleanup(func() { prometheus.DefaultRegisterer, prometheus.DefaultGatherer = oldRegisterer, oldGatherer })
+
+			c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+			s := newHTTPServer(c, 0, tt.configs())
+
+			// App.Run registers this catch-all, and it is what lets an unmatched request reach the middleware.
+			routemark.MarkCatchAll(s.router.PathPrefix("/")).Handler(http.NotFoundHandler())
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tt.target, http.NoBody)
+			req.RemoteAddr = "1.2.3.4:5678"
+			req.RequestURI = tt.target
+
+			s.router.ServeHTTP(httptest.NewRecorder(), req)
+
+			families, err := reg.Gather()
+			require.NoError(t, err)
+
+			var paths []string
+
+			for _, f := range families {
+				if f.GetName() != "app_http_response" {
+					continue
+				}
+
+				for _, m := range f.GetMetric() {
+					for _, l := range m.GetLabel() {
+						if l.GetName() == "path" {
+							paths = append(paths, l.GetValue())
+						}
+					}
+				}
+			}
+
+			assert.Equal(t, []string{tt.expected}, paths)
 		})
 	}
 }

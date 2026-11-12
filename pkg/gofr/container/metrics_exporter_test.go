@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
@@ -120,6 +122,27 @@ func Test_metricsCardinalityLimit(t *testing.T) {
 	}
 }
 
+func TestMetricsCardinalityLimit_OTelFallback(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want int
+	}{
+		{"unset uses SDK default", map[string]string{}, defaultMetricsCardinalityLimit},
+		{"gofr limit wins", map[string]string{"METRICS_CARDINALITY_LIMIT": "500", "OTEL_GO_X_CARDINALITY_LIMIT": "700"}, 500},
+		{"otel limit used when gofr limit unset", map[string]string{"OTEL_GO_X_CARDINALITY_LIMIT": " 700 "}, 700},
+		{"invalid gofr limit falls back to otel limit", map[string]string{
+			"METRICS_CARDINALITY_LIMIT": "abc", "OTEL_GO_X_CARDINALITY_LIMIT": "700"}, 700},
+		{"invalid otel limit uses SDK default", map[string]string{"OTEL_GO_X_CARDINALITY_LIMIT": "abc"}, defaultMetricsCardinalityLimit},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, MetricsCardinalityLimit(config.NewMockConfig(tc.env)))
+		})
+	}
+}
+
 // Test_metricsCardinalityLimit_invalidDoesNotLogValue ensures an invalid value is
 // not echoed into logs (CodeQL: clear-text logging of externally controlled input).
 func Test_metricsCardinalityLimit_invalidDoesNotLogValue(t *testing.T) {
@@ -167,6 +190,14 @@ func Test_metricsExporterConfig_otelFallback(t *testing.T) {
 			want: exporters.Config{
 				AppName: "app", AppVersion: "v1",
 				Protocol: "grpc", Interval: 5 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			name: "invalid OTEL interval falls back to default",
+			env:  map[string]string{"OTEL_METRIC_EXPORT_INTERVAL": "not-a-number"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
 			},
 		},
 		{

@@ -41,7 +41,7 @@ func TestWSConnectionCreate_Error(t *testing.T) {
 	}))
 
 	// Create a test request with incomplete upgrade header
-	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ws", http.NoBody)
 	req.Header.Set("Connection", "upgrade")
 	req.Header.Set("Upgrade", "websocket")
 
@@ -71,7 +71,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ws", http.NoBody)
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 

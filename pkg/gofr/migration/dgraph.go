@@ -1,3 +1,5 @@
+//go:build !gofr_nodgraph
+
 package migration
 
 import (
@@ -13,9 +15,6 @@ import (
 )
 
 var errInvalidDgraphTxn = errors.New("invalid Dgraph transaction")
-
-// migrationMethodUP is the method recorded for an applied (UP) migration.
-const migrationMethodUP = "UP"
 
 // dgraphTxn is the subset of the Dgraph transaction used to record migrations.
 // The value returned by Dgraph.NewTxn satisfies it at runtime.
@@ -51,12 +50,12 @@ const (
 		}
 	`
 
-	// getLastMigrationQuery fetches the most recent migration version.
+	// getMigrationVersionsQuery fetches the version of every applied migration.
 	// The version predicate is aliased to "version" so it decodes into the
 	// response struct below.
-	getLastMigrationQuery = `
+	getMigrationVersionsQuery = `
 		{
-			migrations(func: type(Migration), orderdesc: migrations.version, first: 1) {
+			migrations(func: type(Migration)) {
 				version: migrations.version
 			}
 		}
@@ -109,37 +108,36 @@ func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return dm.migrator.checkAndCreateMigrationTable(c)
 }
 
-// getLastMigration retrieves the last applied migration version.
-func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error) {
+// getAppliedMigrations retrieves the versions of every applied migration.
+func (dm dgraphMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	var response struct {
 		Migrations []struct {
 			Version int64 `json:"version"`
 		} `json:"migrations"`
 	}
 
-	resp, err := c.DGraph.Query(context.Background(), getLastMigrationQuery)
+	resp, err := c.DGraph.Query(context.Background(), getMigrationVersionsQuery)
 	if err != nil {
-		return -1, fmt.Errorf("dgraph: %w", err)
+		return nil, fmt.Errorf("dgraph: %w", err)
 	}
 
 	// Query returns an *api.Response whose Json field holds the actual result.
 	if r, ok := resp.(*api.Response); ok && len(r.Json) > 0 {
 		if err = json.Unmarshal(r.Json, &response); err != nil {
-			return 0, fmt.Errorf("dgraph: %w", err)
+			return nil, fmt.Errorf("dgraph: %w", err)
 		}
 	}
 
-	var lastMigration int64
-	if len(response.Migrations) > 0 {
-		lastMigration = response.Migrations[0].Version
-	}
-
-	lm2, err := dm.migrator.getLastMigration(c)
+	applied, err := dm.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, m := range response.Migrations {
+		applied[m.Version] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 // beginTransaction starts a new migration transaction.
@@ -153,7 +151,7 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 
 // commitMigration records the migration metadata in a Dgraph transaction so the
 // version record is committed atomically, then chains to the next migrator.
-func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (dm dgraphMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if !data.UsedDatasources[dsDGraph] {
 		return dm.migrator.commitMigration(c, data)
 	}
@@ -161,7 +159,7 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 	payload := map[string]any{
 		"migrations": []map[string]any{
 			{
-				// dgraph.type must match the schema type so getLastMigration
+				// dgraph.type must match the schema type so getAppliedMigrations
 				// (func: type(Migration)) can find this record on later runs.
 				"dgraph.type":           "Migration",
 				"migrations.version":    data.MigrationNumber,
@@ -212,7 +210,7 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 }
 
 // rollback handles migration failure and rollback.
-func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) {
+func (dm dgraphMigrator) rollback(c *container.Container, data *transactionData) {
 	dm.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)

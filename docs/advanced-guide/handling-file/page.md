@@ -48,6 +48,12 @@ func main() {
 }
 ```
 
+> FTP reads use their own connections, next to the one connection GoFr keeps for listing, stat, delete and writes:
+> - each file opened for reading holds one connection until it is closed;
+> - each `ReadAt` call opens one more connection while it runs, even though the file is already open (`Seek` replaces the file's connection, so it doesn't add one).
+>
+> So the FTP account needs to allow 1 session, plus one per open file, plus one per `ReadAt` running at the same time; an open file that is read with `ReadAt` needs 3. On a server that limits a user (or an IP address) to fewer sessions, the read that goes over the limit fails with a connection or login error, for example vsftpd's `421 There are too many connections from your internet address`. Raise the limit (`max_per_ip` / `max_clients` in vsftpd) or use an account without one.
+
 ### SFTP file-store
 
 ```go

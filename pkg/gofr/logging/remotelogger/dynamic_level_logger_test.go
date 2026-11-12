@@ -338,25 +338,34 @@ func TestLogLevelChangeToFatal_NoExit(t *testing.T) {
 	}))
 	t.Cleanup(mockServer.Close)
 
-	// This test succeeds if it completes without the process exiting
-	log := testutil.StdoutOutputForFunc(func() {
-		rl := New(logging.INFO, mockServer.URL, 10*time.Millisecond)
+	// This test succeeds if it completes without the process exiting. A change
+	// into FATAL is announced at ERROR (via Errorf) — the most severe level
+	// still guaranteed to be visible — so the announcement goes to stderr.
+	var stdout string
 
-		time.Sleep(20 * time.Millisecond)
+	stderr := testutil.StderrOutputForFunc(func() {
+		stdout = testutil.StdoutOutputForFunc(func() {
+			rl := New(logging.INFO, mockServer.URL, 10*time.Millisecond)
 
-		// If we reach this point, the application didn't exit
-		// Now check that the logger did change to FATAL level
-		if remoteLogger, ok := rl.(*remoteLogger); ok {
-			remoteLogger.mu.RLock()
+			time.Sleep(20 * time.Millisecond)
 
-			assert.Equal(t, logging.FATAL, remoteLogger.currentLevel, "Log level should be updated to FATAL")
+			// If we reach this point, the application didn't exit
+			// Now check that the logger did change to FATAL level
+			if remoteLogger, ok := rl.(*remoteLogger); ok {
+				remoteLogger.mu.RLock()
 
-			remoteLogger.mu.RUnlock()
-		}
+				assert.Equal(t, logging.FATAL, remoteLogger.currentLevel, "Log level should be updated to FATAL")
+
+				remoteLogger.mu.RUnlock()
+			}
+		})
 	})
 
-	// Verify the log contains a warning about the level change
-	assert.Contains(t, log, "LOG_LEVEL updated from INFO to FATAL")
+	// Verify the announcement about the level change is visible.
+	want := "LOG_LEVEL updated from INFO to FATAL"
+
+	assert.Truef(t, strings.Contains(stdout, want) || strings.Contains(stderr, want),
+		"level change into FATAL must be announced")
 }
 
 func TestHTTPDebugMsg_PrettyPrint(t *testing.T) {
@@ -500,4 +509,191 @@ func TestRemoteLoggerLogEnabledAgreesWithLog(t *testing.T) {
 				"LogEnabled must predict whether Log emits")
 		})
 	}
+}
+
+// TestRemoteLogger_AllLevelTransitionsAnnounced covers issue #4101: a remote
+// level change must always be announced, whichever direction it goes. The
+// announcement previously used a fixed level and ran before ChangeLevel, so
+// several of the 30 transitions (those into or out of FATAL) were emitted at a
+// level the active gate discarded and vanished.
+//
+// This drives the real production path: a stub config service returns the new
+// level, New starts the polling goroutine, and UpdateLogLevel performs one
+// immediate check before ticking — so the assertion observes the actual
+// captured output of the shipped code, not a reimplementation of it. Removing
+// the fix makes these assertions fail.
+func TestRemoteLogger_AllLevelTransitionsAnnounced(t *testing.T) {
+	levels := []logging.Level{
+		logging.DEBUG, logging.INFO, logging.NOTICE,
+		logging.WARN, logging.ERROR, logging.FATAL,
+	}
+
+	for _, oldLevel := range levels {
+		for _, newLevel := range levels {
+			if oldLevel == newLevel {
+				continue
+			}
+
+			old, nw := oldLevel, newLevel
+			t.Run(fmt.Sprintf("%v_to_%v", old, nw), func(t *testing.T) {
+				// The stub config service signals when it has been polled, so
+				// the test can wait on the actual fetch instead of sleeping a
+				// fixed amount (which is both slow and flaky under load).
+				hit := make(chan struct{}, 1)
+				server := httptest.NewServer(http.HandlerFunc(
+					func(w http.ResponseWriter, _ *http.Request) {
+						w.Header().Set("Content-Type", "application/json")
+						fmt.Fprintf(w, `{"data":{"serviceName":"test-service","logLevel":"%v"}}`, nw)
+
+						select {
+						case hit <- struct{}{}:
+						default:
+						}
+					}))
+				t.Cleanup(server.Close)
+
+				// Announcements at INFO/NOTICE/WARN go to stdout; ERROR goes to
+				// stderr. Capture both so the assertion does not depend on which
+				// stream a given level uses. A long fetch interval means only
+				// the immediate initial check runs, keeping the test
+				// deterministic.
+				var (
+					out string
+					rl  logging.Logger
+				)
+
+				stderr := testutil.StderrOutputForFunc(func() {
+					out = testutil.StdoutOutputForFunc(func() {
+						rl = New(old, server.URL, time.Hour)
+
+						select {
+						case <-hit:
+							// Give UpdateLogLevel a moment to apply the level and
+							// write the announcement after the fetch returns.
+							time.Sleep(50 * time.Millisecond)
+						case <-time.After(2 * time.Second):
+							t.Error("config service was never polled")
+						}
+					})
+				})
+
+				want := fmt.Sprintf("LOG_LEVEL updated from %v to %v", old, nw)
+
+				assert.Truef(t, strings.Contains(out, want) || strings.Contains(stderr, want),
+					"transition %v -> %v was silently dropped", old, nw)
+
+				// The announcement must reflect a level that was actually
+				// applied, not just logged.
+				if r, ok := rl.(*remoteLogger); ok {
+					r.mu.RLock()
+					assert.Equal(t, nw, r.currentLevel)
+					r.mu.RUnlock()
+				}
+			})
+		}
+	}
+}
+
+// noEntryLogger is a logging.Logger that cannot answer LogEntry/ErrorEntry.
+// Embedding the INTERFACE hides them for the same reason noGateLogger hides
+// LogEnabled, and it counts the fallback so a silent no-op cannot pass.
+type noEntryLogger struct {
+	logging.Logger
+	logCalls, errCalls int
+}
+
+func (n *noEntryLogger) Log(...any)   { n.logCalls++ }
+func (n *noEntryLogger) Error(...any) { n.errCalls++ }
+
+// TestRemoteLoggerResolvesEntryFastPath pins the production wiring: container.go
+// always builds the request logger through New, so if this assertion stops
+// holding the middleware's own entryLogger assertion stops matching too and the
+// allocation the fast path saves comes back -- with no test failing, because the
+// bytes logged are identical either way.
+func TestRemoteLoggerResolvesEntryFastPath(t *testing.T) {
+	r, ok := New(logging.INFO, "", time.Second).(*remoteLogger)
+	require.True(t, ok)
+
+	assert.NotNil(t, r.entries, "New must resolve the embedded logger's entry fast path once")
+}
+
+// TestRemoteLoggerLogEntryMatchesLog is the parity guarantee for the forwarder:
+// routing an entry through the fast path must not change a single byte of what
+// a service's log pipeline receives.
+func TestRemoteLoggerLogEntryMatchesLog(t *testing.T) {
+	viaLog := testutil.StdoutOutputForFunc(func() {
+		l, _ := New(logging.INFO, "", time.Second).(*remoteLogger)
+		l.Log(map[string]any{"uri": "/x", "response": 200})
+	})
+
+	viaEntry := testutil.StdoutOutputForFunc(func() {
+		l, _ := New(logging.INFO, "", time.Second).(*remoteLogger)
+		l.LogEntry(map[string]any{"uri": "/x", "response": 200})
+	})
+
+	require.NotEmpty(t, viaEntry, "LogEntry must actually emit")
+	assert.Equal(t, stripJSONTime(viaLog), stripJSONTime(viaEntry),
+		"LogEntry must produce byte-identical output to Log")
+}
+
+// TestRemoteLoggerErrorEntryMatchesError is the same parity on the path a 5xx
+// takes, which reaches a different writer and could regress on its own.
+func TestRemoteLoggerErrorEntryMatchesError(t *testing.T) {
+	viaError := testutil.StderrOutputForFunc(func() {
+		l, _ := New(logging.INFO, "", time.Second).(*remoteLogger)
+		l.Error(map[string]any{"uri": "/x", "response": 500})
+	})
+
+	viaEntry := testutil.StderrOutputForFunc(func() {
+		l, _ := New(logging.INFO, "", time.Second).(*remoteLogger)
+		l.ErrorEntry(map[string]any{"uri": "/x", "response": 500})
+	})
+
+	require.NotEmpty(t, viaEntry, "ErrorEntry must actually emit")
+	assert.Equal(t, stripJSONTime(viaError), stripJSONTime(viaEntry),
+		"ErrorEntry must produce byte-identical output to Error")
+}
+
+// TestRemoteLoggerEntryFallsBackWithoutFastPath is the compatibility half: an
+// embedded logger that never heard of LogEntry must still be logged through,
+// not silently dropped.
+func TestRemoteLoggerEntryFallsBackWithoutFastPath(t *testing.T) {
+	base := &noEntryLogger{Logger: logging.NewLogger(logging.INFO)}
+	r := &remoteLogger{Logger: base}
+
+	r.LogEntry("x")
+	r.ErrorEntry("y")
+
+	assert.Equal(t, 1, base.logCalls, "LogEntry must fall back to the embedded Log")
+	assert.Equal(t, 1, base.errCalls, "ErrorEntry must fall back to the embedded Error")
+}
+
+// TestRemoteLoggerLogEntryFollowsChangeLevel pins the one thing forwarding could
+// break: the remote logger does not gate LogEntry itself, it pushes the level
+// down with ChangeLevel and trusts the embedded logger to apply it. If that
+// stopped being true, a remote level raise would stop suppressing request logs.
+func TestRemoteLoggerLogEntryFollowsChangeLevel(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		l, _ := New(logging.INFO, "", time.Second).(*remoteLogger)
+		l.ChangeLevel(logging.FATAL)
+		l.LogEntry("must not survive a raise to FATAL")
+	})
+
+	assert.Empty(t, out, "a level raised through ChangeLevel must suppress the fast path too")
+}
+
+// stripJSONTime removes the timestamp field, which necessarily differs between
+// two calls and is not what the parity tests compare.
+func stripJSONTime(s string) string {
+	i := strings.Index(s, `"time":`)
+	if i < 0 {
+		return s
+	}
+
+	j := strings.Index(s[i:], `,`)
+	if j < 0 {
+		return s
+	}
+
+	return s[:i] + s[i+j+1:]
 }

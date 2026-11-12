@@ -11,6 +11,11 @@
 // receiving the data, plus roles/serviceusage.serviceUsageConsumer on the quota
 // project. roles/monitoring.metricWriter is not sufficient: it authorizes
 // monitoring.googleapis.com, which this exporter never calls.
+//
+// Each collection is sent as requests of at most 200 points, the per-request
+// ceiling the Telemetry API enforces by rejecting the whole request, and no more
+// often than every 5 seconds, the closest Google lets two points of one time
+// series be.
 package gcp
 
 import (
@@ -20,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	gcpdetect "go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -141,6 +147,8 @@ func buildReader(ctx context.Context, cfg *exporters.Config, logger exporters.Lo
 	// told before the data silently goes missing.
 	warnUnresolved(cfg, logger)
 
+	interval := exportInterval(cfg.Interval, logger)
+
 	creds, err := google.FindDefaultCredentials(ctx, cloudPlatformScope)
 	if err != nil {
 		return nil, fmt.Errorf("gcp metrics: resolving application default credentials: %w", err)
@@ -179,9 +187,33 @@ func buildReader(ctx context.Context, cfg *exporters.Config, logger exporters.Lo
 		return nil, fmt.Errorf("gcp metrics: creating OTLP exporter: %w", err)
 	}
 
-	logger.Infof("exporting metrics to Google Cloud at %s every %s via keyless ADC", endpoint, cfg.Interval)
+	logger.Infof("exporting metrics to Google Cloud at %s every %s via keyless ADC", endpoint, interval)
 
-	return metricSdk.NewPeriodicReader(exporter, metricSdk.WithInterval(cfg.Interval)), nil
+	return newReader(exporter, interval), nil
+}
+
+// minExportInterval is the closest Cloud Monitoring lets two points of one time
+// series be, a limit Google applies to Telemetry API ingestion too:
+//
+//	The Cloud Monitoring API requires that the end times of points written to a
+//	time series be at least 5 seconds apart.
+//
+// Every collection re-sends every series, so the push interval is that spacing.
+const minExportInterval = 5 * time.Second
+
+// exportInterval returns d, raised to minExportInterval if it is shorter, since
+// Google would reject the points of every collection pushed sooner. Zero is
+// returned as is: it asks for the SDK's default, not for a short interval.
+func exportInterval(d time.Duration, logger exporters.Logger) time.Duration {
+	if d <= 0 || d >= minExportInterval {
+		return d
+	}
+
+	logger.Warnf("gcp metrics: export interval %s is shorter than the %s Google requires between points "+
+		"of one time series; using %s. Set METRICS_EXPORT_INTERVAL (seconds) or "+
+		"OTEL_METRIC_EXPORT_INTERVAL (milliseconds) to at least that", d, minExportInterval, minExportInterval)
+
+	return minExportInterval
 }
 
 // warnUnresolved reports any required prometheus_target label the resource

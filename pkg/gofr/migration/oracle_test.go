@@ -65,29 +65,58 @@ func Test_OracleCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_OracleGetLastMigration(t *testing.T) {
-	mg, mockOracle, mockContainer := oracleSetup(t)
-
+func Test_Oracle_getAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc string
-		err  error
-		resp int64
+		desc         string
+		rows         []map[string]any
+		selectErr    error
+		callInner    bool
+		innerApplied map[int64]struct{}
+		innerErr     error
+		expected     map[int64]struct{}
+		expErr       error
 	}{
-		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, -1},
+		{"unions oracle versions with inner versions",
+			[]map[string]any{{"VERSION": int64(1)}, {"VERSION": float64(3)}, {"VERSION": "4"}}, nil, true,
+			map[int64]struct{}{2: {}}, nil, map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}}, nil},
+		{"empty table returns only the inner set", nil, nil, true,
+			map[int64]struct{}{5: {}}, nil, map[int64]struct{}{5: {}}, nil},
+		{"connection failed", nil, sql.ErrConnDone, false, nil, nil, nil, sql.ErrConnDone},
+		{"inner migrator error", []map[string]any{{"VERSION": int64(1)}}, nil, true, nil, errOracleSystemError,
+			nil, errOracleSystemError},
 	}
 
 	for i, tc := range testCases {
-		mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(tc.err)
+		ctrl := gomock.NewController(t)
+		mockContainer, mocks := container.NewMockContainer(t)
+		mockMigrator := NewMockmigrator(ctrl)
 
-		resp, err := mg.getLastMigration(mockContainer)
-		assert.Equal(t, tc.resp, resp, "TEST[%d]: %s failed", i, tc.desc)
+		mockContainer.Oracle = mocks.Oracle
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%d]: %s failed", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%d]: %s failed", i, tc.desc)
+		mg := oracleMigrator{Oracle: mocks.Oracle, migrator: mockMigrator}
+
+		mocks.Oracle.EXPECT().Select(gomock.Any(), gomock.Any(), getOracleGoFrMigrationVersions).
+			DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
+				*dest.(*[]map[string]any) = tc.rows
+
+				return tc.selectErr
+			})
+
+		if tc.callInner {
+			mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.innerApplied, tc.innerErr)
 		}
+
+		resp, err := mg.getAppliedMigrations(mockContainer)
+
+		if tc.expErr != nil {
+			require.ErrorIs(t, err, tc.expErr, "TEST[%d]: %s failed", i, tc.desc)
+			assert.Nil(t, resp, "TEST[%d]: %s failed", i, tc.desc)
+
+			continue
+		}
+
+		require.NoError(t, err, "TEST[%d]: %s failed", i, tc.desc)
+		assert.Equal(t, tc.expected, resp, "TEST[%d]: %s failed", i, tc.desc)
 	}
 }
 
@@ -112,7 +141,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 
 	mockTxSuccess.EXPECT().Commit().Return(nil)
 
-	err := mg.commitMigration(mockContainer, tdSuccess)
+	err := mg.commitMigration(mockContainer, &tdSuccess)
 	require.NoError(t, err, "Success case failed")
 
 	// Error case
@@ -131,7 +160,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 
 	mockTxError.EXPECT().Rollback().Return(nil).AnyTimes()
 
-	err = mg.commitMigration(mockContainer, tdError)
+	err = mg.commitMigration(mockContainer, &tdError)
 	assert.Equal(t, sql.ErrConnDone, err, "Error case failed")
 }
 
@@ -152,13 +181,11 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	// 2. Create migration lock table
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationLocksTable).Return(nil)
 
-	// 3. Optimistic pre-check + re-fetch under lock: get last migration
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).
+	// 3. Optimistic pre-check + re-fetch under lock: get applied migrations
+	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getOracleGoFrMigrationVersions).
 		DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
 			results := dest.(*[]map[string]any)
-			*results = []map[string]any{
-				{"LAST_MIGRATION": int64(0)},
-			}
+			*results = []map[string]any{}
 
 			return nil
 		}).Times(2)
@@ -203,25 +230,6 @@ func TestOracleMigration_FailCreateMigrationTable(t *testing.T) {
 
 	err := mg.checkAndCreateMigrationTable(mockContainer)
 	assert.Equal(t, sql.ErrConnDone, err)
-}
-
-func TestOracleMigration_GetLastMigration_ReturnsZeroOnError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockContainer, mocks := container.NewMockContainer(t)
-	mockOracle := mocks.Oracle
-	mockContainer.Oracle = mockOracle
-
-	ds := Datasource{Oracle: mockOracle}
-	od := oracleDS{Oracle: mockOracle}
-	mg := od.apply(&ds)
-
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(sql.ErrConnDone)
-
-	lastMigration, err := mg.getLastMigration(mockContainer)
-	assert.Equal(t, int64(-1), lastMigration)
-	assert.ErrorContains(t, err, sql.ErrConnDone.Error())
 }
 
 func TestOracleMigrator_Lock(t *testing.T) {
@@ -492,9 +500,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		data := transactionData{MigrationNumber: 1}
 
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 
 	t.Run("RollbackSuccess", func(t *testing.T) {
@@ -512,9 +520,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		mockTx.EXPECT().Rollback().Return(nil)
 		mockLogger.EXPECT().Fatalf(gomock.Any())
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 
 	t.Run("RollbackError", func(t *testing.T) {
@@ -532,9 +540,9 @@ func TestOracleMigrator_Rollback(t *testing.T) {
 
 		mockTx.EXPECT().Rollback().Return(sql.ErrConnDone)
 		mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
-		mockMigrator.EXPECT().rollback(mockContainer, data)
+		mockMigrator.EXPECT().rollback(mockContainer, &data)
 
-		m.rollback(mockContainer, data)
+		m.rollback(mockContainer, &data)
 	})
 }
 
@@ -667,8 +675,8 @@ func TestOracleMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	// Should NOT expect ExecContext for INSERT.
 	// Should expect Commit (empty transaction).
 	mockTx.EXPECT().Commit().Return(nil)
-	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, &data).Return(nil)
 
-	err := m.commitMigration(mockContainer, data)
+	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }

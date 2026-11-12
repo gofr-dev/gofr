@@ -2,6 +2,8 @@ package container
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,7 +23,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -62,6 +66,51 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	assert.NotNil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
+func TestContainer_SQLNilWhenNotInitialized(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+	}{
+		{desc: "no db settings", configs: map[string]string{}},
+		{desc: "host without dialect", configs: map[string]string{"DB_HOST": "localhost"}},
+		{desc: "unsupported dialect", configs: map[string]string{"DB_DIALECT": "abc", "DB_HOST": "localhost"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := NewContainer(config.NewMockConfig(tc.configs))
+
+			// Compare the interface itself: assert.Nil also passes for a typed nil (*sql.DB)(nil),
+			// which is exactly the value apps can't guard against with c.SQL == nil.
+			if c.SQL != nil {
+				t.Errorf("expected untyped nil SQL, got %T", c.SQL)
+			}
+		})
+	}
+}
+
+func TestContainer_RedisNilWhenNotInitialized(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+	}{
+		{desc: "no redis settings", configs: map[string]string{}},
+		{desc: "port without host", configs: map[string]string{"REDIS_PORT": "6379"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := NewContainer(config.NewMockConfig(tc.configs))
+
+			// Compare the interface itself: assert.Nil also passes for a typed nil (*redis.Redis)(nil),
+			// which is exactly the value apps can't guard against with c.Redis == nil.
+			if c.Redis != nil {
+				t.Errorf("expected untyped nil Redis, got %T", c.Redis)
+			}
+		})
+	}
+}
+
 func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	testCases := []struct {
 		desc    string
@@ -83,6 +132,10 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 }
 
 func TestContainer_MQTTInitialization_Default(t *testing.T) {
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the MQTT client is not linked")
+	}
+
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",
 	}
@@ -186,7 +239,7 @@ func TestContainer_Close(t *testing.T) {
 	sqlMock.ExpectClose()
 
 	c := NewContainer(config.NewMockConfig(nil))
-	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.SQL = &sqlMockDB{DB: mockDB, expectedQuery: &expectedQuery{}, logger: logging.NewLogger(logging.DEBUG)}
 	c.Redis = mockRedis
 	c.PubSub = mockPubSub
 
@@ -222,6 +275,22 @@ func Test_GetConnectionFromContext(t *testing.T) {
 			name:     "wrong type in context",
 			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
 			setup:    func(*Container) {},
+			expected: nil,
+		},
+		{
+			name: "connection object stored directly in context",
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
+			setup: func(c *Container) {
+				c.WSManager = ws.New()
+			},
+			expected: &ws.Connection{Conn: &websocket.Conn{}},
+		},
+		{
+			name: "wrong type in context with manager",
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
+			setup: func(c *Container) {
+				c.WSManager = ws.New()
+			},
 			expected: nil,
 		},
 	}
@@ -386,8 +455,56 @@ func TestWarnRedisPubSubSharedDB_NoWarnWhenPubSubDBDiffers(t *testing.T) {
 	}))
 }
 
+func TestWarnRedisPubSubSharedDB_RedisURLDB(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      map[string]string
+		wantWarn bool
+	}{
+		{"URL path DB equals pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_PUBSUB_DB": "3"}, true},
+		{"URL query DB equals pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379?db=3", "REDIS_PUBSUB_DB": "3"}, true},
+		{"URL DB differs from pubsub DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_PUBSUB_DB": "4"}, false},
+		{"URL wins over REDIS_DB", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379/3", "REDIS_DB": "5", "REDIS_PUBSUB_DB": "5"}, false},
+		{"URL without DB means DB 0", map[string]string{"REDIS_URL": "redis://127.0.0.1:6379", "REDIS_PUBSUB_DB": "0"}, true},
+		{"invalid URL falls back to REDIS_DB", map[string]string{"REDIS_URL": "http://x", "REDIS_DB": "2", "REDIS_PUBSUB_DB": "2"}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			var warns []string
+
+			logger := NewMockLogger(ctrl)
+			logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+				warns = append(warns, fmt.Sprintf(format, args...))
+			}).AnyTimes()
+
+			c := &Container{Logger: logger, Redis: NewMockRedis(ctrl)}
+
+			tc.env["REDIS_PUBSUB_MODE"] = "streams"
+			c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(tc.env))
+
+			if tc.wantWarn {
+				require.Len(t, warns, 1)
+				require.Contains(t, warns[0], "migrations may fail")
+			} else {
+				require.Empty(t, warns)
+			}
+		})
+	}
+}
+
 func TestCreatePubSub_DispatchBranches(t *testing.T) {
+	// The skips below are per-subtest rather than on the parent: createRedisPubSub
+	// is NOT behind gofr_nopubsub, so skipping the whole function would drop
+	// coverage of a backend the tagged build still links.
 	t.Run("kafka branch with empty broker does nothing", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -397,6 +514,10 @@ func TestCreatePubSub_DispatchBranches(t *testing.T) {
 	})
 
 	t.Run("google branch with missing configs returns nil client", func(t *testing.T) {
+		if !pubsubBackendsLinked {
+			t.Skip("built with -tags gofr_nopubsub; the Google Pub/Sub client is not linked")
+		}
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -480,6 +601,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_pubsub_subscribe_total_count",
 		"app_pubsub_subscribe_success_count",
 		"app_http_retry_count",
+		"app_http_retry_budget_exhausted_total",
 		"app_circuit_open_count",
 	}
 	for _, counter := range counters {
@@ -496,6 +618,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 	}{
 		{name: "app_http_response", buckets: httpBuckets},
 		{name: "app_http_service_response", buckets: httpBuckets},
+		{name: "app_http_retry_wait_seconds", buckets: []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30}},
 		{name: "app_redis_stats", buckets: dsMicrosecondBuckets},
 		{name: "app_sql_stats", buckets: dsBuckets},
 	}
@@ -678,6 +801,7 @@ func newSnapshotContainer(t *testing.T) (*Container, *prometheus.Registry) {
 func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 	counters := []string{
 		"app_http_retry_count",
+		"app_http_retry_budget_exhausted_total",
 		"app_pubsub_publish_total_count",
 		"app_pubsub_publish_success_count",
 		"app_pubsub_subscribe_total_count",
@@ -690,6 +814,7 @@ func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 	histograms := []string{
 		"app_http_response",
 		"app_http_service_response",
+		"app_http_retry_wait_seconds",
 		"app_redis_stats",
 		"app_sql_stats",
 	}
@@ -761,23 +886,267 @@ func scrapeMetricsContract(t *testing.T, reg *prometheus.Registry) map[string]me
 // reviewer must acknowledge in the PR description.
 func frameworkMetricContract() map[string]metricContract {
 	return map[string]metricContract{
-		"app_info":                           {"Info for app_name, app_version and framework_version.", "gauge"},
-		"app_go_routines":                    {"Number of Go routines running.", "gauge"},
-		"app_sys_memory_alloc":               {"Number of bytes allocated for heap objects.", "gauge"},
-		"app_sys_total_alloc":                {"Number of cumulative bytes allocated for heap objects.", "gauge"},
-		"app_go_numGC":                       {"Number of completed Garbage Collector cycles.", "gauge"},
-		"app_go_sys":                         {"Number of total bytes of memory.", "gauge"},
-		"app_http_response":                  {"Response time of HTTP requests in seconds.", "histogram"},
-		"app_http_service_response":          {"Response time of HTTP service requests in seconds.", "histogram"},
-		"app_http_retry_count":               {"Total number of retry events", "counter"},
-		"app_http_circuit_breaker_state":     {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
-		"app_redis_stats":                    {"Response time of Redis commands in microseconds.", "histogram"},
-		"app_sql_stats":                      {"Response time of SQL queries in milliseconds.", "histogram"},
-		"app_sql_open_connections":           {"Number of open SQL connections.", "gauge"},
-		"app_sql_inUse_connections":          {"Number of inUse SQL connections.", "gauge"},
-		"app_pubsub_publish_total_count":     {"Number of total publish operations.", "counter"},
-		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
-		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
-		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
+		"app_info":                              {"Info for app_name, app_version and framework_version.", "gauge"},
+		"app_go_routines":                       {"Number of Go routines running.", "gauge"},
+		"app_sys_memory_alloc":                  {"Number of bytes allocated for heap objects.", "gauge"},
+		"app_sys_total_alloc":                   {"Number of cumulative bytes allocated for heap objects.", "gauge"},
+		"app_go_numGC":                          {"Number of completed Garbage Collector cycles.", "gauge"},
+		"app_go_sys":                            {"Number of total bytes of memory.", "gauge"},
+		"app_http_response":                     {"Response time of HTTP requests in seconds.", "histogram"},
+		"app_http_service_response":             {"Response time of HTTP service requests in seconds.", "histogram"},
+		"app_http_retry_count":                  {"Total number of retry events", "counter"},
+		"app_http_retry_wait_seconds":           {"Time waited before each HTTP service retry in seconds.", "histogram"},
+		"app_http_retry_budget_exhausted_total": {"Total number of HTTP service retries skipped because the retry budget was spent.", "counter"},
+		"app_http_circuit_breaker_state":        {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
+		"app_redis_stats":                       {"Response time of Redis commands in microseconds.", "histogram"},
+		"app_sql_stats":                         {"Response time of SQL queries in milliseconds.", "histogram"},
+		"app_sql_open_connections":              {"Number of open SQL connections.", "gauge"},
+		"app_sql_inUse_connections":             {"Number of inUse SQL connections.", "gauge"},
+		"app_pubsub_publish_total_count":        {"Number of total publish operations.", "counter"},
+		"app_pubsub_publish_success_count":      {"Number of successful publish operations.", "counter"},
+		"app_pubsub_subscribe_total_count":      {"Number of total subscribe operations.", "counter"},
+		"app_pubsub_subscribe_success_count":    {"Number of successful subscribe operations.", "counter"},
+	}
+}
+
+var errToolCall = errors.New("tool call failed")
+
+func TestContainer_LLMRegistry(t *testing.T) {
+	tests := []struct {
+		desc      string
+		register  []string
+		lookup    []string
+		expHasLLM bool
+		expModel  bool
+		expName   string
+	}{
+		{
+			desc:      "no model registered",
+			register:  nil,
+			lookup:    nil,
+			expHasLLM: false,
+			expModel:  false,
+			expName:   "",
+		},
+		{
+			desc:      "default model registered and looked up",
+			register:  []string{""},
+			lookup:    nil,
+			expHasLLM: true,
+			expModel:  true,
+			expName:   "model-",
+		},
+		{
+			desc:      "named model looked up by name",
+			register:  []string{"", "fast"},
+			lookup:    []string{"fast"},
+			expHasLLM: true,
+			expModel:  true,
+			expName:   "model-fast",
+		},
+		{
+			desc:      "unknown name returns not-configured LLM",
+			register:  []string{"fast"},
+			lookup:    []string{"typo"},
+			expHasLLM: true,
+			expModel:  false,
+			expName:   "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := &Container{}
+
+			for _, n := range tc.register {
+				m := ai.NewMockModel(ctrl)
+				m.EXPECT().Name().Return("model-" + n).AnyTimes()
+				c.SetLLM(m, n)
+			}
+
+			assert.Equal(t, tc.expHasLLM, c.HasLLM())
+			assert.Equal(t, tc.expModel, c.LLMModel(tc.lookup...) != nil)
+			assert.Equal(t, tc.expName, c.LLM(tc.lookup...).Name())
+		})
+	}
+}
+
+func TestContainer_NotConfiguredLLM(t *testing.T) {
+	llm := (&Container{}).LLM("missing")
+
+	tests := []struct {
+		desc   string
+		call   func() (any, error)
+		expErr error
+	}{
+		{
+			desc:   "chat",
+			call:   func() (any, error) { return llm.Chat(t.Context(), nil) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "generate",
+			call:   func() (any, error) { return llm.Generate(t.Context(), "hi") },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "stream",
+			call:   func() (any, error) { return llm.Stream(t.Context(), nil) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+		{
+			desc:   "embed",
+			call:   func() (any, error) { return llm.Embed(t.Context(), []string{"a"}) },
+			expErr: ai.ErrLLMNotConfigured,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, err := tc.call()
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Nil(t, resp)
+		})
+	}
+
+	assert.Equal(t, datasource.Health{Status: datasource.StatusDown}, llm.HealthCheck(t.Context()))
+	assert.Empty(t, llm.Name())
+}
+
+func TestContainer_LLMToolsLazyResolution(t *testing.T) {
+	specs := []ai.ToolSpec{{Name: "a"}, {Name: "b"}}
+	onlySpecs := []ai.ToolSpec{{Name: "a"}}
+
+	tests := []struct {
+		desc      string
+		setup     func(ctrl *gomock.Controller) ai.Tools
+		expList   []ai.ToolSpec
+		expOnly   []ai.ToolSpec
+		expResult ai.Result
+		expErr    error
+	}{
+		{
+			desc:      "no tools installed",
+			setup:     func(*gomock.Controller) ai.Tools { return nil },
+			expList:   nil,
+			expOnly:   nil,
+			expResult: ai.Result{},
+			expErr:    ai.ErrToolNotFound,
+		},
+		{
+			desc: "installed tools are delegated to",
+			setup: func(ctrl *gomock.Controller) ai.Tools {
+				only := ai.NewMockTools(ctrl)
+				only.EXPECT().List().Return(onlySpecs)
+
+				tools := ai.NewMockTools(ctrl)
+				tools.EXPECT().List().Return(specs)
+				tools.EXPECT().Only("a").Return(only)
+				tools.EXPECT().Call(gomock.Any(), "a", json.RawMessage(`{}`)).Return(ai.NewResult("ok"), nil)
+
+				return tools
+			},
+			expList:   specs,
+			expOnly:   onlySpecs,
+			expResult: ai.NewResult("ok"),
+			expErr:    nil,
+		},
+		{
+			desc: "tool call error is propagated",
+			setup: func(ctrl *gomock.Controller) ai.Tools {
+				tools := ai.NewMockTools(ctrl)
+				tools.EXPECT().List().Return(nil)
+
+				only := ai.NewMockTools(ctrl)
+				only.EXPECT().List().Return(nil)
+
+				tools.EXPECT().Only("a").Return(only)
+				tools.EXPECT().Call(gomock.Any(), "a", json.RawMessage(`{}`)).Return(ai.Result{}, errToolCall)
+
+				return tools
+			},
+			expList:   nil,
+			expOnly:   nil,
+			expResult: ai.Result{},
+			expErr:    errToolCall,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := &Container{}
+
+			// Tools are installed after the LLM is obtained, proving they are resolved lazily.
+			tools := c.LLM().Tools()
+			c.SetTools(tc.setup(ctrl))
+
+			assert.Equal(t, tc.expList, tools.List())
+
+			assert.Equal(t, tc.expOnly, tools.Only("a").List())
+
+			res, err := tools.Call(t.Context(), "a", json.RawMessage(`{}`))
+
+			require.ErrorIs(t, err, tc.expErr)
+			assert.Equal(t, tc.expResult, res)
+		})
+	}
+}
+
+func TestContainer_createKafkaPubSub_InvalidConfigs(t *testing.T) {
+	// The assertions are on what kafka.New's own validation logs. Under gofr_nopubsub there is no
+	// kafka.New to validate anything -- the stub logs the one message naming the tag and returns --
+	// so there is nothing here for this test to be about.
+	if !pubsubBackendsLinked {
+		t.Skip("built with -tags gofr_nopubsub; the Kafka client is not linked")
+	}
+
+	tests := []struct {
+		desc    string
+		configs map[string]string
+		expLogs []string
+	}{
+		{
+			desc: "invalid partition and offset are logged; security protocol validation fails",
+			configs: map[string]string{
+				"PUBSUB_BROKER":           "localhost:9092",
+				"PARTITION_SIZE":          "abc",
+				"PUBSUB_OFFSET":           "xyz",
+				"KAFKA_SECURITY_PROTOCOL": "BOGUS",
+			},
+			expLogs: []string{
+				"Invalid value for PARTITION_SIZE, using default: 0",
+				"Invalid value for PUBSUB_OFFSET, using default: -1",
+				"could not initialize kafka, error: unsupported security protocol: BOGUS",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			var logs []string
+
+			logger := NewMockLogger(ctrl)
+			logger.EXPECT().Error(gomock.Any()).Do(func(args ...any) {
+				logs = append(logs, fmt.Sprint(args...))
+			}).AnyTimes()
+			logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+				logs = append(logs, fmt.Sprintf(format, args...))
+			}).AnyTimes()
+
+			c := &Container{Logger: logger}
+			c.createKafkaPubSub(config.NewMockConfig(tc.configs))
+
+			assert.Nil(t, c.PubSub)
+			require.Len(t, logs, len(tc.expLogs))
+
+			for i, exp := range tc.expLogs {
+				assert.Contains(t, logs[i], exp)
+			}
+		})
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 )
@@ -659,84 +660,86 @@ func setupDotPath(t *testing.T) (migrator, *container.Container, string) {
 	return migratorWithOpenTSDB, mockContainer, dotPath
 }
 
-func Test_OpenTSDBGetLastMigration(t *testing.T) {
-	migratorWithOpenTSDB, mockContainer, filePath := openTSDBSetup(t)
-
+func Test_OpenTSDBGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc           string
-		setupFunc      func()
-		expectedResult int64
+		desc      string
+		fileData  *string // nil means the migration file does not exist
+		inner     map[int64]struct{}
+		innerErr  error
+		skipInner bool
+		expected  map[int64]struct{}
+		expErr    error
+		expErrAny bool
 	}{
 		{
-			desc: "empty migration file",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, []byte("[]"), 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: 0,
+			desc:     "file versions merged with inner versions",
+			fileData: tsdbFileContent(`[{"version":1},{"version":3},{"version":4}]`),
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
 		},
 		{
-			desc: "file with migrations",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-
-				migrations := []tsdbMigrationRecord{
-					{Version: 1, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 0},
-					{Version: 3, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 100},
-					{Version: 2, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 50},
-				}
-				data, err := json.Marshal(migrations)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, data, 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: 3,
+			desc:     "empty migration file returns only inner set",
+			fileData: tsdbFileContent("[]"),
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
 		},
 		{
-			desc: "file doesn't exist",
-			setupFunc: func() {
-				t.Helper()
-				// No file
-			},
-			expectedResult: 0,
+			desc:     "file doesn't exist returns only inner set",
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
 		},
 		{
-			desc: "invalid JSON file",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: -1,
+			desc:      "invalid JSON file",
+			fileData:  tsdbFileContent("invalid json"),
+			skipInner: true,
+			expErrAny: true,
+		},
+		{
+			desc:     "inner migrator error",
+			fileData: tsdbFileContent(`[{"version":2}]`),
+			innerErr: errRandomDB,
+			expErr:   errRandomDB,
 		},
 	}
 
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			os.RemoveAll(filepath.Dir(filePath))
-			tc.setupFunc()
+			ctrl := gomock.NewController(t)
+			mockContainer, _ := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			filePath := filepath.Join(t.TempDir(), "migrations.json")
 
-			result, err := migratorWithOpenTSDB.getLastMigration(mockContainer)
-			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
-
-			if tc.expectedResult == -1 {
-				assert.Error(t, err, "TEST[%v] %v Failed! Expected error", i, tc.desc)
-			} else {
-				assert.NoError(t, err, "TEST[%v] %v Failed! Unexpected error", i, tc.desc)
+			if tc.fileData != nil {
+				require.NoError(t, os.WriteFile(filePath, []byte(*tc.fileData), 0600))
 			}
+
+			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
+
+			if !tc.skipInner {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.inner, tc.innerErr)
+			}
+
+			applied, err := om.getAppliedMigrations(mockContainer)
+
+			if tc.expErrAny || tc.expErr != nil {
+				require.Error(t, err)
+
+				if tc.expErr != nil {
+					require.ErrorIs(t, err, tc.expErr)
+				}
+
+				assert.Nil(t, applied)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, applied)
 		})
 	}
 }
+
+func tsdbFileContent(s string) *string { return &s }
 
 // Test_OpenTSDBCommitMigration_ConcurrentAccess tests concurrent commits.
 func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
@@ -767,7 +770,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
 				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
-			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 			errCh <- err
 		}(i)
 	}
@@ -829,7 +832,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentDuplicates(t *testing.T) {
 				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
-			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 			errCh <- err
 		}()
 	}
@@ -879,7 +882,7 @@ func Test_OpenTSDBCommitMigration_JSONFormatValidation(t *testing.T) {
 		UsedDatasources: map[string]bool{dsOpenTSDB: true},
 	}
 
-	err = migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+	err = migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 	require.NoError(t, err)
 
 	// Read the file and verify JSON formatting
@@ -923,7 +926,7 @@ func Test_OpenTSDBCommitMigration_TimestampAccuracy(t *testing.T) {
 
 	// Record time just before commit for duration calculation
 	beforeCommit := time.Now()
-	err = migratorWithOpenTSDB.commitMigration(mockContainer, txData)
+	err = migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
 	afterCommit := time.Now()
 
 	require.NoError(t, err)
@@ -1353,4 +1356,237 @@ func Test_OpenTSDBValidateExistingFile_FileModifiedDuringRead(t *testing.T) {
 	err = openTSDBMig.validateExistingFile(mockContainer)
 	require.Error(t, err, "Should fail to validate corrupted file")
 	assert.Contains(t, err.Error(), "existing migration file contains invalid JSON")
+}
+
+// longFileName exceeds the maximum file name length so that filesystem calls fail with
+// an error other than "not exist".
+func longFileName() string {
+	return strings.Repeat("a", 300) + ".json"
+}
+
+func Test_OpenTSDBFileSystemErrors(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		filePath  func(t *testing.T, dir string) string
+		call      func(om *openTSDBMigrator, c *container.Container) error
+		expErrMsg string
+	}{
+		{
+			desc:     "stat error other than not exist",
+			filePath: func(_ *testing.T, dir string) string { return filepath.Join(dir, longFileName()) },
+			call: func(om *openTSDBMigrator, c *container.Container) error {
+				return om.checkAndCreateMigrationTable(c)
+			},
+			expErrMsg: "unexpected error stating migration file",
+		},
+		{
+			desc:     "create empty file in missing directory",
+			filePath: func(_ *testing.T, dir string) string { return filepath.Join(dir, "missing", "migrations.json") },
+			call: func(om *openTSDBMigrator, c *container.Container) error {
+				return om.createEmptyMigrationFile(c)
+			},
+			expErrMsg: "failed to create migration file",
+		},
+		{
+			desc:     "load migrations open error",
+			filePath: func(_ *testing.T, dir string) string { return filepath.Join(dir, longFileName()) },
+			call: func(om *openTSDBMigrator, _ *container.Container) error {
+				_, err := om.loadMigrationsUnsafe()
+				return err
+			},
+			expErrMsg: "failed to open migration file",
+		},
+		{
+			desc: "temporary file cannot be created",
+			filePath: func(t *testing.T, dir string) string {
+				t.Helper()
+
+				p := filepath.Join(dir, "migrations.json")
+				require.NoError(t, os.Mkdir(p+".tmp", dirPerm))
+
+				return p
+			},
+			call: func(om *openTSDBMigrator, _ *container.Container) error {
+				return om.writeMigrationsAtomically([]tsdbMigrationRecord{{Version: 1}})
+			},
+			expErrMsg: "failed to create temporary file",
+		},
+		{
+			desc: "rename onto non-empty directory fails",
+			filePath: func(t *testing.T, dir string) string {
+				t.Helper()
+
+				p := filepath.Join(dir, "migrations.json")
+				require.NoError(t, os.MkdirAll(filepath.Join(p, "child"), dirPerm))
+
+				return p
+			},
+			call: func(om *openTSDBMigrator, _ *container.Container) error {
+				return om.writeMigrationsAtomically([]tsdbMigrationRecord{{Version: 1}})
+			},
+			expErrMsg: "failed to rename temporary file",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockContainer, _ := container.NewMockContainer(t)
+			om := &openTSDBMigrator{filePath: tc.filePath(t, t.TempDir()), migrator: &Datasource{}}
+
+			err := tc.call(om, mockContainer)
+
+			require.ErrorContains(t, err, tc.expErrMsg)
+		})
+	}
+}
+
+func Test_OpenTSDBWriteMigrationsAtomically_RemovesTempFileOnFailure(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "migrations.json")
+	require.NoError(t, os.MkdirAll(filepath.Join(filePath, "child"), dirPerm))
+
+	om := &openTSDBMigrator{filePath: filePath, migrator: &Datasource{}}
+
+	err := om.writeMigrationsAtomically([]tsdbMigrationRecord{{Version: 1}})
+
+	require.Error(t, err)
+	assert.NoFileExists(t, filePath+".tmp")
+}
+
+func Test_OpenTSDBCommitMigration_Errors(t *testing.T) {
+	txData := transactionData{
+		MigrationNumber: 5,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{dsOpenTSDB: true},
+	}
+
+	testCases := []struct {
+		desc      string
+		setupFile func(t *testing.T, filePath string)
+		expErrMsg string
+	}{
+		{
+			desc: "existing file has invalid JSON",
+			setupFile: func(t *testing.T, filePath string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filePath, []byte("invalid"), 0600))
+			},
+			expErrMsg: "failed to load existing migrations",
+		},
+		{
+			desc: "migration record cannot be written",
+			setupFile: func(t *testing.T, filePath string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filePath, []byte("[]"), 0600))
+				require.NoError(t, os.Mkdir(filePath+".tmp", dirPerm))
+			},
+			expErrMsg: "failed to record migration in JSON file",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			migratorWithOpenTSDB, mockContainer, filePath := openTSDBSetup(t)
+			tc.setupFile(t, filePath)
+
+			err := migratorWithOpenTSDB.commitMigration(mockContainer, &txData)
+
+			require.ErrorContains(t, err, tc.expErrMsg)
+		})
+	}
+}
+
+func Test_OpenTSDBCommitMigration_BaseMigratorAndUnused(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		data    transactionData
+		baseErr error
+		expErr  error
+	}{
+		{
+			desc:    "base migrator commit error is returned",
+			data:    transactionData{MigrationNumber: 1, UsedDatasources: map[string]bool{dsOpenTSDB: true}},
+			baseErr: errGenericCommit,
+			expErr:  errGenericCommit,
+		},
+		{
+			desc: "record skipped when OpenTSDB not used",
+			data: transactionData{MigrationNumber: 1, UsedDatasources: map[string]bool{}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, _ := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			filePath := filepath.Join(t.TempDir(), "migrations.json")
+
+			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
+
+			mockMigrator.EXPECT().commitMigration(mockContainer, &tc.data).Return(tc.baseErr)
+
+			err := om.commitMigration(mockContainer, &tc.data)
+
+			assert.Equal(t, tc.expErr, err)
+			assert.NoFileExists(t, filePath)
+		})
+	}
+}
+
+func Test_OpenTSDBRollback(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		setupFile func(t *testing.T, filePath string)
+	}{
+		{
+			desc: "temporary file is cleaned up",
+			setupFile: func(t *testing.T, filePath string) {
+				t.Helper()
+				require.NoError(t, os.WriteFile(filePath+".tmp", []byte("[]"), 0600))
+			},
+		},
+		{desc: "no temporary file present", setupFile: func(*testing.T, string) {}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, _ := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			mockLogger := container.NewMockLogger(ctrl)
+			mockContainer.Logger = mockLogger
+			filePath := filepath.Join(t.TempDir(), "migrations.json")
+
+			tc.setupFile(t, filePath)
+
+			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
+			data := transactionData{MigrationNumber: 3}
+
+			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockMigrator.EXPECT().rollback(mockContainer, &data)
+			mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(3))
+
+			om.rollback(mockContainer, &data)
+
+			assert.NoFileExists(t, filePath+".tmp")
+		})
+	}
+}
+
+func Test_OpenTSDBMigratorDelegation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	om := &openTSDBMigrator{migrator: mockMigrator}
+	expData := transactionData{MigrationNumber: 8}
+
+	mockMigrator.EXPECT().beginTransaction(mockContainer).Return(expData)
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, "owner-1").Return(errRandomDB)
+	mockMigrator.EXPECT().unlock(mockContainer, "owner-1").Return(errRandomDB)
+
+	assert.Equal(t, expData, om.beginTransaction(mockContainer))
+	require.ErrorIs(t, om.lock(t.Context(), func() {}, mockContainer, "owner-1"), errRandomDB)
+	require.ErrorIs(t, om.unlock(mockContainer, "owner-1"), errRandomDB)
+	assert.Equal(t, "OpenTSDB", om.name())
 }

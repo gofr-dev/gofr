@@ -147,3 +147,53 @@ func TestLocalProvider_ListDir_ReturnsObjectsAndDirs(t *testing.T) {
 
 	assert.True(t, foundFile, "expected to find top-level file in objects")
 }
+
+func TestNewJSONReader_LogsErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      io.Reader
+		setupMocks func(l *MockLogger)
+		expErr     error
+	}{
+		{
+			name:  "read error is logged",
+			input: errReader{err: io.ErrUnexpectedEOF},
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("failed to read JSON input: %v", io.ErrUnexpectedEOF)
+			},
+			expErr: io.ErrUnexpectedEOF,
+		},
+		{
+			name:  "invalid json is logged",
+			input: strings.NewReader(`{"a":`),
+			setupMocks: func(l *MockLogger) {
+				l.EXPECT().Errorf("invalid JSON input")
+			},
+			expErr: errInvalidJSON,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLogger := NewMockLogger(gomock.NewController(t))
+			tt.setupMocks(mockLogger)
+
+			rr, err := NewJSONReader(tt.input, mockLogger)
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Nil(t, rr)
+		})
+	}
+}
+
+func TestJSONReader_SingleObjectNextFalseAfterScan(t *testing.T) {
+	jr, err := NewJSONReader(strings.NewReader(`{"b":3}`), nil)
+	require.NoError(t, err)
+
+	require.True(t, jr.Next())
+
+	var obj map[string]any
+
+	require.NoError(t, jr.Scan(&obj))
+	assert.False(t, jr.Next())
+}

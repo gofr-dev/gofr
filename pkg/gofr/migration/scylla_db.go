@@ -51,40 +51,35 @@ type migrationRow struct {
 	Version int64 `db:"version"`
 }
 
-func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		migrations  []migrationRow
-		lastVersion int64
-	)
+func (s scyllaMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var migrations []migrationRow
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
 
 	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
-		return -1, fmt.Errorf("scylladb: %w", err)
+		return nil, fmt.Errorf("scylladb: %w", err)
+	}
+
+	c.Debugf("ScyllaDB applied migrations fetched: %v", len(migrations))
+
+	applied, err := s.migrator.getAppliedMigrations(c)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, m := range migrations {
-		if m.Version > lastVersion {
-			lastVersion = m.Version
-		}
+		applied[m.Version] = struct{}{}
 	}
 
-	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
-
-	lm2, err := s.migrator.getLastMigration(c)
-	if err != nil {
-		return -1, err
-	}
-
-	return max(lastVersion, lm2), nil
+	return applied, nil
 }
 
 func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData {
 	return s.migrator.beginTransaction(c)
 }
 
-func (s scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s scyllaMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsScyllaDB] {
 		insertStmt := fmt.Sprintf(`
 		INSERT INTO %s (version, method, start_time, duration)
@@ -93,7 +88,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 
 		err := s.ScyllaDB.Exec(insertStmt,
 			data.MigrationNumber,
-			"UP",
+			migrationMethodUP,
 			data.StartTime,
 			time.Since(data.StartTime).Milliseconds(),
 		)
@@ -108,7 +103,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
+func (s scyllaMigrator) rollback(c *container.Container, data *transactionData) {
 	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
