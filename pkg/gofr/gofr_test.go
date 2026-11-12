@@ -2254,9 +2254,11 @@ func Test_HTTPHEAD(t *testing.T) {
 			app.GET("/failure", func(*Context) (any, error) { return nil, gofrHTTP.ErrorEntityNotFound{} })
 			app.POST("/post-only", func(*Context) (any, error) { return "created", nil })
 
+			const staticPath = "/static"
+
 			dir := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("static content"), 0600))
-			app.AddStaticFiles("/static", dir)
+			app.AddStaticFiles(staticPath, dir)
 			app.httpServerSetup()
 
 			server := httptest.NewServer(app.httpServer.router)
@@ -2272,7 +2274,7 @@ func Test_HTTPHEAD(t *testing.T) {
 				{"/failure", http.StatusNotFound},
 				{"/missing", http.StatusNotFound},
 				{"/post-only", http.StatusMethodNotAllowed},
-				{"/static", http.StatusOK},
+				{staticPath, http.StatusOK},
 				{"/static/missing", http.StatusNotFound},
 			}
 

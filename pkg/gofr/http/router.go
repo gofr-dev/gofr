@@ -170,12 +170,7 @@ func (rou *Router) serveHead(w http.ResponseWriter, r *http.Request) bool {
 		}
 	}
 
-	if matched {
-		rou.serveHeadMatch(w, r, &headMatch)
-
-		return true
-	}
-
+	// No suitable GET route: preserve the router's normal catch-all and error handling.
 	return false
 }
 
