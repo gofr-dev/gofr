@@ -446,3 +446,151 @@ func TestGetEndpointForRequest_SlashConstraintDoesNotOutrankNarrowRule(t *testin
 		assert.Equal(t, "/files/private/{name}", endpoint.Path)
 	}
 }
+
+func TestGetEndpointForRequest_LiteralPatternDoesNotBypassRegexConstraint(t *testing.T) {
+	// A request whose path literally equals a public pattern string must not bypass regex
+	// constraints by matching the exact fast path; it must fall through to the ordered scan.
+	endpoints := []EndpointMapping{
+		{Path: "/reports/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
+		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
+	}
+
+	config := newTestConfig(t, endpoints, nil)
+
+	testCases := []struct {
+		desc           string
+		path           string
+		expectedPath   string
+		expectedPublic bool
+	}{
+		{
+			desc:           "valid numeric id matches public pattern",
+			path:           "/reports/123",
+			expectedPath:   "/reports/{id:[0-9]+}",
+			expectedPublic: true,
+		},
+		{
+			desc:           "literal pattern text falls through to protected rule",
+			path:           "/reports/{id:[0-9]+}",
+			expectedPath:   "/reports/{name}",
+			expectedPublic: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
+			ep, isPublic := getEndpointForRequest(req, config)
+
+			require.NotNil(t, ep)
+			assert.Equal(t, tc.expectedPath, ep.Path)
+			assert.Equal(t, tc.expectedPublic, isPublic)
+		})
+	}
+}
+
+func TestConfig_GetEndpointPermission_PatternText(t *testing.T) {
+	endpoints := []EndpointMapping{
+		{Path: "/items/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"items:read"}},
+		{Path: "/reports/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
+		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
+		{Path: "/files/{path:.*}", Methods: []string{"GET"}, RequiredPermissions: []string{"files:read"}},
+		{Path: "/wildcard/{id}", Methods: []string{"*"}, RequiredPermissions: []string{"wildcard:write"}},
+		{Path: "/public-wildcard/{id}", Methods: []string{"*"}, Public: true},
+		{Path: "/broken/{id:[}", Methods: []string{"GET"}, Public: true},
+		{Path: "/broken/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"broken:read"}},
+		{Path: "/uncompilable-protected/{id:[}", Methods: []string{"GET"}, RequiredPermissions: []string{"uncompilable:read"}},
+	}
+
+	config := newTestConfig(t, endpoints, nil)
+
+	testCases := []struct {
+		desc           string
+		method         string
+		path           string
+		expectedPerms  []string
+		expectedPublic bool
+	}{
+		{
+			desc:           "protected pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/items/{id:[0-9]+}",
+			expectedPerms:  []string{"items:read"},
+			expectedPublic: false,
+		},
+		{
+			desc:           "public pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/reports/{id:[0-9]+}",
+			expectedPerms:  nil,
+			expectedPublic: true,
+		},
+		{
+			desc:           "catch-all pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/files/{path:.*}",
+			expectedPerms:  []string{"files:read"},
+			expectedPublic: false,
+		},
+		{
+			desc:           "wildcard method pattern looked up with explicit method",
+			method:         http.MethodPost,
+			path:           "/wildcard/{id}",
+			expectedPerms:  []string{"wildcard:write"},
+			expectedPublic: false,
+		},
+		{
+			desc:           "public wildcard method pattern looked up with explicit method",
+			method:         http.MethodGet,
+			path:           "/public-wildcard/{id}",
+			expectedPerms:  nil,
+			expectedPublic: true,
+		},
+		{
+			desc:           "uncompilable pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/broken/{id:[}",
+			expectedPerms:  nil,
+			expectedPublic: true,
+		},
+		{
+			desc:           "protected uncompilable pattern looked up by own pattern text",
+			method:         http.MethodGet,
+			path:           "/uncompilable-protected/{id:[}",
+			expectedPerms:  []string{"uncompilable:read"},
+			expectedPublic: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			perms, isPublic := config.GetEndpointPermission(tc.method, tc.path)
+
+			assert.Equal(t, tc.expectedPublic, isPublic)
+			assert.Equal(t, tc.expectedPerms, perms)
+		})
+	}
+
+	// Incoming request to the literal uncompilable pattern must resolve to the narrower protected rule
+	t.Run("incoming request to literal uncompilable pattern resolves to narrower protected rule", func(t *testing.T) {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/broken/{id:[}", http.NoBody)
+		ep, isPublic := getEndpointForRequest(req, config)
+
+		require.NotNil(t, ep)
+		assert.Equal(t, "/broken/{name}", ep.Path)
+		assert.False(t, isPublic, "incoming request matching literal uncompilable pattern must not be public")
+	})
+}
+
+func TestConfig_PatternPathMissingPermissions(t *testing.T) {
+	// A pattern endpoint declared as protected without required permissions must return ErrEndpointMissingPermissions.
+	endpoints := []EndpointMapping{
+		{Path: "/items/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: nil},
+	}
+
+	config := &Config{Endpoints: endpoints}
+	err := config.processUnifiedConfig()
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEndpointMissingPermissions)
+}
