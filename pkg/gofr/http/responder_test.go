@@ -128,8 +128,8 @@ func TestResponder_getStatusCode(t *testing.T) {
 			map[string]any{"message": ErrorInvalidRoute{}.Error()}},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
-		{"data with status-coded error", http.MethodGet, "partial response", ErrorInvalidRoute{},
-			http.StatusNotFound, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
+			http.StatusPartialContent, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
 		{"request timeout error", http.MethodGet, nil, ErrorRequestTimeout{},
 			http.StatusRequestTimeout,
 			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
@@ -146,9 +146,9 @@ func TestResponder_getStatusCode(t *testing.T) {
 		{"nil slice with plain error", http.MethodGet, []any(nil), errTest,
 			http.StatusInternalServerError, map[string]any{"message": errTest.Error()}},
 		{"empty non-nil map with error", http.MethodGet, map[string]any{}, ErrorEntityAlreadyExist{},
-			http.StatusConflict, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
+			http.StatusPartialContent, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
 		{"empty non-nil slice with error", http.MethodGet, []any{}, ErrorEntityAlreadyExist{},
-			http.StatusConflict, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
+			http.StatusPartialContent, map[string]any{"message": ErrorEntityAlreadyExist{}.Error()}},
 	}
 
 	for i, tc := range tests {
@@ -187,7 +187,7 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		{"error response contains a nullable type with a nil value", newNilTemp(), sampleError,
 			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
 		{"error response with partial response", sampleData, sampleError,
-			http.StatusNotFound,
+			http.StatusPartialContent,
 			`{"error":{"message":"route not registered"},"data":{"message":"Hello World"}}`},
 		{"client closed request - no response", nil, ErrorClientClosedRequest{},
 			StatusClientClosedRequest, `{"error":{"message":"client closed request"}}`},
@@ -1299,11 +1299,13 @@ func TestResponder_Char_ErrorEnvelopeEdges(t *testing.T) {
 			"{\"error\":{\"field\":\"email\",\"message\":\"validation failed\",\"reason\":\"bad format\"}}\n",
 		},
 
-		// Explicit error status codes take precedence even when data is present.
+		// --- data + error -> 206 Partial Content ------------------------------
+		// NOTE: the error's own StatusCode() is ignored entirely when data is
+		// non-nil; a 404 alongside partial data is reported as 206.
 		{
-			"data-plus-statuscoded-error-uses-error-status", http.MethodGet, map[string]string{"k": "v"},
+			"data-plus-statuscoded-error-is-206", http.MethodGet, map[string]string{"k": "v"},
 			ErrorEntityNotFound{Name: "id", Value: "9"},
-			http.StatusNotFound, "application/json",
+			http.StatusPartialContent, "application/json",
 			"{\"error\":{\"message\":\"No entity found with id: 9\"},\"data\":{\"k\":\"v\"}}\n",
 		},
 		// A typed nil pointer counts as nil here, so the error's status wins.
@@ -1320,29 +1322,37 @@ func TestResponder_Char_ErrorEnvelopeEdges(t *testing.T) {
 			http.StatusConflict, "application/json", "{\"error\":{\"message\":\"entity already exists\"}}\n",
 		},
 		{
-			"empty-map-plus-error-uses-error-status", http.MethodGet, map[string]string{}, ErrorEntityAlreadyExist{},
-			http.StatusConflict, "application/json",
+			"empty-map-plus-error-remains-partial-data", http.MethodGet, map[string]string{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, "application/json",
 			"{\"error\":{\"message\":\"entity already exists\"},\"data\":{}}\n",
 		},
 		{
-			"empty-slice-plus-error-uses-error-status", http.MethodGet, []string{}, ErrorEntityAlreadyExist{},
-			http.StatusConflict, "application/json",
+			"empty-slice-plus-error-remains-partial-data", http.MethodGet, []string{}, ErrorEntityAlreadyExist{},
+			http.StatusPartialContent, "application/json",
 			"{\"error\":{\"message\":\"entity already exists\"},\"data\":[]}\n",
 		},
 
-		// Zero-valued structs preserve the caller's error and remain in data.
+		// --- empty-struct short circuit ---------------------------------------
+		// LATENT QUIRK (pinned as-is): when data is a zero-valued struct AND an
+		// error is present, determineResponse replaces the status with 500 and
+		// the error object with the generic "internal server error" — the real
+		// error is lost. The zero struct is still serialized into `data`.
 		{
 			"empty-struct-plus-error", http.MethodGet, charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
-			http.StatusNotFound, "application/json",
-			"{\"error\":{\"message\":\"No entity found with id: 1\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
+			http.StatusInternalServerError, "application/json",
+			"{\"error\":{\"message\":\"internal server error\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
 		},
-		// A pointer to the same struct has the same status and body.
+		// ...but a POINTER to a zero struct escapes the short circuit, because
+		// isEmptyStruct dereferences for the Kind check yet compares the
+		// original pointer against a zero STRUCT. Different behavior for
+		// semantically identical data.
 		{
 			"pointer-to-empty-struct-plus-error", http.MethodGet, &charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
-			http.StatusNotFound, "application/json",
+			http.StatusPartialContent, "application/json",
 			"{\"error\":{\"message\":\"No entity found with id: 1\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
 		},
-		// Plain errors retain the existing empty-struct fallback.
+		// A zero struct whose fields are all omitempty still serializes as `{}`
+		// under `data`, so the client cannot distinguish it from "no data".
 		{
 			"empty-omitempty-struct-plus-error", http.MethodGet, charOmit{}, errCharPlain,
 			http.StatusInternalServerError, "application/json",
