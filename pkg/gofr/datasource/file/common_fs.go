@@ -483,8 +483,9 @@ func (c *CommonFileSystem) OpenFile(name string, flag int, perm os.FileMode) (Fi
 
 // tryOpenStrategies attempts different strategies to open a file based on flags.
 func (c *CommonFileSystem) tryOpenStrategies(name string, flag int, perm os.FileMode) (File, error) {
-	// Strategy 1: Try local filesystem for O_RDWR
-	if flag&os.O_RDWR != 0 {
+	// Strategy 1: the local store opens O_RDWR files on disk. Other providers must not
+	// touch the app host's disk, so their O_RDWR opens go through the provider below.
+	if _, isLocal := c.Provider.(*localProvider); isLocal && flag&os.O_RDWR != 0 {
 		if localFile, err := c.tryLocalFileOpen(name, flag, perm); err == nil {
 			return localFile, nil
 		}
@@ -514,6 +515,7 @@ func (c *CommonFileSystem) tryLocalFileOpen(name string, flag int, perm os.FileM
 	}
 
 	return &CommonFile{
+		provider: c.Provider,
 		name:     name,
 		body:     osFile,
 		writer:   osFile,
