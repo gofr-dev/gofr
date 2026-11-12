@@ -90,6 +90,8 @@ The `hello-world` server involves three essential steps:
 
    The full set of verbs is `app.GET`, `app.POST`, `app.PUT`, `app.PATCH`, `app.DELETE`, and `app.QUERY`. `QUERY` is the HTTP QUERY method (RFC 10008) — a safe, idempotent verb whose search criteria live in the request body; a `QUERY` request MUST carry a `Content-Type` GoFr can decode (`application/json`, form, multipart, or octet-stream), and GoFr rejects a missing one with 400 and an unsupported one with 415 before your handler runs.
 
+   HEAD requests fall back to GET routes when no route accepts HEAD, including `/.well-known/alive` and `/.well-known/health`. The fallback runs the GET handler and middleware with the request method preserved, returning the corresponding status and headers without transmitting a response body. Explicit HEAD routes always take precedence over GET fallback, regardless of registration order.
+
    **Good To Know**
 
 > In Go, functions are first-class citizens, allowing easy handler definition and reference.

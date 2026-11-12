@@ -345,6 +345,12 @@ Fix the name in the config to restore the inherited permissions.
 }
 ```
 
+### HEAD Fallback Authorization
+
+When a `HEAD` request falls back to a `GET` route, GoFr enforces the `GET` route's RBAC policy, even if a separate `HEAD` rule is public. This prevents implicit HEAD support from bypassing authorization required by the GET handler.
+
+An explicitly registered `HEAD` route takes precedence and uses its own `HEAD` RBAC policy.
+
 ### Mux Pattern Syntax
 
 RBAC uses **gorilla/mux route pattern conventions** for endpoint matching. This ensures perfect alignment with how routes are registered in GoFr.
