@@ -144,21 +144,138 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 			schedules: []string{
 				"* * ab/2 * *",
 				"* 1,2/10 * * *",
-				"* * 1,2,3,1-15/10 * *",
 				"a b c d e",
 			},
 			expErrString: "unable to parse",
+		},
+		{
+			desc: "zero step",
+			schedules: []string{
+				"*/0 * * * *",
+				"* 1-10/0 * * *",
+				"* * 1,*/0 * *",
+			},
+			expErrString: "step must be greater than 0",
+		},
+		{
+			desc: "reversed range",
+			schedules: []string{
+				"10-5/2 * * * *",
+				"* 10-5 * * *",
+			},
+			expErrString: "range start 10 is greater than end 5",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			for _, s := range tc.schedules {
-				j, err := parseSchedule(s)
+				j, err := parseScheduleWithTimeout(t, s)
 
 				assert.Nil(t, j)
 				require.ErrorContains(t, err, tc.expErrString)
 			}
+		})
+	}
+}
+
+func TestCron_parseSchedule_EmptyListValue(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		schedule string
+		expErr   string
+	}{
+		{desc: "trailing comma after a step", schedule: "*/30, * * * *", expErr: "empty value in list in */30,"},
+		{desc: "trailing comma after a range step", schedule: "* 0-10/5, * * *", expErr: "empty value in list in 0-10/5,"},
+		{desc: "two commas in a row", schedule: "5,,6 * * * *", expErr: "empty value in list in 5,,6"},
+		{desc: "leading comma", schedule: "* * ,1 * *", expErr: "empty value in list in ,1"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			j, err := parseScheduleWithTimeout(t, tc.schedule)
+
+			assert.Nil(t, j)
+			require.EqualError(t, err, tc.expErr)
+		})
+	}
+}
+
+// parseScheduleWithTimeout fails the test when parseSchedule does not return within 2 seconds, so that a
+// regression to an endless loop, as a zero step used to cause, fails fast instead of hanging the whole package.
+func parseScheduleWithTimeout(t *testing.T, s string) (*job, error) {
+	t.Helper()
+
+	type result struct {
+		j   *job
+		err error
+	}
+
+	done := make(chan result, 1)
+
+	go func() {
+		j, err := parseSchedule(s)
+		done <- result{j, err}
+	}()
+
+	var res result
+
+	select {
+	case res = <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("parseSchedule(%q) did not return within 2s", s)
+	}
+
+	return res.j, res.err
+}
+
+func TestCron_parseSchedule_StepInCommaList(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		schedule string
+		expJob   *job
+	}{
+		{
+			desc:     "step inside a comma list",
+			schedule: "*/30,45 * * * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 30: {}, 45: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       getDefaultJobField(1, 31, 1),
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: getDefaultJobField(0, 6, 1),
+			},
+		},
+		{
+			desc:     "range with step inside a comma list",
+			schedule: "0-10/5,30 * 1,2,3,1-15/10 * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 5: {}, 10: {}, 30: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       map[int]struct{}{1: {}, 2: {}, 3: {}, 11: {}},
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: map[int]struct{}{},
+			},
+		},
+		{
+			desc:     "two steps in a comma list",
+			schedule: "*/15,*/20 * * * *",
+			expJob: &job{
+				min:       map[int]struct{}{0: {}, 15: {}, 20: {}, 30: {}, 40: {}, 45: {}},
+				hour:      getDefaultJobField(0, 23, 1),
+				day:       getDefaultJobField(1, 31, 1),
+				month:     getDefaultJobField(1, 12, 1),
+				dayOfWeek: getDefaultJobField(0, 6, 1),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			j, err := parseSchedule(tc.schedule)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expJob, j)
 		})
 	}
 }
@@ -876,6 +993,27 @@ func TestErrOutOfRange_Error(t *testing.T) {
 	err := errOutOfRange{rangeVal: "65", input: "65-70", min: 0, max: 59}
 
 	expected := "out of range for 65 in 65-70. 65 must be in range 0-59"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrReversedRange_Error(t *testing.T) {
+	err := errReversedRange{start: 10, end: 5, input: "10-5/2"}
+
+	expected := "range start 10 is greater than end 5 in 10-5/2"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrInvalidStep_Error(t *testing.T) {
+	err := errInvalidStep{input: "*/0"}
+
+	expected := "step must be greater than 0 in */0"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestErrEmptyListValue_Error(t *testing.T) {
+	err := errEmptyListValue{input: "*/30,"}
+
+	expected := "empty value in list in */30,"
 	assert.Equal(t, expected, err.Error())
 }
 
