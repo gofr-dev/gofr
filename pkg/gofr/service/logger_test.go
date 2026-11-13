@@ -2,10 +2,23 @@ package service
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+type spyLogger struct {
+	logged []any
+}
+
+func (s *spyLogger) Log(args ...any) {
+	s.logged = append(s.logged, args...)
+}
 
 func TestLog_PrettyPrint(t *testing.T) {
 	w := new(bytes.Buffer)
@@ -63,4 +76,92 @@ func Test_ColorForStatusCode(t *testing.T) {
 
 		assert.Equal(t, tc.expOut, out)
 	}
+}
+
+func TestLog_JSON(t *testing.T) {
+	l := &Log{
+		Timestamp:     time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC),
+		ResponseTime:  150,
+		LatencyUnit:   "µs",
+		CorrelationID: "test-correlation-id",
+		ResponseCode:  200,
+		HTTPMethod:    "GET",
+		URI:           "/api/test",
+	}
+
+	data, err := json.Marshal(l)
+	require.NoError(t, err)
+
+	var m map[string]any
+	err = json.Unmarshal(data, &m)
+	require.NoError(t, err)
+
+	assert.Equal(t, "µs", m["latency_unit"], "latency_unit should be µs to match the pretty-printed output")
+	assert.Equal(t, float64(150), m["latency"])
+	assert.Equal(t, "GET", m["httpMethod"])
+	assert.Equal(t, "/api/test", m["uri"])
+	assert.Equal(t, float64(200), m["responseCode"])
+	assert.Equal(t, "test-correlation-id", m["correlationId"])
+}
+
+func TestErrorLog_JSON(t *testing.T) {
+	el := &ErrorLog{
+		Log: &Log{
+			Timestamp:     time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC),
+			ResponseTime:  250,
+			LatencyUnit:   "µs",
+			CorrelationID: "err-correlation-id",
+			ResponseCode:  503,
+			HTTPMethod:    "POST",
+			URI:           "/api/fail",
+		},
+		ErrorMessage: "service unavailable",
+	}
+
+	data, err := json.Marshal(el)
+	require.NoError(t, err)
+
+	var m map[string]any
+	err = json.Unmarshal(data, &m)
+	require.NoError(t, err)
+
+	assert.Equal(t, "µs", m["latency_unit"])
+	assert.Equal(t, float64(250), m["latency"])
+	assert.Equal(t, "service unavailable", m["errorMessage"])
+}
+
+func TestCreateAndSendRequest_LatencyUnit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	logger := &spyLogger{}
+	svc := NewHTTPService(server.URL, logger, nil)
+
+	resp, err := svc.Get(t.Context(), "/test", nil)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Len(t, logger.logged, 1)
+	entry, ok := logger.logged[0].(*Log)
+	require.True(t, ok)
+	assert.Equal(t, "µs", entry.LatencyUnit)
+}
+
+func TestCreateAndSendRequest_ErrorLog_LatencyUnit(t *testing.T) {
+	logger := &spyLogger{}
+	svc := NewHTTPService("http://127.0.0.1:1", logger, nil)
+
+	resp, err := svc.Get(t.Context(), "/test", nil)
+	require.Error(t, err)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+
+	require.Len(t, logger.logged, 1)
+	errEntry, ok := logger.logged[0].(*ErrorLog)
+	require.True(t, ok)
+	require.NotNil(t, errEntry.Log)
+	assert.Equal(t, "µs", errEntry.Log.LatencyUnit)
 }

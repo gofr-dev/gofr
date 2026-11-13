@@ -230,6 +230,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	log := &Log{
 		Timestamp:     time.Now(),
+		LatencyUnit:   "µs",
 		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
