@@ -568,13 +568,8 @@ func TestHTTPService_createAndSendRequest_RedactsAddressCredentials(t *testing.T
 
 	// The mock logger writes to the stdout it saw when it was built, so the service is built inside.
 	logs := testutil.StdoutOutputForFunc(func() {
-		service := &httpService{
-			Client:  http.DefaultClient,
-			url:     "http://admin:hunter2@" + host,
-			Tracer:  trace.NewTracerProvider(trace.WithSpanProcessor(recorder)).Tracer("gofr-http-client"),
-			Logger:  logging.NewMockLogger(logging.INFO),
-			Metrics: metrics,
-		}
+		service := NewHTTPService("http://admin:hunter2@"+host, logging.NewMockLogger(logging.INFO), metrics).(*httpService)
+		service.Tracer = trace.NewTracerProvider(trace.WithSpanProcessor(recorder)).Tracer("gofr-http-client")
 
 		resp, err := service.createAndSendRequest(t.Context(), http.MethodGet, "test-path", nil, nil, nil)
 		require.NoError(t, err)
@@ -598,4 +593,67 @@ func TestHTTPService_createAndSendRequest_RedactsAddressCredentials(t *testing.T
 	assert.Contains(t, spanNames, "http://REDACTED@"+host+"/test-path")
 	assert.NotContains(t, strings.Join(spans, " "), "hunter2")
 	assert.NotContains(t, strings.Join(spans, " "), base64.StdEncoding.EncodeToString([]byte("admin:hunter2")))
+}
+
+func TestNewHTTPService_RedactedURL(t *testing.T) {
+	tests := []struct {
+		desc     string
+		address  string
+		expected string
+	}{
+		{desc: "no credentials", address: "http://localhost:9000", expected: ""},
+		{desc: "user and password", address: "http://admin:hunter2@localhost:9000", expected: "http://REDACTED@localhost:9000"},
+		{desc: "token as user", address: "https://ghp_token@api.example.com", expected: "https://REDACTED@api.example.com"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			service := NewHTTPService(tc.address, logging.NewMockLogger(logging.INFO), nil).(*httpService)
+
+			assert.Equal(t, tc.expected, service.redactedURL)
+			assert.Equal(t, tc.address, service.url)
+		})
+	}
+}
+
+func TestHTTPService_createAndSendRequest_RedactsAddressCredentialsInErrors(t *testing.T) {
+	// A listener that is closed at once gives an address nothing answers on.
+	server := httptest.NewServer(http.NotFoundHandler())
+	host := server.Listener.Addr().String()
+	server.Close()
+
+	tests := []struct {
+		desc    string
+		address string
+		secrets []string
+	}{
+		{desc: "token as user, upstream down", address: "http://ghp_secrettoken@" + host, secrets: []string{"ghp_secrettoken"}},
+		{desc: "user and password, upstream down", address: "http://admin:hunter2@" + host,
+			secrets: []string{"admin", "hunter2"}},
+		{desc: "password with a bad escape", address: "http://admin:hun%zzter2@" + host, secrets: []string{"admin", "hun", "ter2"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var err error
+
+			// The mock logger writes to the stdout it saw when it was built, so the service is built inside.
+			logs := testutil.StdoutOutputForFunc(func() {
+				service := NewHTTPService(tc.address, logging.NewMockLogger(logging.INFO), nil)
+
+				var resp *http.Response
+
+				resp, err = service.Get(t.Context(), "orders", nil) //nolint:bodyclose // resp is nil when err is set.
+				assert.Nil(t, resp)
+			})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "REDACTED@")
+
+			for _, secret := range tc.secrets {
+				assert.NotContains(t, err.Error(), secret)
+				assert.NotContains(t, logs, secret)
+			}
+		})
+	}
 }

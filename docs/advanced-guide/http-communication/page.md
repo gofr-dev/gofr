@@ -355,8 +355,10 @@ GoFr publishes the following metrics for HTTP service communication:
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
 - `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
 
-If the service address carries credentials (`https://user:pass@host`), they are replaced with `REDACTED` in the
-`path` label, in the service's request logs and in span names. The request itself still uses the address as given.
+If the service address carries credentials (`https://user:pass@host` or `https://token@host`), they are replaced
+with `REDACTED` in the `path` label, in the service's request and error logs, in span names and in the errors the
+service returns. The request itself still uses the address as given.
+
 ## Related production guides
 
 - **Distributed Tracing**: [Trace inter-service HTTP calls end-to-end](/docs/guides/distributed-tracing) — context propagation across GoFr's HTTP client.
