@@ -34,13 +34,29 @@ func TestNewgRPCLogger(t *testing.T) {
 
 func TestRPCLog_String(t *testing.T) {
 	l := gRPCLog{
-		ID:         "123",
-		StartTime:  "2020-01-01T12:12:12",
-		Method:     http.MethodGet,
-		StatusCode: 0,
+		ID:           "123",
+		StartTime:    "2020-01-01T12:12:12",
+		ResponseTime: 0,
+		Method:       http.MethodGet,
+		StatusCode:   0,
 	}
 
 	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"method":"GET","statusCode":0}`
+
+	assert.Equal(t, expLog, l.String())
+}
+
+func TestRPCLog_String_WithUnit(t *testing.T) {
+	l := gRPCLog{
+		ID:               "123",
+		StartTime:        "2020-01-01T12:12:12",
+		ResponseTime:     0,
+		ResponseTimeUnit: "µs",
+		Method:           http.MethodGet,
+		StatusCode:       0,
+	}
+
+	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"response_time_unit":"µs","method":"GET","statusCode":0}`
 
 	assert.Equal(t, expLog, l.String())
 }
@@ -55,6 +71,23 @@ func TestRPCLog_StringWithStreamType(t *testing.T) {
 	}
 
 	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,` +
+		`"method":"/test.Service/Method","statusCode":0,"streamType":"CLIENT_STREAM"}`
+
+	assert.Equal(t, expLog, l.String())
+}
+
+func TestRPCLog_StringWithStreamType_WithUnit(t *testing.T) {
+	l := gRPCLog{
+		ID:               "123",
+		StartTime:        "2020-01-01T12:12:12",
+		ResponseTime:     0,
+		ResponseTimeUnit: "µs",
+		Method:           "/test.Service/Method",
+		StatusCode:       0,
+		StreamType:       "CLIENT_STREAM",
+	}
+
+	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"response_time_unit":"µs",` +
 		`"method":"/test.Service/Method","statusCode":0,"streamType":"CLIENT_STREAM"}`
 
 	assert.Equal(t, expLog, l.String())
@@ -221,6 +254,40 @@ func TestGRPCLog_DocumentRPCLog(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
+}
+
+func TestLogRPC_ResponseTimeUnit(t *testing.T) {
+	mockLogger, mockMetrics, ctrl := createMocks(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+	start := time.Now()
+
+	mockLogger.EXPECT().Info(gomock.Any()).Do(func(arg any) {
+		entry, ok := arg.(*gRPCLog)
+		require.True(t, ok)
+		assert.Equal(t, "µs", entry.ResponseTimeUnit)
+	}).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	logRPC(ctx, mockLogger, mockMetrics, start, nil, "/test.Service/Unary", "test_metric")
+}
+
+func TestLogStreamRPC_ResponseTimeUnit(t *testing.T) {
+	mockLogger, mockMetrics, ctrl := createMocks(t)
+	defer ctrl.Finish()
+
+	ctx := t.Context()
+	start := time.Now()
+
+	mockLogger.EXPECT().Info(gomock.Any()).Do(func(arg any) {
+		entry, ok := arg.(*gRPCLog)
+		require.True(t, ok)
+		assert.Equal(t, "µs", entry.ResponseTimeUnit)
+	}).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	logStreamRPC(ctx, mockLogger, mockMetrics, start, nil, "/test.Service/Stream", streamTypeServer, "test_stream_metric")
 }
 
 func TestObservabilityInterceptor(t *testing.T) {
