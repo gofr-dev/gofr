@@ -61,6 +61,12 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
+	// ConnMaxLifetime is the longest a connection may be reused before it is closed (DB_CONN_MAX_LIFETIME).
+	// Zero leaves connections open indefinitely.
+	ConnMaxLifetime time.Duration
+	// ConnMaxIdleTime is the longest a connection may sit idle before it is closed (DB_CONN_MAX_IDLE_TIME).
+	// Zero never closes a connection for being idle.
+	ConnMaxIdleTime time.Duration
 	// connectTimeout is the connect timeout in whole seconds for the networked dialects; zero
 	// leaves the driver default (no timeout) in place. For MySQL it bounds only the TCP dial.
 	connectTimeout int
@@ -78,6 +84,12 @@ const redactedPassword = "*****"
 
 // redactArgsKey names the config that, set to true, masks query arguments.
 const redactArgsKey = "DB_REDACT_ARGS"
+
+// Config keys for the connection pool's time limits.
+const (
+	connMaxLifetimeKey = "DB_CONN_MAX_LIFETIME"
+	connMaxIdleTimeKey = "DB_CONN_MAX_IDLE_TIME"
+)
 
 // String implements fmt.Stringer so that logging a DBConfig — directly or as part
 // of a larger struct, with %v or %+v — never leaks the raw password. The Password
@@ -159,6 +171,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	warnInvalidRedactArgs(configs, logger)
 
 	dbConfig.connectTimeout = getConnectTimeout(dbConfig.Dialect, configs, logger)
+	dbConfig.ConnMaxLifetime = getConnDuration(connMaxLifetimeKey, configs, logger)
+	dbConfig.ConnMaxIdleTime = getConnDuration(connMaxIdleTimeKey, configs, logger)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
@@ -265,6 +279,8 @@ func NewSQLFromConnector(connector driver.Connector, conf config.Config,
 	// The connector owns routing (host/port/TLS), so a port label is meaningless on
 	// this path; clear it so connection logs don't print a dangling ':' after the host.
 	dbConfig.Port = ""
+	dbConfig.ConnMaxLifetime = getConnDuration(connMaxLifetimeKey, conf, logger)
+	dbConfig.ConnMaxIdleTime = getConnDuration(connMaxIdleTimeKey, conf, logger)
 
 	database := &DB{
 		DB:         otelsql.OpenDB(connector),
@@ -284,10 +300,18 @@ func NewSQLFromConnector(connector driver.Connector, conf config.Config,
 // background retry + metrics goroutines. Shared by NewSQL and NewSQLFromDB so both
 // connection paths get identical post-open behavior.
 func finalizeConnection(database *DB) *DB {
-	// We are not setting idle connection timeout because we are checking for connection
-	// every 10 seconds which would need a connection, moreover if connection expires it is
-	// automatically closed by the database/sql package.
 	database.DB.SetMaxIdleConns(database.config.MaxIdleConn)
+
+	// Zero means "no limit", which is already the database/sql default. Only apply a
+	// positive value so a *sql.DB handed to NewSQLFromDB keeps limits it set itself.
+	if database.config.ConnMaxLifetime > 0 {
+		database.DB.SetConnMaxLifetime(database.config.ConnMaxLifetime)
+	}
+
+	if database.config.ConnMaxIdleTime > 0 {
+		database.DB.SetConnMaxIdleTime(database.config.ConnMaxIdleTime)
+	}
+
 	// We are not setting max open connection because any connection which is expired,
 	// it is closed automatically.
 	database.DB.SetMaxOpenConns(database.config.MaxOpenConn)
@@ -447,6 +471,25 @@ func warnInvalidRedactArgs(configs config.Config, logger datasource.Logger) {
 	if _, err := strconv.ParseBool(strings.TrimSpace(redactArgs)); err != nil {
 		logger.Warnf("invalid %s %q, expected true or false; query arguments stay visible in logs", redactArgsKey, redactArgs)
 	}
+}
+
+// getConnDuration reads a pool duration setting (DB_CONN_MAX_LIFETIME or DB_CONN_MAX_IDLE_TIME) written
+// as a Go duration such as "30m". Unset or 0 means no limit, as before the keys existed; a negative or
+// unparsable value is logged and ignored.
+func getConnDuration(key string, configs config.Config, logger datasource.Logger) time.Duration {
+	raw := strings.TrimSpace(configs.Get(key))
+	if raw == "" {
+		return 0
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 0 {
+		logger.Warnf("invalid %s %q, expected a non-negative duration such as 30m; connections have no such limit", key, raw)
+
+		return 0
+	}
+
+	return d
 }
 
 // getConnectTimeout reads DB_CONNECT_TIMEOUT (whole seconds) for a networked dialect. Unset or 0

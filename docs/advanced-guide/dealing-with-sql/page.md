@@ -46,7 +46,12 @@ Add the following configs in `.env` file.
 ```dotenv
 DB_MAX_IDLE_CONNECTION=5 // Default 2
 DB_MAX_OPEN_CONNECTION=5 // Default unlimited
+DB_CONN_MAX_LIFETIME=30m // Default no limit
+DB_CONN_MAX_IDLE_TIME=5m // Default no limit
 ```
+
+`DB_CONN_MAX_LIFETIME` and `DB_CONN_MAX_IDLE_TIME` take a Go duration (`30s`, `5m`, `1h`). Use them when a proxy, load balancer or
+managed database closes old or idle connections on its side, so GoFr recycles them first.
 > ##### Check out the example on how to add configuration for SQL in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)
 
 ## Keeping query arguments out of logs and traces
