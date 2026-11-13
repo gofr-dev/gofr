@@ -24,6 +24,7 @@ var (
 	errOddBasicAuthCredentials  = errors.New("invalid number of arguments for basic auth: expected username/password pairs")
 	errEmptyBasicAuthCredential = errors.New("empty username or password for basic auth")
 	errInvalidJWKSEndpoint      = errors.New("invalid JWKS endpoint URL")
+	errInvalidRefreshInterval   = errors.New("invalid JWKS refresh interval: expected a positive number of seconds")
 )
 
 // EnableBasicAuth enables basic authentication for the application.
@@ -139,8 +140,9 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 // https://pkg.go.dev/github.com/golang-jwt/jwt/v4#ParserOption
 //
 // It returns an error, and installs no middleware, if jwksEndpoint is not an http or https URL
-// with a host. The error is also logged, so an app that ignores it still sees why authentication
-// is off; return or exit on it to stop startup instead.
+// with a host or refreshInterval is not a positive number of seconds. The error is also logged,
+// so an app that ignores it still sees why authentication is off; return or exit on it to stop
+// startup instead.
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int, options ...jwt.ParserOption) error {
 	return a.authDisabled(a.enableOAuth(jwksEndpoint, refreshInterval, options...), "OAuth authentication", "EnableOAuth")
 }
@@ -157,6 +159,10 @@ func (a *App) enableOAuth(jwksEndpoint string, refreshInterval int, options ...j
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return fmt.Errorf("%w: unsupported scheme %q", errInvalidJWKSEndpoint, parsedURL.Scheme)
+	}
+
+	if refreshInterval <= 0 {
+		return fmt.Errorf("%w: got %d", errInvalidRefreshInterval, refreshInterval)
 	}
 
 	baseURL := parsedURL.Scheme + "://" + parsedURL.Host

@@ -39,6 +39,9 @@ const (
 	redisUserKey              = "REDIS_USER"
 	redisPasswordKey          = "REDIS_PASSWORD"
 	redisTLSEnabledKey        = "REDIS_TLS_ENABLED"
+	redactArgsKey             = "REDIS_REDACT_ARGS"
+	// redactedArg stands in for each command argument when REDIS_REDACT_ARGS is true.
+	redactedArg = "*****"
 )
 
 var (
@@ -73,6 +76,8 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	} else {
 		redisConfig = configFromVars(c, logger)
 	}
+
+	redisConfig.hideArgs = hideArgs(c, logger)
 
 	applyPoolOptions(c, redisConfig.Options, logger)
 
@@ -310,6 +315,26 @@ func applyTLSFiles(c config.Config, tlsConfig *tls.Config, logger datasource.Log
 			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
 	}
+}
+
+// hideArgs reports whether REDIS_REDACT_ARGS asks for command arguments to be
+// hidden. Only a value that parses as boolean true hides them; an unparsable
+// value is warned about and keeps them visible.
+func hideArgs(c config.Config, logger datasource.Logger) bool {
+	redactArgs := c.Get(redactArgsKey)
+	if redactArgs == "" {
+		return false
+	}
+
+	redact, err := strconv.ParseBool(strings.TrimSpace(redactArgs))
+	if err != nil {
+		logger.Warnf("invalid %s %q, expected true or false; command arguments stay visible in logs and traces",
+			redactArgsKey, redactArgs)
+
+		return false
+	}
+
+	return redact
 }
 
 // parsePubSubConfig parses PubSub configuration from environment variables.

@@ -28,7 +28,7 @@ const (
     expires_at TIMESTAMP NOT NULL
 );`
 
-	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
+	getSQLGoFrMigrationVersions = `SELECT DISTINCT version FROM gofr_migrations;`
 
 	insertGoFrMigrationRowMySQL    = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
@@ -80,22 +80,47 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	return d.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
-	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
+func (d sqlMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	versions, err := d.queryAppliedVersions(c)
 	if err != nil {
-		return -1, fmt.Errorf("sql: %w", err)
+		return nil, fmt.Errorf("sql: %w", err)
 	}
 
-	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
+	c.Debugf("SQL applied migrations fetched: %v", versions)
 
-	lm2, err := d.migrator.getLastMigration(c)
+	applied, err := d.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
+}
+
+func (sqlMigrator) queryAppliedVersions(c *container.Container) ([]int64, error) {
+	rows, err := c.SQL.QueryContext(context.Background(), getSQLGoFrMigrationVersions)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var versions []int64
+
+	for rows.Next() {
+		var v int64
+
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+
+		versions = append(versions, v)
+	}
+
+	return versions, rows.Err()
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data *transactionData) error {

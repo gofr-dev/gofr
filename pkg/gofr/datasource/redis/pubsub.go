@@ -56,7 +56,7 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
+		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
 		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
@@ -91,7 +91,7 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
+		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
 		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
@@ -100,6 +100,16 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
+}
+
+// loggedMessage returns the message body as it appears in the debug log:
+// masked when REDIS_REDACT_ARGS is true, verbatim otherwise.
+func (ps *PubSub) loggedMessage(message []byte) string {
+	if ps.config.hideArgs {
+		return redactedArg
+	}
+
+	return string(message)
 }
 
 // Subscribe subscribes to a Redis channel or stream and returns a single message.
@@ -278,7 +288,7 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 			ps.logger.Debug(&pubsub.Log{
 				Mode:          "SUB",
 				CorrelationID: span.SpanContext().TraceID().String(),
-				MessageValue:  string(msg.Value),
+				MessageValue:  ps.loggedMessage(msg.Value),
 				Topic:         topic,
 				Host:          ps.config.addr(),
 				PubSubBackend: redisBackend,
