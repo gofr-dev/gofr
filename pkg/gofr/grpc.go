@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
@@ -30,7 +31,19 @@ type grpcServer struct {
 	options            []grpc.ServerOption
 	port               int
 	config             config.Config
+
+	// lateUnary and lateStream hold the interceptors added after ensureServer built the server,
+	// chained into one. The server's chain ends with runLateUnary and runLateStream, which run
+	// them, so Enable*Auth and the AddGRPC*Interceptors methods work in either order around
+	// RegisterService. Writers hold srvMu; RPCs only load the pointer.
+	lateUnary  atomic.Pointer[grpc.UnaryServerInterceptor]
+	lateStream atomic.Pointer[grpc.StreamServerInterceptor]
 }
+
+// errMsgGRPCOptionsIgnored is logged when server options are added after RegisterService built the
+// gRPC server. Unlike interceptors, options cannot be applied to a running server.
+const errMsgGRPCOptionsIgnored = "gRPC server was already created by RegisterService, ignoring %d server options: " +
+	"options such as TLS credentials (grpc.Creds) are NOT active. Add them before registering gRPC services"
 
 // defaultInterceptorCount is the number of interceptors registered by default (recovery + observability).
 const defaultInterceptorCount = 2
@@ -67,6 +80,11 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Error("no gRPC server to add options to")
+		return
+	}
+
+	if g.getServer() != nil {
+		a.container.Logger.Errorf(errMsgGRPCOptionsIgnored, len(grpcOpts))
 		return
 	}
 
@@ -165,8 +183,13 @@ func (g *grpcServer) ensureServer() (*grpc.Server, error) {
 		return g.server, nil
 	}
 
-	interceptorOption := grpc.ChainUnaryInterceptor(g.interceptors...)
-	streamOpt := grpc.ChainStreamInterceptor(g.streamInterceptors...)
+	// The last link runs the interceptors added after this point; copies keep g.interceptors as given.
+	unary := append(append(make([]grpc.UnaryServerInterceptor, 0, len(g.interceptors)+1), g.interceptors...), g.runLateUnary)
+	stream := append(append(make([]grpc.StreamServerInterceptor, 0, len(g.streamInterceptors)+1),
+		g.streamInterceptors...), g.runLateStream)
+
+	interceptorOption := grpc.ChainUnaryInterceptor(unary...)
+	streamOpt := grpc.ChainStreamInterceptor(stream...)
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	srv := grpc.NewServer(g.options...)
@@ -346,10 +369,84 @@ func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
 	g.options = append(g.options, opts...)
 }
 
+// addUnaryInterceptors adds interceptors to the chain the server is built with or, once the
+// server exists, to the late chain that runs at the end of it.
 func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
-	g.interceptors = append(g.interceptors, interceptors...)
+	g.srvMu.Lock()
+	defer g.srvMu.Unlock()
+
+	if g.server == nil {
+		g.interceptors = append(g.interceptors, interceptors...)
+		return
+	}
+
+	for _, next := range interceptors {
+		chained := next
+		if late := g.lateUnary.Load(); late != nil {
+			chained = chainUnary(*late, next)
+		}
+
+		g.lateUnary.Store(&chained)
+	}
 }
 
+// addStreamInterceptors is addUnaryInterceptors for stream interceptors.
 func (g *grpcServer) addStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
-	g.streamInterceptors = append(g.streamInterceptors, interceptors...)
+	g.srvMu.Lock()
+	defer g.srvMu.Unlock()
+
+	if g.server == nil {
+		g.streamInterceptors = append(g.streamInterceptors, interceptors...)
+		return
+	}
+
+	for _, next := range interceptors {
+		chained := next
+		if late := g.lateStream.Load(); late != nil {
+			chained = chainStream(*late, next)
+		}
+
+		g.lateStream.Store(&chained)
+	}
+}
+
+// runLateUnary is the last interceptor of the server's chain. It runs the interceptors added after
+// the server was built, or goes straight to the handler when there are none.
+func (g *grpcServer) runLateUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler) (any, error) {
+	late := g.lateUnary.Load()
+	if late == nil {
+		return handler(ctx, req)
+	}
+
+	return (*late)(ctx, req, info, handler)
+}
+
+// runLateStream is runLateUnary for stream RPCs.
+func (g *grpcServer) runLateStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo,
+	handler grpc.StreamHandler) error {
+	late := g.lateStream.Load()
+	if late == nil {
+		return handler(srv, ss)
+	}
+
+	return (*late)(srv, ss, info, handler)
+}
+
+// chainUnary returns an interceptor that runs outer, then inner, then the handler.
+func chainUnary(outer, inner grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return outer(ctx, req, info, func(ctx context.Context, req any) (any, error) {
+			return inner(ctx, req, info, handler)
+		})
+	}
+}
+
+// chainStream is chainUnary for stream interceptors.
+func chainStream(outer, inner grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return outer(srv, ss, info, func(srv any, ss grpc.ServerStream) error {
+			return inner(srv, ss, info, handler)
+		})
+	}
 }

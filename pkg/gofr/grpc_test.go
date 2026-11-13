@@ -16,10 +16,12 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -769,6 +771,183 @@ func TestEnableBasicAuth_EmptyCredentialsGRPCFailClosed(t *testing.T) {
 		return nil
 	})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// grpcHealthClient serves the app's gRPC server on an in-memory listener and returns a health
+// client connected to it.
+func grpcHealthClient(t *testing.T, app *App) grpc_health_v1.HealthClient {
+	t.Helper()
+
+	srv, err := app.grpcServer.ensureServer()
+	require.NoError(t, err)
+
+	lis := bufconn.Listen(1 << 20)
+
+	go func() { _ = srv.Serve(lis) }()
+
+	t.Cleanup(srv.Stop)
+
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return grpc_health_v1.NewHealthClient(conn)
+}
+
+// TestApp_EnableAuthAfterRegisterService pins that authentication enabled after a gRPC service is
+// registered still guards its unary and stream RPCs, as it does when enabled first.
+func TestApp_EnableAuthAfterRegisterService(t *testing.T) {
+	tests := []struct {
+		desc   string
+		enable func(a *App)
+		creds  metadata.MD
+		expRPC codes.Code
+	}{
+		{
+			desc:   "basic auth",
+			enable: func(a *App) { _ = a.EnableBasicAuth("user", "pass") },
+			creds:  metadata.MD{"authorization": []string{"Basic dXNlcjpwYXNz"}}, // user:pass
+			expRPC: codes.OK,
+		},
+		{
+			desc: "basic auth with validator",
+			enable: func(a *App) {
+				a.EnableBasicAuthWithValidator(func(_ *container.Container, u, p string) bool { return u == "user" && p == "pass" })
+			},
+			creds:  metadata.MD{"authorization": []string{"Basic dXNlcjpwYXNz"}},
+			expRPC: codes.OK,
+		},
+		{
+			desc:   "API key auth",
+			enable: func(a *App) { a.EnableAPIKeyAuth("key") },
+			creds:  metadata.MD{"x-api-key": []string{"key"}},
+			expRPC: codes.OK,
+		},
+		{
+			desc: "API key auth with validator",
+			enable: func(a *App) {
+				a.EnableAPIKeyAuthWithValidator(func(_ *container.Container, key string) bool { return key == "key" })
+			},
+			creds:  metadata.MD{"x-api-key": []string{"key"}},
+			expRPC: codes.OK,
+		},
+		{
+			// No JWKS is reachable, so even a well-formed token is rejected: what matters is that
+			// the OAuth interceptor runs at all.
+			desc:   "OAuth",
+			enable: func(a *App) { _ = a.EnableOAuth("http://127.0.0.1:1/.well-known/jwks.json", 3600) },
+			creds:  metadata.MD{"authorization": []string{"Bearer a.b.c"}},
+			expRPC: codes.Unauthenticated,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			app := New()
+			app.RegisterService(&grpc_health_v1.Health_ServiceDesc, health.NewServer())
+			tc.enable(app)
+
+			client := grpcHealthClient(t, app)
+
+			_, err := client.Check(t.Context(), &grpc_health_v1.HealthCheckRequest{})
+			assert.Equal(t, codes.Unauthenticated, status.Code(err), "unary call without credentials")
+
+			watch, err := client.Watch(t.Context(), &grpc_health_v1.HealthCheckRequest{})
+			require.NoError(t, err)
+
+			_, err = watch.Recv()
+			assert.Equal(t, codes.Unauthenticated, status.Code(err), "stream call without credentials")
+
+			_, err = client.Check(metadata.NewOutgoingContext(t.Context(), tc.creds), &grpc_health_v1.HealthCheckRequest{})
+			assert.Equal(t, tc.expRPC, status.Code(err), "unary call with credentials")
+		})
+	}
+}
+
+// TestGRPCServer_LateInterceptorsRunInOrder pins that interceptors added after the server is built
+// run in the order they were added, before the handler, and that none means the handler runs directly.
+func TestGRPCServer_LateInterceptorsRunInOrder(t *testing.T) {
+	_, _, g := setupTestGRPCServer(t, 9999, false)
+
+	_, err := g.ensureServer()
+	require.NoError(t, err)
+
+	var calls []string
+
+	unaryHandler := func(context.Context, any) (any, error) {
+		calls = append(calls, "handler")
+
+		return "ok", nil
+	}
+
+	streamHandler := func(any, grpc.ServerStream) error {
+		calls = append(calls, "handler")
+
+		return nil
+	}
+
+	unary := func(name string) grpc.UnaryServerInterceptor {
+		return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			calls = append(calls, name)
+
+			return handler(ctx, req)
+		}
+	}
+
+	stream := func(name string) grpc.StreamServerInterceptor {
+		return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			calls = append(calls, name)
+
+			return handler(srv, ss)
+		}
+	}
+
+	resp, err := g.runLateUnary(t.Context(), nil, &grpc.UnaryServerInfo{}, unaryHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+	require.NoError(t, g.runLateStream(nil, nil, &grpc.StreamServerInfo{}, streamHandler))
+	assert.Equal(t, []string{"handler", "handler"}, calls)
+
+	calls = nil
+
+	g.addUnaryInterceptors(unary("u1"), unary("u2"))
+	g.addUnaryInterceptors(unary("u3"))
+	g.addStreamInterceptors(stream("s1"))
+	g.addStreamInterceptors(stream("s2"), stream("s3"))
+
+	_, err = g.runLateUnary(t.Context(), nil, &grpc.UnaryServerInfo{}, unaryHandler)
+	require.NoError(t, err)
+	require.NoError(t, g.runLateStream(nil, nil, &grpc.StreamServerInfo{}, streamHandler))
+
+	assert.Equal(t, []string{"u1", "u2", "u3", "handler", "s1", "s2", "s3", "handler"}, calls)
+
+	// The chain the server was built with is unchanged; late interceptors live only in the late chain.
+	assert.Len(t, g.interceptors, defaultInterceptorCount)
+	assert.Len(t, g.streamInterceptors, defaultInterceptorCount)
+}
+
+func TestApp_AddGRPCServerOptions_AfterServerCreated(t *testing.T) {
+	c, _, g := setupTestGRPCServer(t, 9999, false)
+
+	_, err := g.ensureServer()
+	require.NoError(t, err)
+
+	options := len(g.options)
+
+	logger := container.NewMockLogger(gomock.NewController(t))
+	logger.EXPECT().Errorf(errMsgGRPCOptionsIgnored, 1)
+	c.Logger = logger
+
+	a := &App{container: c, grpcServer: g}
+	a.AddGRPCServerOptions(grpc.MaxRecvMsgSize(1024))
+
+	assert.Len(t, g.options, options)
 }
 
 func TestStartGRPCServer_Registered(t *testing.T) {
