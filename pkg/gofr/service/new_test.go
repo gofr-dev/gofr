@@ -1,19 +1,23 @@
 package service
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 // TestMethodQueryMatchesInboundConstant pins the two copies of the QUERY method
@@ -514,4 +518,142 @@ func TestHTTPService_Query_EmptyBody(t *testing.T) {
 	resp, err := service.Query(t.Context(), "search", nil, nil)
 
 	validateResponse(t, resp, err, false)
+}
+
+func TestRedactAddress(t *testing.T) {
+	tests := []struct {
+		desc    string
+		address string
+		exp     string
+	}{
+		{desc: "no userinfo", address: "http://localhost:9000", exp: "http://localhost:9000"},
+		{desc: "no userinfo, with path", address: "https://api.example.com/v1/orders", exp: "https://api.example.com/v1/orders"},
+		{desc: "no scheme", address: "localhost:9000", exp: "localhost:9000"},
+		{desc: "@ in the path only", address: "http://localhost:9000/users/a@b.com", exp: "http://localhost:9000/users/a@b.com"},
+		{desc: "user and password", address: "http://admin:hunter2@localhost:9000", exp: "http://REDACTED@localhost:9000"},
+		{desc: "user and password, with path", address: "https://admin:hunter2@api.example.com/v1",
+			exp: "https://REDACTED@api.example.com/v1"},
+		{desc: "token as user", address: "https://ghp_token@api.example.com", exp: "https://REDACTED@api.example.com"},
+		{desc: "password with a bad escape", address: "http://admin:hun%zzter2@localhost:9000", exp: "REDACTED@localhost:9000"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.exp, redactAddress(tc.address))
+		})
+	}
+}
+
+func TestHTTPService_createAndSendRequest_RedactsAddressCredentials(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The request itself still carries the credentials from the address.
+		user, pass, ok := r.BasicAuth()
+		assert.True(t, ok)
+		assert.Equal(t, "admin", user)
+		assert.Equal(t, "hunter2", pass)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	host := server.Listener.Addr().String()
+
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", "http://REDACTED@"+host,
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
+
+	recorder := tracetest.NewSpanRecorder()
+
+	// The mock logger writes to the stdout it saw when it was built, so the service is built inside.
+	logs := testutil.StdoutOutputForFunc(func() {
+		service := NewHTTPService("http://admin:hunter2@"+host, logging.NewMockLogger(logging.INFO), metrics).(*httpService)
+		service.Tracer = trace.NewTracerProvider(trace.WithSpanProcessor(recorder)).Tracer("gofr-http-client")
+
+		resp, err := service.createAndSendRequest(t.Context(), http.MethodGet, "test-path", nil, nil, nil)
+		require.NoError(t, err)
+
+		resp.Body.Close()
+	})
+
+	assert.NotContains(t, logs, "hunter2")
+	assert.Contains(t, logs, "http://REDACTED@"+host+"/test-path")
+
+	// The request span is joined by the client-trace spans (connect, headers, ...); none may carry the
+	// password, in its name or its attributes, plain or base64-encoded as in the Authorization header.
+	spanNames := make([]string, 0, len(recorder.Ended()))
+	spans := make([]string, 0, len(recorder.Ended()))
+
+	for _, s := range recorder.Ended() {
+		spanNames = append(spanNames, s.Name())
+		spans = append(spans, fmt.Sprint(s.Name(), s.Attributes()))
+	}
+
+	assert.Contains(t, spanNames, "http://REDACTED@"+host+"/test-path")
+	assert.NotContains(t, strings.Join(spans, " "), "hunter2")
+	assert.NotContains(t, strings.Join(spans, " "), base64.StdEncoding.EncodeToString([]byte("admin:hunter2")))
+}
+
+func TestNewHTTPService_RedactedURL(t *testing.T) {
+	tests := []struct {
+		desc     string
+		address  string
+		expected string
+	}{
+		{desc: "no credentials", address: "http://localhost:9000", expected: ""},
+		{desc: "user and password", address: "http://admin:hunter2@localhost:9000", expected: "http://REDACTED@localhost:9000"},
+		{desc: "token as user", address: "https://ghp_token@api.example.com", expected: "https://REDACTED@api.example.com"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			service := NewHTTPService(tc.address, logging.NewMockLogger(logging.INFO), nil).(*httpService)
+
+			assert.Equal(t, tc.expected, service.redactedURL)
+			assert.Equal(t, tc.address, service.url)
+		})
+	}
+}
+
+func TestHTTPService_createAndSendRequest_RedactsAddressCredentialsInErrors(t *testing.T) {
+	// A listener that is closed at once gives an address nothing answers on.
+	server := httptest.NewServer(http.NotFoundHandler())
+	host := server.Listener.Addr().String()
+	server.Close()
+
+	tests := []struct {
+		desc    string
+		address string
+		secrets []string
+	}{
+		{desc: "token as user, upstream down", address: "http://ghp_secrettoken@" + host, secrets: []string{"ghp_secrettoken"}},
+		{desc: "user and password, upstream down", address: "http://admin:hunter2@" + host,
+			secrets: []string{"admin", "hunter2"}},
+		{desc: "password with a bad escape", address: "http://admin:hun%zzter2@" + host, secrets: []string{"admin", "hun", "ter2"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var err error
+
+			// The mock logger writes to the stdout it saw when it was built, so the service is built inside.
+			logs := testutil.StdoutOutputForFunc(func() {
+				service := NewHTTPService(tc.address, logging.NewMockLogger(logging.INFO), nil)
+
+				var resp *http.Response
+
+				resp, err = service.Get(t.Context(), "orders", nil) //nolint:bodyclose // resp is nil when err is set.
+				assert.Nil(t, resp)
+			})
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "REDACTED@")
+
+			for _, secret := range tc.secrets {
+				assert.NotContains(t, err.Error(), secret)
+				assert.NotContains(t, logs, secret)
+			}
+		})
+	}
 }
