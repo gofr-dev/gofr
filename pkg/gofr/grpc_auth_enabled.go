@@ -70,15 +70,6 @@ func (a *App) addGRPCInterceptors(build func() (grpc.UnaryServerInterceptor, grp
 		return
 	}
 
-	// RegisterService built the server from the interceptors it had then, so these would never run and
-	// every gRPC call would be served without authentication. Stop startup instead.
-	if g.getServer() != nil {
-		a.container.Logger.Fatal("gRPC authentication must be enabled before RegisterService: " +
-			"a gRPC service is already registered, so its calls would be served without authentication")
-
-		return
-	}
-
 	unary, stream := build()
 
 	g.addUnaryInterceptors(unary)

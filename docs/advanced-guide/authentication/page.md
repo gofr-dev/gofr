@@ -15,9 +15,6 @@ users can perform actions or access data within an application.
 GoFr offers a **Unified Authentication** model, meaning that once you enable an authentication method, it automatically 
 applies to both your HTTP and gRPC services.
 
-For gRPC, enable authentication before registering your gRPC services. If a service is already registered, the
-`Enable*Auth` call stops the app at startup, because the gRPC server would otherwise run without authentication.
-
 ## Exempted Paths
 
 By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check requires a `/` separator after the prefix, so a path such as `/.well-knownprivate` is not exempt). This includes:
