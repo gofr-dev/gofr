@@ -41,23 +41,23 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pm pubsubMigrator) getLastMigration(c *container.Container) (int64, error) {
+func (pm pubsubMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	// PubSub no longer participates in version tracking.
 	// We delegate directly to the next migrator in the chain (SQL, Redis, etc.).
-	return pm.migrator.getLastMigration(c)
+	return pm.migrator.getAppliedMigrations(c)
 }
 
 func (pm pubsubMigrator) beginTransaction(c *container.Container) transactionData {
 	return pm.migrator.beginTransaction(c)
 }
 
-func (pm pubsubMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (pm pubsubMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	// No migration entry is added to PubSub anymore.
 	// We only commit the migration in the primary data source.
 	return pm.migrator.commitMigration(c, data)
 }
 
-func (pm pubsubMigrator) rollback(c *container.Container, data transactionData) {
+func (pm pubsubMigrator) rollback(c *container.Container, data *transactionData) {
 	pm.migrator.rollback(c, data)
 }
 

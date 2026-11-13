@@ -9,7 +9,12 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-const dirPerm = 0755
+const (
+	dirPerm = 0755
+
+	// localLocation is the Location reported for the local filesystem.
+	localLocation = "local"
+)
 
 // localProvider implements StorageProvider for local filesystem.
 type localProvider struct{}
@@ -27,7 +32,7 @@ func NewLocalFileSystem(logger datasource.Logger) FileSystemProvider {
 
 	cfs := &CommonFileSystem{
 		Provider: provider,
-		Location: "local",
+		Location: localLocation,
 		Logger:   logger,
 		Metrics:  nil,
 	}

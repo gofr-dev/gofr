@@ -23,10 +23,8 @@ const (
 	arangoMigrationDB         = "_system"
 	arangoMigrationCollection = "gofr_migrations"
 
-	getLastArangoMigration = `
+	getArangoMigrationVersions = `
   FOR doc IN gofr_migrations
-    SORT doc.version DESC
-    LIMIT 1
     RETURN doc.version
 `
 	insertArangoMigrationRecord = `
@@ -79,29 +77,26 @@ func (am arangoMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return am.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (am arangoMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		lastMigrations []int64
-		lastMigration  int64
-	)
+func (am arangoMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var versions []int64
 
-	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
+	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getArangoMigrationVersions, nil, &versions)
 	if err != nil {
-		return -1, fmt.Errorf("arangodb: %w", err)
+		return nil, fmt.Errorf("arangodb: %w", err)
 	}
 
-	if len(lastMigrations) != 0 {
-		lastMigration = lastMigrations[0]
-	}
+	c.Debugf("ArangoDB applied migrations fetched: %v", versions)
 
-	c.Debugf("ArangoDB last migration fetched value is: %v", lastMigration)
-
-	lm2, err := am.migrator.getLastMigration(c)
+	applied, err := am.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, v := range versions {
+		applied[v] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (am arangoMigrator) beginTransaction(c *container.Container) transactionData {
@@ -112,13 +107,13 @@ func (am arangoMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-func (am arangoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (am arangoMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsArangoDB] {
 		bindVars := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime,
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime,
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		var result []map[string]any
@@ -134,7 +129,7 @@ func (am arangoMigrator) commitMigration(c *container.Container, data transactio
 	return am.migrator.commitMigration(c, data)
 }
 
-func (am arangoMigrator) rollback(c *container.Container, data transactionData) {
+func (am arangoMigrator) rollback(c *container.Container, data *transactionData) {
 	am.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)

@@ -115,32 +115,28 @@ func (om *openTSDBMigrator) createEmptyMigrationFile(c *container.Container) err
 	return nil
 }
 
-// getLastMigration reads JSON file to find the highest applied migration version.
-func (om *openTSDBMigrator) getLastMigration(c *container.Container) (int64, error) {
+// getAppliedMigrations reads JSON file to find every applied migration version.
+func (om *openTSDBMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	om.mu.Lock()
 	defer om.mu.Unlock()
 
-	var lastMigration int64
-
 	migrations, err := om.loadMigrationsUnsafe()
 	if err != nil {
-		return -1, fmt.Errorf("opentsdb: %w", err)
+		return nil, fmt.Errorf("opentsdb: %w", err)
+	}
+
+	c.Debugf("JSON migration file applied migrations: %v", len(migrations))
+
+	applied, err := om.migrator.getAppliedMigrations(c)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, m := range migrations {
-		if m.Version > lastMigration {
-			lastMigration = m.Version
-		}
+		applied[m.Version] = struct{}{}
 	}
 
-	c.Debugf("JSON migration file last migration: %v", lastMigration)
-
-	baseMigration, err := om.migrator.getLastMigration(c)
-	if err != nil {
-		return -1, err
-	}
-
-	return max(lastMigration, baseMigration), nil
+	return applied, nil
 }
 
 // beginTransaction delegates to base migrator.
@@ -150,7 +146,7 @@ func (om *openTSDBMigrator) beginTransaction(c *container.Container) transaction
 
 // commitMigration records a new migration in a JSON file in a thread-safe manner.
 // It prevents duplicates and delegates the actual migration logic to the embedded migrator.
-func (om *openTSDBMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (om *openTSDBMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	// First, delegate to base migrator to perform the actual migration
 	if err := om.migrator.commitMigration(c, data); err != nil {
 		return err
@@ -179,7 +175,7 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data transac
 	// Add new migration entry
 	newRecord := tsdbMigrationRecord{
 		Version:   data.MigrationNumber,
-		Method:    "UP",
+		Method:    migrationMethodUP,
 		StartTime: data.StartTime.Format(time.RFC3339),
 		Duration:  time.Since(data.StartTime).Milliseconds(),
 	}
@@ -271,7 +267,7 @@ func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigration
 }
 
 // rollback logs the failure and handles cleanup.
-func (om *openTSDBMigrator) rollback(c *container.Container, data transactionData) {
+func (om *openTSDBMigrator) rollback(c *container.Container, data *transactionData) {
 	// Clean up any temporary files
 	tmpFilePath := om.filePath + ".tmp"
 	if _, err := os.Stat(tmpFilePath); err == nil {

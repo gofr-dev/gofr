@@ -18,6 +18,8 @@ To connect to `ArangoDB`, you need to provide the following environment variable
 - `PASSWORD`: The password for the specified user.
 - `PORT`: The port number
 
+If any of these values is missing, GoFr logs the error, the ArangoDB health check reports `DOWN` with the reason in `details.error`, and ArangoDB calls return a "not connected to ArangoDB" error instead of panicking. If the server is unreachable at startup, GoFr logs the error and keeps the client; the health check reports `DOWN` (with the connection error in `details.error`) until the server becomes reachable, after which queries and the `app_arango_stats` metric work without a restart.
+
 ## Setup
 
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be

@@ -34,6 +34,11 @@ const (
 	mongoMigrationCollection = "gofr_migrations"
 	mongoLockCollection      = "gofr_migration_locks"
 	mongoLockDocumentID      = "gofr_migrations_lock"
+
+	// Field names of the lock document.
+	mongoFieldID        = "_id"
+	mongoFieldLockedBy  = "lockedBy"
+	mongoFieldExpiresAt = "expiresAt"
 )
 
 func isMongoCollectionExistsError(err error) bool {
@@ -62,47 +67,43 @@ func (mg mongoMigrator) checkAndCreateMigrationTable(c *container.Container) err
 	return mg.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var (
-		lastMigration int64
-		migrations    []struct {
-			Version int64 `bson:"version"`
-		}
-	)
+func (mg mongoMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	var migrations []struct {
+		Version int64 `bson:"version"`
+	}
 
 	filter := make(map[string]any)
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		return -1, fmt.Errorf("mongo: %w", err)
+		return nil, fmt.Errorf("mongo: %w", err)
 	}
 
-	// Identify the highest migration version.
-	for _, migration := range migrations {
-		lastMigration = max(lastMigration, migration.Version)
-	}
+	c.Debugf("MongoDB applied migrations fetched: %v", len(migrations))
 
-	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
-
-	lm2, err := mg.migrator.getLastMigration(c)
+	applied, err := mg.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, migration := range migrations {
+		applied[migration.Version] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
 	return mg.migrator.beginTransaction(c)
 }
 
-func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (mg mongoMigrator) commitMigration(c *container.Container, data *transactionData) error {
 	if data.UsedDatasources[dsMongo] {
 		migrationDoc := map[string]any{
-			"version":    data.MigrationNumber,
-			"method":     "UP",
-			"start_time": data.StartTime,
-			"duration":   time.Since(data.StartTime).Milliseconds(),
+			migrationFieldVersion:   data.MigrationNumber,
+			migrationFieldMethod:    migrationMethodUP,
+			migrationFieldStartTime: data.StartTime,
+			migrationFieldDuration:  time.Since(data.StartTime).Milliseconds(),
 		}
 
 		_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
@@ -116,7 +117,7 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 	return mg.migrator.commitMigration(c, data)
 }
 
-func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
+func (mg mongoMigrator) rollback(c *container.Container, data *transactionData) {
 	mg.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
@@ -136,14 +137,14 @@ func (mg mongoMigrator) startRefresh(ctx context.Context, cancel context.CancelF
 			now := time.Now()
 
 			filter := map[string]any{
-				"_id":      mongoLockDocumentID,
-				"lockedBy": ownerID,
+				mongoFieldID:       mongoLockDocumentID,
+				mongoFieldLockedBy: ownerID,
 			}
 
 			update := map[string]any{
 				"$set": map[string]any{
-					"lockedAt":  now,
-					"expiresAt": now.Add(defaultLockTTL),
+					"lockedAt":          now,
+					mongoFieldExpiresAt: now.Add(defaultLockTTL),
 				},
 			}
 
@@ -174,8 +175,8 @@ func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *
 		now := time.Now()
 
 		staleFilter := map[string]any{
-			"_id": mongoLockDocumentID,
-			"expiresAt": map[string]any{
+			mongoFieldID: mongoLockDocumentID,
+			mongoFieldExpiresAt: map[string]any{
 				"$lte": now,
 			},
 		}
@@ -185,10 +186,10 @@ func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *
 		}
 
 		lockDoc := map[string]any{
-			"_id":       mongoLockDocumentID,
-			"lockedAt":  now,
-			"lockedBy":  ownerID,
-			"expiresAt": now.Add(defaultLockTTL),
+			mongoFieldID:        mongoLockDocumentID,
+			"lockedAt":          now,
+			mongoFieldLockedBy:  ownerID,
+			mongoFieldExpiresAt: now.Add(defaultLockTTL),
 		}
 
 		_, err := mg.Mongo.InsertOne(ctx, mongoLockCollection, lockDoc)
@@ -218,8 +219,8 @@ func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *
 
 func (mg mongoMigrator) unlock(c *container.Container, ownerID string) error {
 	deleted, err := mg.Mongo.DeleteOne(context.Background(), mongoLockCollection, map[string]any{
-		"_id":      mongoLockDocumentID,
-		"lockedBy": ownerID,
+		mongoFieldID:       mongoLockDocumentID,
+		mongoFieldLockedBy: ownerID,
 	})
 	if err != nil {
 		c.Errorf("unable to release MongoDB lock: %v", err)

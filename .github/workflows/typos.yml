@@ -27,4 +27,4 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
       - name: typos-action
-        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
+        uses: crate-ci/typos@4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85 # v1.52.0

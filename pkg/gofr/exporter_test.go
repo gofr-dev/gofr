@@ -238,6 +238,40 @@ func Test_attributeToStringPair(t *testing.T) {
 	}
 }
 
+// Test_attributeToStringPair_StringFallbackTypes pins the value exported for the attribute
+// types that have no JSON encoding of their own and use the value's String form.
+func Test_attributeToStringPair_StringFallbackTypes(t *testing.T) {
+	tests := []struct {
+		name          string
+		keyValue      attribute.KeyValue
+		expectedValue string
+	}{
+		{
+			name:          "Slice",
+			keyValue:      attribute.Slice("sliceKey", attribute.StringValue("a"), attribute.Int64Value(1)),
+			expectedValue: `["a",1]`,
+		},
+		{
+			name:          "Map",
+			keyValue:      attribute.Map("mapKey", attribute.String("k", "v"), attribute.Bool("b", true)),
+			expectedValue: `{"b":true,"k":"v"}`,
+		},
+		{
+			name:          "EmptyStringSlice",
+			keyValue:      attribute.StringSlice("stringKey", nil),
+			expectedValue: `[]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, value := attributeToStringPair(tt.keyValue)
+			assert.Equal(t, string(tt.keyValue.Key), key)
+			assert.Equal(t, tt.expectedValue, value)
+		})
+	}
+}
+
 func Test_ExportSpans_InvalidEndpoint(t *testing.T) {
 	exporter := NewExporter("http://[::1", logging.NewMockLogger(logging.FATAL))
 

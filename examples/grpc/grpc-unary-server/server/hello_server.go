@@ -1,3 +1,5 @@
+//go:build !gofr_nogrpc
+
 // versions:
 // 	gofr-cli v0.6.0
 // 	gofr.dev v1.37.0

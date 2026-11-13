@@ -44,6 +44,9 @@ const (
 	graphqlSuccess  = "success"
 	graphqlError    = "error"
 	graphqlUnknown  = "unknown"
+
+	// graphqlErrorMessageKey is the key of the message in a GraphQL error object.
+	graphqlErrorMessageKey = "message"
 )
 
 // GraphQLLog represents a logged GraphQL resolver execution.
@@ -412,7 +415,7 @@ func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 
 func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Request) {
 	ct := r.Header.Get("Content-Type")
-	if ct != "" && !strings.HasPrefix(ct, "application/json") {
+	if ct != "" && !strings.HasPrefix(ct, contentTypeJSON) {
 		m.respondWithErrors(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 		return
 	}
@@ -455,7 +458,7 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 		Context:        ctx,
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", contentTypeJSON)
 
 	if len(result.Errors) > 0 {
 		m.container.Metrics().IncrementCounter(ctx, "app_graphql_error_total", "operation_name", opName, "type", opType)
@@ -513,12 +516,12 @@ func (*graphQLManager) parseOperation(query, operationName string) (opName, opTy
 }
 
 func (m *graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", contentTypeJSON)
 	w.WriteHeader(status)
 
 	err := json.NewEncoder(w).Encode(map[string]any{
 		"errors": []map[string]any{
-			{"message": message},
+			{graphqlErrorMessageKey: message},
 		},
 	})
 	if err != nil {

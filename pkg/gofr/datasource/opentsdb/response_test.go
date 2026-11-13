@@ -129,7 +129,7 @@ func TestOperateAnnotation_Errors(t *testing.T) {
 			resp:       &AnnotationResponse{},
 			method:     http.MethodPost,
 			mockCall:   func(*MockhttpClient) {},
-			expErr:     errInvalidArgument,
+			expErr:     errInvalidParam,
 		},
 		{
 			desc:       "invalid response type",

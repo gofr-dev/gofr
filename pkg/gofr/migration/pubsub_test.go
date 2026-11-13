@@ -77,15 +77,15 @@ func Test_pubsubMigrator_Delegation(t *testing.T) {
 	// All these methods should delegate to the base migrator (ds) without error
 	require.NoError(t, p.checkAndCreateMigrationTable(c))
 
-	v, err := p.getLastMigration(c)
+	applied, err := p.getAppliedMigrations(c)
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), v)
+	assert.Equal(t, map[int64]struct{}{}, applied)
 
 	assert.NotNil(t, p.beginTransaction(c))
-	require.NoError(t, p.commitMigration(c, transactionData{}))
+	require.NoError(t, p.commitMigration(c, &transactionData{}))
 
 	// Should not panic
-	p.rollback(c, transactionData{})
+	p.rollback(c, &transactionData{})
 	require.NoError(t, p.lock(context.TODO(), nil, c, "owner"))
 	require.NoError(t, p.unlock(c, "owner"))
 
@@ -126,10 +126,10 @@ func Test_PubSub_GhostDataConflict(t *testing.T) {
 	ps := pubsubDS{client: c.PubSub}
 	pm := ps.apply(rm)
 
-	version, err := pm.getLastMigration(c)
+	applied, err := pm.getAppliedMigrations(c)
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(0), version, "Migration version should be 0, ignoring ghost data in PubSub")
+	assert.Empty(t, applied, "No migration should be applied, ignoring ghost data in PubSub")
 }
 
 func Test_PubSub_NoEntryAdded(t *testing.T) {
@@ -155,7 +155,7 @@ func Test_PubSub_NoEntryAdded(t *testing.T) {
 	data.StartTime = time.Now()
 	data.UsedDatasources = map[string]bool{dsRedis: true}
 
-	err := pm.commitMigration(c, data)
+	err := pm.commitMigration(c, &data)
 	require.NoError(t, err)
 
 	// Check if entry was added to DB 1 (it should NOT be)

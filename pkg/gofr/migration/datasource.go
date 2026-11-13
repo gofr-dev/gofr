@@ -48,21 +48,21 @@ func (*Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (*Datasource) getLastMigration(*container.Container) (int64, error) {
-	return 0, nil
+func (*Datasource) getAppliedMigrations(*container.Container) (map[int64]struct{}, error) {
+	return map[int64]struct{}{}, nil
 }
 
 func (*Datasource) beginTransaction(*container.Container) transactionData {
 	return transactionData{}
 }
 
-func (*Datasource) commitMigration(c *container.Container, data transactionData) error {
+func (*Datasource) commitMigration(c *container.Container, data *transactionData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (*Datasource) rollback(*container.Container, transactionData) {}
+func (*Datasource) rollback(*container.Container, *transactionData) {}
 
 func (Datasource) lock(context.Context, context.CancelFunc, *container.Container, string) error {
 	return nil

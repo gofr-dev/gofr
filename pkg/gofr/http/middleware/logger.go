@@ -26,6 +26,11 @@ const (
 	envelopeCodeKey    = "code"
 	envelopeStatusKey  = "status"
 	envelopeMessageKey = "message"
+
+	// envelopeStatusError is the status the panic-recovery response reports.
+	envelopeStatusError = "ERROR"
+	// unknownPanicType is logged when a recovered panic value is neither a string nor an error.
+	unknownPanicType = "Unknown panic type"
 )
 
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
@@ -391,7 +396,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	case error:
 		e = t.Error()
 	default:
-		e = "Unknown panic type"
+		e = unknownPanicType
 	}
 
 	logger.Error(panicLog{
@@ -403,10 +408,17 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	res := map[string]any{
 		envelopeCodeKey:    http.StatusInternalServerError,
-		envelopeStatusKey:  "ERROR",
+		envelopeStatusKey:  envelopeStatusError,
 		envelopeMessageKey: "Some unexpected error has occurred",
 	}
-	_ = json.NewEncoder(w).Encode(res)
+
+	// The envelope is a fixed map that always marshals, so Encode can only fail writing to the
+	// client; the status is already committed, so logging the failure is all that is left to do.
+	// net/http buffers the first 2 KB of a response, and this envelope is well under that, so a
+	// client that has gone away usually does not surface here: no log does not mean it was received.
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		logger.Error("failed to write panic recovery response: " + err.Error())
+	}
 }
 
 // traceSpanIDs renders both IDs into ONE allocation.

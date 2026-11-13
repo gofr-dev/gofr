@@ -1,26 +1,18 @@
 package http
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/internal/routemark"
 )
 
-// routeTemplateCtxKey is the private context key under which the trie router
-// stores the matched route template (e.g. "/users/{id}"). It exists because,
-// once the trie router bypasses mux's ServeHTTP, mux.CurrentRoute(r) is no
-// longer populated, so the template must be carried some other way.
-type routeTemplateCtxKey struct{}
-
-// withRouteTemplate returns r carrying tmpl as the matched route template. An
-// empty template is a no-op so unmatched requests do not pay for a context copy.
-func withRouteTemplate(r *http.Request, tmpl string) *http.Request {
-	if tmpl == "" {
-		return r
-	}
-
-	return r.WithContext(context.WithValue(r.Context(), routeTemplateCtxKey{}, tmpl))
+// withRoute returns r carrying route as the matched route. It exists because, once the trie
+// router bypasses mux's ServeHTTP, mux.CurrentRoute(r) is no longer populated, so the route must be
+// carried some other way. A nil route is a no-op so unmatched requests do not pay for a context copy.
+func withRoute(r *http.Request, route *mux.Route) *http.Request {
+	return routemark.With(r, route)
 }
 
 // RouteTemplate returns the matched route template for r (e.g. "/users/{id}"),
@@ -31,11 +23,7 @@ func withRouteTemplate(r *http.Request, tmpl string) *http.Request {
 // via mux.CurrentRoute. Callers get consistent behavior without knowing which
 // router is active.
 func RouteTemplate(r *http.Request) string {
-	if tmpl, _ := r.Context().Value(routeTemplateCtxKey{}).(string); tmpl != "" {
-		return tmpl
-	}
-
-	if route := mux.CurrentRoute(r); route != nil {
+	if route := routemark.Matched(r); route != nil {
 		if tmpl, err := route.GetPathTemplate(); err == nil {
 			return tmpl
 		}
