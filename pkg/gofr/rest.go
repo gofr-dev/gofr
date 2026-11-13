@@ -66,9 +66,10 @@ func (a *App) add(method, pattern string, h Handler) {
 	}
 
 	var routeHandler http.Handler = handler{
-		function:       h,
-		container:      a.container,
-		requestTimeout: time.Duration(reqTimeout) * time.Second,
+		function:           h,
+		container:          a.container,
+		requestTimeout:     time.Duration(reqTimeout) * time.Second,
+		hideInternalErrors: a.httpServer.hideInternalErrors,
 	}
 
 	// RFC 10008: a QUERY request MUST carry a Content-Type the server can
