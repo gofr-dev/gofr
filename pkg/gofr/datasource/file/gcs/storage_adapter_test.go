@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -655,6 +656,7 @@ func TestStorageAdapter_StatObject_NotFound(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, errObjectNotFound)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	assert.Contains(t, err.Error(), "missing.txt")
 }
 

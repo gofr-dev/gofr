@@ -71,6 +71,9 @@ type SignedURLProvider interface {
 }
 
 // ObjectInfo represents cloud storage object metadata.
+//
+// Size is the object's length in bytes; 0 is an empty object. An adapter sets a negative
+// Size when the provider did not report one, so reads are not bounded by it.
 type ObjectInfo struct {
 	Name         string
 	Size         int64

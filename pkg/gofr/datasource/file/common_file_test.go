@@ -63,6 +63,11 @@ func TestCommonFile_Size(t *testing.T) {
 			size:         1073741824, // 1GB
 			expectedSize: 1073741824,
 		},
+		{
+			name:         "unknown size reports zero",
+			size:         -1,
+			expectedSize: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -283,7 +288,7 @@ func TestCommonFile_ReadAt_Various(t *testing.T) {
 
 	// Offset out of range
 	f2 := &CommonFile{size: 5, name: "oob.bin"}
-	_, err2 := f2.ReadAt(make([]byte, 2), 5)
+	_, err2 := f2.ReadAt(make([]byte, 2), 6)
 
 	assert.Equal(t, ErrOutOfRange, err2)
 
@@ -480,19 +485,107 @@ func TestCommonFile_Read_BodyResults(t *testing.T) {
 	}
 }
 
-func TestCommonFile_ReadAt_EmptyRangeReturnsEOF(t *testing.T) {
-	_, mockProvider, _ := setupCommonFS(t)
+// errAfterReader returns data on the first call and err on the next, like a connection dropped mid-body.
+type errAfterReader struct {
+	data []byte
+	err  error
+}
 
-	mockProvider.EXPECT().
-		NewRangeReader(gomock.Any(), "empty.bin", int64(0), int64(4)).
-		Return(io.NopCloser(bytes.NewReader(nil)), nil)
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
 
-	f := &CommonFile{provider: mockProvider, name: "empty.bin", size: 10}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
 
-	n, err := f.ReadAt(make([]byte, 4), 0)
+	return n, nil
+}
 
-	assert.Equal(t, 0, n)
-	require.ErrorIs(t, err, io.EOF)
+func TestCommonFile_ReadAt(t *testing.T) {
+	tests := []struct {
+		name      string
+		size      int64
+		off       int64
+		body      io.Reader
+		wantN     int
+		wantData  string
+		wantErr   error
+		noReader  bool
+		wantState string
+	}{
+		{
+			name: "full read", size: 10, off: 2, body: strings.NewReader("abcd"),
+			wantN: 4, wantData: "abcd", wantState: StatusSuccess,
+		},
+		{
+			name: "short read at end of object returns io.EOF", size: 10, off: 8, body: strings.NewReader("ab"),
+			wantN: 2, wantData: "ab", wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "error mid-body is returned with the bytes read", size: 10, off: 0,
+			body:  &errAfterReader{data: []byte("ab"), err: errTest},
+			wantN: 2, wantData: "ab", wantErr: errTest, wantState: StatusError,
+		},
+		{
+			name: "empty range returns io.EOF", size: 10, off: 0, body: bytes.NewReader(nil),
+			wantN: 0, wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "unknown size reads through the range reader", size: -1, off: 3, body: strings.NewReader("defg"),
+			wantN: 4, wantData: "defg", wantState: StatusSuccess,
+		},
+		{
+			name: "empty object returns io.EOF without a range read", size: 0, off: 0, noReader: true,
+			wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "offset at end of object returns io.EOF", size: 10, off: 10, noReader: true,
+			wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "negative offset is out of range", size: 10, off: -1, noReader: true,
+			wantErr: ErrOutOfRange, wantState: StatusError,
+		},
+		{
+			name: "offset past known size is out of range", size: 10, off: 11, noReader: true,
+			wantErr: ErrOutOfRange, wantState: StatusError,
+		},
+		{
+			name: "offset past an empty object is out of range", size: 0, off: 1, noReader: true,
+			wantErr: ErrOutOfRange, wantState: StatusError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockProvider := NewMockStorageProvider(ctrl)
+			metrics := &recordingMetrics{}
+
+			if !tt.noReader {
+				mockProvider.EXPECT().
+					NewRangeReader(gomock.Any(), "f.bin", tt.off, int64(4)).
+					Return(io.NopCloser(tt.body), nil)
+			}
+
+			f := &CommonFile{provider: mockProvider, name: "f.bin", size: tt.size, metrics: metrics}
+			p := make([]byte, 4)
+
+			n, err := f.ReadAt(p, tt.off)
+
+			assert.Equal(t, tt.wantN, n)
+			assert.Equal(t, tt.wantData, string(p[:n]))
+
+			if tt.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tt.wantErr)
+			}
+
+			assert.Equal(t, []string{tt.wantState}, metrics.statuses())
+		})
+	}
 }
 
 func TestCommonFile_Write_WriterError(t *testing.T) {
