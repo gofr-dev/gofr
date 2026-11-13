@@ -158,6 +158,10 @@ func main() {
 
 To customize your gRPC server, use `AddGRPCServerOptions()`.
 
+> Note: The gRPC server is built when the first service is registered, so call `AddGRPCServerOptions()`, the
+> `AddGRPC*Interceptors()` methods and the `Enable*Auth` methods before registering services. Server options and
+> interceptors added later are ignored with an error log, and enabling authentication later stops the app at startup.
+
 ### Example: Enabling TLS & other ServerOptions
 ```go
 func main() {

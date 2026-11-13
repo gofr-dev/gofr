@@ -32,6 +32,11 @@ type grpcServer struct {
 	config             config.Config
 }
 
+// errMsgGRPCServerCreated is logged when interceptors or options are added after RegisterService
+// built the gRPC server, which reads them only once. Args: how many were dropped, and what they are.
+const errMsgGRPCServerCreated = "gRPC server was already created by RegisterService, ignoring %d %s: " +
+	"add them before registering gRPC services"
+
 // defaultInterceptorCount is the number of interceptors registered by default (recovery + observability).
 const defaultInterceptorCount = 2
 
@@ -70,6 +75,11 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 		return
 	}
 
+	if g.getServer() != nil {
+		a.container.Logger.Errorf(errMsgGRPCServerCreated, len(grpcOpts), "server options")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d gRPC server options", len(grpcOpts))
 	g.addServerOptions(grpcOpts...)
 }
@@ -95,6 +105,11 @@ func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerIntercept
 		return
 	}
 
+	if g.getServer() != nil {
+		a.container.Logger.Errorf(errMsgGRPCServerCreated, len(interceptors), "unary interceptors")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d valid unary interceptors", len(interceptors))
 	g.addUnaryInterceptors(interceptors...)
 }
@@ -108,6 +123,11 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 	g := a.grpcServer
 	if g == nil {
 		a.container.Logger.Error("no gRPC server to add stream interceptors to")
+		return
+	}
+
+	if g.getServer() != nil {
+		a.container.Logger.Errorf(errMsgGRPCServerCreated, len(interceptors), "stream interceptors")
 		return
 	}
 

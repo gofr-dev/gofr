@@ -658,6 +658,108 @@ func TestApp_AddGRPCServerOptionsAndInterceptors(t *testing.T) {
 	}
 }
 
+func TestApp_AddGRPCServerOptionsAndInterceptors_AfterServerCreated(t *testing.T) {
+	unary := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(ctx, req)
+	}
+
+	stream := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, ss)
+	}
+
+	otherStream := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, ss)
+	}
+
+	tests := []struct {
+		desc       string
+		call       func(a *App)
+		setupMocks func(l *container.MockLogger)
+	}{
+		{
+			desc: "server options",
+			call: func(a *App) { a.AddGRPCServerOptions(grpc.MaxRecvMsgSize(1024)) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Errorf(errMsgGRPCServerCreated, 1, "server options")
+			},
+		},
+		{
+			desc: "unary interceptors",
+			call: func(a *App) { a.AddGRPCUnaryInterceptors(unary) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Errorf(errMsgGRPCServerCreated, 1, "unary interceptors")
+			},
+		},
+		{
+			desc: "stream interceptors",
+			call: func(a *App) { a.AddGRPCServerStreamInterceptors(stream, otherStream) },
+			setupMocks: func(l *container.MockLogger) {
+				l.EXPECT().Errorf(errMsgGRPCServerCreated, 2, "stream interceptors")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, _, g := setupTestGRPCServer(t, 9999, false)
+
+			// RegisterService builds the server; this is the state it leaves behind.
+			_, err := g.ensureServer()
+			require.NoError(t, err)
+
+			options := len(g.options)
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			tc.setupMocks(logger)
+			c.Logger = logger
+
+			a := &App{container: c, grpcServer: g}
+
+			tc.call(a)
+
+			assert.Len(t, g.options, options)
+			assert.Len(t, g.interceptors, defaultInterceptorCount)
+			assert.Len(t, g.streamInterceptors, defaultInterceptorCount)
+		})
+	}
+}
+
+func TestApp_EnableAuth_AfterRegisterServiceIsFatal(t *testing.T) {
+	tests := []struct {
+		desc   string
+		enable func(a *App)
+	}{
+		{desc: "basic auth", enable: func(a *App) { _ = a.EnableBasicAuth("user", "password") }},
+		{desc: "basic auth with validator", enable: func(a *App) {
+			a.EnableBasicAuthWithValidator(func(*container.Container, string, string) bool { return true })
+		}},
+		{desc: "API key auth", enable: func(a *App) { a.EnableAPIKeyAuth("key") }},
+		{desc: "API key auth with validator", enable: func(a *App) {
+			a.EnableAPIKeyAuthWithValidator(func(*container.Container, string) bool { return true })
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, mocks, g := setupTestGRPCServer(t, 9999, false)
+			mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "grpc_services_registered_total")
+
+			a := &App{container: c, grpcServer: g}
+			a.RegisterService(&grpc_health_v1.Health_ServiceDesc, &injectableHealthService{})
+
+			logger := container.NewMockLogger(gomock.NewController(t))
+			logger.EXPECT().Fatal("gRPC authentication must be enabled before RegisterService: " +
+				"a gRPC service is already registered, so its calls would be served without authentication")
+			c.Logger = logger
+
+			tc.enable(a)
+
+			assert.Len(t, g.interceptors, defaultInterceptorCount)
+			assert.Len(t, g.streamInterceptors, defaultInterceptorCount)
+		})
+	}
+}
+
 func TestApp_RegisterService(t *testing.T) {
 	tests := []struct {
 		desc        string
