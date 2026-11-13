@@ -165,10 +165,6 @@ func applyClientOptions(prof profile, endpoint string) func(*s3.Options) {
 // creating the file, it retrieves the file metadata and returns a `file` object representing the
 // newly created file.
 func (f *FileSystem) Create(name string) (file.File, error) {
-	if f.conn == nil {
-		return nil, ErrNotConnected
-	}
-
 	var msg string
 
 	st := statusErr
@@ -179,6 +175,11 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
 
 	// S3 has no directories: a prefix comes into existence with the first
 	// object stored under it, so no parent path needs to pre-exist.
@@ -253,10 +254,6 @@ func (f *FileSystem) newS3File(name string, res *s3.GetObjectOutput) *S3File {
 // This method deletes the specified file from the S3 bucket. Currently, it supports the deletion of unversioned files
 // from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
 func (f *FileSystem) Remove(name string) error {
-	if f.conn == nil {
-		return ErrNotConnected
-	}
-
 	var msg string
 
 	st := statusErr
@@ -267,6 +264,11 @@ func (f *FileSystem) Remove(name string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
 
 	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(f.config.BucketName),
@@ -290,10 +292,6 @@ func (f *FileSystem) Remove(name string) error {
 // This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
 // If the file cannot be retrieved, it returns an error.
 func (f *FileSystem) Open(name string) (file.File, error) {
-	if f.conn == nil {
-		return nil, ErrNotConnected
-	}
-
 	var msg string
 
 	st := statusErr
@@ -304,6 +302,11 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(f.config.BucketName),
@@ -325,10 +328,6 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 // This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
 // FileSystem interface requirements in the GoFr framework.
 func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
-	if f.conn == nil {
-		return nil, ErrNotConnected
-	}
-
 	return f.Open(name)
 }
 
@@ -340,10 +339,6 @@ func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, err
 //
 // If the old and new names are the same, no operation is performed.
 func (f *FileSystem) Rename(oldname, newname string) error {
-	if f.conn == nil {
-		return ErrNotConnected
-	}
-
 	var msg string
 
 	st := statusErr
@@ -354,6 +349,11 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
 
 	// check if they have the same name or not
 	if oldname == newname {
