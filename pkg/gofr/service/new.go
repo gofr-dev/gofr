@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"strings"
 	"time"
 
@@ -33,6 +34,10 @@ const (
 // weight, not a build constraint.) Go's net/http has no http.MethodQuery yet.
 // TestMethodQueryMatchesInboundConstant pins this string to the inbound one.
 const methodQuery = "QUERY"
+
+// redactedUserInfo replaces the credentials of a service address wherever the address is logged,
+// used as a metric label or used as a span name.
+const redactedUserInfo = "REDACTED"
 
 type httpService struct {
 	*http.Client
@@ -188,7 +193,10 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	ctx, span := h.Tracer.Start(ctx, uri)
+	// The request is sent to uri; logURI is the same address without its credentials.
+	logURI := redactAddress(uri)
+
+	ctx, span := h.Tracer.Start(ctx, logURI)
 	defer span.End()
 
 	// Attach client-side trace handling for HTTP request, but only when
@@ -232,7 +240,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		Timestamp:     time.Now(),
 		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
-		URI:           uri,
+		URI:           logURI,
 	}
 
 	requestStart := time.Now()
@@ -263,7 +271,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
 		labels := []string{
-			metricLabelPath, h.url,
+			metricLabelPath, redactAddress(h.url),
 			metricLabelMethod, method,
 			metricLabelStatus, fmt.Sprintf("%v", statusCode),
 		}
@@ -308,4 +316,27 @@ func (a attributesOption) AddOption(h HTTP) HTTP {
 // WithAttributes returns an Option that sets the attributes of the HTTP service.
 func WithAttributes(attributes map[string]string) Options {
 	return attributesOption(attributes)
+}
+
+// redactAddress returns address with its userinfo (https://user:pass@host) replaced, so it can be
+// logged, used as a metric label or used as a span name. An address without userinfo is returned
+// unchanged.
+func redactAddress(address string) string {
+	if !strings.Contains(address, "@") {
+		return address
+	}
+
+	u, err := url.Parse(address)
+	if err != nil {
+		// A bad escape in a password fails the parse; drop everything up to the last '@'.
+		return redactedUserInfo + address[strings.LastIndex(address, "@"):]
+	}
+
+	if u.User == nil {
+		return address
+	}
+
+	u.User = url.User(redactedUserInfo)
+
+	return u.String()
 }
