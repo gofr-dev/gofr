@@ -515,3 +515,72 @@ func TestHTTPService_Query_EmptyBody(t *testing.T) {
 
 	validateResponse(t, resp, err, false)
 }
+
+func TestNewHTTPService_CrossHostRedirectDropsAPIKey(t *testing.T) {
+	var forwarded string
+
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded = r.Header.Get(xAPIKeyHeader)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer other.Close()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/landing", http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	apiKey, err := NewAPIKeyConfig("secret-key")
+	require.NoError(t, err)
+
+	service := NewHTTPService(upstream.URL, logging.NewMockLogger(logging.ERROR), nil, apiKey)
+
+	resp, err := service.Get(t.Context(), "orders", nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Empty(t, forwarded)
+}
+
+func TestNewHTTPService_SameHostRedirectKeepsAPIKey(t *testing.T) {
+	var forwarded string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/landing" {
+			forwarded = r.Header.Get(xAPIKeyHeader)
+			w.WriteHeader(http.StatusOK)
+
+			return
+		}
+
+		http.Redirect(w, r, "/landing", http.StatusFound)
+	}))
+	defer server.Close()
+
+	apiKey, err := NewAPIKeyConfig("secret-key")
+	require.NoError(t, err)
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil, apiKey)
+
+	resp, err := service.Get(t.Context(), "start", nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, "secret-key", forwarded)
+}
+
+func TestNewHTTPService_StopsAfterMaxRedirects(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/loop", http.StatusFound)
+	}))
+	defer server.Close()
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil)
+
+	_, err := service.Get(t.Context(), "loop", nil)
+	require.Error(t, err)
+
+	assert.ErrorIs(t, err, errTooManyRedirects)
+}
