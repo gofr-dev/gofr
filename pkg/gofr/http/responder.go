@@ -67,13 +67,20 @@ func statusWithoutBody(status int) bool {
 	return status < http.StatusOK || status == http.StatusNoContent || status == http.StatusNotModified
 }
 
-// setContentLength sets the Content-Length header for the File and XML paths,
-// which write through http.Header rather than the JSON path's header map. It is
-// skipped for an empty body, for a status that cannot carry one, and when a
-// handler already set the header itself.
-func setContentLength(w http.ResponseWriter, status, length int) {
-	if length > 0 && !statusWithoutBody(status) && w.Header().Get("Content-Length") == "" {
-		w.Header().Set("Content-Length", strconv.Itoa(length))
+// minExplicitContentLength is net/http's bufferBeforeChunkingSize. net/http sets
+// Content-Length itself, from a fixed buffer with no allocation, for a body up to
+// this size written in one go. Only a larger body is sent chunked and so needs an
+// explicit header. Setting it below this size only adds a per-response allocation
+// and changes nothing on the wire.
+const minExplicitContentLength = 2048
+
+// setContentLength sets Content-Length for a body that net/http would otherwise
+// send chunked: one larger than minExplicitContentLength, with a status that may
+// carry a body. It is a no-op otherwise, so small responses keep net/http's
+// allocation-free path and bodiless statuses stay clean (RFC 9110 §8.6).
+func setContentLength(h http.Header, status, length int) {
+	if length > minExplicitContentLength && !statusWithoutBody(status) {
+		h[canonicalContentLength] = []string{strconv.Itoa(length)}
 	}
 }
 
@@ -162,22 +169,17 @@ func (r Responder) Respond(data any, err error) {
 	if encodeErr := re.enc.Encode(resp); encodeErr != nil {
 		putRespBuf(re)
 
-		errBody := []byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n")
-		if len(header[canonicalContentLength]) == 0 {
-			header[canonicalContentLength] = []string{strconv.Itoa(len(errBody))}
-		}
-
+		// This 59-byte body is under minExplicitContentLength, so net/http sets
+		// its Content-Length itself; no explicit header is needed here.
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		_, _ = r.w.Write(errBody)
+		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
 
 		return
 	}
 
 	bodyBytes := buf.Bytes()
-	if !statusWithoutBody(statusCode) && len(header[canonicalContentLength]) == 0 {
-		header[canonicalContentLength] = []string{strconv.Itoa(len(bodyBytes))}
-	}
+	setContentLength(header, statusCode, len(bodyBytes))
 
 	r.w.WriteHeader(statusCode)
 	_, _ = r.w.Write(bodyBytes)
@@ -239,7 +241,7 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
-		setContentLength(r.w, statusCode, len(v.Content))
+		setContentLength(r.w.Header(), statusCode, len(v.Content))
 		r.w.WriteHeader(statusCode)
 		_, _ = r.w.Write(v.Content)
 
@@ -275,7 +277,7 @@ func (r Responder) handleXML(v resTypes.XML, statusCode int) {
 	}
 
 	r.w.Header().Set("Content-Type", contentType)
-	setContentLength(r.w, statusCode, len(v.Content))
+	setContentLength(r.w.Header(), statusCode, len(v.Content))
 	r.w.WriteHeader(statusCode)
 
 	if len(v.Content) > 0 {

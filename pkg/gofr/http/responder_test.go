@@ -1417,53 +1417,54 @@ func TestResponder_Char_ContentTypeNotOverwritten(t *testing.T) {
 	}
 }
 
-// TestResponder_ContentLengthSet pins that Respond sets Content-Length matching the exact body length.
+// TestResponder_ContentLengthSet pins the threshold: the responder sets
+// Content-Length only for a body over 2 KB. net/http sets it for smaller bodies
+// itself, so the responder leaves those alone and does not pay an allocation.
 func TestResponder_ContentLengthSet(t *testing.T) {
-	tests := []struct {
-		name string
-		data any
-		err  error
-	}{
-		{"string", "hello", nil},
-		{"map", map[string]string{"k": "v"}, nil},
-		{"nil", nil, nil},
-		{"struct", struct{ ID int }{ID: 42}, nil},
-	}
+	t.Run("large body gets an explicit length", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond(strings.Repeat("x", 4096), nil)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			NewResponder(w, http.MethodGet).Respond(tc.data, tc.err)
+		assert.Equal(t, strconv.Itoa(w.Body.Len()), w.Header().Get("Content-Length"))
+	})
 
-			bodyLen := strconv.Itoa(w.Body.Len())
-			assert.Equal(t, bodyLen, w.Header().Get("Content-Length"))
-		})
-	}
+	t.Run("small body is left to net/http", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond("hello", nil)
+
+		assert.Empty(t, w.Header().Get("Content-Length"), "responder must not set Content-Length below 2 KB")
+	})
 }
 
 // TestStatusWithoutBody pins which status codes must not carry Content-Length,
 // per RFC 9110 §8.6: all 1xx, 204, and 304.
 func TestStatusWithoutBody(t *testing.T) {
-	cases := map[int]bool{
-		http.StatusContinue:            true,
-		http.StatusNoContent:           true,
-		http.StatusNotModified:         true,
-		http.StatusOK:                  false,
-		http.StatusCreated:             false,
-		http.StatusNotFound:            false,
-		http.StatusInternalServerError: false,
+	tests := []struct {
+		name   string
+		status int
+		want   bool
+	}{
+		{"1xx continue", http.StatusContinue, true},
+		{"204 no content", http.StatusNoContent, true},
+		{"304 not modified", http.StatusNotModified, true},
+		{"200 ok", http.StatusOK, false},
+		{"201 created", http.StatusCreated, false},
+		{"404 not found", http.StatusNotFound, false},
+		{"500 internal", http.StatusInternalServerError, false},
 	}
 
-	for status, want := range cases {
-		assert.Equal(t, want, statusWithoutBody(status), "status %d", status)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, statusWithoutBody(tc.status))
+		})
 	}
 }
 
 // TestResponder_ContentLength_FileAndXML pins that the File and XML paths set a
-// Content-Length equal to the exact body length. A len(v.Content)+1 mutation
-// fails here.
+// Content-Length equal to the exact body length for a body over 2 KB. A
+// len(v.Content)+1 mutation fails here.
 func TestResponder_ContentLength_FileAndXML(t *testing.T) {
-	content := []byte("<note>hello</note>")
+	content := []byte("<note>" + strings.Repeat("a", 4096) + "</note>")
 
 	t.Run("file", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1488,27 +1489,44 @@ func respondHandler(data any, err error) http.HandlerFunc {
 	}
 }
 
-// TestResponder_NoContentLengthOn204_HTTP2 reproduces the reported bug: a DELETE
-// that returns nil answers 204, and over HTTP/2 the response must not carry a
-// Content-Length (RFC 9110 §8.6). Before the fix a client rejected the response.
+// TestResponder_NoContentLengthOn204_HTTP2 reproduces the reported bug on all
+// three paths: a DELETE answers 204 whatever the handler returns, and over HTTP/2
+// the response must not carry Content-Length (RFC 9110 §8.6). The bodies are over
+// 2 KB so the only thing suppressing the header is the bodiless-status guard;
+// removing it fails the XML and File rows (curl exit 92 on a real server).
 func TestResponder_NoContentLengthOn204_HTTP2(t *testing.T) {
-	srv := httptest.NewUnstartedServer(respondHandler(nil, nil))
-	srv.EnableHTTP2 = true
-	srv.StartTLS()
+	large := strings.Repeat("x", 4096)
 
-	defer srv.Close()
+	tests := []struct {
+		desc string
+		data any
+	}{
+		{"JSON", large},
+		{"XML", resTypes.XML{Content: []byte(large)}},
+		{"File", resTypes.File{Content: []byte(large), ContentType: "text/plain"}},
+	}
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, srv.URL, http.NoBody)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			srv := httptest.NewUnstartedServer(respondHandler(tc.data, nil))
+			srv.EnableHTTP2 = true
+			srv.StartTLS()
 
-	resp, err := srv.Client().Do(req)
-	require.NoError(t, err)
+			defer srv.Close()
 
-	defer resp.Body.Close()
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, srv.URL, http.NoBody)
+			require.NoError(t, err)
 
-	assert.Equal(t, "HTTP/2.0", resp.Proto)
-	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Empty(t, resp.Header.Get("Content-Length"), "204 must not carry Content-Length")
+			resp, err := srv.Client().Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, "HTTP/2.0", resp.Proto)
+			assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+			assert.Empty(t, resp.Header.Get("Content-Length"), "204 must not carry Content-Length")
+		})
+	}
 }
 
 // TestResponder_ContentLengthOnLargeBody_RealServer pins that a body over 2 KB
