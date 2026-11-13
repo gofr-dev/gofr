@@ -99,6 +99,8 @@ type Data struct {
 
   - The `form` tag is used to bind non-file fields.
   - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
+  - A `file.Zip` field is unzipped in memory. Each file in it, and all of its files together, must be at most 100 MB
+    uncompressed; a larger archive makes `Bind` return an error.
 
 
 - `HostName()` - to access the host name for the incoming request
