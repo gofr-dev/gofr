@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
@@ -33,6 +34,12 @@ const (
 // weight, not a build constraint.) Go's net/http has no http.MethodQuery yet.
 // TestMethodQueryMatchesInboundConstant pins this string to the inbound one.
 const methodQuery = "QUERY"
+
+// maxRedirects mirrors the limit Go applies when following redirects.
+const maxRedirects = 10
+
+//nolint:gochecknoglobals // sentinel error for the redirect limit
+var errTooManyRedirects = errors.New("stopped after 10 redirects")
 
 type httpService struct {
 	*http.Client
@@ -99,8 +106,7 @@ type httpClient interface {
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
-		// using default HTTP client to do HTTP communication
-		Client:  &http.Client{},
+		Client:  &http.Client{CheckRedirect: redirectPolicy},
 		url:     serviceAddress,
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logger,
@@ -125,6 +131,19 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	}
 
 	return svc
+}
+
+// redirectPolicy drops the api key header when a redirect leaves the configured host.
+func redirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return errTooManyRedirects
+	}
+
+	if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+		req.Header.Del(xAPIKeyHeader)
+	}
+
+	return nil
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
