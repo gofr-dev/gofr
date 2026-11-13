@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +32,7 @@ var (
 	errSameSourceAndDest         = errors.New("source and destination are the same")
 	errFailedToCreateReader      = errors.New("failed to create reader")
 	errFailedToCreateRangeReader = errors.New("failed to create range reader")
-	errObjectNotFound            = errors.New("object not found")
+	errObjectNotFound            = notFoundError("object not found")
 	errFailedToGetObjectAttrs    = errors.New("failed to get object attrs")
 	errFailedToDeleteObject      = errors.New("failed to delete object")
 	errFailedToCopyObject        = errors.New("failed to copy object")
@@ -45,6 +46,14 @@ var (
 	errExpiryMustBePositive    = errors.New("expiry duration must be positive")
 	errInvalidContentType      = errors.New("invalid Content-Type format")
 )
+
+// notFoundError is the type of errObjectNotFound. It also matches os.ErrNotExist, so the
+// file store records a missing object as NOT_FOUND instead of ERROR.
+type notFoundError string
+
+func (e notFoundError) Error() string { return string(e) }
+
+func (notFoundError) Is(target error) bool { return target == os.ErrNotExist }
 
 const (
 	contentTypeDirectory  = "application/x-directory"

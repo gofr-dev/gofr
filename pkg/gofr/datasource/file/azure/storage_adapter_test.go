@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -2847,4 +2848,36 @@ func TestStorageAdapter_SetShareClient_KeepsExisting(t *testing.T) {
 	a.setShareClient(newPlainShareClient(t, "http://127.0.0.1:2"))
 
 	assert.Same(t, first, a.shareClient)
+}
+
+func TestStorageAdapter_StatObject_MissingStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       int
+		errorCode    string
+		objectName   string
+		wantNotExist bool
+	}{
+		{name: "missing file", status: http.StatusNotFound, errorCode: "ResourceNotFound", objectName: "a.txt", wantNotExist: true},
+		{name: "missing parent", status: http.StatusNotFound, errorCode: "ParentNotFound", objectName: "d/a.txt", wantNotExist: true},
+		{name: "missing directory", status: http.StatusNotFound, errorCode: "ResourceNotFound", objectName: "d/", wantNotExist: true},
+		{name: "file auth failure", status: http.StatusForbidden, errorCode: "AuthorizationFailure", objectName: "a.txt"},
+		{name: "directory auth failure", status: http.StatusForbidden, errorCode: "AuthorizationFailure", objectName: "d/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(statusHandler(tt.status, tt.errorCode))
+			defer srv.Close()
+
+			adapter := &storageAdapter{cfg: &Config{ShareName: "testshare"}, shareClient: newPlainShareClient(t, srv.URL)}
+
+			info, err := adapter.StatObject(t.Context(), tt.objectName)
+
+			require.Error(t, err)
+			assert.Nil(t, info)
+			assert.Equal(t, tt.wantNotExist, errors.Is(err, os.ErrNotExist))
+			assert.Equal(t, tt.wantNotExist, errors.Is(err, errObjectNotFound))
+		})
+	}
 }
