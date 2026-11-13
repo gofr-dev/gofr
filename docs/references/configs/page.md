@@ -359,6 +359,19 @@ This document lists all the configuration options supported by the GoFr framewor
 -  DB_MAX_OPEN_CONNECTION
 -  Number of maximum connections which can be used with database.
 -  0 (unlimited)
+
+---
+
+-  DB_CONN_MAX_LIFETIME
+-  Longest a database connection may be reused before it is closed, as a Go duration such as `30m` or `1h`. Set it below the idle or age limit of any proxy, load balancer or managed database in front of the database, so connections are recycled before the other side drops them. A negative or unparsable value logs a warning and is ignored.
+-  0 (connections are never closed for age)
+
+---
+
+-  DB_CONN_MAX_IDLE_TIME
+-  Longest a database connection may sit unused in the pool before it is closed, as a Go duration such as `5m`. A negative or unparsable value logs a warning and is ignored.
+-  0 (idle connections are never closed for age)
+
 ---
 
 -  DB_CONNECT_TIMEOUT

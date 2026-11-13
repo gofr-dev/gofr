@@ -1,14 +1,18 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -77,4 +81,81 @@ func TestNewSQLFromDB(t *testing.T) {
 			assert.NotNil(t, got.HealthCheck(), "wrapped DB exposes health checks")
 		})
 	}
+}
+
+// okConnector is a driver.Connector that opens a fresh, always-healthy connection on
+// every Connect, so a test can watch database/sql close and replace pooled connections.
+type okConnector struct{}
+
+func (okConnector) Connect(context.Context) (driver.Conn, error) { return okConn{}, nil }
+func (okConnector) Driver() driver.Driver                        { return fakeDriver{} }
+
+type okConn struct{}
+
+func (okConn) Prepare(string) (driver.Stmt, error) { return nil, errFakeNoConn }
+func (okConn) Close() error                        { return nil }
+func (okConn) Begin() (driver.Tx, error)           { return nil, errFakeNoConn }
+
+func TestNewSQLFromDB_AppliesPoolTimeLimits(t *testing.T) {
+	const limit = 20 * time.Millisecond
+
+	tests := []struct {
+		name   string
+		config *DBConfig
+		closed func(sql.DBStats) int64
+	}{
+		{
+			name:   "ConnMaxLifetime closes an old connection",
+			config: &DBConfig{Dialect: "mysql", MaxIdleConn: 2, ConnMaxLifetime: limit},
+			closed: func(s sql.DBStats) int64 { return s.MaxLifetimeClosed },
+		},
+		{
+			name:   "ConnMaxIdleTime closes an idle connection",
+			config: &DBConfig{Dialect: "mysql", MaxIdleConn: 2, ConnMaxIdleTime: limit},
+			closed: func(s sql.DBStats) int64 { return s.MaxIdleTimeClosed },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewSQLFromDB(sql.OpenDB(okConnector{}), tc.config, logging.NewMockLogger(logging.ERROR), newConnectorMetrics(t))
+			require.NotNil(t, got)
+			t.Cleanup(func() { _ = got.Close() })
+
+			// The connection opened by the connectivity check goes idle in the pool; database/sql's
+			// background cleaner closes it once it outlives the limit, which can take up to a second.
+			require.Eventually(t, func() bool {
+				return tc.closed(got.DB.Stats()) > 0
+			}, 5*time.Second, 2*limit)
+		})
+	}
+}
+
+func TestNewSQLFromDB_UnsetPoolTimeLimitsKeepCallerSettings(t *testing.T) {
+	rawDB := sql.OpenDB(okConnector{})
+
+	// Limits the caller set on its own *sql.DB must survive when the config leaves them unset.
+	rawDB.SetConnMaxLifetime(20 * time.Millisecond)
+
+	got := NewSQLFromDB(rawDB, &DBConfig{Dialect: "mysql", MaxIdleConn: 2}, logging.NewMockLogger(logging.ERROR), newConnectorMetrics(t))
+	require.NotNil(t, got)
+	t.Cleanup(func() { _ = got.Close() })
+
+	require.Eventually(t, func() bool {
+		return got.DB.Stats().MaxLifetimeClosed > 0
+	}, 5*time.Second, 50*time.Millisecond)
+}
+
+func TestNewSQLFromConnector_ReadsPoolTimeLimits(t *testing.T) {
+	conf := config.NewMockConfig(map[string]string{
+		"DB_CONN_MAX_LIFETIME":  "30m",
+		"DB_CONN_MAX_IDLE_TIME": "5m",
+	})
+
+	got := NewSQLFromConnector(okConnector{}, conf, logging.NewMockLogger(logging.ERROR), newConnectorMetrics(t), nil)
+	require.NotNil(t, got)
+	t.Cleanup(func() { _ = got.Close() })
+
+	assert.Equal(t, 30*time.Minute, got.config.ConnMaxLifetime)
+	assert.Equal(t, 5*time.Minute, got.config.ConnMaxIdleTime)
 }
