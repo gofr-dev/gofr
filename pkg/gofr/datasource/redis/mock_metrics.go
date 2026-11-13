@@ -67,3 +67,20 @@ func (mr *MockMetricsMockRecorder) IncrementCounter(ctx, name any, labels ...any
 	varargs := append([]any{ctx, name}, labels...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementCounter", reflect.TypeOf((*MockMetrics)(nil).IncrementCounter), varargs...)
 }
+
+// SetGauge mocks base method.
+func (m *MockMetrics) SetGauge(name string, value float64, labels ...string) {
+	m.ctrl.T.Helper()
+	varargs := []any{name, value}
+	for _, a := range labels {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetGauge", varargs...)
+}
+
+// SetGauge indicates an expected call of SetGauge.
+func (mr *MockMetricsMockRecorder) SetGauge(name, value any, labels ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{name, value}, labels...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGauge", reflect.TypeOf((*MockMetrics)(nil).SetGauge), varargs...)
+}

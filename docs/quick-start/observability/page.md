@@ -200,6 +200,42 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
+- app_redis_pool_hits
+- gauge
+- Number of times a free connection was found in the Redis pool (cumulative)
+
+---
+
+- app_redis_pool_misses
+- gauge
+- Number of times no free connection was found in the Redis pool, so a new one was dialed (cumulative)
+
+---
+
+- app_redis_pool_timeouts
+- gauge
+- Number of times waiting for a Redis pool connection timed out (cumulative)
+
+---
+
+- app_redis_pool_total_conns
+- gauge
+- Number of connections in the Redis pool
+
+---
+
+- app_redis_pool_idle_conns
+- gauge
+- Number of idle connections in the Redis pool
+
+---
+
+- app_redis_pool_stale_conns
+- gauge
+- Number of stale connections removed from the Redis pool (cumulative)
+
+---
+
 - app_pubsub_publish_total_count
 - counter
 - Number of total publish operations

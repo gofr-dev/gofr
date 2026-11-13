@@ -375,6 +375,15 @@ func (c *Container) registerFrameworkMetrics() {
 		// Redis records latency in microseconds (see datasource/redis hook), so it uses the microsecond buckets.
 		redisBuckets := getDefaultDatasourceMicrosecondBuckets()
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
+
+		// Connection-pool statistics, sampled every 10 seconds.
+		c.Metrics().NewGauge("app_redis_pool_hits", "Number of times a free connection was found in the Redis pool (cumulative).")
+		c.Metrics().NewGauge("app_redis_pool_misses",
+			"Number of times no free connection was found in the Redis pool, so a new one was dialed (cumulative).")
+		c.Metrics().NewGauge("app_redis_pool_timeouts", "Number of times waiting for a Redis pool connection timed out (cumulative).")
+		c.Metrics().NewGauge("app_redis_pool_total_conns", "Number of connections in the Redis pool.")
+		c.Metrics().NewGauge("app_redis_pool_idle_conns", "Number of idle connections in the Redis pool.")
+		c.Metrics().NewGauge("app_redis_pool_stale_conns", "Number of stale connections removed from the Redis pool (cumulative).")
 	}
 
 	{ // SQL metrics
