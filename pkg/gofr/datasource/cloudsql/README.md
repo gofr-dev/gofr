@@ -58,6 +58,7 @@ including query logging, metrics and health checks.
 | `DB_PASSWORD`         | Only used when `DB_IAM_AUTH` is not `true`                            |
 | `DB_CLOUDSQL_IP_TYPE` | `PUBLIC` (default), `PRIVATE` or `PSC`                                |
 | `DB_MAX_IDLE_CONNECTION` / `DB_MAX_OPEN_CONNECTION` | Pool sizing; zero uses GoFr defaults    |
+| `DB_CONN_MAX_LIFETIME` / `DB_CONN_MAX_IDLE_TIME` | Pool time limits as Go durations such as `30m`; unset means no limit |
 
 ## How it works
 

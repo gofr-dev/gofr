@@ -9,7 +9,7 @@ nextjs:
 # Connection Pooling
 
 {% answer %}
-GoFr exposes per-datasource pool knobs as environment variables — `DB_MAX_OPEN_CONNECTION` and `DB_MAX_IDLE_CONNECTION` for SQL, plus a programmatic `service.ConnectionPoolConfig` for outbound HTTP calls. On Kubernetes the rule that matters is `replicas × per_pod_pool ≤ database max_connections`. Size pools using the formula `target_connections = peak_qps × p99_latency_seconds` so each pod has just enough capacity to absorb its share of traffic.
+GoFr exposes per-datasource pool knobs as environment variables — `DB_MAX_OPEN_CONNECTION`, `DB_MAX_IDLE_CONNECTION`, `DB_CONN_MAX_LIFETIME` and `DB_CONN_MAX_IDLE_TIME` for SQL, plus a programmatic `service.ConnectionPoolConfig` for outbound HTTP calls. On Kubernetes the rule that matters is `replicas × per_pod_pool ≤ database max_connections`. Size pools using the formula `target_connections = peak_qps × p99_latency_seconds` so each pod has just enough capacity to absorb its share of traffic.
 {% /answer %}
 
 ## When to use
@@ -24,6 +24,8 @@ GoFr reads two env vars in `pkg/gofr/datasource/sql` and applies them with `data
 |---|---|---|
 | `DB_MAX_OPEN_CONNECTION` | `0` (unlimited) | Maps to `SetMaxOpenConns` |
 | `DB_MAX_IDLE_CONNECTION` | `2` | Maps to `SetMaxIdleConns` |
+| `DB_CONN_MAX_LIFETIME` | unset (no limit) | Maps to `SetConnMaxLifetime`; a duration such as `30m` |
+| `DB_CONN_MAX_IDLE_TIME` | unset (no limit) | Maps to `SetConnMaxIdleTime`; a duration such as `5m` |
 
 ```dotenv
 DB_DIALECT=postgres
@@ -37,7 +39,7 @@ DB_MAX_OPEN_CONNECTION=20
 DB_MAX_IDLE_CONNECTION=5
 ```
 
-GoFr does not currently expose a knob for `SetConnMaxLifetime` / `SetConnMaxIdleTime`; rely on the database's own idle-timeout to recycle stale connections.
+Set `DB_CONN_MAX_LIFETIME` and `DB_CONN_MAX_IDLE_TIME` when a pooler, load balancer or serverless database closes old or idle connections on its side: choose values below that server-side limit so GoFr recycles connections before they go stale. Leaving them unset keeps connections open until the database closes them.
 
 For replica reads, the framework also recognizes `DB_REPLICA_*` variables (hosts, ports, users, passwords, plus pool sizing). See [GoFr Configuration Options](/docs/references/configs) for the full list.
 
@@ -124,7 +126,7 @@ After a deploy, watch the connection count climb to roughly `replicas × DB_MAX_
 
 {% faq %}
 {% faq-item question="What are the exact env vars for GoFr's SQL pool?" %}
-`DB_MAX_OPEN_CONNECTION` (default 0 = unlimited) and `DB_MAX_IDLE_CONNECTION` (default 2). They map to `SetMaxOpenConns` and `SetMaxIdleConns` respectively.
+`DB_MAX_OPEN_CONNECTION` (default 0 = unlimited) and `DB_MAX_IDLE_CONNECTION` (default 2). They map to `SetMaxOpenConns` and `SetMaxIdleConns` respectively. `DB_CONN_MAX_LIFETIME` and `DB_CONN_MAX_IDLE_TIME` (durations such as `30m`, unset by default) map to `SetConnMaxLifetime` and `SetConnMaxIdleTime`.
 {% /faq-item %}
 {% faq-item question="Why is my HTTP client only using 2 connections per host?" %}
 That's Go's `DefaultMaxIdleConnsPerHost`. Pass a `service.ConnectionPoolConfig` with `MaxIdleConnsPerHost: 20` (in any position among the `AddHTTPService` options — the framework unwraps circuit-breaker/retry/auth wrappers regardless of order).

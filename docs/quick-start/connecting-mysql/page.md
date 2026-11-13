@@ -444,6 +444,8 @@ DB_REPLICA_MIN_OPEN=20
 DB_REPLICA_DEFAULT_OPEN=150
 ```
 
+Replicas use the primary's `DB_CONN_MAX_LIFETIME` and `DB_CONN_MAX_IDLE_TIME` values; there is no replica-specific override.
+
 **Benefits**
 - Performance: Offloads read traffic from the primary, reducing latency.
 - Scalability: Easily scale reads by adding more replicas.
