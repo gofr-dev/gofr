@@ -800,7 +800,8 @@ func Test_LogWireFormat_MessageShapeByArity(t *testing.T) {
 // Test_LogWireFormat_HTMLEscapingOnTheRealPath pins that the production writer
 // (json.NewEncoder(out).Encode) HTML-escapes by default, exactly like
 // json.Marshal. A URI carrying `<`, `>` or `&` is rewritten on the wire, and
-// invalid UTF-8 becomes the escaped replacement character.
+// invalid UTF-8 becomes the replacement character (pinned decoded in
+// Test_LogWireFormat_InvalidUTF8OnTheRealPath, as the engines escape it differently).
 func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -823,11 +824,6 @@ func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 			`{"uri":"/\u2028\u2029"}`,
 		},
 		{
-			"invalid UTF-8",
-			"/\xff/ok",
-			`{"uri":"/\ufffd/ok"}`,
-		},
-		{
 			"CJK and emoji stay raw",
 			"/日本語/\U0001F680",
 			"{\"uri\":\"/日本語/\U0001F680\"}",
@@ -843,6 +839,23 @@ func Test_LogWireFormat_HTMLEscapingOnTheRealPath(t *testing.T) {
 				logCharNormalize(buf.String()))
 		})
 	}
+}
+
+// Test_LogWireFormat_InvalidUTF8OnTheRealPath pins that invalid UTF-8 in a logged
+// value comes back as U+FFFD once the line is decoded. The original engine writes
+// it escaped and json/v2 raw, so the decoded string is compared.
+func Test_LogWireFormat_InvalidUTF8OnTheRealPath(t *testing.T) {
+	buf := &bytes.Buffer{}
+	newBufLogger(buf).Log(&logCharRequestLog{URI: "/\xff/ok"})
+
+	var line struct {
+		Message struct {
+			URI string `json:"uri"`
+		} `json:"message"`
+	}
+
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &line))
+	assert.Equal(t, "/\ufffd/ok", line.Message.URI)
 }
 
 // Test_LogWireFormat_TimeIsRFC3339Nano pins the envelope timestamp format:
