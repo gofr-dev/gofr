@@ -588,6 +588,12 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_go_sys",
 		"app_sql_open_connections",
 		"app_sql_inUse_connections",
+		"app_redis_pool_hits",
+		"app_redis_pool_misses",
+		"app_redis_pool_timeouts",
+		"app_redis_pool_total_conns",
+		"app_redis_pool_idle_conns",
+		"app_redis_pool_stale_conns",
 	}
 	for _, gauge := range gauges {
 		mockMetrics.EXPECT().NewGauge(gauge, gomock.Any()).Times(1)
