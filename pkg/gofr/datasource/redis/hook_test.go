@@ -129,10 +129,34 @@ func TestRedisHook_Args(t *testing.T) {
 				return err
 			},
 			query: queryPipeline,
-			// The hook logs every pipelined command but the last one.
 			wantArgs: []any{[]string{
 				"set " + masked + " " + masked + " " + masked + " " + masked,
 				"get " + masked,
+				"incr " + masked,
+			}},
+		},
+		{
+			desc: "pipeline logs every command",
+			run: func(ctx context.Context, rc *redis.Client) error {
+				_, err := rc.Pipelined(ctx, setThenGet(ctx))
+				return err
+			},
+			query:    queryPipeline,
+			wantArgs: [][]any{{"set", "key", "value"}, {"get", "key"}},
+		},
+		{
+			desc:     "transaction pipeline logs multi and exec around its commands",
+			hideArgs: true,
+			run: func(ctx context.Context, rc *redis.Client) error {
+				_, err := rc.TxPipelined(ctx, setThenGet(ctx))
+				return err
+			},
+			query: queryPipeline,
+			wantArgs: []any{[]string{
+				"multi",
+				"set " + masked + " " + masked,
+				"get " + masked,
+				"exec",
 			}},
 		},
 	}
@@ -156,9 +180,41 @@ func TestRedisHook_Args(t *testing.T) {
 
 			require.NoError(t, tc.run(t.Context(), rc))
 
-			assert.Equal(t, tc.wantArgs, recorder.lastLog(t, tc.query).Args)
+			assert.Equal(t, tc.wantArgs, cmdArgs(recorder.lastLog(t, tc.query).Args))
 		})
 	}
+}
+
+// setThenGet queues a SET and a GET of the same key on a pipeline.
+func setThenGet(ctx context.Context) func(redis.Pipeliner) error {
+	return func(pipe redis.Pipeliner) error {
+		pipe.Set(ctx, "key", "value", 0)
+		pipe.Get(ctx, "key")
+
+		return nil
+	}
+}
+
+// cmdArgs turns logged args holding an unmasked pipeline ([]any{[]redis.Cmder})
+// into each command's arguments, which a test can compare without the replies.
+// Any other args are returned unchanged.
+func cmdArgs(args any) any {
+	wrapped, ok := args.([]any)
+	if !ok || len(wrapped) != 1 {
+		return args
+	}
+
+	cmds, ok := wrapped[0].([]redis.Cmder)
+	if !ok {
+		return args
+	}
+
+	out := make([][]any, len(cmds))
+	for i, cmd := range cmds {
+		out[i] = cmd.Args()
+	}
+
+	return out
 }
 
 func TestTracingOptions(t *testing.T) {
