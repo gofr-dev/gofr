@@ -71,6 +71,9 @@ type SignedURLProvider interface {
 }
 
 // ObjectInfo represents cloud storage object metadata.
+//
+// Size is the object's length in bytes; 0 is an empty object. An adapter sets a negative
+// Size when the provider did not report one, so reads are not bounded by it.
 type ObjectInfo struct {
 	Name         string
 	Size         int64
@@ -197,10 +200,8 @@ var (
 )
 
 const (
-	StatusSuccess = "SUCCESS"
-	StatusError   = "ERROR"
-	// StatusNotFound marks an operation on an object that does not exist, so a miss is not counted as a failure.
-	StatusNotFound  = "NOT_FOUND"
+	StatusSuccess   = "SUCCESS"
+	StatusError     = "ERROR"
 	MsgWriterClosed = "Writer closed successfully"
 	MsgReaderClosed = "Reader closed successfully"
 )

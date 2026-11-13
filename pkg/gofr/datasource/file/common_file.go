@@ -139,13 +139,19 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 
 	defer f.observe(OpReadAt, startTime, &st, &msg)
 
-	// A size of 0 on a file means the provider did not report one (e.g. no Content-Length),
-	// so only a known size bounds the offset; otherwise the range read decides.
-	sizeKnown := f.size > 0 || f.isDir
+	// A negative size means the provider did not report one (see ObjectInfo.Size), so only a
+	// known size bounds the offset; otherwise the range read decides. Size 0 is an empty object.
+	sizeKnown := f.size >= 0
 
-	if off < 0 || (sizeKnown && off >= f.size) {
+	switch {
+	case off < 0, f.isDir, sizeKnown && off > f.size:
 		msg = fmt.Sprintf("offset %d out of range [0, %d]", off, f.size)
 		return 0, ErrOutOfRange
+	case sizeKnown && off == f.size:
+		st = StatusSuccess
+		msg = fmt.Sprintf("ReadAt 0 bytes from %q at offset %d: end of object", f.name, off)
+
+		return 0, io.EOF
 	}
 
 	ctx := context.Background()
@@ -244,7 +250,7 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	defer f.observe(OpSeek, startTime, &st, &msg)
 
 	// Calculate new position
-	newPos, err := ValidateSeekOffset(whence, offset, f.currentPos, f.size)
+	newPos, err := ValidateSeekOffset(whence, offset, f.currentPos, f.Size())
 	if err != nil {
 		msg = fmt.Sprintf("invalid seek offset: %v", err)
 		return 0, err
@@ -321,9 +327,10 @@ func (f *CommonFile) Name() string {
 	return f.name
 }
 
-// Size returns the file size in bytes. Returns 0 for directories.
+// Size returns the file size in bytes. Returns 0 for directories and when the provider
+// did not report a size.
 func (f *CommonFile) Size() int64 {
-	return f.size
+	return max(f.size, 0)
 }
 
 // ModTime returns the last modification time.

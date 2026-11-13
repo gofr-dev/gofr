@@ -375,11 +375,14 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 	return nil, ErrFileNotFound
 }
 
+// statusNotFound marks an operation on an object that does not exist, so a miss is not counted as a failure.
+const statusNotFound = "NOT_FOUND"
+
 // missingStatus labels a failed lookup NOT_FOUND when the provider reported the object missing,
 // so dashboards don't count misses as failures; any other error stays ERROR.
 func missingStatus(err error) string {
 	if errors.Is(err, os.ErrNotExist) {
-		return StatusNotFound
+		return statusNotFound
 	}
 
 	return StatusError

@@ -395,7 +395,7 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			fileName:    "missing",
 			statErr:     fmt.Errorf("head missing: %w", os.ErrNotExist),
 			expectError: true,
-			wantStatus:  StatusNotFound,
+			wantStatus:  statusNotFound,
 		},
 		{
 			name:        "stat error and list error",
@@ -719,7 +719,7 @@ func TestCommonFileSystem_Open_StatObjectError(t *testing.T) {
 		{
 			name:       "missing object is recorded as not found",
 			statErr:    fmt.Errorf("head missing.txt: %w", os.ErrNotExist),
-			wantStatus: StatusNotFound,
+			wantStatus: statusNotFound,
 		},
 	}
 

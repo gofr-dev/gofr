@@ -63,6 +63,11 @@ func TestCommonFile_Size(t *testing.T) {
 			size:         1073741824, // 1GB
 			expectedSize: 1073741824,
 		},
+		{
+			name:         "unknown size reports zero",
+			size:         -1,
+			expectedSize: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -283,7 +288,7 @@ func TestCommonFile_ReadAt_Various(t *testing.T) {
 
 	// Offset out of range
 	f2 := &CommonFile{size: 5, name: "oob.bin"}
-	_, err2 := f2.ReadAt(make([]byte, 2), 5)
+	_, err2 := f2.ReadAt(make([]byte, 2), 6)
 
 	assert.Equal(t, ErrOutOfRange, err2)
 
@@ -523,15 +528,31 @@ func TestCommonFile_ReadAt(t *testing.T) {
 			wantN: 2, wantData: "ab", wantErr: errTest, wantState: StatusError,
 		},
 		{
-			name: "unknown size reads through the range reader", size: 0, off: 3, body: strings.NewReader("defg"),
+			name: "empty range returns io.EOF", size: 10, off: 0, body: bytes.NewReader(nil),
+			wantN: 0, wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "unknown size reads through the range reader", size: -1, off: 3, body: strings.NewReader("defg"),
 			wantN: 4, wantData: "defg", wantState: StatusSuccess,
+		},
+		{
+			name: "empty object returns io.EOF without a range read", size: 0, off: 0, noReader: true,
+			wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
+			name: "offset at end of object returns io.EOF", size: 10, off: 10, noReader: true,
+			wantErr: io.EOF, wantState: StatusSuccess,
 		},
 		{
 			name: "negative offset is out of range", size: 10, off: -1, noReader: true,
 			wantErr: ErrOutOfRange, wantState: StatusError,
 		},
 		{
-			name: "offset past known size is out of range", size: 10, off: 10, noReader: true,
+			name: "offset past known size is out of range", size: 10, off: 11, noReader: true,
+			wantErr: ErrOutOfRange, wantState: StatusError,
+		},
+		{
+			name: "offset past an empty object is out of range", size: 0, off: 1, noReader: true,
 			wantErr: ErrOutOfRange, wantState: StatusError,
 		},
 	}
@@ -565,21 +586,6 @@ func TestCommonFile_ReadAt(t *testing.T) {
 			assert.Equal(t, []string{tt.wantState}, metrics.statuses())
 		})
 	}
-}
-
-func TestCommonFile_ReadAt_EmptyRangeReturnsEOF(t *testing.T) {
-	_, mockProvider, _ := setupCommonFS(t)
-
-	mockProvider.EXPECT().
-		NewRangeReader(gomock.Any(), "empty.bin", int64(0), int64(4)).
-		Return(io.NopCloser(bytes.NewReader(nil)), nil)
-
-	f := &CommonFile{provider: mockProvider, name: "empty.bin", size: 10}
-
-	n, err := f.ReadAt(make([]byte, 4), 0)
-
-	assert.Equal(t, 0, n)
-	require.ErrorIs(t, err, io.EOF)
 }
 
 func TestCommonFile_Write_WriterError(t *testing.T) {
