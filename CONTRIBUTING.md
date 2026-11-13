@@ -1,21 +1,22 @@
 ## Contribution Guidelines
 * Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
-  change etc. For larger commits, the following steps are recommended.
-* (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
-* Configure your editor to use goimports and golangci-lint on file changes. Any code which is not formatted using these
-  tools, will fail on the pipeline.
+  changes. For larger commits, the following steps are recommended.
+* (Optional) If you want to discuss your implementation with the users and maintainers of GoFr, use [GitHub Discussions](https://github.com/gofr-dev/gofr/discussions).
+* Ensure you have **Go 1.26 or higher** installed on your development environment.
+* Configure your editor to use `goimports` and `golangci-lint` on file changes. Any code which is not formatted using these
+  tools will fail in the CI pipeline.
 * Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
   and request assignment from a maintainer. This helps avoid duplicate or conflicting pull requests from multiple contributors.
-* Issues labeled triage are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
+* Issues labeled `triage` are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
   to discuss it before proceeding in the GitHub thread.
 <!-- spellchecker:off "favour" have to be ignored here -->
 * We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
 * All code contributions should have associated tests and all new line additions should be covered in those test cases.
   No PR should ever decrease the overall code coverage.
-* Once your code changes are done along with the test cases, submit a PR to development branch. Please note that all PRs
-  are merged from feature branches to development first.
+* Once your code changes are done along with the test cases, submit a PR to the `development` branch. Please note that all PRs
+  are merged from feature branches to `development` first.
 * A PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
 * All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
@@ -62,7 +63,7 @@ docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
 
 # the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
-# http://opentsdb.net/docs/build/html/installation.html#id1
+# https://opentsdb.net/docs/build/html/installation.html
 docker run -d --name gofr-opentsdb -p 4242:4242 petergrace/opentsdb-docker:latest
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30
 docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
@@ -110,8 +111,8 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 
 ### Coding Guidelines
 * Use only what is given to you as part of function parameter or receiver. No globals. Inject all dependencies including
-  DB, Logger etc.
-* No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
+  DB, Logger, etc.
+* No magic. Avoid package `init()` functions. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
 * Exported functions must have an associated godoc.
 * New integrations — a datasource, a message broker, an external service — ship as their own Go
@@ -120,24 +121,24 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
   out would change import paths and setup calls for every existing user. A new integration has no
   such users, so there is nothing to break, and it stays out of everyone else's binary by default.
   A PR proposing a new `gofr_no*` tag should almost always be a module instead.
-* Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
+* Sensitive data (username, password, keys) should not be committed. Always use environment variables.
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
-      using it. so, it should be as lean as possible. This makes it easier to test.
+      using it, so it should be as lean as possible. This makes it easier to test.
     - Be careful of type assertions in this context. If you take an interface and type assert to a type - then it's
       similar to taking concrete type.
-* Uses of context:
+* Use of Context:
     - We should use context as a first parameter.
-    - Can not use string as a key for the context. Define your own type and provide context accessor method to avoid
+    - Do not use a string as a key for the context. Define your own type and provide context accessor method to avoid
       conflict.
-* External Library uses:
+* External Library Usage:
     - A little copying is better than a little dependency.
-    - All external dependencies should go through the same careful consideration, we would have done for our own written
+    - All external dependencies should receive the same careful consideration as internally written
       code. We need to test the functionality we are going to use from an external library, as sometimes library
       implementation may change.
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
       of time.
-* Version tagging as per Semantic versioning (https://semver.org/)
+* Follow [Semantic Versioning](https://semver.org/) for version tagging.
 
 ### Documentation
 * After adding or modifying existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
@@ -145,9 +146,9 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](./docs/public) folder.
 * Make sure you don't break existing links and references.
-* Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
+* Maintain Markdown standards (refer to the [Markdown Guide](https://www.markdownguide.org/basic-syntax/)); this includes:
     - Headings (`#`, `##`, etc.) should be placed in order.
     - Use trailing white space or the <br> HTML tag at the end of the line.
     - Use "`" sign to add single line code and "```" to add multi-line code block.
     - Use relative references to images (in `public` folder as mentioned above.)
-* The [gofr.dev documentation](https://gofr.dev/docs) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.
+* The [gofr.dev documentation](https://gofr.dev/docs) site is updated upon push to `/docs` path in the repo. Verify your changes are live after the next GoFr release.
