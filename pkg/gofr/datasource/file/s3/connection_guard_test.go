@@ -39,6 +39,7 @@ func TestFileOperationsAfterFailedConnectReturnError(t *testing.T) {
 	f.UseLogger(logger)
 
 	f.Connect()
+
 	if f.conn != nil {
 		t.Fatal("expected Connect to fail and leave the S3 client uninitialized")
 	}
@@ -51,12 +52,14 @@ func assertDisconnectedOperations(t *testing.T, f *FileSystem) {
 
 	// Observe the same FileLog path consumed by GoFr logging/metrics.
 	var logs []FileLog
+
 	logger := NewMockLogger(gomock.NewController(t))
 	logger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) {
 		fl, ok := args[0].(*FileLog)
 		if !ok {
 			t.Fatalf("expected *FileLog, got %T", args[0])
 		}
+
 		logs = append(logs, *fl)
 	}).AnyTimes()
 	f.UseLogger(logger)
@@ -89,6 +92,7 @@ func assertDisconnectedOperations(t *testing.T, f *FileSystem) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			before := len(logs)
+
 			err := tt.run()
 			if !errors.Is(err, errS3ClientNotInitialized) {
 				t.Fatalf("expected errS3ClientNotInitialized, got %v", err)
@@ -102,9 +106,11 @@ func assertDisconnectedOperations(t *testing.T, f *FileSystem) {
 			if got.Operation != tt.operation {
 				t.Errorf("operation = %q, want %q", got.Operation, tt.operation)
 			}
+
 			if got.Status == nil || *got.Status != statusErr {
 				t.Errorf("status = %v, want %q", got.Status, statusErr)
 			}
+
 			if got.Message == nil || *got.Message != errS3ClientNotInitialized.Error() {
 				t.Errorf("message = %v, want %q", got.Message, errS3ClientNotInitialized.Error())
 			}
