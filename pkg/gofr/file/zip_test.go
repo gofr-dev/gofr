@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -399,6 +401,69 @@ func TestNewZip_EntryErrors(t *testing.T) {
 			assert.Nil(t, z)
 		})
 	}
+}
+
+func TestNewZip_TotalSizeLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		sizes    []int
+		expFiles int
+		expErr   error
+	}{
+		{name: "entries adding up to the limit", sizes: []int{maxTotalSize / 2, maxTotalSize / 2}, expFiles: 2},
+		{name: "entries adding up to one byte over the limit", sizes: []int{maxTotalSize / 2, maxTotalSize/2 + 1},
+			expErr: errMaxTotalSize},
+		{name: "many entries each under the file limit", sizes: []int{maxFileSize / 2, maxFileSize / 2, maxFileSize / 2},
+			expErr: errMaxTotalSize},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			z, err := NewZip(zeroFilledZip(t, tt.sizes...))
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expFiles, fileCount(z))
+		})
+	}
+}
+
+// fileCount returns the number of files in z, or 0 when NewZip returned no Zip.
+func fileCount(z *Zip) int {
+	if z == nil {
+		return 0
+	}
+
+	return len(z.Files)
+}
+
+// zeroFilledZip builds a deflated archive with one entry of zero bytes per size, so a small
+// archive can declare a large uncompressed size.
+func zeroFilledZip(t *testing.T, sizes ...int) []byte {
+	t.Helper()
+
+	buf := bytes.NewBuffer(nil)
+	zipWriter := zip.NewWriter(buf)
+
+	for i, size := range sizes {
+		w, err := zipWriter.Create(fmt.Sprintf("part-%d.bin", i))
+		require.NoError(t, err)
+
+		_, err = io.CopyN(w, zeroReader{}, int64(size))
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, zipWriter.Close())
+
+	return buf.Bytes()
+}
+
+// zeroReader is an endless reader of zero bytes.
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+
+	return len(p), nil
 }
 
 func TestCreateLocalCopies_DirectoryCreationErrors(t *testing.T) {
