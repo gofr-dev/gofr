@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"cloud.google.com/go/cloudsqlconn"
 )
@@ -85,12 +86,14 @@ func (s *settings) postgresDSN() string {
 		quotePGValue(s.instanceConnectionName), quotePGValue(s.user), quotePGValue(s.database))
 }
 
-// quotePGValue renders a libpq connection-string value. Values without a space,
-// single quote or backslash are returned as-is (keeping the common case readable);
-// otherwise the value is single-quoted with backslash escaping, so it stays a single
-// token and can't inject further keywords.
+// quotePGValue renders a libpq connection-string value. Values without a unicode
+// space, single quote or backslash are returned as-is (keeping the common case
+// readable); otherwise the value is single-quoted with backslash escaping, so it
+// stays a single token and can't inject further keywords. An empty value is quoted
+// too, matching the copy in datasource/sql, which cannot be shared: this module
+// does not import gofr.dev.
 func quotePGValue(v string) string {
-	if v != "" && !strings.ContainsAny(v, " '\\") {
+	if v != "" && !strings.ContainsAny(v, "'\\") && !strings.ContainsFunc(v, unicode.IsSpace) {
 		return v
 	}
 
