@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -300,10 +301,11 @@ func Test_getPublicKeyFunc(t *testing.T) {
 		response any
 		err      error
 		funcErr  error
+		token    *jwt.Token
 	}{
 		{err: errEmptyProvider},
-		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
-		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}},
+		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}, token: &jwt.Token{}},
+		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}, token: &jwt.Token{Header: map[string]any{"kid": "test-key-id"}}},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -314,13 +316,7 @@ func Test_getPublicKeyFunc(t *testing.T) {
 				return
 			}
 
-			// Create a token with a kid header for the emptyPublicKeyProvider test
-			token := &jwt.Token{}
-			if i == 2 { // Test case 2 is emptyPublicKeyProvider
-				token.Header = map[string]any{"kid": "test-key-id"}
-			}
-
-			response, err := function(token)
+			response, err := function(tc.token)
 			assert.Equal(t, tc.response, response)
 
 			if tc.funcErr != nil {
@@ -361,6 +357,51 @@ type emptyPublicKeyProvider struct{}
 
 func (emptyPublicKeyProvider) Get(_ string) *rsa.PublicKey {
 	return nil
+}
+
+func Test_PublicKeys_Get_MissingOrEmptyKid(t *testing.T) {
+	singleKey := &rsa.PublicKey{N: big.NewInt(65537), E: 65537}
+	anotherKey := &rsa.PublicKey{N: big.NewInt(12345), E: 3}
+
+	tests := []struct {
+		desc     string
+		keys     map[string]*rsa.PublicKey
+		kid      string
+		expected *rsa.PublicKey
+	}{
+		{
+			desc:     "single key in JWKS with empty ID matches empty kid",
+			keys:     map[string]*rsa.PublicKey{"": singleKey},
+			kid:      "",
+			expected: singleKey,
+		},
+		{
+			desc:     "single key in JWKS with named ID fallback for missing kid in token",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey},
+			kid:      "",
+			expected: singleKey,
+		},
+		{
+			desc:     "multiple keys in JWKS does not match empty kid",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey, "key-2": anotherKey},
+			kid:      "",
+			expected: nil,
+		},
+		{
+			desc:     "explicit kid lookup matches corresponding key",
+			keys:     map[string]*rsa.PublicKey{"key-1": singleKey, "key-2": anotherKey},
+			kid:      "key-2",
+			expected: anotherKey,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			p := &PublicKeys{keys: tc.keys}
+			res := p.Get(tc.kid)
+			assert.Equal(t, tc.expected, res)
+		})
+	}
 }
 
 type MockJWKSProvider struct {
@@ -409,5 +450,52 @@ func (MockJWKSProvider) GetWithHeaders(_ context.Context, path string, _ map[str
 		return nil, &net.DNSError{}
 	default:
 		return &http.Response{StatusCode: http.StatusOK}, nil
+	}
+}
+
+// A token without a kid header is verified with the only key of a JWKS, whether that key has a kid or not.
+func TestOAuth_TokenWithoutKid(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	jwk := func(kid string) JSONWebKey {
+		return JSONWebKey{
+			ID:             kid,
+			Type:           "RSA",
+			Modulus:        base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+			PublicExponent: base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
+		}
+	}
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256,
+		jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()}).
+		SignedString(key)
+	require.NoError(t, err)
+
+	tests := []struct {
+		desc    string
+		jwks    []JSONWebKey
+		expCode int
+	}{
+		{desc: "single key without kid", jwks: []JSONWebKey{jwk("")}, expCode: http.StatusOK},
+		{desc: "single key with kid", jwks: []JSONWebKey{jwk("k1")}, expCode: http.StatusOK},
+		{desc: "two keys with kids", jwks: []JSONWebKey{jwk("k1"), jwk("k2")}, expCode: http.StatusUnauthorized},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			provider := &PublicKeys{keys: publicKeyFromJWKS(JWKS{Keys: tc.jwks})}
+			handler := OAuth(provider)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Authorization", "Bearer "+token)
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.expCode, rec.Code)
+		})
 	}
 }
