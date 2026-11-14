@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/traces/exporters"
 )
 
 // errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
@@ -73,7 +75,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create HTTP request, error: %w", err)
+		return fmt.Errorf("failed to create HTTP request, error: %w", redactRequestError(err, e.endpoint))
 	}
 
 	req.Header.Set("Content-Type", contentTypeJSON)
@@ -82,7 +84,9 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	resp, err := client.Do(req)
 	if err != nil {
+		err = redactRequestError(err, e.endpoint)
 		logger.Errorf("failed to create spans, error: %v", err)
+
 		return err
 	}
 	defer resp.Body.Close()
@@ -92,13 +96,68 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		// Log as well as return: the batch processor swallows the returned error, so without this a
 		// misconfigured or rejecting endpoint drops every trace with no signal to the operator.
-		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
+		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", exporters.RedactURL(e.endpoint), errUnexpectedStatusCode, resp.StatusCode)
 		logger.Errorf("%v", err)
 
 		return err
 	}
 
 	return nil
+}
+
+// redactRequestError returns a failed request's error without the endpoint's credentials. TRACER_URL can carry
+// them in its userinfo or query, and the *url.Error from http.NewRequest or http.Client names the URL with at most
+// the password masked. The *url.Error is kept, so errors.As and its Timeout method still work, with the URL
+// redacted and the cause passed through redactCause.
+func redactRequestError(err error, endpoint string) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return &url.Error{Op: urlErr.Op, URL: exporters.RedactURL(endpoint), Err: redactCause(urlErr.Err, endpoint)}
+	}
+
+	return redactCause(err, endpoint)
+}
+
+// redactCause hides any part of the endpoint that a request error's cause quotes back, using
+// exporters.RedactMessage: a schemeless TRACER_URL such as user:pass@host fails with
+// `unsupported protocol scheme "user"`. The returned error still unwraps to the cause, so errors.Is keeps
+// matching context.Canceled, DeadlineExceeded and the like, and *url.Error's Timeout and Temporary still
+// see the cause's answers.
+func redactCause(err error, endpoint string) error {
+	if err == nil {
+		return nil
+	}
+
+	msg := exporters.RedactMessage(err.Error(), endpoint)
+	if msg == err.Error() {
+		return err
+	}
+
+	return &redactedError{msg: msg, err: err}
+}
+
+// redactedError is a cause whose text had a credential removed. Unwrap returns the original cause.
+type redactedError struct {
+	msg string
+	err error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+
+func (e *redactedError) Unwrap() error { return e.err }
+
+// Timeout reports whether the cause is a timeout, so (*url.Error).Timeout keeps working once it is redacted.
+func (e *redactedError) Timeout() bool {
+	var t interface{ Timeout() bool }
+
+	return errors.As(e.err, &t) && t.Timeout()
+}
+
+// Temporary reports whether the cause is temporary, so (*url.Error).Temporary keeps working once it is redacted.
+func (e *redactedError) Temporary() bool {
+	var t interface{ Temporary() bool }
+
+	return errors.As(e.err, &t) && t.Temporary()
 }
 
 // convertSpans converts OpenTelemetry spans to the format expected by the exporter.

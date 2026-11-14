@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -152,7 +153,52 @@ func RedactMessage(msg, endpoint string) string {
 		msg = strings.ReplaceAll(msg, form, redacted)
 	}
 
+	// A cause can also quote one part of the endpoint on its own: a schemeless
+	// user:pass@host parses with "user" as the scheme, and net/http reports
+	// `unsupported protocol scheme "user"`. Only the quoted form is replaced, so a
+	// short credential such as "a" or "1" never masks part of an address or a word.
+	for _, credential := range endpointCredentials(endpoint) {
+		msg = strings.ReplaceAll(msg, strconv.Quote(credential), strconv.Quote(redactedPlaceholder))
+	}
+
 	return msg
+}
+
+// endpointCredentials returns the parts of an endpoint that can hold a credential:
+// each userinfo part, the query and each query value (raw and unescaped). Like
+// RedactURL, an endpoint that does not parse with a host is split on its raw text.
+func endpointCredentials(endpoint string) []string {
+	var userinfo, query string
+
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		password, _ := u.User.Password()
+		userinfo = u.User.Username() + ":" + password
+		query = u.RawQuery
+	} else {
+		raw, _, _ := strings.Cut(endpoint, "#")
+		raw, query, _ = strings.Cut(raw, "?")
+
+		if i := strings.LastIndex(raw, "@"); i >= 0 {
+			userinfo = raw[:i]
+			if _, rest, found := strings.Cut(userinfo, "://"); found {
+				userinfo = rest
+			}
+		}
+	}
+
+	credentials := strings.Split(userinfo, ":")
+
+	if query != "" {
+		credentials = append(credentials, query)
+
+		for pair := range strings.SplitSeq(query, "&") {
+			_, value, _ := strings.Cut(pair, "=")
+			unescaped, _ := url.QueryUnescape(value)
+			credentials = append(credentials, value, unescaped)
+		}
+	}
+
+	return slices.DeleteFunc(credentials, func(s string) bool { return s == "" })
 }
 
 // redactEndpointInError applies RedactMessage to a builder's error, so a failure
