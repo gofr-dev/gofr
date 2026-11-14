@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -14,11 +15,14 @@ import (
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofr_grpc "gofr.dev/pkg/gofr/grpc"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type grpcServer struct {
@@ -32,7 +36,7 @@ type grpcServer struct {
 	config             config.Config
 }
 
-// defaultInterceptorCount is the number of interceptors registered by default (recovery + observability).
+// defaultInterceptorCount is the number of interceptors registered by default (observability + recovery).
 const defaultInterceptorCount = 2
 
 var (
@@ -122,15 +126,19 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 
 	registerGRPCMetrics(c)
 
+	// Recovery runs inside observability, so a panicking handler still gets its RPC logged, measured and its
+	// span ended, with the Internal status that recovery turns the panic into.
+	recoverPanic := grpc_recovery.WithRecoveryHandlerContext(grpcPanicHandler(c.Logger))
+
 	middleware := make([]grpc.UnaryServerInterceptor, 0, defaultInterceptorCount)
 	middleware = append(middleware,
-		grpc_recovery.UnaryServerInterceptor(),
-		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
+		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()),
+		grpc_recovery.UnaryServerInterceptor(recoverPanic))
 
 	streamMiddleware := make([]grpc.StreamServerInterceptor, 0, defaultInterceptorCount)
 	streamMiddleware = append(streamMiddleware,
-		grpc_recovery.StreamServerInterceptor(),
-		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()))
+		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()),
+		grpc_recovery.StreamServerInterceptor(recoverPanic))
 
 	return &grpcServer{
 		port:               port,
@@ -138,6 +146,17 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 		streamInterceptors: streamMiddleware,
 		config:             cfg,
 	}, nil
+}
+
+// grpcPanicHandler logs a recovered handler panic with its stack trace, the same way an HTTP handler panic is
+// logged, and returns a generic Internal status. Without it, the recovery middleware sends the client the panic
+// value and the server's full stack trace as an Unknown error, and logs nothing.
+func grpcPanicHandler(logger logging.Logger) grpc_recovery.RecoveryHandlerFuncContext {
+	return func(_ context.Context, p any) error {
+		logPanic(logger, p)
+
+		return status.Error(codes.Internal, http.StatusText(http.StatusInternalServerError))
+	}
 }
 
 // registerGRPCMetrics registers essential gRPC metrics.
