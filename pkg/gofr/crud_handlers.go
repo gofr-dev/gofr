@@ -1,16 +1,17 @@
 package gofr
 
 import (
+	stdsql "database/sql"
 	"errors"
 	"fmt"
 	"reflect"
 
 	"gofr.dev/pkg/gofr/datasource/sql"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 var (
 	errInvalidObject     = errors.New("unexpected object given for AddRESTHandlers")
-	errEntityNotFound    = errors.New("entity not found")
 	errObjectIsNil       = errors.New("object given for AddRESTHandlers is nil")
 	errNonPointerObject  = errors.New("passed object is not pointer")
 	errFieldCannotBeNull = errors.New("field cannot be null")
@@ -260,7 +261,7 @@ func (e *entity) GetAll(c *Context) (any, error) {
 
 func (e *entity) Get(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
-	id := c.Request.PathParam("id")
+	id := c.PathParam(e.primaryKey)
 
 	query := sql.SelectByQuery(c.SQL.Dialect(), e.tableName, e.primaryKey)
 
@@ -274,6 +275,10 @@ func (e *entity) Get(c *Context) (any, error) {
 	}
 
 	err := row.Scan(dest...)
+	if errors.Is(err, stdsql.ErrNoRows) {
+		return nil, gofrHTTP.ErrorEntityNotFound{Name: e.primaryKey, Value: id}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +316,7 @@ func (e *entity) Update(c *Context) (any, error) {
 }
 
 func (e *entity) Delete(c *Context) (any, error) {
-	id := c.PathParam("id")
+	id := c.PathParam(e.primaryKey)
 
 	query := sql.DeleteByQuery(c.SQL.Dialect(), e.tableName, e.primaryKey)
 
@@ -326,7 +331,7 @@ func (e *entity) Delete(c *Context) (any, error) {
 	}
 
 	if rowsAffected == 0 {
-		return nil, errEntityNotFound
+		return nil, gofrHTTP.ErrorEntityNotFound{Name: e.primaryKey, Value: id}
 	}
 
 	return fmt.Sprintf("%s successfully deleted with id: %v", e.name, id), nil
