@@ -12,6 +12,14 @@ type Publisher interface {
 	Publish(ctx context.Context, topic string, message []byte) error
 }
 
+// KeyedPublisher is an optional publishing capability for brokers that support
+// record keys. Implementations must route records with the same key consistently
+// while the topic's partition count remains unchanged.
+type KeyedPublisher interface {
+	Publisher
+	PublishWithKey(ctx context.Context, topic string, key, message []byte) error
+}
+
 type Subscriber interface {
 	Subscribe(ctx context.Context, topic string) (*Message, error)
 }
