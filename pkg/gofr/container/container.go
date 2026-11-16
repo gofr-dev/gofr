@@ -376,14 +376,15 @@ func (c *Container) registerFrameworkMetrics() {
 		redisBuckets := getDefaultDatasourceMicrosecondBuckets()
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
 
-		// Connection-pool statistics, sampled every 10 seconds.
-		c.Metrics().NewGauge("app_redis_pool_hits", "Number of times a free connection was found in the Redis pool (cumulative).")
-		c.Metrics().NewGauge("app_redis_pool_misses",
-			"Number of times no free connection was found in the Redis pool, so a new one was dialed (cumulative).")
-		c.Metrics().NewGauge("app_redis_pool_timeouts", "Number of times waiting for a Redis pool connection timed out (cumulative).")
-		c.Metrics().NewGauge("app_redis_pool_total_conns", "Number of connections in the Redis pool.")
-		c.Metrics().NewGauge("app_redis_pool_idle_conns", "Number of idle connections in the Redis pool.")
-		c.Metrics().NewGauge("app_redis_pool_stale_conns", "Number of stale connections removed from the Redis pool (cumulative).")
+		// Connection-pool statistics, sampled every 10 seconds. Hits, misses, timeouts and stale
+		// connections are cumulative, so they are counters; open and idle connections are gauges.
+		c.Metrics().NewCounter("app_redis_pool_hits_total", "Number of times a free connection was found in the Redis pool.")
+		c.Metrics().NewCounter("app_redis_pool_misses_total",
+			"Number of times no free connection was found in the Redis pool, so a new one was dialed.")
+		c.Metrics().NewCounter("app_redis_pool_timeouts_total", "Number of times waiting for a Redis pool connection timed out.")
+		c.Metrics().NewCounter("app_redis_pool_stale_conns_total", "Number of stale connections removed from the Redis pool.")
+		c.Metrics().NewGauge("app_redis_open_connections", "Number of connections in the Redis pool.")
+		c.Metrics().NewGauge("app_redis_idle_connections", "Number of idle connections in the Redis pool.")
 	}
 
 	{ // SQL metrics

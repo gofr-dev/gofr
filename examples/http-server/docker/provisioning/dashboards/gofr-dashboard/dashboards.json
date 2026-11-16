@@ -3692,6 +3692,144 @@
       "type": "table"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "description": "Redis connection pool of the primary client, sampled every 10 seconds. Misses and timeouts are shown as a per-second rate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 128
+      },
+      "id": 137,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "app_redis_open_connections{}",
+          "hide": false,
+          "legendFormat": "Open",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "app_redis_idle_connections{}",
+          "hide": false,
+          "legendFormat": "Idle",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_redis_pool_misses_total{}[$__rate_interval]))",
+          "hide": false,
+          "legendFormat": "Misses/s",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_redis_pool_timeouts_total{}[$__rate_interval]))",
+          "hide": false,
+          "legendFormat": "Timeouts/s",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "title": "Connection Pool",
+      "transformations": [],
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
@@ -3701,7 +3839,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 128
+        "y": 136
       },
       "id": 60,
       "panels": [],
@@ -3748,7 +3886,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 137
       },
       "id": 114,
       "options": {
@@ -3891,7 +4029,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 133
+        "y": 141
       },
       "id": 62,
       "options": {
@@ -4002,7 +4140,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 143
+        "y": 151
       },
       "id": 120,
       "options": {
@@ -4113,7 +4251,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 143
+        "y": 151
       },
       "id": 121,
       "options": {
@@ -4169,7 +4307,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 152
+        "y": 160
       },
       "id": 48,
       "panels": [],
@@ -4216,7 +4354,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 153
+        "y": 161
       },
       "id": 118,
       "options": {
@@ -4360,7 +4498,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 161
+        "y": 169
       },
       "id": 64,
       "options": {
@@ -4473,7 +4611,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 171
+        "y": 179
       },
       "id": 122,
       "options": {
@@ -4611,7 +4749,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 171
+        "y": 179
       },
       "id": 123,
       "options": {
@@ -4665,7 +4803,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 180
+        "y": 188
       },
       "id": 130,
       "panels": [],
@@ -4739,7 +4877,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 181
+        "y": 189
       },
       "id": 131,
       "options": {
@@ -4876,7 +5014,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 189
+        "y": 197
       },
       "id": 133,
       "options": {
@@ -4987,7 +5125,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 189
+        "y": 197
       },
       "id": 134,
       "options": {
@@ -5098,7 +5236,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 197
+        "y": 205
       },
       "id": 135,
       "options": {
@@ -5236,7 +5374,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 197
+        "y": 205
       },
       "id": 136,
       "options": {

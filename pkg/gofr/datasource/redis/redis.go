@@ -167,7 +167,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		stopSignal: stopSignal,
 	}
 
-	go pushPoolMetrics(rc, metrics, redisConfig.HostName, poolMetricsInterval, stopSignal)
+	if pm, ok := metrics.(poolMetrics); ok {
+		go pushPoolMetrics(rc, pm, redisConfig.HostName, poolMetricsInterval, stopSignal)
+	}
 
 	return r
 }
