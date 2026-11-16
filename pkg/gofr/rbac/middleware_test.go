@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -72,32 +74,258 @@ func TestMiddleware_PublicEndpoint(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "OK")
 }
 
-func TestMiddleware_NoEndpointMatch(t *testing.T) {
-	config := &Config{
-		Endpoints: []EndpointMapping{
-			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+// noEndpointMatchCase is one request through the middleware of a config that holds a rule for
+// GET /api/users and a public rule for GET /health, and none for anything else.
+type noEndpointMatchCase struct {
+	desc   string
+	policy string // defaultPolicy of the config under test
+	method string
+	path   string
+	role   string        // value of the X-User-Role header; empty sends none
+	jwt    bool          // read roles from the "roles" claim instead of the header
+	claims jwt.MapClaims // claims in the request context
+	// mark marks the route the request matched, as GoFr does for its catch-all and built-in routes.
+	mark func(*mux.Route) *mux.Route
+	// before and after are the other configs of the app, installed before and after the one under test.
+	before, after []Config
+
+	wantStatus int
+	wantReason string // reason label on rbac_role_extraction_failures; empty: not incremented
+	wantRole   string // ErrorHandler role and AuditLog.Role
+	wantCount  int    // AuditLog.HeldCount
+	wantErr    error  // what a custom ErrorHandler receives; nil: it is not called
+	wantRoute  string // AuditLog.Route of a refusal; empty: unmatched
+}
+
+func noEndpointMatchCases() []noEndpointMatchCase {
+	covers := func(path string) []Config {
+		return []Config{{Endpoints: []EndpointMapping{{Path: path, Methods: []string{"GET"}, RequiredPermissions: []string{"p:r"}}}}}
+	}
+	denies := func(path string) []Config {
+		cfg := covers(path)
+		cfg[0].deny = true
+
+		return cfg
+	}
+
+	return append([]noEndpointMatchCase{
+		{
+			desc: "allow: an unmatched route is served, as before", policy: "allow",
+			method: http.MethodGet, path: "/api/posts", wantStatus: http.StatusOK,
+		},
+		{
+			desc: "no policy: an unmatched route is served, as before", policy: "",
+			method: http.MethodGet, path: "/api/posts", wantStatus: http.StatusOK,
+		},
+		{
+			desc: "deny: a covered route is unchanged", policy: "deny",
+			method: http.MethodGet, path: "/api/users", role: "admin", wantStatus: http.StatusOK,
+		},
+		{
+			desc: "deny: a public route is served", policy: "deny",
+			method: http.MethodGet, path: "/health", wantStatus: http.StatusOK,
+		},
+		{
+			desc: "C3: deny with no role is 401 and counts the extraction failure", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", wantStatus: http.StatusUnauthorized,
+			wantReason: "missing_role", wantErr: ErrRoleNotFound,
+		},
+		{
+			desc: "C3: deny with a role is 403 and the handler gets the role", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", role: "admin", wantStatus: http.StatusForbidden,
+			wantRole: "admin", wantErr: ErrAccessDenied,
+		},
+		{
+			desc: "C3: deny with several roles is 403 and reports a count", policy: "deny", jwt: true,
+			claims: jwt.MapClaims{"roles": []any{"admin", "viewer"}},
+			method: http.MethodGet, path: "/api/posts", wantStatus: http.StatusForbidden,
+			wantCount: 2, wantErr: ErrAccessDenied,
+		},
+		{
+			desc: "F2: deny refuses a method no rule covers on a covered path", policy: "deny",
+			method: http.MethodDelete, path: "/api/users", role: "admin", wantStatus: http.StatusForbidden,
+			wantRole: "admin", wantErr: ErrAccessDenied,
+		},
+		{
+			desc: "C2: deny leaves the catch-all's answer alone", policy: "deny",
+			method: http.MethodGet, path: "/nope", mark: routemark.MarkCatchAll, wantStatus: http.StatusOK,
+		},
+		{
+			desc: "Q2: deny leaves a GoFr built-in route alone", policy: "deny",
+			method: http.MethodGet, path: "/.well-known/alive", mark: routemark.MarkBuiltIn, wantStatus: http.StatusOK,
+		},
+		{
+			desc: "Q2: a rule written for a built-in route still applies", policy: "deny",
+			method: http.MethodGet, path: "/api/users", mark: routemark.MarkBuiltIn,
+			wantStatus: http.StatusUnauthorized, wantReason: "missing_role", wantErr: ErrRoleNotFound,
+			wantRoute: "/api/users",
+		},
+	}, groupNoEndpointMatchCases(covers, denies)...)
+}
+
+// groupNoEndpointMatchCases are the cases of TestMiddleware_NoEndpointMatch where the app holds
+// several configs.
+func groupNoEndpointMatchCases(covers, denies func(string) []Config) []noEndpointMatchCase {
+	return []noEndpointMatchCase{
+		{
+			desc: "Q3: deny leaves a route a later config covers to that config", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", after: covers("/api/posts"), wantStatus: http.StatusOK,
+		},
+		{
+			desc: "Q3: deny leaves a route an earlier config covers to that config", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", before: covers("/api/posts"), wantStatus: http.StatusOK,
+		},
+		{
+			desc: "Q3: deny leaves a route another config makes public", policy: "deny",
+			method: http.MethodGet, path: "/open",
+			after: []Config{{Endpoints: []EndpointMapping{{Path: "/open", Methods: []string{"GET"}, Public: true}}}}, wantStatus: http.StatusOK,
+		},
+		{
+			desc: "Q3: deny refuses a route no config covers", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", role: "admin", after: covers("/other"),
+			wantStatus: http.StatusForbidden, wantRole: "admin", wantErr: ErrAccessDenied,
+		},
+		{
+			desc: "O2: a config left on allow passes an unmatched request on; the deny config after it is the one that refuses", policy: "allow",
+			method: http.MethodGet, path: "/api/posts", role: "admin", after: denies("/other"), wantStatus: http.StatusOK,
+		},
+		{
+			desc: "O2: when an earlier config is the first deny one, this deny config passes the request on", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", role: "admin", before: denies("/other"), wantStatus: http.StatusOK,
+		},
+		{
+			desc: "O2: a config that does not deny passes on, so a later deny config is the one that refuses", policy: "deny",
+			method: http.MethodGet, path: "/api/posts", role: "admin", before: covers("/other"),
+			wantStatus: http.StatusForbidden, wantRole: "admin", wantErr: ErrAccessDenied,
 		},
 	}
-	err := config.processUnifiedConfig()
-	require.NoError(t, err)
+}
 
-	middlewareFunc := Middleware(config)
-	require.NotNil(t, middlewareFunc)
+func TestMiddleware_NoEndpointMatch(t *testing.T) {
+	for i, tc := range noEndpointMatchCases() {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := &Config{
+				deny:       tc.policy == policyDeny,
+				RoleHeader: "X-User-Role",
+				Roles:      []RoleDefinition{{Name: "admin", Permissions: []string{"users:read"}}},
+				Endpoints: []EndpointMapping{
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+					{Path: "/health", Methods: []string{"GET"}, Public: true},
+				},
+			}
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+			if tc.jwt {
+				config.RoleHeader, config.JWTClaimPath = "", "roles"
+			}
 
-	wrapped := middlewareFunc(handler)
-	w := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/posts", http.NoBody)
-	wrapped.ServeHTTP(w, req)
+			logger := &mockLogger{}
+			metrics := container.NewMockMetrics(gomock.NewController(t))
 
-	// Routes not in RBAC config are handled by normal route matching
-	// So unmatched endpoints should be allowed through
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "OK")
+			if tc.wantReason != "" {
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "rbac_role_extraction_failures", "reason", tc.wantReason)
+			}
+
+			config.Logger, config.Metrics = logger, metrics
+
+			var handlerRole string
+
+			var handlerErr error
+
+			config.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, role, _ string, err error) {
+				handlerRole, handlerErr = role, err
+
+				status := http.StatusForbidden
+				if errors.Is(err, ErrRoleNotFound) {
+					status = http.StatusUnauthorized
+				}
+
+				w.WriteHeader(status)
+			}
+
+			require.NoError(t, config.processUnifiedConfig(), "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			linkNoEndpointMatchGroup(t, config, &tc)
+
+			w := httptest.NewRecorder()
+			Middleware(config)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("OK"))
+			})).ServeHTTP(w, tc.request(t))
+
+			assert.Equal(t, tc.wantStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantRole, handlerRole, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			if tc.wantErr == nil {
+				require.NoError(t, handlerErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+				return
+			}
+
+			assert.Same(t, tc.wantErr, handlerErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assertNoEndpointMatchAudit(t, i, &tc, logger)
+		})
+	}
+}
+
+// linkNoEndpointMatchGroup installs config with the other configs of tc, in order, as an app does.
+func linkNoEndpointMatchGroup(t *testing.T, config *Config, tc *noEndpointMatchCase) {
+	t.Helper()
+
+	if len(tc.before)+len(tc.after) == 0 {
+		return
+	}
+
+	all := make([]*Config, 0, len(tc.before)+len(tc.after)+1)
+
+	for i := range tc.before {
+		all = append(all, &tc.before[i])
+	}
+
+	all = append(all, config)
+
+	for i := range tc.after {
+		all = append(all, &tc.after[i])
+	}
+
+	for _, c := range all {
+		require.NoError(t, c.processUnifiedConfig())
+	}
+
+	linkGroup(all)
+}
+
+// request builds the request of tc, marked as the route GoFr would have matched it to.
+func (tc *noEndpointMatchCase) request(t *testing.T) *http.Request {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+	if tc.role != "" {
+		req.Header.Set("X-User-Role", tc.role)
+	}
+
+	if tc.claims != nil {
+		req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, tc.claims))
+	}
+
+	if tc.mark != nil {
+		req = routemark.With(req, tc.mark(mux.NewRouter().NewRoute().Path(tc.path)))
+	}
+
+	return req
+}
+
+// assertNoEndpointMatchAudit checks the audit entry of a refused request: the role or the count of
+// roles held, and that the route is reported as unmatched.
+func assertNoEndpointMatchAudit(t *testing.T, i int, tc *noEndpointMatchCase, logger *mockLogger) {
+	t.Helper()
+
+	require.Len(t, logger.infoArgs, 1, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+	entry, ok := logger.infoArgs[0].(*AuditLog)
+	require.True(t, ok, "TEST[%d], Failed.\n%s", i, tc.desc)
+	assert.Equal(t, tc.wantRole, entry.Role, "TEST[%d], Failed.\n%s", i, tc.desc)
+	assert.Equal(t, tc.wantCount, entry.HeldCount, "TEST[%d], Failed.\n%s", i, tc.desc)
+	assert.Equal(t, cmp.Or(tc.wantRoute, unknownRouteLabel), entry.Route, "TEST[%d], Failed.\n%s", i, tc.desc)
 }
 
 func TestMiddleware_RoleNotFound(t *testing.T) {

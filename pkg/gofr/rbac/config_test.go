@@ -97,9 +97,61 @@ endpoints:
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
+
+	policyCases := []struct {
+		desc     string
+		file     string
+		content  string
+		wantDeny bool
+	}{
+		{desc: "defaultPolicy unset means allow", file: "policy_unset.json", content: `{"roleHeader": "X"}`},
+		{desc: "defaultPolicy allow", file: "policy_allow.json", content: `{"defaultPolicy": "allow"}`},
+		{desc: "defaultPolicy deny", file: "policy_deny.json", content: `{"defaultPolicy": "deny"}`, wantDeny: true},
+		{desc: "O1: defaultPolicy ignores case", file: "policy_upper.json", content: `{"defaultPolicy": "DENY"}`, wantDeny: true},
+		{desc: "O1: defaultPolicy ignores case and spaces for allow", file: "policy_spaced.json", content: `{"defaultPolicy": " Allow "}`},
+		{desc: "defaultPolicy deny in yaml", file: "policy_deny.yaml", content: "defaultPolicy: deny\n", wantDeny: true},
+		{desc: "defaultPolicy empty string means allow", file: "policy_empty.json", content: `{"defaultPolicy": ""}`},
+	}
+
+	for i, tc := range policyCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path, err := createTestConfigFile(tc.file, tc.content)
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			defer os.Remove(path)
+
+			config, err := LoadPermissions(tc.file, nil, nil, nil)
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.wantDeny, config.deny, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
 }
 
 func TestLoadPermissions_ErrorCases(t *testing.T) {
+	invalidPolicyCases := []struct {
+		desc    string
+		content string
+	}{
+		{desc: "C1: defaultPolicy with an unknown value", content: `{"defaultPolicy": "block"}`},
+		{desc: "C1: defaultPolicy with a typo", content: `{"defaultPolicy": "dney"}`},
+		{desc: "C1: defaultPolicy warn is not a value (Q1)", content: `{"defaultPolicy": "warn"}`},
+		{desc: "C1: defaultPolicy that is only spaces", content: `{"defaultPolicy": "  "}`},
+	}
+
+	for i, tc := range invalidPolicyCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			path, err := createTestConfigFile("test_bad_policy.json", tc.content)
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			defer os.Remove(path)
+
+			config, err := LoadPermissions("test_bad_policy.json", nil, nil, nil)
+			require.ErrorIs(t, err, errInvalidDefaultPolicy, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Contains(t, err.Error(), `"allow" or "deny"`, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+
 	t.Run("returns error for non-existent file", func(t *testing.T) {
 		config, err := LoadPermissions("nonexistent.json", nil, nil, nil)
 		require.Error(t, err)
@@ -814,28 +866,34 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 		{
 			desc: "permissions mode from json", file: "rbac.json",
 			content: `{"permissionsClaimPath": "scope", ` + endpoints + `}`,
-			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope, defaultPolicy=allow",
 		},
 		{
 			desc: "permissions mode from yaml", file: "rbac.yaml",
 			content: "permissionsClaimPath: scope\nendpoints:\n" +
 				"  - path: /orders\n    methods: [GET]\n    requiredPermissions: [orders:read]\n",
-			perms: "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+			perms: "scope", startLine: "RBAC enabled: mode=permissions, source=scope, defaultPolicy=allow",
 		},
 		{
 			desc: "permissions mode with a nested path and an index loads", file: "rbac.json",
 			content: `{"permissionsClaimPath": "realm.access[0]", ` + endpoints + `}`,
-			perms:   "realm.access[0]", startLine: "RBAC enabled: mode=permissions, source=realm.access[0]",
+			perms:   "realm.access[0]", startLine: "RBAC enabled: mode=permissions, source=realm.access[0], defaultPolicy=allow",
 		},
 		{
 			desc: "roles mode keeps loading a claim path it cannot parse, as before", file: "rbac.json",
 			content:   `{"jwtClaimPath": "roles[x]", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
-			startLine: "RBAC enabled: mode=roles, source=roles[x]",
+			startLine: "RBAC enabled: mode=roles, source=roles[x], defaultPolicy=allow",
 		},
 		{
 			desc: "header mode", file: "rbac.json",
 			content:   `{"roleHeader": "X-User-Role", "roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
-			startLine: "RBAC enabled: mode=header, source=X-User-Role",
+			startLine: "RBAC enabled: mode=header, source=X-User-Role, defaultPolicy=allow",
+		},
+		{
+			desc: "the start line names a deny default policy, normalized", file: "rbac.json",
+			content: `{"roleHeader": "X-User-Role", "defaultPolicy": " DENY ", ` +
+				`"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
+			startLine: "RBAC enabled: mode=header, source=X-User-Role, defaultPolicy=deny",
 		},
 		{
 			desc: "both claim paths are rejected", file: "rbac.json",
@@ -850,7 +908,7 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 		{
 			desc: "roleHeader beside permissionsClaimPath warns that the header is ignored", file: "rbac.json",
 			content: `{"permissionsClaimPath": "scope", "roleHeader": "X-User-Role", ` + endpoints + `}`,
-			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope",
+			perms:   "scope", startLine: "RBAC enabled: mode=permissions, source=scope, defaultPolicy=allow",
 			warn: "roleHeader is ignored",
 		},
 		{
@@ -858,7 +916,7 @@ func TestLoadPermissions_ClaimModes(t *testing.T) {
 			content: `{"permissionsClaimPath": "scope", ` +
 				`"roles": [{"name": "a", "permissions": ["orders:read"]}], ` + endpoints + `}`,
 			perms:     "scope",
-			startLine: "RBAC enabled: mode=permissions, source=scope",
+			startLine: "RBAC enabled: mode=permissions, source=scope, defaultPolicy=allow",
 			warn:      "roles section is ignored",
 		},
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -402,7 +403,71 @@ func prepareHTTPServerCases(t *testing.T) []prepareHTTPServerCase {
 			wantLog: []string{routeCheckFailed, "GET /.well-known/custom"},
 			notLog:  []string{"/.well-known/health", "/.well-known/alive", "favicon.ico"},
 		},
-	}, twoConfigRouteCheckCases()...)
+	}, append(twoConfigRouteCheckCases(), denyRouteCheckCases()...)...)
+}
+
+// denying returns config, a JSON object, with defaultPolicy deny added.
+func denying(config string) string {
+	return `{"defaultPolicy":"deny",` + strings.TrimPrefix(config, "{")
+}
+
+const blockedUncovered = "Under defaultPolicy deny they are blocked; add a rule to make them reachable."
+
+// denyRouteCheckCases are the cases of TestApp_prepareHTTPServer under defaultPolicy deny.
+func denyRouteCheckCases() []prepareHTTPServerCase {
+	return []prepareHTTPServerCase{
+		{
+			desc:     "Q4: under deny an uncovered route is a warning with the blocked text, not an error",
+			config:   denying(rbacLeavingPingUncovered),
+			wantWarn: []string{"RBAC route check: routes covered by no rule: GET /ping", blockedUncovered},
+			notLog:   []string{routeCheckFailed, "GET /ping"},
+		},
+		{
+			desc:     "Q4: under deny an uncovered route does not stop startup with fail",
+			config:   denying(rbacLeavingPingUncovered),
+			mode:     "fail",
+			wantWarn: []string{"GET /ping", blockedUncovered},
+			notLog:   []string{routeCheckFailed, "GOFR_RBAC_ROUTE_CHECK=fail"},
+		},
+		{
+			desc:   "Q4: under deny a partly covered route is a warning that does not stop startup with fail",
+			config: denying(rbacPartlyCoveringItems),
+			mode:   "fail",
+			setup:  func(a *App) { a.GET("/items/{id}", func(*Context) (any, error) { return "ok", nil }) },
+			wantWarn: []string{"routes only partly covered", "GET /items/{id} (by GET /items/{id:[0-9]+})",
+				"Under defaultPolicy deny the requests these rules do not match are blocked"},
+			notLog: []string{routeCheckFailed},
+		},
+		{
+			desc:        "Q4: under deny a dead rule is still an error and still stops startup with fail",
+			config:      denying(rbacWithDeadRule),
+			mode:        "fail",
+			wantLog:     []string{routeCheckFailed, "DELETE /api/user/{id}", "GOFR_RBAC_ROUTE_CHECK=fail"},
+			wantOutcome: startupFailed,
+		},
+		{
+			desc:     "Q4: under deny a dead public rule is still a warning",
+			config:   denying(rbacWithDeadPublicRule),
+			mode:     "fail",
+			wantWarn: []string{"public rules match no registered route: GET /healthz"},
+			notLog:   []string{routeCheckFailed},
+		},
+		{
+			desc:   "Q4: off skips the check under deny too",
+			config: denying(rbacLeavingPingUncovered),
+			mode:   "off",
+			notLog: []string{routeCheckFailed, "GET /ping"},
+		},
+		{
+			desc:     "Q4: with two configs, deny in the second makes an uncovered route a warning",
+			config:   rbacGuardingPing,
+			second:   denying(rbacGuardingPing),
+			setup:    func(a *App) { a.GET("/admin", func(*Context) (any, error) { return "ok", nil }) },
+			mode:     "fail",
+			wantWarn: []string{"routes covered by no rule: GET /admin", blockedUncovered},
+			notLog:   []string{routeCheckFailed},
+		},
+	}
 }
 
 // twoConfigRouteCheckCases are the cases of TestApp_prepareHTTPServer where EnableRBAC is called twice.

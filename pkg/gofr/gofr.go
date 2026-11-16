@@ -91,6 +91,11 @@ type App struct {
 	// config, so all of them are checked. See prepareHTTPServer.
 	rbacConfigs []*rbac.Config
 
+	// rbacDeny is whether any of rbacConfigs sets defaultPolicy deny, which prepareHTTPServer reads
+	// from the rbac package when it links the configs. It makes the route check report the routes
+	// no rule covers as blocked, not open.
+	rbacDeny bool
+
 	// rbacRoutes is the route table as the RBAC route check reads it. httpServerSetup fills it from
 	// the walk it already makes, and only when rbacConfigs is set.
 	rbacRoutes []rbaccheck.Route
