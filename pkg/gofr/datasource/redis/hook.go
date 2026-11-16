@@ -110,11 +110,24 @@ func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Pr
 		if r.config.hideArgs {
 			r.sendOperationStats(start, queryPipeline, maskPipeline(cmds))
 		} else {
-			r.sendOperationStats(start, queryPipeline, cmds)
+			r.sendOperationStats(start, queryPipeline, pipelineStrings(cmds))
 		}
 
 		return err
 	}
+}
+
+// pipelineStrings renders each pipelined command with its reply, e.g.
+// "get key: value". A redis.Cmder has no exported fields, so logging the
+// commands themselves would print each one as {} in JSON.
+func pipelineStrings(cmds []redis.Cmder) []string {
+	logged := make([]string, len(cmds))
+
+	for i, cmd := range cmds {
+		logged[i] = cmd.String()
+	}
+
+	return logged
 }
 
 // maskCmdArgs keeps the command name (the first argument) and replaces every
