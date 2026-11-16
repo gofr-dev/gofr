@@ -15,6 +15,11 @@ import (
 // that would have to outlive or be shared between routers.
 const catchAllName = "gofr.catch-all"
 
+// builtInName is the name every route GoFr registers for itself carries (health, alive, favicon,
+// OpenAPI/Swagger, the GraphQL playground). mux lets one name sit on many routes, and GoFr names no
+// route otherwise, so the name is free to carry the mark.
+const builtInName = "gofr.built-in"
+
 // ctxKey is the private context key under which the trie router stores the matched route. It
 // exists because, once the trie router bypasses mux's ServeHTTP, mux.CurrentRoute(r) is no longer
 // populated. A pointer is stored rather than the template string: it fits in an interface without
@@ -55,4 +60,26 @@ func Matched(r *http.Request) *mux.Route {
 // CatchAllAnswered reports whether GoFr's catch-all is the route that matched r.
 func CatchAllAnswered(r *http.Request) bool {
 	return IsCatchAll(Matched(r))
+}
+
+// MarkBuiltIn marks route as one GoFr registered for itself and returns it. GoFr tells these routes
+// apart by where they were registered, not by path, so that an application route under
+// /.well-known/ is not mistaken for one. A route that already has a name keeps it and is not marked:
+// mux refuses a second name and would put the route in error. A nil route is a no-op.
+func MarkBuiltIn(route *mux.Route) *mux.Route {
+	if route == nil || route.GetName() != "" {
+		return route
+	}
+
+	return route.Name(builtInName)
+}
+
+// IsBuiltIn reports whether route is one MarkBuiltIn marked. A nil route is not.
+func IsBuiltIn(route *mux.Route) bool {
+	return route != nil && route.GetName() == builtInName
+}
+
+// BuiltInAnswered reports whether one of GoFr's own routes is the route that matched r.
+func BuiltInAnswered(r *http.Request) bool {
+	return IsBuiltIn(Matched(r))
 }

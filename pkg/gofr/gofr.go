@@ -31,6 +31,9 @@ import (
 
 const (
 	configLocation = "./configs"
+
+	// faviconPath is the path of the favicon GoFr serves itself.
+	faviconPath = "/favicon.ico"
 )
 
 var (
@@ -240,12 +243,15 @@ func (a *App) httpServerSetup() {
 
 	routes := newRBACRouteCollector(len(a.rbacConfigs) > 0)
 
-	// Register default routes - these are only added when HTTP server is actually starting
-	routes.startBuiltIns(&a.httpServer.router.Router)
+	// Register default routes - these are only added when HTTP server is actually starting. They are
+	// marked as GoFr's own by where they were registered, not by path, so that the RBAC middleware
+	// and route check leave them alone while an application route under /.well-known/ still needs a
+	// rule.
+	appRoutes := countRoutes(&a.httpServer.router.Router)
 
 	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
-	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+	a.add(http.MethodGet, faviconPath, faviconHandler)
 
 	// Add OpenAPI/Swagger routes if openapi.json exists
 	a.checkAndAddOpenAPIDocumentation()
@@ -255,7 +261,7 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
-	routes.endBuiltIns(&a.httpServer.router.Router)
+	markBuiltIns(&a.httpServer.router.Router, appRoutes)
 
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)

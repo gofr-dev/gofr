@@ -197,41 +197,11 @@ func (a *App) checkRBACRoutes() bool {
 type rbacRouteCollector struct {
 	enabled bool
 	seen    map[rbaccheck.Route]bool
-
-	// builtInFrom and builtInTo bound, as positions in the router walk, the routes GoFr registers
-	// itself; walked is the position of the next route add sees. The routes are told apart by
-	// where they were registered rather than by their path, so that an application route under
-	// /.well-known/ is still checked.
-	builtInFrom, builtInTo, walked int
-
-	routes []rbaccheck.Route
+	routes  []rbaccheck.Route
 }
 
 func newRBACRouteCollector(enabled bool) *rbacRouteCollector {
 	return &rbacRouteCollector{enabled: enabled, seen: make(map[rbaccheck.Route]bool)}
-}
-
-// startBuiltIns marks the routes registered on router from now on as GoFr's own, until endBuiltIns.
-func (c *rbacRouteCollector) startBuiltIns(router *mux.Router) {
-	if c.enabled {
-		c.builtInFrom = countRoutes(router)
-	}
-}
-
-// endBuiltIns ends the run of routes startBuiltIns began.
-func (c *rbacRouteCollector) endBuiltIns(router *mux.Router) {
-	if c.enabled {
-		c.builtInTo = countRoutes(router)
-	}
-}
-
-// nextIsBuiltIn reports whether the route at the next walk position is one of GoFr's own, and
-// moves past it.
-func (c *rbacRouteCollector) nextIsBuiltIn() bool {
-	position := c.walked
-	c.walked++
-
-	return position >= c.builtInFrom && position < c.builtInTo
 }
 
 // countRoutes returns how many routes a walk of router visits.
@@ -247,9 +217,26 @@ func countRoutes(router *mux.Router) int {
 	return n
 }
 
+// markBuiltIns marks every route a walk of router visits after the first skip as one of GoFr's own
+// (routemark.MarkBuiltIn). httpServerSetup calls it right after registering its built-in routes,
+// with the count taken right before, so exactly those routes are marked, in one walk.
+func markBuiltIns(router *mux.Router, skip int) {
+	position := 0
+
+	_ = router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		if position >= skip {
+			routemark.MarkBuiltIn(route)
+		}
+
+		position++
+
+		return nil
+	})
+}
+
 // add records route once per method, "*" for a route with no method matcher, as built in when it
-// falls between startBuiltIns and endBuiltIns. A prefix route gets a trailing catch-all segment, so
-// that it stands for every path under the prefix.
+// carries routemark's built-in mark. A prefix route gets a trailing catch-all segment, so that it
+// stands for every path under the prefix.
 // GoFr's PathPrefix("/") catch-all is left out: it answers 404 for every path no other route
 // serves, and would otherwise make every rule look live.
 func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
@@ -257,7 +244,7 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 		return
 	}
 
-	builtIn := c.nextIsBuiltIn()
+	builtIn := routemark.IsBuiltIn(route)
 
 	if routemark.IsCatchAll(route) {
 		return
