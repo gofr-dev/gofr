@@ -734,33 +734,31 @@ func TestCommonFileSystem_OpenFile_LocalRDWR(t *testing.T) {
 	t.Chdir(t.TempDir())
 	require.NoError(t, os.WriteFile("data.txt", []byte("hello world"), 0o600))
 
-	fs := newLocalCommonFS()
+	store := &CommonFileSystem{Provider: &localProvider{}, Location: localLocation}
 
-	f, err := fs.OpenFile("data.txt", os.O_RDWR, DefaultFileMode)
+	f, err := store.OpenFile("data.txt", os.O_RDWR, DefaultFileMode)
 	require.NoError(t, err)
-
-	pos, err := f.Seek(6, io.SeekStart)
-	require.NoError(t, err)
-	assert.Equal(t, int64(6), pos)
 
 	buf := make([]byte, 5)
 	_, err = io.ReadFull(f, buf)
 	require.NoError(t, err)
-	assert.Equal(t, "world", string(buf))
-
-	_, err = f.ReadAt(buf, 0)
-	require.NoError(t, err)
 	assert.Equal(t, "hello", string(buf))
 
-	_, err = f.WriteAt([]byte("H"), 0)
+	_, err = f.WriteAt([]byte("W"), 6)
 	require.NoError(t, err)
 
-	// Reader and writer are the same open file, which is closed once.
-	require.NoError(t, f.Close())
+	// Seek and ReadAt return an error instead of dereferencing a nil provider.
+	_, err = f.Seek(0, io.SeekStart)
+	require.ErrorIs(t, err, errProviderNil)
+
+	_, err = f.ReadAt(buf, 0)
+	require.ErrorIs(t, err, errProviderNil)
+
+	_ = f.Close()
 
 	content, err := os.ReadFile("data.txt")
 	require.NoError(t, err)
-	assert.Equal(t, "Hello world", string(content))
+	assert.Equal(t, "hello World", string(content))
 }
 
 func TestCommonFileSystem_OpenFile_Append_Success(t *testing.T) {

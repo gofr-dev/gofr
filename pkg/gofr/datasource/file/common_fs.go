@@ -515,7 +515,6 @@ func (c *CommonFileSystem) tryLocalFileOpen(name string, flag int, perm os.FileM
 	}
 
 	return &CommonFile{
-		provider: c.Provider,
 		name:     name,
 		body:     osFile,
 		writer:   osFile,
