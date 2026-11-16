@@ -539,8 +539,12 @@ func TestLocalFileSystem_OpenFile_CreateFlags(t *testing.T) {
 	// O_EXCL fails on an existing file and leaves it untouched.
 	writeTestFile(t, "job.lock", "owner=A")
 
-	_, err := fs.OpenFile("job.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	lock, err := fs.OpenFile("job.lock", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	require.ErrorIs(t, err, os.ErrExist)
+
+	// The file returned with the error fails on Write and leaves the existing file alone.
+	_, writeErr := lock.Write([]byte("owner=B"))
+	require.ErrorIs(t, writeErr, os.ErrExist)
 	assert.Equal(t, "owner=A", readTestFile(t, "job.lock"))
 
 	// perm is used for a new file, and missing parent directories are created.
@@ -557,12 +561,20 @@ func TestLocalFileSystem_OpenFile_CreateFlags(t *testing.T) {
 	// Parent directories cannot be created under a file.
 	writeTestFile(t, "parent", "a file")
 
-	_, err = fs.OpenFile(filepath.Join("parent", "child.txt"), os.O_CREATE|os.O_WRONLY, 0o644)
+	child, err := fs.OpenFile(filepath.Join("parent", "child.txt"), os.O_CREATE|os.O_WRONLY, 0o644)
 	require.Error(t, err)
+	require.ErrorIs(t, child.Close(), err)
 
-	// A missing file without O_CREATE is reported as not found.
-	_, err = fs.OpenFile("missing.txt", os.O_RDONLY, 0)
-	require.ErrorIs(t, err, ErrFileNotFound)
+	// A missing file without O_CREATE returns ErrFileNotFound itself. A file is returned
+	// with the error only when it was opened for writing.
+	f, err = fs.OpenFile("missing.txt", os.O_RDONLY, 0)
+	require.Same(t, ErrFileNotFound, err)
+	assert.Nil(t, f)
+
+	f, err = fs.OpenFile("missing.txt", os.O_RDWR, 0)
+	require.Same(t, ErrFileNotFound, err)
+	require.NotNil(t, f)
+	require.ErrorIs(t, f.Close(), ErrFileNotFound)
 }
 
 func TestLocalFileSystem_OpenFile_ReadWriteHandle(t *testing.T) {
@@ -618,16 +630,20 @@ func TestLocalFileSystem_Create(t *testing.T) {
 
 	assert.Equal(t, "HELLO world", readTestFile(t, path))
 
-	// Create returns the error instead of a file that fails on every write.
+	// A failed Create returns the error, and also a file whose Write and Close return it,
+	// so code that ignores the error does not dereference a nil File.
 	writeTestFile(t, "parent", "a file")
-
-	_, err = fs.Create(filepath.Join("parent", "child.txt"))
-	require.Error(t, err)
-
 	require.NoError(t, os.Mkdir("dir", 0o755))
 
-	_, err = fs.Create("dir")
-	require.Error(t, err)
+	for _, name := range []string{filepath.Join("parent", "child.txt"), "dir"} {
+		f, err := fs.Create(name)
+		require.Error(t, err, name)
+		require.NotNil(t, f, name)
+
+		_, writeErr := f.Write([]byte("x"))
+		require.ErrorIs(t, writeErr, err, name)
+		require.ErrorIs(t, f.Close(), err, name)
+	}
 }
 
 func TestLocalFileSystem_Open(t *testing.T) {
@@ -660,6 +676,8 @@ func TestLocalFileSystem_Open(t *testing.T) {
 	assert.Equal(t, "OLD", string(buf))
 	require.NoError(t, f.Close())
 
-	_, err = fs.Open("missing.txt")
-	require.ErrorIs(t, err, ErrFileNotFound)
+	// A missing file returns ErrFileNotFound itself, so == comparisons keep matching.
+	f, err = fs.Open("missing.txt")
+	require.Same(t, ErrFileNotFound, err)
+	assert.Nil(t, f)
 }

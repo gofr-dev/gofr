@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -57,7 +58,8 @@ func (l *localFileSystem) Connect() {
 // every write-only open truncates. The local store calls the os package directly instead.
 
 // Create creates or truncates the named file like os.Create, creating missing parent
-// directories first.
+// directories first. If the file cannot be created, Create returns the error together
+// with a non-nil File whose Write and Close return it, as earlier releases did.
 func (l *localFileSystem) Create(name string) (File, error) {
 	var msg string
 
@@ -68,13 +70,13 @@ func (l *localFileSystem) Create(name string) (File, error) {
 
 	if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
 		msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
-		return nil, err
+		return l.failedFile(name, err), err
 	}
 
 	f, err := os.Create(name)
 	if err != nil {
 		msg = fmt.Sprintf("failed to create %q: %v", name, err)
-		return nil, err
+		return l.failedFile(name, err), err
 	}
 
 	st = StatusSuccess
@@ -83,7 +85,8 @@ func (l *localFileSystem) Create(name string) (File, error) {
 	return l.newFile(f), nil
 }
 
-// Open opens the named file for reading like os.Open.
+// Open opens the named file for reading like os.Open. A missing file returns
+// ErrFileNotFound.
 func (l *localFileSystem) Open(name string) (File, error) {
 	var msg string
 
@@ -95,7 +98,7 @@ func (l *localFileSystem) Open(name string) (File, error) {
 	f, err := os.Open(name)
 	if err != nil {
 		msg = fmt.Sprintf("failed to open %q: %v", name, err)
-		return nil, err
+		return nil, notFound(err)
 	}
 
 	st = StatusSuccess
@@ -105,7 +108,9 @@ func (l *localFileSystem) Open(name string) (File, error) {
 }
 
 // OpenFile opens the named file with the given flags and permissions like os.OpenFile.
-// With O_CREATE, missing parent directories are created first.
+// With O_CREATE, missing parent directories are created first. A missing file returns
+// ErrFileNotFound. If a file opened for writing cannot be opened, the error is returned
+// together with a non-nil File whose Write and Close return it, as earlier releases did.
 func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
 	var msg string
 
@@ -117,14 +122,14 @@ func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (Fil
 	if flag&os.O_CREATE != 0 {
 		if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
 			msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
-			return nil, err
+			return l.failedOpen(name, flag, err)
 		}
 	}
 
 	f, err := os.OpenFile(name, flag, perm)
 	if err != nil {
 		msg = fmt.Sprintf("failed to open %q: %v", name, err)
-		return nil, err
+		return l.failedOpen(name, flag, notFound(err))
 	}
 
 	st = StatusSuccess
@@ -206,6 +211,33 @@ func (l *localFileSystem) Rename(oldname, newname string) error {
 
 func (l *localFileSystem) newFile(f *os.File) File {
 	return newLocalFile(f, l.Logger, l.Metrics, l.Location)
+}
+
+// failedFile returns the File that earlier releases returned when a file could not be
+// created: its Write and Close return err. Returning it alongside err keeps code that
+// ignores the error from dereferencing a nil File.
+func (l *localFileSystem) failedFile(name string, err error) File {
+	return NewCommonFileWriter(l.Provider, name, &failWriter{err: err}, l.Logger, l.Metrics, l.Location)
+}
+
+// failedOpen returns the result of an OpenFile call that failed with err: a failedFile
+// when the file was opened for writing, as earlier releases returned, and nil otherwise.
+func (l *localFileSystem) failedOpen(name string, flag int, err error) (File, error) {
+	if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+		return l.failedFile(name, err), err
+	}
+
+	return nil, err
+}
+
+// notFound returns ErrFileNotFound itself for an error that reports a missing file, so
+// that callers comparing with == keep matching it, and err otherwise.
+func notFound(err error) error {
+	if errors.Is(err, os.ErrNotExist) {
+		return ErrFileNotFound
+	}
+
+	return err
 }
 
 // pathExists reports whether path can be stat'ed.

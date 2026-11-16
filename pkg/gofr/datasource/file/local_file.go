@@ -45,12 +45,32 @@ func (f *localFile) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// ReadAt implements io.ReaderAt.
+// ReadAt implements io.ReaderAt. A read that reaches the end of the file returns io.EOF
+// with the bytes read. As on the other stores, a negative offset or one past the end of
+// the file returns ErrOutOfRange.
 func (f *localFile) ReadAt(p []byte, off int64) (int, error) {
 	startTime := time.Now()
 
-	n, err := f.file.ReadAt(p, off)
+	n, err := f.readAt(p, off)
 	f.observe(OpReadAt, startTime, err, fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.Name(), off))
+
+	return n, err
+}
+
+func (f *localFile) readAt(p []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, ErrOutOfRange
+	}
+
+	n, err := f.file.ReadAt(p, off)
+
+	// The os package returns io.EOF for any offset at or past the end. Only a read that
+	// starts at the end is a successful read of nothing.
+	if n == 0 && errors.Is(err, io.EOF) {
+		if info, statErr := f.file.Stat(); statErr == nil && off > info.Size() {
+			return 0, ErrOutOfRange
+		}
+	}
 
 	return n, err
 }
@@ -75,14 +95,49 @@ func (f *localFile) WriteAt(p []byte, off int64) (int, error) {
 	return n, err
 }
 
-// Seek implements io.Seeker. It moves the offset used by both Read and Write.
+// Seek implements io.Seeker. It moves the offset used by both Read and Write. As in the
+// os package, the offset can move past the end of the file, where a later Write extends
+// it. As on the other stores, an unknown whence or a negative offset returns an error
+// that matches ErrOutOfRange.
 func (f *localFile) Seek(offset int64, whence int) (int64, error) {
 	startTime := time.Now()
 
 	pos, err := f.file.Seek(offset, whence)
+	if err != nil && f.invalidSeek(offset, whence) {
+		err = fmt.Errorf("%w: %w", ErrOutOfRange, err)
+	}
+
 	f.observe(OpSeek, startTime, err, fmt.Sprintf("Sought to position %d in %q", pos, f.Name()))
 
 	return pos, err
+}
+
+// invalidSeek reports whether a failed seek had an unknown whence or would have moved
+// the offset before the start of the file. A failed seek leaves the offset unchanged.
+func (f *localFile) invalidSeek(offset int64, whence int) bool {
+	var base int64
+
+	switch whence {
+	case io.SeekStart:
+	case io.SeekCurrent:
+		cur, err := f.file.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return false
+		}
+
+		base = cur
+	case io.SeekEnd:
+		info, err := f.file.Stat()
+		if err != nil {
+			return false
+		}
+
+		base = info.Size()
+	default:
+		return true
+	}
+
+	return base+offset < 0
 }
 
 // Close implements io.Closer.
@@ -97,6 +152,11 @@ func (f *localFile) Close() error {
 	}
 
 	err := f.file.Close()
+	if errors.Is(err, os.ErrClosed) {
+		// Closing a file again is not an error, as on the other stores.
+		err = nil
+	}
+
 	f.observe(OpClose, startTime, err, fmt.Sprintf("Closed %q successfully", f.Name()))
 
 	return err

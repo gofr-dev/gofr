@@ -226,3 +226,116 @@ func TestLocalFile_ConcurrentUse(t *testing.T) {
 
 	assert.Equal(t, int64(11), f.Size())
 }
+
+func TestLocalFile_ReadAt(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeTestFile(t, "data.txt", "0123456789")
+
+	f, err := newTestLocalFS(t).Open("data.txt")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = f.Close() })
+
+	tests := []struct {
+		desc    string
+		off     int64
+		want    string
+		wantErr error
+	}{
+		{desc: "inside the file", off: 2, want: "2345"},
+		{desc: "running into the end", off: 8, want: "89", wantErr: io.EOF},
+		{desc: "at the end", off: 10, wantErr: io.EOF},
+		{desc: "past the end", off: 11, wantErr: ErrOutOfRange},
+		{desc: "negative offset", off: -1, wantErr: ErrOutOfRange},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			buf := make([]byte, 4)
+
+			n, readErr := f.ReadAt(buf, tc.off)
+			assert.Equal(t, tc.want, string(buf[:n]))
+
+			if tc.wantErr == nil {
+				require.NoError(t, readErr)
+
+				return
+			}
+
+			require.ErrorIs(t, readErr, tc.wantErr)
+		})
+	}
+
+	// io.SectionReader relies on io.EOF at the end of the file.
+	tail, err := io.ReadAll(io.NewSectionReader(f, 8, 4))
+	require.NoError(t, err)
+	assert.Equal(t, "89", string(tail))
+}
+
+func TestLocalFile_Seek(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeTestFile(t, "data.txt", "0123456789")
+
+	f, err := newTestLocalFS(t).OpenFile("data.txt", os.O_RDWR, 0)
+	require.NoError(t, err)
+
+	// The offset can move past the end, and a Write there extends the file.
+	pos, err := f.Seek(2, io.SeekEnd)
+	require.NoError(t, err)
+	assert.Equal(t, int64(12), pos)
+
+	_, err = f.Write([]byte("X"))
+	require.NoError(t, err)
+
+	invalid := []struct {
+		desc   string
+		offset int64
+		whence int
+	}{
+		{desc: "negative from the start", offset: -1, whence: io.SeekStart},
+		{desc: "before the start from the current offset", offset: -14, whence: io.SeekCurrent},
+		{desc: "before the start from the end", offset: -14, whence: io.SeekEnd},
+		{desc: "unknown whence", offset: 0, whence: 7},
+	}
+
+	for _, tc := range invalid {
+		_, err = f.Seek(tc.offset, tc.whence)
+		require.ErrorIs(t, err, ErrOutOfRange, tc.desc)
+	}
+
+	// A failed seek leaves the offset where it was.
+	pos, err = f.Seek(0, io.SeekCurrent)
+	require.NoError(t, err)
+	assert.Equal(t, int64(13), pos)
+
+	require.NoError(t, f.Close())
+	assert.Equal(t, "0123456789\x00\x00X", readTestFile(t, "data.txt"))
+
+	// Seeking a closed file is not an offset error, even where the current offset or
+	// the size would be needed to tell.
+	closedSeeks := []struct {
+		offset int64
+		whence int
+	}{{0, io.SeekStart}, {-1, io.SeekCurrent}, {-1, io.SeekEnd}}
+
+	for _, s := range closedSeeks {
+		_, err = f.Seek(s.offset, s.whence)
+		require.ErrorIs(t, err, os.ErrClosed)
+		require.NotErrorIs(t, err, ErrOutOfRange)
+	}
+}
+
+func TestLocalFile_CloseTwice(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeTestFile(t, "data.txt", "abc")
+
+	logger := &recordingLogger{}
+
+	f, err := NewLocalFileSystem(logger).Open("data.txt")
+	require.NoError(t, err)
+
+	require.NoError(t, f.Close())
+	require.NoError(t, f.Close())
+
+	assert.Equal(t, []string{"OPEN SUCCESS", "CLOSE SUCCESS", "CLOSE SUCCESS"}, logger.statuses())
+}

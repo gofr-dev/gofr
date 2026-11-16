@@ -483,6 +483,8 @@ if err != nil {
 }
 ```
 
+> Note: On the local file system, `Open`, `OpenFile` and `Create` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. `ReadAt` returns `io.EOF` when the read reaches the end of the file, and `file.ErrOutOfRange` for a negative offset or one past the end. `Seek` can move past the end of the file, where a later `Write` extends it, and returns an error matching `file.ErrOutOfRange` for a negative offset.
+
 ### Getting Information of the file/directory
 
 Stat retrieves details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
@@ -517,7 +519,7 @@ To move file from one location to another provide current location as source and
 err := ctx.File.Rename("old_name.text", "new_name.text")
 ```
 
-> Note: On the local file system, `Rename` behaves like `os.Rename` and also creates any missing parent directories of the destination. A file moved to a different filesystem is copied and the original removed.
+> Note: On the local file system, `Rename` behaves like `os.Rename` and also creates any missing parent directories of the destination. Across filesystems, only a regular file can be moved: it is copied with its mode and modification time, and then the original is removed. Moving a directory or symlink to another filesystem returns the error from `os.Rename`.
 
 ### Deleting Files
 
