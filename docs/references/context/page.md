@@ -87,6 +87,8 @@ a request that looks correct can bind nothing.
   - To bind multipart-form data or url-encoded form, we can use the Bind method similarly. The struct fields should be tagged appropriately
     to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`
 
+JSON objects in form fields can bind to structs. A numeric value such as `2` or `2.5` can bind to a `float32` or `float64` field.
+
 ```go
 type Data struct {
 	Name string `form:"name"`

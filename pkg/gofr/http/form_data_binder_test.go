@@ -1,7 +1,13 @@
 package http
 
 import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -181,5 +187,56 @@ func TestFormData_setStructValue_InvalidJSON(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, formBinderTarget{}, target)
 		})
+	}
+}
+
+func TestBind_FormStructFloat(t *testing.T) {
+	tests := []struct {
+		desc   string
+		number string
+		want   float64
+	}{
+		{desc: "whole number", number: "2", want: 2},
+		{desc: "whole decimal", number: "2.0", want: 2},
+		{desc: "zero", number: "0", want: 0},
+		{desc: "negative whole number", number: "-2", want: -2},
+		{desc: "fraction", number: "2.5", want: 2.5},
+	}
+
+	for _, contentType := range []string{contentTypeFormURLEncoded, contentTypeMultipartForm} {
+		for _, tc := range tests {
+			t.Run(contentType+"/"+tc.desc, func(t *testing.T) {
+				data := `{"Price":` + tc.number + `,"Weight":` + tc.number + `,"Quantity":1}`
+				body := url.Values{"item": {data}}.Encode()
+				mediaType := contentType
+
+				if contentType == contentTypeMultipartForm {
+					var buf bytes.Buffer
+
+					writer := multipart.NewWriter(&buf)
+					require.NoError(t, writer.WriteField("item", data))
+					require.NoError(t, writer.Close())
+
+					body = buf.String()
+					mediaType = writer.FormDataContentType()
+				}
+
+				r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/products", strings.NewReader(body))
+				r.Header.Set("Content-Type", mediaType)
+
+				var target struct {
+					Item struct {
+						Price    float64
+						Weight   float32
+						Quantity int
+					} `form:"item"`
+				}
+
+				require.NoError(t, NewRequest(r).Bind(&target))
+				assert.InDelta(t, tc.want, target.Item.Price, 0.001)
+				assert.InDelta(t, tc.want, target.Item.Weight, 0.001)
+				assert.Equal(t, 1, target.Item.Quantity)
+			})
+		}
 	}
 }
