@@ -325,6 +325,10 @@ func (a *App) prepareHTTPServer() startupOutcome {
 
 	a.httpServerSetup()
 
+	// Linked before the mode early return below: defaultPolicy deny is enforced whatever the route
+	// check does.
+	a.linkRBACConfigs()
+
 	if len(a.rbacConfigs) == 0 {
 		return startupOK
 	}
