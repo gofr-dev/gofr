@@ -5,6 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -517,16 +520,25 @@ func TestHTTPService_Query_EmptyBody(t *testing.T) {
 }
 
 func TestNewHTTPService_CrossHostRedirectDropsAPIKey(t *testing.T) {
-	var forwarded string
+	var (
+		forwarded atomic.Value // string
+		landed    atomic.Bool
+	)
 
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		forwarded = r.Header.Get(xAPIKeyHeader)
+		landed.Store(true)
+		forwarded.Store(r.Header.Get(xAPIKeyHeader))
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer other.Close()
 
+	// Keep the port and change only the host name: the redirect must leave
+	// 127.0.0.1 for localhost, which is a different host for net/http.
+	otherURL := strings.Replace(other.URL, "127.0.0.1", "localhost", 1)
+
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, other.URL+"/landing", http.StatusFound)
+		http.Redirect(w, r, otherURL+"/landing", http.StatusFound)
 	}))
 	defer upstream.Close()
 
@@ -540,47 +552,158 @@ func TestNewHTTPService_CrossHostRedirectDropsAPIKey(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	assert.Empty(t, forwarded)
+	// Without this the test passes even when the redirect is never followed.
+	require.True(t, landed.Load(), "the redirect never reached the second server")
+	assert.Empty(t, forwarded.Load())
 }
 
-func TestNewHTTPService_SameHostRedirectKeepsAPIKey(t *testing.T) {
-	var forwarded string
+func TestNewHTTPService_RedirectBackToOriginKeepsAPIKey(t *testing.T) {
+	var (
+		atB     atomic.Value // string
+		backAtA atomic.Value // string
+		landedB atomic.Bool
+		landedA atomic.Bool
+	)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/landing" {
-			forwarded = r.Header.Get(xAPIKeyHeader)
+	var (
+		serverA *httptest.Server
+		urlA    string
+	)
+
+	// B lives on 127.0.0.1, A is reached as localhost: the first hop changes the
+	// host, the hop back lands on the original host again.
+	serverB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		landedB.Store(true)
+		atB.Store(r.Header.Get(xAPIKeyHeader))
+
+		http.Redirect(w, r, urlA+"/back", http.StatusFound)
+	}))
+	defer serverB.Close()
+
+	serverA = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/back" {
+			landedA.Store(true)
+			backAtA.Store(r.Header.Get(xAPIKeyHeader))
+
 			w.WriteHeader(http.StatusOK)
 
 			return
 		}
 
-		http.Redirect(w, r, "/landing", http.StatusFound)
+		http.Redirect(w, r, serverB.URL+"/hop", http.StatusFound)
 	}))
-	defer server.Close()
+	defer serverA.Close()
+
+	urlA = strings.Replace(serverA.URL, "127.0.0.1", "localhost", 1)
 
 	apiKey, err := NewAPIKeyConfig("secret-key")
 	require.NoError(t, err)
 
-	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil, apiKey)
+	service := NewHTTPService(urlA, logging.NewMockLogger(logging.ERROR), nil, apiKey)
 
-	resp, err := service.Get(t.Context(), "start", nil)
+	resp, err := service.Get(t.Context(), "orders", nil)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
-	assert.Equal(t, "secret-key", forwarded)
+	require.True(t, landedB.Load(), "the first redirect never reached the second server")
+	require.True(t, landedA.Load(), "the redirect back to the origin never landed")
+
+	// A to B drops the key, B back to A restores it because A is the original host.
+	assert.Empty(t, atB.Load())
+	assert.Equal(t, "secret-key", backAtA.Load())
+}
+
+func TestNewHTTPService_CrossHostRedirect307DropsAPIKey(t *testing.T) {
+	var (
+		forwarded atomic.Value // string
+		body      atomic.Value // string
+		landed    atomic.Bool
+	)
+
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		landed.Store(true)
+		forwarded.Store(r.Header.Get(xAPIKeyHeader))
+
+		b, _ := io.ReadAll(r.Body)
+		body.Store(string(b))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer other.Close()
+
+	otherURL := strings.Replace(other.URL, "127.0.0.1", "localhost", 1)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", otherURL+"/landing")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer upstream.Close()
+
+	apiKey, err := NewAPIKeyConfig("secret-key")
+	require.NoError(t, err)
+
+	service := NewHTTPService(upstream.URL, logging.NewMockLogger(logging.ERROR), nil, apiKey)
+
+	resp, err := service.Post(t.Context(), "orders", nil, []byte("payload"))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	require.True(t, landed.Load(), "the 307 redirect never reached the second server")
+	assert.Empty(t, forwarded.Load())
+	assert.Equal(t, "payload", body.Load())
 }
 
 func TestNewHTTPService_StopsAfterMaxRedirects(t *testing.T) {
+	var requests atomic.Int32
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
 		http.Redirect(w, r, "/loop", http.StatusFound)
 	}))
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.ERROR), nil)
 
-	_, err := service.Get(t.Context(), "loop", nil)
+	resp, err := service.Get(t.Context(), "loop", nil)
 	require.Error(t, err)
 
-	assert.ErrorIs(t, err, errTooManyRedirects)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	assert.ErrorContains(t, err, "stopped after 10 redirects")
+	// Go refuses the 11th request before it is sent, so the server sees exactly 10.\n	assert.EqualValues(t, maxRedirects, requests.Load())
+}
+
+// TestKeepAPIKey pins the rule to the one net/http uses for the Authorization
+// header: same host or subdomain, port ignored, https never downgrades to http.
+func TestKeepAPIKey(t *testing.T) {
+	cases := []struct {
+		name     string
+		initial  string
+		dest     string
+		expected bool
+	}{
+		{"same host", "https://api.example.com/a", "https://api.example.com/b", true},
+		{"same host, other port", "https://api.example.com:8080/a", "https://api.example.com:8443/b", true},
+		{"subdomain", "https://example.com/a", "https://eu.example.com/b", true},
+		{"sibling host", "https://api.example.com/a", "https://eu.example.com/b", false},
+		{"lookalike host", "https://x.com/a", "https://evilx.com/b", false},
+		{"https to http", "https://api.example.com/a", "http://api.example.com/b", false},
+		{"ipv6 literal", "https://[::1]/a", "https://[::1]/b", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			initial, err := url.Parse(tc.initial)
+			require.NoError(t, err)
+
+			dest, err := url.Parse(tc.dest)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, keepAPIKey(dest, initial))
+		})
+	}
 }

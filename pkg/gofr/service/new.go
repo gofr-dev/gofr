@@ -3,10 +3,10 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"strings"
 	"time"
 
@@ -37,9 +37,6 @@ const methodQuery = "QUERY"
 
 // maxRedirects mirrors the limit Go applies when following redirects.
 const maxRedirects = 10
-
-//nolint:gochecknoglobals // sentinel error for the redirect limit
-var errTooManyRedirects = errors.New("stopped after 10 redirects")
 
 type httpService struct {
 	*http.Client
@@ -133,17 +130,50 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	return svc
 }
 
-// redirectPolicy drops the api key header when a redirect leaves the configured host.
+// redirectPolicy keeps the api key on the same rules net/http uses for the
+// Authorization header: it survives a redirect to the same host or a subdomain
+// of it (the port is ignored) and is dropped when the scheme goes from https to
+// anything else. Every other redirect target loses the header.
 func redirectPolicy(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
-		return errTooManyRedirects
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
 	}
 
-	if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+	if len(via) > 0 && !keepAPIKey(req.URL, via[0].URL) {
 		req.Header.Del(xAPIKeyHeader)
 	}
 
 	return nil
+}
+
+// keepAPIKey reports whether the api key may follow a redirect from initial to dest.
+func keepAPIKey(dest, initial *url.URL) bool {
+	// net/http does not forward credentials when a redirect downgrades https to http.
+	if initial.Scheme == "https" && dest.Scheme != "https" {
+		return false
+	}
+
+	return isDomainOrSubdomain(strings.ToLower(dest.Hostname()), strings.ToLower(initial.Hostname()))
+}
+
+// isDomainOrSubdomain reports whether sub is parent or a subdomain of it.
+// It mirrors the helper net/http uses for credentials on redirects.
+func isDomainOrSubdomain(sub, parent string) bool {
+	if sub == parent {
+		return true
+	}
+
+	// An IPv6 literal is never a subdomain. Checking for ":" and "%" also keeps a
+	// zone identifier such as "::1%.example.com" from matching "example.com".
+	if strings.ContainsAny(sub, ":%") {
+		return false
+	}
+
+	if !strings.HasSuffix(sub, parent) {
+		return false
+	}
+
+	return len(sub) > len(parent) && sub[len(sub)-len(parent)-1] == '.'
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
