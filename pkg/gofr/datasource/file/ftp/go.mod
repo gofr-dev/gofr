@@ -8,13 +8,13 @@ require (
 	github.com/jlaffaye/ftp v0.2.4
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.62.0
+	gofr.dev v1.63.1
 )
 
 require (
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/term v0.47.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	google.golang.org/api v0.311.0 // indirect
 )
