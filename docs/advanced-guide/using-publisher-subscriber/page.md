@@ -255,7 +255,11 @@ MQTT_PROTOCOL=tcp              // protocol for connecting to broker can be tcp, 
 MQTT_MESSAGE_ORDER=true  // config to maintain/retain message publish order, by default this is false
 MQTT_USER=username       // authentication username
 MQTT_PASSWORD=password   // authentication password 
+MQTT_PUBLISH_RETAINED=false  // publish with the retain flag, so the broker keeps the last message per topic for later subscribers
 ```
+> **Note** : `MQTT_RETRIEVE_RETAINED` is deprecated. Despite its name, it sets the retain flag on every published message.
+> Use `MQTT_PUBLISH_RETAINED` instead; unlike the old key, it does not queue subscribe requests made while disconnected.
+> If either key is `true`, messages are retained. Retained messages stay on the broker until an empty retained message is published to the topic.
 > **Note** : If `MQTT_HOST` config is not provided, the application will connect to a public broker
 > {% new-tab-link title="EMQX Broker" href="https://www.emqx.com/en/mqtt/public-mqtt5-broker" /%}
 

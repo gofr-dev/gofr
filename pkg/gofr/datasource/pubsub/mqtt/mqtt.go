@@ -57,14 +57,21 @@ type MQTT struct {
 }
 
 type Config struct {
-	Protocol         string
-	Hostname         string
-	Port             int
-	Username         string
-	Password         string
-	ClientID         string
-	QoS              byte
-	Order            bool
+	Protocol string
+	Hostname string
+	Port     int
+	Username string
+	Password string
+	ClientID string
+	QoS      byte
+	Order    bool
+	// PublishRetained sets the MQTT retain flag on every published message, so the broker keeps
+	// the last message per topic and delivers it to subscribers that connect later.
+	PublishRetained bool
+	// Deprecated: use PublishRetained. Despite its name, RetrieveRetained sets the retain flag on
+	// every published message; it does not control receiving retained messages, which MQTT 3.1.1
+	// brokers always deliver to new subscribers. When Hostname is set, it also enables paho's ResumeSubs,
+	// which queues subscribe requests made while disconnected; PublishRetained does not.
 	RetrieveRetained bool
 	KeepAlive        time.Duration
 	CloseTimeout     time.Duration
@@ -78,6 +85,11 @@ type subscription struct {
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
 // with more MQTT focused functionalities related to subscribing(push), unsubscribing and disconnecting from broker.
 func New(config *Config, logger Logger, metrics Metrics) *MQTT {
+	if config.RetrieveRetained {
+		logger.Warnf("MQTT_RETRIEVE_RETAINED (Config.RetrieveRetained) is deprecated: it sets the retain flag " +
+			"on every published message. Use MQTT_PUBLISH_RETAINED (Config.PublishRetained) instead.")
+	}
+
 	if config.Hostname == "" {
 		return getDefaultClient(config, logger, metrics)
 	}
@@ -207,7 +219,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 	s := time.Now()
 
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
+	token := m.Client.Publish(topic, m.config.QoS, m.config.retainOnPublish(), message)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
@@ -232,6 +244,12 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
+}
+
+// retainOnPublish reports whether published messages carry the retain flag. The deprecated
+// RetrieveRetained keeps its original effect so existing configurations behave the same.
+func (c *Config) retainOnPublish() bool {
+	return c.PublishRetained || c.RetrieveRetained
 }
 
 func (m *MQTT) Health() datasource.Health {

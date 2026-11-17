@@ -787,3 +787,80 @@ func TestMQTT_Query_SuccessCases(t *testing.T) {
 		})
 	}
 }
+
+func TestMQTT_PublishRetainFlag(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		conf         Config
+		wantRetained bool
+	}{
+		{desc: "neither setting: publish without retain", conf: Config{QoS: 1}, wantRetained: false},
+		{desc: "PublishRetained: publish with retain", conf: Config{QoS: 1, PublishRetained: true}, wantRetained: true},
+		{desc: "deprecated RetrieveRetained keeps retaining", conf: Config{QoS: 1, RetrieveRetained: true}, wantRetained: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			conf := tc.conf
+
+			ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, &conf)
+			defer ctrl.Finish()
+
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), "topic", "test/topic").Times(2)
+			mockClient.EXPECT().Publish("test/topic", conf.QoS, tc.wantRetained, msg).Return(mockToken)
+			mockToken.EXPECT().Wait().Return(true)
+			mockToken.EXPECT().Error().Return(nil)
+
+			require.NoError(t, client.Publish(t.Context(), "test/topic", msg))
+		})
+	}
+}
+
+func TestMQTT_getMQTTClientOptions_ResumeSubs(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		conf       Config
+		wantResume bool
+	}{
+		{desc: "PublishRetained does not resume subscriptions", conf: Config{PublishRetained: true}, wantResume: false},
+		{desc: "deprecated RetrieveRetained still resumes subscriptions", conf: Config{RetrieveRetained: true}, wantResume: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			options := getMQTTClientOptions(&tc.conf)
+
+			assert.Equal(t, tc.wantResume, options.ResumeSubs)
+		})
+	}
+}
+
+func TestMQTT_New_RetrieveRetainedDeprecationWarning(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		conf     Config
+		wantWarn bool
+	}{
+		{desc: "deprecated RetrieveRetained logs a warning", conf: Config{RetrieveRetained: true}, wantWarn: true},
+		{desc: "PublishRetained logs no warning", conf: Config{PublishRetained: true}, wantWarn: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			conf := tc.conf
+			// Unreachable broker: New fails fast and retries in the background.
+			conf.Protocol, conf.Hostname, conf.Port = "tcp", "127.0.0.1", 1
+
+			out := testutil.StdoutOutputForFunc(func() {
+				New(&conf, logging.NewMockLogger(logging.WARN), nil)
+			})
+
+			if tc.wantWarn {
+				assert.Contains(t, out, "MQTT_RETRIEVE_RETAINED (Config.RetrieveRetained) is deprecated")
+				assert.Contains(t, out, "MQTT_PUBLISH_RETAINED")
+			} else {
+				assert.NotContains(t, out, "deprecated")
+			}
+		})
+	}
+}

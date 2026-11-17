@@ -867,8 +867,17 @@ This document lists all the configuration options supported by the GoFr framewor
 -  MQTT_KEEP_ALIVE
 -  Sends regular messages to check the link is active. May not work as expected if handling func is blocking execution
 
-- MQTT_RETRIEVE_RETAINED
-- Retrieve retained messages on subscription
+---
+
+-  MQTT_PUBLISH_RETAINED
+-  Publish every message with the MQTT retain flag set. The broker keeps the last message on each topic and delivers it to subscribers that connect later, until an empty retained message is published to that topic.
+-  false
+
+---
+
+-  MQTT_RETRIEVE_RETAINED
+-  Deprecated: use MQTT_PUBLISH_RETAINED. Despite its name, it sets the retain flag on every published message. It does not control receiving retained messages: MQTT 3.1.1 brokers always deliver them to new subscribers. When MQTT_HOST is set, it also queues subscribe requests made while disconnected (paho ResumeSubs), which MQTT_PUBLISH_RETAINED does not. If either key is true, messages are retained.
+-  false
 
 {% /table %}
 
