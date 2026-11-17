@@ -31,6 +31,7 @@ func New() *App {
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config, app.container.Logger))
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
+	app.httpServer.hideInternalErrors = readHideInternalErrors(app.Config, app.container.Logger)
 	app.httpServer.staticFiles = make(map[string]string)
 
 	// Note: Default routes (health, alive, favicon, swagger) are registered in httpServerSetup()
