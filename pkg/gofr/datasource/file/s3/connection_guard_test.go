@@ -2,20 +2,19 @@ package s3
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
 // Calls should fail without panicking even before the app has installed a logger.
 func TestFileOperationsBeforeConnectReturnError(t *testing.T) {
 	f, ok := New(&Config{BucketName: "test-bucket"}).(*FileSystem)
-	if !ok {
-		t.Fatal("New should return *FileSystem")
-	}
+	require.True(t, ok, "New should return *FileSystem")
 
 	assertDisconnectedOperations(t, f)
 }
@@ -28,9 +27,7 @@ func TestFileOperationsAfterFailedConnectReturnError(t *testing.T) {
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(t.TempDir(), "missing-credentials"))
 
 	f, ok := New(&Config{BucketName: "test-bucket", Region: "us-east-1"}).(*FileSystem)
-	if !ok {
-		t.Fatal("New should return *FileSystem")
-	}
+	require.True(t, ok, "New should return *FileSystem")
 
 	logger := NewMockLogger(gomock.NewController(t))
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -40,9 +37,7 @@ func TestFileOperationsAfterFailedConnectReturnError(t *testing.T) {
 
 	f.Connect()
 
-	if f.conn != nil {
-		t.Fatal("expected Connect to fail and leave the S3 client uninitialized")
-	}
+	require.Nil(t, f.conn, "expected Connect to fail and leave the S3 client uninitialized")
 
 	assertDisconnectedOperations(t, f)
 }
@@ -50,15 +45,13 @@ func TestFileOperationsAfterFailedConnectReturnError(t *testing.T) {
 func assertDisconnectedOperations(t *testing.T, f *FileSystem) {
 	t.Helper()
 
-	// Observe the same FileLog path consumed by GoFr logging/metrics.
+	// Observe the same FileLog path consumed by GoFr logging.
 	var logs []FileLog
 
 	logger := NewMockLogger(gomock.NewController(t))
 	logger.EXPECT().Debug(gomock.Any()).Do(func(args ...any) {
 		fl, ok := args[0].(*FileLog)
-		if !ok {
-			t.Fatalf("expected *FileLog, got %T", args[0])
-		}
+		require.True(t, ok, "expected *FileLog, got %T", args[0])
 
 		logs = append(logs, *fl)
 	}).AnyTimes()
@@ -94,26 +87,18 @@ func assertDisconnectedOperations(t *testing.T, f *FileSystem) {
 			before := len(logs)
 
 			err := tt.run()
-			if !errors.Is(err, errS3ClientNotInitialized) {
-				t.Fatalf("expected errS3ClientNotInitialized, got %v", err)
-			}
+			require.ErrorIs(t, err, errS3ClientNotInitialized)
 
-			if len(logs) != before+1 {
-				t.Fatalf("expected one operation log, got %d", len(logs)-before)
-			}
+			require.Len(t, logs, before+1, "expected exactly one operation log")
 
 			got := logs[len(logs)-1]
-			if got.Operation != tt.operation {
-				t.Errorf("operation = %q, want %q", got.Operation, tt.operation)
-			}
+			assert.Equal(t, tt.operation, got.Operation)
 
-			if got.Status == nil || *got.Status != statusErr {
-				t.Errorf("status = %v, want %q", got.Status, statusErr)
-			}
+			require.NotNil(t, got.Status)
+			assert.Equal(t, statusErr, *got.Status)
 
-			if got.Message == nil || *got.Message != errS3ClientNotInitialized.Error() {
-				t.Errorf("message = %v, want %q", got.Message, errS3ClientNotInitialized.Error())
-			}
+			require.NotNil(t, got.Message)
+			assert.Equal(t, errS3ClientNotInitialized.Error(), *got.Message)
 		})
 	}
 }
