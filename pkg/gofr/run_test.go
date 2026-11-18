@@ -177,7 +177,7 @@ func TestApp_Run_waitsForShutdown(t *testing.T) {
 // metrics-only startup: an app that registers readiness checks but no HTTP routes skips the HTTP
 // server without a word, and /.well-known/health is unreachable for no logged reason.
 func TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed(t *testing.T) {
-	runStart := func(setup func(*App)) string {
+	runStart := func(httpRegistered bool, setup func(*App)) string {
 		// The app must be created INSIDE the capture: the container logger stores
 		// os.Stdout at construction, so an app built before the swap would log
 		// past the pipe and the capture would come back empty.
@@ -187,7 +187,12 @@ func TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed(t *testing.T
 			// New() marks the HTTP server for startup whenever the working directory
 			// happens to hold a static directory, so pin the state under test instead
 			// of inheriting whatever the CI/workspace checkout looks like.
-			app.httpRegistered = false
+			app.httpRegistered = httpRegistered
+
+			// With the server marked for startup, keep startHTTPServer from binding a
+			// port: a stopped httpServer makes run return at once, so wg.Wait does not
+			// block on a live listener.
+			app.httpServer.stopped = httpRegistered
 
 			setup(app)
 
@@ -199,7 +204,7 @@ func TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed(t *testing.T
 	}
 
 	t.Run("readiness checks registered but no routes", func(t *testing.T) {
-		out := runStart(func(app *App) {
+		out := runStart(false, func(app *App) {
 			app.AddReadinessCheck(func(*Context) error { return nil })
 		})
 
@@ -208,9 +213,20 @@ func TestApp_startHTTPServer_warnsWhenReadinessChecksCannotBeServed(t *testing.T
 	})
 
 	t.Run("no readiness checks and no routes stays silent", func(t *testing.T) {
-		out := runStart(func(*App) {})
+		out := runStart(false, func(*App) {})
 
 		assert.NotContains(t, out, "the HTTP server will not start", "an app without readiness checks has nothing to explain:\n%s", out)
+	})
+
+	t.Run("readiness checks and a started server stays silent", func(t *testing.T) {
+		// The warning is only for the metrics-only trap. When the HTTP server does
+		// start, a registered readiness check is served, so there is nothing to warn
+		// about. This fails if the early return after the goroutine is removed.
+		out := runStart(true, func(app *App) {
+			app.AddReadinessCheck(func(*Context) error { return nil })
+		})
+
+		assert.NotContains(t, out, "the HTTP server will not start", "a started server serves the check, so stay silent:\n%s", out)
 	})
 }
 
