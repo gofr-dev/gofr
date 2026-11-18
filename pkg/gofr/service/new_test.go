@@ -657,3 +657,33 @@ func TestHTTPService_createAndSendRequest_RedactsAddressCredentialsInErrors(t *t
 		})
 	}
 }
+
+func TestHTTPService_createAndSendRequest_KeepsErrorsWithoutCredentials(t *testing.T) {
+	// A listener that is closed at once gives an address nothing answers on.
+	server := httptest.NewServer(http.NotFoundHandler())
+	address := server.URL
+	server.Close()
+
+	tests := []struct {
+		desc   string
+		path   string
+		expErr string
+	}{
+		{desc: "path with a bad escape and an @", path: "users/50%zz@b.com",
+			expErr: `parse "` + address + `/users/50%zz@b.com": invalid URL escape "%zz"`},
+		{desc: "upstream down", path: "orders", expErr: `Get "` + address + `/orders": `},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			service := NewHTTPService(address, logging.NewMockLogger(logging.FATAL), nil)
+
+			resp, err := service.Get(t.Context(), tc.path, nil) //nolint:bodyclose // resp is nil when err is set.
+
+			assert.Nil(t, resp)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expErr)
+			assert.NotContains(t, err.Error(), "REDACTED")
+		})
+	}
+}

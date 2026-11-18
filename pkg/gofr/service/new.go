@@ -224,7 +224,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	// Create the HTTP request with the tracing context.
 	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, redactURLError(err)
+		return nil, h.redactError(err)
 	}
 
 	var isContentTypeSet bool
@@ -263,7 +263,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
-		err = redactURLError(err)
+		err = h.redactError(err)
 
 		log.ResponseCode = http.StatusServiceUnavailable
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
@@ -340,10 +340,15 @@ func (h *httpService) logAddress() string {
 	return h.url
 }
 
-// redactURLError replaces the address inside a *url.Error, which net/http returns for a failed
+// redactError replaces the address inside a *url.Error, which net/http returns for a failed
 // request and net/url for an address it cannot parse. net/http masks only a password
 // (user:***@), so a token used as the user name would otherwise reach the logs and the caller.
-func redactURLError(err error) error {
+// A service whose address has no credentials gets its errors back unchanged.
+func (h *httpService) redactError(err error) error {
+	if h.redactedURL == "" {
+		return err
+	}
+
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		urlErr.URL = redactAddress(urlErr.URL)
