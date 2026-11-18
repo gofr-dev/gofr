@@ -2152,3 +2152,14 @@ func TestCircuitBreaker_OpeningResponseBodyIsClosed(t *testing.T) {
 	assert.Equal(t, int32(2), closes.Load(),
 		"the response dropped on the open path must still have been closed")
 }
+
+func TestNewCircuitBreaker_NonPositiveIntervalUsesDefault(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Second} {
+		cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: interval}, nil)
+
+		assert.Equal(t, defaultCircuitBreakerInterval, cb.interval)
+	}
+
+	// give the background health check goroutine time to start; it must not panic.
+	time.Sleep(50 * time.Millisecond)
+}
