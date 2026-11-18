@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -117,9 +118,53 @@ func TestGRPCServer_AddServerOptions(t *testing.T) {
 	option1 := grpc.ConnectionTimeout(5 * time.Second)
 	option2 := grpc.MaxRecvMsgSize(1024 * 1024)
 
-	g.addServerOptions(option1, option2)
-
+	assert.True(t, g.addServerOptions(option1, option2))
 	assert.Len(t, g.options, 2)
+
+	_, err := g.ensureServer()
+	require.NoError(t, err)
+
+	options := len(g.options)
+
+	assert.False(t, g.addServerOptions(option1), "options cannot be added to a built server")
+	assert.Len(t, g.options, options)
+}
+
+// TestApp_AddGRPCServerOptions_ConcurrentWithRegisterService pins that the options setter and the
+// server build are one locked step: run with -race, a data race on g.options fails it, and every
+// option is either applied or reported as ignored, never lost silently.
+func TestApp_AddGRPCServerOptions_ConcurrentWithRegisterService(t *testing.T) {
+	c, mocks, g := setupTestGRPCServer(t, 9999, false)
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "grpc_services_registered_total").AnyTimes()
+
+	var added, ignored atomic.Int32
+
+	logger := container.NewMockLogger(gomock.NewController(t))
+	logger.EXPECT().Debugf("adding %d gRPC server options", 1).Do(func(string, ...any) { added.Add(1) }).AnyTimes()
+	logger.EXPECT().Errorf(errMsgGRPCOptionsIgnored, 1).Do(func(string, ...any) { ignored.Add(1) }).AnyTimes()
+	logger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	c.Logger = logger
+
+	a := &App{container: c, grpcServer: g}
+
+	const setters = 8
+
+	var wg sync.WaitGroup
+
+	for range setters {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			a.AddGRPCServerOptions(grpc.MaxRecvMsgSize(1024))
+		}()
+	}
+
+	a.RegisterService(&grpc_health_v1.Health_ServiceDesc, &injectableHealthService{})
+	wg.Wait()
+
+	assert.Equal(t, int32(setters), added.Load()+ignored.Load())
 }
 
 func TestGRPCServer_AddUnaryInterceptors(t *testing.T) {

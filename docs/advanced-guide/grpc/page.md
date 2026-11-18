@@ -160,7 +160,8 @@ To customize your gRPC server, use `AddGRPCServerOptions()`.
 
 > Note: The gRPC server is built when the first service is registered, so call `AddGRPCServerOptions()` before
 > registering services. Options added later, such as TLS credentials, are not applied, and GoFr logs an error.
-> Interceptors and the `Enable*Auth` methods work before or after registering services.
+> Interceptors and the `Enable*Auth` methods work before or after registering services. Interceptors added after
+> registering run after those added before, in the order added.
 
 ### Example: Enabling TLS & other ServerOptions
 ```go

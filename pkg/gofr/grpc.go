@@ -83,13 +83,12 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 		return
 	}
 
-	if g.getServer() != nil {
+	if !g.addServerOptions(grpcOpts...) {
 		a.container.Logger.Errorf(errMsgGRPCOptionsIgnored, len(grpcOpts))
 		return
 	}
 
 	a.container.Logger.Debugf("adding %d gRPC server options", len(grpcOpts))
-	g.addServerOptions(grpcOpts...)
 }
 
 // AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
@@ -365,8 +364,20 @@ func injectContainer(impl any, c *container.Container) error {
 	return nil
 }
 
-func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
+// addServerOptions adds opts to the options the server is built with. It reports false, adding
+// nothing, once the server exists: options cannot be applied to a built server. The check and the
+// append are one step under srvMu, the lock ensureServer reads g.options under.
+func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) bool {
+	g.srvMu.Lock()
+	defer g.srvMu.Unlock()
+
+	if g.server != nil {
+		return false
+	}
+
 	g.options = append(g.options, opts...)
+
+	return true
 }
 
 // addUnaryInterceptors adds interceptors to the chain the server is built with or, once the
