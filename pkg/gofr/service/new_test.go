@@ -687,3 +687,35 @@ func TestHTTPService_createAndSendRequest_KeepsErrorsWithoutCredentials(t *testi
 		})
 	}
 }
+
+func TestHTTPService_createAndSendRequest_RedactedErrorKeepsHostAndPath(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	host := server.Listener.Addr().String()
+	server.Close()
+
+	tests := []struct {
+		desc    string
+		address string
+		path    string
+		expErr  string
+	}{
+		{desc: "token as user, path with a bad escape and an @", address: "http://ghp_secrettoken@" + host,
+			path: "users/50%zz@b.com", expErr: `parse "http://REDACTED@` + host + `/users/50%zz@b.com": invalid URL escape "%zz"`},
+		{desc: "token as user, upstream down", address: "http://ghp_secrettoken@" + host,
+			path: "orders", expErr: `Get "http://REDACTED@` + host + `/orders": `},
+		{desc: "user and password, upstream down", address: "http://admin:hunter2@" + host,
+			path: "orders", expErr: `Get "http://REDACTED@` + host + `/orders": `},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			service := NewHTTPService(tc.address, logging.NewMockLogger(logging.FATAL), nil)
+
+			resp, err := service.Get(t.Context(), tc.path, nil) //nolint:bodyclose // resp is nil when err is set.
+
+			assert.Nil(t, resp)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expErr)
+		})
+	}
+}

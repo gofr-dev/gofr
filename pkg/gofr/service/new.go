@@ -351,7 +351,14 @@ func (h *httpService) redactError(err error) error {
 
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		urlErr.URL = redactAddress(urlErr.URL)
+		// The URL starts with the service address unless net/http has already masked its password
+		// (user:***@), so swap in the known redacted address and parse only in that case. Parsing a
+		// URL whose path has a bad escape would fail and lose the host.
+		if rest, ok := strings.CutPrefix(urlErr.URL, h.url); ok {
+			urlErr.URL = h.redactedURL + rest
+		} else {
+			urlErr.URL = redactAddress(urlErr.URL)
+		}
 	}
 
 	return err
