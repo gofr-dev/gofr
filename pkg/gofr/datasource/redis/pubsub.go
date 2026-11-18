@@ -53,13 +53,12 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 		return err
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
+		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
-		Host:          addr,
+		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
@@ -89,19 +88,28 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 		return err
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
+		MessageValue:  ps.loggedMessage(message),
 		Topic:         topic,
-		Host:          addr,
+		Host:          ps.config.addr(),
 		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
+}
+
+// loggedMessage returns the message body as it appears in the debug log:
+// masked when REDIS_REDACT_ARGS is true, verbatim otherwise.
+func (ps *PubSub) loggedMessage(message []byte) string {
+	if ps.config.hideArgs {
+		return redactedArg
+	}
+
+	return string(message)
 }
 
 // Subscribe subscribes to a Redis channel or stream and returns a single message.
@@ -277,13 +285,12 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 
 		if msg != nil {
 			end := time.Since(start)
-			addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 			ps.logger.Debug(&pubsub.Log{
 				Mode:          "SUB",
 				CorrelationID: span.SpanContext().TraceID().String(),
-				MessageValue:  string(msg.Value),
+				MessageValue:  ps.loggedMessage(msg.Value),
 				Topic:         topic,
-				Host:          addr,
+				Host:          ps.config.addr(),
 				PubSubBackend: redisBackend,
 				Time:          end.Microseconds(),
 			})

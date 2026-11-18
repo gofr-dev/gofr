@@ -51,7 +51,7 @@ The CLI can be run directly from the terminal after installation. Here’s the g
 
 The CLI groups its functionality into four commands. See each subpage for full reference:
 
-- [`gofr init`](/docs/references/gofrcli/init) — initialize a new GoFr project with the standard layout.
+- [`gofr init`](/docs/references/gofrcli/init) — create a `go.mod` and a "Hello World!" `main.go` for a new GoFr project.
 - [`gofr migrate`](/docs/references/gofrcli/migrate) — create database migration templates with timestamped filenames and an auto-generated registry.
 - [`gofr wrap grpc`](/docs/references/gofrcli/wrap-grpc) — generate gRPC server/client wrappers with built-in tracing, metrics, and logging.
 - [`gofr store`](/docs/references/gofrcli/store) — generate a type-safe data-access layer from YAML schema definitions.

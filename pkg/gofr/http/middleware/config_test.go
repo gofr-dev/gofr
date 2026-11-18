@@ -200,3 +200,53 @@ func TestGetConfigs_MetricsCardinalityLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestGetConfigs_MetricsUnmatchedLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		expected int
+		unset    bool
+		warns    bool
+	}{
+		{name: "unset leaves the limit nil so the default budget applies", value: "", unset: true},
+		{name: "zero collapses from the first request", value: "0", expected: 0},
+		{name: "a positive value is kept", value: "100", expected: 100},
+		{name: "a value above the default is kept for the middleware to cap", value: "1000", expected: 1000},
+		{name: "whitespace is trimmed", value: " 64 ", expected: 64},
+		{name: "a negative value is treated as zero", value: "-1", expected: 0, warns: true},
+		{name: "a non-integer value is treated as zero", value: "abc", expected: 0, warns: true},
+		{name: "a value overflowing int is treated as zero", value: "99999999999999999999", expected: 0, warns: true},
+		{name: "an explicit plus sign is accepted", value: "+5", expected: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := map[string]string{}
+			if tt.value != "" {
+				env[keyMetricsUnmatchedLimit] = tt.value
+			}
+
+			var got Config
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				got = GetConfigs(config.NewMockConfig(env), logging.NewMockLogger(logging.WARN))
+			})
+
+			if tt.unset {
+				assert.Nil(t, got.MetricsUnmatchedLimit)
+			} else if assert.NotNil(t, got.MetricsUnmatchedLimit) {
+				assert.Equal(t, tt.expected, *got.MetricsUnmatchedLimit)
+			}
+
+			if !tt.warns {
+				assert.Empty(t, logs, "a valid value must not be reported")
+				return
+			}
+
+			assert.Contains(t, logs, keyMetricsUnmatchedLimit, "the warning must name the config key")
+			assert.Contains(t, logs, "treated as 0", "the warning must say what the value became")
+			assert.NotContains(t, logs, tt.value, "the raw value must not be logged")
+		})
+	}
+}

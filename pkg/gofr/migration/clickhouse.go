@@ -37,7 +37,7 @@ const (
 ORDER BY (version, method);
 `
 
-	getLastChGoFrMigration = `SELECT COALESCE(MAX(version), 0) as last_migration FROM gofr_migrations;`
+	getChGoFrMigrationVersions = `SELECT DISTINCT version FROM gofr_migrations;`
 
 	insertChGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
@@ -50,32 +50,30 @@ func (ch clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container
 	return ch.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (ch clickHouseMigrator) getLastMigration(c *container.Container) (int64, error) {
-	type LastMigration struct {
-		Timestamp int64 `ch:"last_migration"`
+func (ch clickHouseMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
+	type appliedMigration struct {
+		Version int64 `ch:"version"`
 	}
 
-	var lastMigrations []LastMigration
+	var migrations []appliedMigration
 
-	var lastMigration int64
-
-	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
+	err := c.Clickhouse.Select(context.Background(), &migrations, getChGoFrMigrationVersions)
 	if err != nil {
-		return -1, fmt.Errorf("clickhouse: %w", err)
+		return nil, fmt.Errorf("clickhouse: %w", err)
 	}
 
-	if len(lastMigrations) != 0 {
-		lastMigration = lastMigrations[0].Timestamp
-	}
+	c.Debugf("Clickhouse applied migrations fetched: %v", len(migrations))
 
-	c.Debugf("Clickhouse last migration fetched value is: %v", lastMigration)
-
-	lm2, err := ch.migrator.getLastMigration(c)
+	applied, err := ch.migrator.getAppliedMigrations(c)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return max(lastMigration, lm2), nil
+	for _, m := range migrations {
+		applied[m.Version] = struct{}{}
+	}
+
+	return applied, nil
 }
 
 func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactionData {

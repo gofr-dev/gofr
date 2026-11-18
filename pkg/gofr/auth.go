@@ -20,19 +20,31 @@ const authDisabledMsg = "%v. %s is DISABLED: all routes are served without it. "
 	"Check the error returned by %s to stop startup instead"
 
 var (
-	errNoBasicAuthCredentials  = errors.New("no credentials provided for basic auth")
-	errOddBasicAuthCredentials = errors.New("invalid number of arguments for basic auth: expected username/password pairs")
-	errInvalidJWKSEndpoint     = errors.New("invalid JWKS endpoint URL")
+	errNoBasicAuthCredentials   = errors.New("no credentials provided for basic auth")
+	errOddBasicAuthCredentials  = errors.New("invalid number of arguments for basic auth: expected username/password pairs")
+	errEmptyBasicAuthCredential = errors.New("empty username or password for basic auth")
+	errInvalidJWKSEndpoint      = errors.New("invalid JWKS endpoint URL")
+	errInvalidRefreshInterval   = errors.New("invalid JWKS refresh interval: expected a positive number of seconds")
 )
 
 // EnableBasicAuth enables basic authentication for the application.
 //
 // It takes a variable number of credentials as alternating username and password strings.
 // It returns an error, and installs no middleware, if no credentials or an odd number of
-// arguments are provided. The error is also logged, so an app that ignores it still sees why
-// authentication is off; return or exit on it to stop startup instead.
+// arguments are provided. If a username or password is empty, it returns an error but still
+// installs the middleware without that pair, so the routes stay protected. The error is also
+// logged, so an app that ignores it still sees the problem; return or exit on it to stop startup instead.
 func (a *App) EnableBasicAuth(credentials ...string) error {
-	return a.authDisabled(a.enableBasicAuth(credentials...), "Basic authentication", "EnableBasicAuth")
+	err := a.enableBasicAuth(credentials...)
+	if errors.Is(err, errEmptyBasicAuthCredential) {
+		// The middleware is still installed without the empty pairs, so the routes stay protected.
+		a.Logger().Errorf("%v. Basic authentication rejects every request for those credentials. "+
+			"Check the error returned by EnableBasicAuth to stop startup instead", err)
+
+		return err
+	}
+
+	return a.authDisabled(err, "Basic authentication", "EnableBasicAuth")
 }
 
 func (a *App) enableBasicAuth(credentials ...string) error {
@@ -44,15 +56,24 @@ func (a *App) enableBasicAuth(credentials ...string) error {
 		return errOddBasicAuthCredentials
 	}
 
+	var err error
+
 	users := make(map[string]string)
+
 	for i := 0; i < len(credentials); i += 2 {
+		if credentials[i] == "" || credentials[i+1] == "" {
+			err = errEmptyBasicAuthCredential
+
+			continue
+		}
+
 		users[credentials[i]] = credentials[i+1]
 	}
 
 	a.addAuthMiddleware(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 	a.addGRPCBasicAuth(middleware.BasicAuthProvider{Users: users})
 
-	return nil
+	return err
 }
 
 // EnableBasicAuthWithFunc enables basic authentication for the HTTP server with a custom validation function.
@@ -119,8 +140,9 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 // https://pkg.go.dev/github.com/golang-jwt/jwt/v4#ParserOption
 //
 // It returns an error, and installs no middleware, if jwksEndpoint is not an http or https URL
-// with a host. The error is also logged, so an app that ignores it still sees why authentication
-// is off; return or exit on it to stop startup instead.
+// with a host or refreshInterval is not a positive number of seconds. The error is also logged,
+// so an app that ignores it still sees why authentication is off; return or exit on it to stop
+// startup instead.
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int, options ...jwt.ParserOption) error {
 	return a.authDisabled(a.enableOAuth(jwksEndpoint, refreshInterval, options...), "OAuth authentication", "EnableOAuth")
 }
@@ -137,6 +159,10 @@ func (a *App) enableOAuth(jwksEndpoint string, refreshInterval int, options ...j
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return fmt.Errorf("%w: unsupported scheme %q", errInvalidJWKSEndpoint, parsedURL.Scheme)
+	}
+
+	if refreshInterval <= 0 {
+		return fmt.Errorf("%w: got %d", errInvalidRefreshInterval, refreshInterval)
 	}
 
 	baseURL := parsedURL.Scheme + "://" + parsedURL.Host

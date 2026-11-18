@@ -59,32 +59,65 @@ func Test_ArangoCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_ArangoGetLastMigration(t *testing.T) {
-	migratorWithArango, mockArango, mockContainer := arangoSetup(t)
-
+func Test_ArangoGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc string
-		err  error
-		resp int64
+		desc        string
+		versions    []int64
+		queryErr    error
+		baseApplied map[int64]struct{}
+		baseErr     error
+		expApplied  map[int64]struct{}
+		expErr      error
 	}{
-		{"no error", nil, 0},
-		{"query failed", context.DeadlineExceeded, -1},
+		{
+			desc:        "arango versions are unioned with inner migrator versions",
+			versions:    []int64{1, 3, 4},
+			baseApplied: map[int64]struct{}{2: {}},
+			expApplied:  map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
+		},
+		{
+			desc:        "empty collection returns only inner versions",
+			versions:    []int64{},
+			baseApplied: map[int64]struct{}{5: {}},
+			expApplied:  map[int64]struct{}{5: {}},
+		},
+		{desc: "arango query error", queryErr: context.DeadlineExceeded, expErr: context.DeadlineExceeded},
+		{desc: "inner migrator error", versions: []int64{2}, baseErr: errArango, expErr: errArango},
 	}
 
-	var lastMigrations []int64
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
 
-	for i, tc := range testCases {
-		mockArango.EXPECT().Query(gomock.Any(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations).Return(tc.err)
+			m := arangoMigrator{ArangoDB: arangoDS{client: mocks.ArangoDB}, migrator: mockMigrator}
 
-		resp, err := migratorWithArango.getLastMigration(mockContainer)
+			mocks.ArangoDB.EXPECT().Query(gomock.Any(), arangoMigrationDB, getArangoMigrationVersions, nil, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, _ map[string]any, result any, _ ...map[string]any) error {
+					if tc.queryErr != nil {
+						return tc.queryErr
+					}
 
-		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+					*(result.(*[]int64)) = tc.versions
 
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		}
+					return nil
+				})
+
+			if tc.queryErr == nil {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.baseApplied, tc.baseErr)
+			}
+
+			applied, err := m.getAppliedMigrations(mockContainer)
+
+			assert.Equal(t, tc.expApplied, applied)
+
+			if tc.expErr != nil {
+				require.ErrorIs(t, err, tc.expErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 
@@ -220,60 +253,6 @@ func Test_ArangoCheckAndCreateMigrationTable_CollectionError(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Contains(t, logs, tc.expLog)
-		})
-	}
-}
-
-func Test_ArangoGetLastMigration_Chained(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		versions   []int64
-		baseResp   int64
-		baseErr    error
-		expVersion int64
-		expErr     error
-	}{
-		{
-			desc:       "arango version greater than base",
-			versions:   []int64{7},
-			baseResp:   3,
-			expVersion: 7,
-		},
-		{
-			desc:       "base version greater than arango",
-			versions:   []int64{2},
-			baseResp:   5,
-			expVersion: 5,
-		},
-		{
-			desc:       "base migrator error",
-			versions:   []int64{2},
-			baseErr:    errArango,
-			expVersion: -1,
-			expErr:     errArango,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-
-			m := arangoMigrator{ArangoDB: arangoDS{client: mocks.ArangoDB}, migrator: mockMigrator}
-
-			mocks.ArangoDB.EXPECT().Query(gomock.Any(), arangoMigrationDB, getLastArangoMigration, nil, gomock.Any()).
-				DoAndReturn(func(_ context.Context, _, _ string, _ map[string]any, result any, _ ...map[string]any) error {
-					*(result.(*[]int64)) = tc.versions
-
-					return nil
-				})
-			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
-
-			resp, err := m.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, resp)
-			assert.Equal(t, tc.expErr, err)
 		})
 	}
 }
