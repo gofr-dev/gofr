@@ -126,8 +126,8 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 
 	registerGRPCMetrics(c)
 
-	// Recovery runs inside observability, so a panicking handler still gets its RPC logged, measured and its
-	// span ended, with the Internal status that recovery turns the panic into.
+	// Recovery runs inside observability, so a panicking handler still gets its RPC logged and measured with the
+	// Internal status that recovery turns the panic into, and its span ended.
 	recoverPanic := grpc_recovery.WithRecoveryHandlerContext(grpcPanicHandler(c.Logger))
 
 	middleware := make([]grpc.UnaryServerInterceptor, 0, defaultInterceptorCount)
