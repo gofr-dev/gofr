@@ -2345,7 +2345,7 @@ func Test_HTTPHEAD_SubrouterRBAC(t *testing.T) {
 			sub.Handle("/users", handler{
 				function:  func(*Context) (any, error) { return "GET secret", nil },
 				container: app.container,
-			}).Methods(http.MethodGet)
+			}).Methods(http.MethodGet, http.MethodHead)
 
 			const rbacConfig = `{"roleHeader":"X-User-Role","roles":[{"name":"reader","permissions":["users:read"]}],` +
 				`"endpoints":[{"path":"/api/users","methods":["GET"],"requiredPermissions":["users:read"]},` +
@@ -2383,23 +2383,15 @@ func Test_HTTPHEAD_SubrouterRBAC(t *testing.T) {
 
 func Test_HTTPHEAD_RBACPolicy(t *testing.T) {
 	tests := []struct {
-		name         string
-		explicitHEAD bool
-		headFirst    bool
-		publicGET    bool
-		role         string
-		status       int
-		handler      string
+		name      string
+		publicGET bool
+		role      string
+		status    int
 	}{
-		{"fallback cannot use a public HEAD rule", false, false, false, "", http.StatusUnauthorized, ""},
-		{"fallback requires GET permission", false, false, false, "head", http.StatusForbidden, ""},
-		{"GET permission allows fallback", false, false, false, "get", http.StatusOK, "GET"},
-		{"public HEAD after GET selects HEAD", true, false, false, "", http.StatusOK, "HEAD"},
-		{"public HEAD before GET selects HEAD", true, true, false, "", http.StatusOK, "HEAD"},
-		{"protected HEAD after GET requires identity", true, false, true, "", http.StatusUnauthorized, ""},
-		{"GET permission cannot authorize explicit HEAD", true, false, true, "get", http.StatusForbidden, ""},
-		{"HEAD permission selects explicit HEAD", true, false, true, "head", http.StatusOK, "HEAD"},
-		{"public GET fallback uses GET policy", false, false, true, "", http.StatusOK, "GET"},
+		{"public HEAD rule cannot bypass GET policy", false, "", http.StatusUnauthorized},
+		{"HEAD permission does not grant GET access", false, "head", http.StatusForbidden},
+		{"GET permission authorizes HEAD", false, "get", http.StatusOK},
+		{"public GET rule authorizes HEAD", true, "", http.StatusOK},
 	}
 
 	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
@@ -2409,23 +2401,9 @@ func Test_HTTPHEAD_RBACPolicy(t *testing.T) {
 				t.Setenv(gofrHTTP.RouterEnvVar, matcher)
 
 				app := New()
-				registerHEAD := func() {
-					app.add(http.MethodHead, "/users", func(*Context) (any, error) {
-						return response.Response{Data: "HEAD", Headers: map[string]string{"X-Handler": "HEAD"}}, nil
-					})
-				}
-
-				if tc.explicitHEAD && tc.headFirst {
-					registerHEAD()
-				}
-
 				app.GET("/users", func(*Context) (any, error) {
 					return response.Response{Data: "GET secret", Headers: map[string]string{"X-Handler": "GET"}}, nil
 				})
-
-				if tc.explicitHEAD && !tc.headFirst {
-					registerHEAD()
-				}
 
 				getRule, headRule := `"requiredPermissions":["get:read"]`, `"public":true`
 				if tc.publicGET {
@@ -2446,7 +2424,11 @@ func Test_HTTPHEAD_RBACPolicy(t *testing.T) {
 				app.httpServer.router.ServeHTTP(rec, req)
 
 				assert.Equal(t, tc.status, rec.Code)
-				assert.Equal(t, tc.handler, rec.Header().Get("X-Handler"))
+				if tc.status == http.StatusOK {
+					assert.Equal(t, "GET", rec.Header().Get("X-Handler"))
+				} else {
+					assert.Empty(t, rec.Header().Get("X-Handler"))
+				}
 			})
 		}
 	}

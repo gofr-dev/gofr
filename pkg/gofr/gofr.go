@@ -286,10 +286,6 @@ func (a *App) httpServerSetup() {
 
 	a.rbacRoutes = routes.routes
 
-	if contains(registeredMethods, http.MethodGet) && !contains(registeredMethods, http.MethodHead) {
-		registeredMethods = append(registeredMethods, http.MethodHead)
-	}
-
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
 }
 

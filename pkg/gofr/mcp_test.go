@@ -87,7 +87,7 @@ func TestRouterTools_List_ReadOnlyAccess(t *testing.T) {
 	assert.Equal(t, ai.ReadOnly, specs[0].Access)
 }
 
-func TestRouterTools_ExplicitHEAD(t *testing.T) {
+func TestRouterTools_ImplicitHEADExcluded(t *testing.T) {
 	for _, matcher := range []string{gofrHTTP.MatcherMux, gofrHTTP.MatcherTrie} {
 		t.Run(matcher, func(t *testing.T) {
 			t.Setenv(gofrHTTP.RouterEnvVar, matcher)
@@ -99,10 +99,11 @@ func TestRouterTools_ExplicitHEAD(t *testing.T) {
 			_, err := rt.Call(t.Context(), "head_items", nil)
 			require.ErrorIs(t, err, ai.ErrToolNotFound)
 
-			app.add(http.MethodHead, "/items", func(*Context) (any, error) { return "HEAD", nil })
-			assert.ElementsMatch(t, []string{"get_items", "head_items"}, toolNames(rt.List()))
+			// A separately registered HEAD-only route remains eligible for discovery.
+			app.add(http.MethodHead, "/probe", func(*Context) (any, error) { return "HEAD", nil })
+			assert.ElementsMatch(t, []string{"get_items", "head_probe"}, toolNames(rt.List()))
 
-			result, err := rt.Call(t.Context(), "head_items", nil)
+			result, err := rt.Call(t.Context(), "head_probe", nil)
 			require.NoError(t, err)
 			data, err := result.JSON()
 			require.NoError(t, err)

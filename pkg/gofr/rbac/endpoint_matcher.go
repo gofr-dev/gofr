@@ -165,9 +165,9 @@ func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, b
 	if method == http.MethodHead {
 		if route := routemark.Matched(r); route != nil {
 			methods, _ := route.GetMethods()
-			if slices.Contains(methods, http.MethodGet) && !slices.Contains(methods, http.MethodHead) {
-				// A fallback runs the GET handler, so it must satisfy GET's policy even when a
-				// separate HEAD rule is public. Explicit HEAD handlers keep their own policy.
+			if slices.Contains(methods, http.MethodGet) {
+				// Implicit HEAD executes GET, so GET's policy must apply even when
+				// another HEAD rule is public. HEAD-only routes keep their own policy.
 				method = http.MethodGet
 			}
 		}

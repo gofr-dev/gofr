@@ -50,7 +50,7 @@ Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework
 never exposed. The safe-method rule is enforced at call time, not just in the tool listing — a write
 route cannot be invoked by guessing its tool name.
 
-Implicit `HEAD` fallback for a `GET` route does not create a second MCP tool. Tool discovery uses explicitly registered route methods: a GET-only route exposes its `get_*` tool, while an explicitly registered HEAD route can also expose a `head_*` tool.
+Implicit `HEAD` support on a `GET` route does not create a second MCP tool. Tool discovery exposes the `get_*` tool for a GET route; a separately registered HEAD-only route can expose its own `head_*` tool.
 
 ### Safety
 

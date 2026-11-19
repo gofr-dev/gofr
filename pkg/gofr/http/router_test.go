@@ -93,10 +93,6 @@ func TestRouter_HEAD(t *testing.T) {
 				})
 			})
 
-			router.Add(http.MethodHead, "/explicit", echoHandler("explicit HEAD"))
-			router.Add(http.MethodGet, "/explicit", echoHandler("GET after HEAD"))
-			router.Add(http.MethodGet, "/first", echoHandler("first GET"))
-			router.Add(http.MethodHead, "/first", echoHandler("HEAD after GET"))
 			router.Add(http.MethodGet, "/users/me", echoHandler("literal"))
 			router.Add(http.MethodGet, "/users/{id:[0-9]+}", echoHandler("parameter"))
 			router.Add(http.MethodGet, "/users/{id}", echoHandler("fallback parameter"))
@@ -108,8 +104,6 @@ func TestRouter_HEAD(t *testing.T) {
 				tag  string
 				vars string
 			}{
-				{"/explicit", "explicit HEAD", `[]`},
-				{"/first", "HEAD after GET", `[]`},
 				{"/users/me", "literal", `[]`},
 				{"/users/42", "parameter", `[["id","42"]]`},
 				{"/users/other", "fallback parameter", `[["id","other"]]`},
@@ -149,7 +143,6 @@ func TestRouter_HEADExistingRoutes(t *testing.T) {
 			router.UseMiddleware(func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					calls++
-
 					w.Header().Set("X-Method", r.Method)
 					w.Header().Set("X-Route", RouteTemplate(r))
 
@@ -161,36 +154,21 @@ func TestRouter_HEADExistingRoutes(t *testing.T) {
 					next.ServeHTTP(w, r)
 				})
 			})
+
 			router.Add(http.MethodGet, "/files/{name}", echoHandler("GET"))
-			router.Handle("/files/{name}", echoHandler("HEAD")).Methods(http.MethodHead).Headers("X-Head", "yes")
-			router.Handle("/files/asset", echoHandler("methodless"))
-			router.Add(http.MethodGet, "/dynamic", echoHandler("GET dynamic"))
-			dynamicHandler := echoHandler("dynamic")
-
-			router.NewRoute().Path("/dynamic").MatcherFunc(func(r *http.Request, match *mux.RouteMatch) bool {
-				if r.Method != http.MethodHead {
-					return false
-				}
-
-				match.Handler = dynamicHandler
-
-				return true
-			})
+			router.Handle("/public", echoHandler("methodless"))
 
 			tests := []struct {
-				method, path, head, tag, template, vars string
+				method, path, tag, template, vars string
 			}{
-				{http.MethodHead, "/files/other", "", "GET", "/files/{name}", `[["name","other"]]`},
-				{http.MethodHead, "/files/other", "yes", "HEAD", "/files/{name}", `[["name","other"]]`},
-				{http.MethodHead, "/files/asset", "", "methodless", "/files/asset", `[]`},
-				{http.MethodGet, "/files/asset", "", "GET", "/files/{name}", `[["name","asset"]]`},
-				{http.MethodHead, "/dynamic", "", "dynamic", "/dynamic", `[]`},
+				{http.MethodHead, "/files/other", "GET", "/files/{name}", `[["name","other"]]`},
+				{http.MethodGet, "/files/asset", "GET", "/files/{name}", `[["name","asset"]]`},
+				{http.MethodHead, "//files/other/", "GET", "/files/{name}", `[["name","other"]]`},
+				{http.MethodHead, "/public", "methodless", "/public", `[]`},
 			}
 
 			for _, tc := range tests {
 				req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
-				req.Header.Set("X-Head", tc.head)
-
 				rec := httptest.NewRecorder()
 				router.ServeHTTP(rec, req)
 
@@ -211,86 +189,9 @@ func TestRouter_HEADExistingRoutes(t *testing.T) {
 	}
 }
 
-func TestRouter_ExplicitHEADPrecedence(t *testing.T) {
-	for _, matcher := range []string{MatcherMux, MatcherTrie} {
-		for _, headFirst := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/head-first=%t", matcher, headFirst), func(t *testing.T) {
-				t.Setenv(RouterEnvVar, matcher)
-
-				router := NewRouter()
-				methods := []string{http.MethodGet, http.MethodHead}
-
-				if headFirst {
-					methods[0], methods[1] = methods[1], methods[0]
-				}
-
-				for _, method := range methods {
-					router.Add(method, "/users", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("X-Handler", method)
-						w.Header().Set("X-Method", r.Method)
-					}))
-				}
-
-				for _, method := range []string{http.MethodHead, http.MethodGet} {
-					rec := httptest.NewRecorder()
-					router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/users", http.NoBody))
-					assert.Equal(t, http.StatusOK, rec.Code)
-					assert.Equal(t, method, rec.Header().Get("X-Handler"))
-					assert.Equal(t, method, rec.Header().Get("X-Method"))
-				}
-			})
-		}
-	}
-}
-
-func TestRouter_ExplicitHEADSubrouterMiddleware(t *testing.T) {
-	for _, matcher := range []string{MatcherMux, MatcherTrie} {
-		t.Run(matcher, func(t *testing.T) {
-			t.Setenv(RouterEnvVar, matcher)
-
-			router := NewRouter()
-			router.Add(http.MethodGet, "/sub/users", echoHandler("GET"))
-			sub := router.PathPrefix("/sub").Subrouter()
-			constructed, executed := 0, 0
-
-			sub.Use(func(next http.Handler) http.Handler {
-				constructed++
-
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					executed++
-
-					next.ServeHTTP(w, r)
-				})
-			})
-			sub.Handle("/users", echoHandler("HEAD")).Methods(http.MethodHead)
-
-			status, body := serve(router, http.MethodHead, "/sub/users")
-			assert.Equal(t, http.StatusOK, status)
-			assert.JSONEq(t, `{"tag":"HEAD","vars":[]}`, body)
-			assert.Equal(t, 1, constructed)
-			assert.Equal(t, 1, executed)
-		})
-	}
-}
-
-func TestRouter_ExplicitHEADAfterServingMux(t *testing.T) {
-	t.Setenv(RouterEnvVar, MatcherMux)
-
-	router := NewRouter()
-	router.Add(http.MethodGet, "/users", echoHandler("GET"))
-	status, body := serve(router, http.MethodHead, "/users")
-	assert.Equal(t, http.StatusOK, status)
-	assert.JSONEq(t, `{"tag":"GET","vars":[]}`, body)
-
-	router.Add(http.MethodHead, "/users", echoHandler("HEAD"))
-	status, body = serve(router, http.MethodHead, "/users")
-	assert.Equal(t, http.StatusOK, status)
-	assert.JSONEq(t, `{"tag":"HEAD","vars":[]}`, body)
-}
-
 func TestRouter_HEADSubrouterErrorHandlers(t *testing.T) {
 	for _, matcher := range []string{MatcherMux, MatcherTrie} {
-		for _, registration := range []string{"GET", "HEAD", "methodless"} {
+		for _, registration := range []string{"GET", "methodless"} {
 			t.Run(matcher+"/"+registration, func(t *testing.T) {
 				t.Setenv(RouterEnvVar, matcher)
 
@@ -315,16 +216,7 @@ func TestRouter_HEADSubrouterErrorHandlers(t *testing.T) {
 				})
 
 				if registration != "methodless" {
-					getRoute.Methods(http.MethodGet)
-				}
-
-				headHandler := "GET"
-				if registration == "HEAD" {
-					headHandler = "HEAD"
-
-					sub.HandleFunc("/users", func(w http.ResponseWriter, _ *http.Request) {
-						w.Header().Set("X-Handler", "HEAD")
-					}).Methods(http.MethodHead)
+					getRoute.Methods(http.MethodGet, http.MethodHead)
 				}
 
 				tests := []struct {
@@ -332,7 +224,7 @@ func TestRouter_HEADSubrouterErrorHandlers(t *testing.T) {
 					status                           int
 				}{
 					{http.MethodGet, "/api/users", "GET", http.MethodGet, http.StatusOK},
-					{http.MethodHead, "/api/users", headHandler, http.MethodHead, http.StatusOK},
+					{http.MethodHead, "/api/users", "GET", http.MethodHead, http.StatusOK},
 					{http.MethodPost, "/api/users", "custom 405", "", http.StatusMethodNotAllowed},
 					{http.MethodHead, "/api/missing", "custom 404", "", http.StatusNotFound},
 				}

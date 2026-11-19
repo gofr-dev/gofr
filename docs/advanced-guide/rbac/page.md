@@ -345,11 +345,11 @@ Fix the name in the config to restore the inherited permissions.
 }
 ```
 
-### HEAD Fallback Authorization
+### HEAD Authorization
 
-When a `HEAD` request falls back to a `GET` route, GoFr enforces the `GET` route's RBAC policy, even if a separate `HEAD` rule is public. This prevents implicit HEAD support from bypassing authorization required by the GET handler.
+GoFr registers `HEAD` alongside every `GET` route. Because a HEAD request executes the same handler, GoFr enforces the `GET` route's RBAC policy even if an unrelated `HEAD` rule is public. A GET route needs only its GET rule in the RBAC route coverage check; the implicit HEAD method does not require a separate rule.
 
-An explicitly registered `HEAD` route takes precedence and uses its own `HEAD` RBAC policy.
+A separately registered HEAD-only handler uses its own HEAD RBAC policy.
 
 ### Mux Pattern Syntax
 
