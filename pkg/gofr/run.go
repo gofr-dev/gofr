@@ -403,6 +403,13 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 }
 
 // startHTTPServer starts the HTTP server if registered.
+//
+// If nothing marked the HTTP server for startup — no route was registered and
+// no static/ directory exists — the server is skipped silently. That silence is
+// a trap for an app that registered readiness checks but no routes: it starts
+// metrics-only and stays unreachable, with /.well-known/health never served and
+// no log line saying why. Warn when exactly that mismatch is detected, so the
+// operator sees the cause instead of a connection refused.
 func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	if a.httpRegistered {
 		wg.Add(1)
@@ -416,6 +423,21 @@ func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 
 			s.run(a.container)
 		}(a.httpServer)
+
+		return
+	}
+
+	// readinessChecks carries a locking contract: AddReadinessCheck writes it under a.mu, and
+	// healthHandler and logReadiness read it under a.mu. Snapshot the count the same way so this
+	// read matches the others.
+	a.mu.Lock()
+	readinessCount := len(a.readinessChecks)
+	a.mu.Unlock()
+
+	if readinessCount > 0 && a.container.Logger != nil {
+		a.container.Logger.Warnf("readiness: %d app check(s) registered, but the HTTP server will not start - "+
+			"no route was registered and no static/ directory exists, so /.well-known/health is unreachable. "+
+			"Register at least one HTTP route.", readinessCount)
 	}
 }
 
