@@ -11,7 +11,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/embedded"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
@@ -372,6 +375,176 @@ func Test_QueryLogPrettyPrint(t *testing.T) {
 			for _, exp := range tc.expContains {
 				assert.Contains(t, buf.String(), exp)
 			}
+		})
+	}
+}
+
+// recordingTracer is a trace.Tracer that remembers every span it starts.
+type recordingTracer struct {
+	embedded.Tracer
+
+	spans []*recordingSpan
+}
+
+func (r *recordingTracer) Start(ctx context.Context, _ string, _ ...trace.SpanStartOption) (context.Context, trace.Span) {
+	s := &recordingSpan{Span: noop.Span{}, attrs: map[attribute.Key]attribute.Value{}}
+	r.spans = append(r.spans, s)
+
+	return trace.ContextWithSpan(ctx, s), s
+}
+
+// recordingSpan counts End calls and captures the recorded errors, status and attributes.
+type recordingSpan struct {
+	trace.Span
+
+	ended  int
+	errs   []error
+	status codes.Code
+	attrs  map[attribute.Key]attribute.Value
+}
+
+func (s *recordingSpan) End(...trace.SpanEndOption) { s.ended++ }
+
+func (s *recordingSpan) RecordError(err error, _ ...trace.EventOption) { s.errs = append(s.errs, err) }
+
+func (s *recordingSpan) SetStatus(code codes.Code, _ string) { s.status = code }
+
+func (s *recordingSpan) SetAttributes(kv ...attribute.KeyValue) {
+	for _, a := range kv {
+		s.attrs[a.Key] = a.Value
+	}
+}
+
+func newTracedClient(t *testing.T, ts *httptest.Server) (*Client, *recordingTracer) {
+	t.Helper()
+
+	addr := strings.Split(ts.Listener.Addr().String(), ":")
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_solr_stats", gomock.Any(), "type", gomock.Any())
+
+	tracer := &recordingTracer{}
+
+	c := New(Config{Host: addr[0], Port: addr[1]})
+	c.logger = mockLogger
+	c.metrics = mockMetrics
+	c.tracer = tracer
+
+	return c, tracer
+}
+
+func htmlNotFound(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusNotFound)
+
+	_, _ = w.Write([]byte(`<html><body>Error 404 Not Found</body></html>`))
+}
+
+func Test_SpanEndedOnEveryPath(t *testing.T) {
+	jsonOK := func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"ok":true}`)) }
+	jsonSolrError := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+
+		_, _ = w.Write([]byte(`{"error":{"code":400}}`))
+	}
+	truncated := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+
+		_, _ = w.Write([]byte(`{`))
+	}
+
+	testCases := []struct {
+		desc       string
+		handler    http.HandlerFunc
+		closed     bool
+		collection string
+		canceled   bool
+		expErr     bool
+		expCode    int64
+	}{
+		{desc: "success", handler: jsonOK, collection: "core", expCode: http.StatusOK},
+		{desc: "solr error as JSON", handler: jsonSolrError, collection: "core", expCode: http.StatusBadRequest},
+		{desc: "html error page", handler: htmlNotFound, collection: "core", expErr: true, expCode: http.StatusNotFound},
+		{desc: "truncated body", handler: truncated, collection: "core", expErr: true, expCode: http.StatusOK},
+		{desc: "connection refused", handler: jsonOK, closed: true, collection: "core", expErr: true},
+		{desc: "canceled context", handler: jsonOK, canceled: true, collection: "core", expErr: true},
+		{desc: "invalid url", handler: jsonOK, collection: "bad\x7fcore", expErr: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ts := httptest.NewServer(tc.handler)
+			defer ts.Close()
+
+			client, tracer := newTracedClient(t, ts)
+
+			if tc.closed {
+				ts.Close()
+			}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			if tc.canceled {
+				cancel()
+			}
+
+			_, err := client.Search(ctx, tc.collection, nil)
+
+			require.Equal(t, tc.expErr, err != nil, "err = %v", err)
+			require.Len(t, tracer.spans, 1)
+
+			span := tracer.spans[0]
+
+			assert.Equal(t, 1, span.ended, "span must be ended exactly once")
+			assert.Contains(t, span.attrs, attribute.Key("solr.search.duration"))
+
+			if tc.expErr {
+				assert.Equal(t, codes.Error, span.status)
+				require.Len(t, span.errs, 1)
+				require.ErrorIs(t, span.errs[0], err)
+			} else {
+				assert.Equal(t, codes.Unset, span.status)
+				assert.Empty(t, span.errs)
+			}
+
+			if tc.expCode != 0 {
+				assert.Equal(t, tc.expCode, span.attrs["http.status_code"].AsInt64())
+			}
+		})
+	}
+}
+
+// Search is covered by Test_SpanEndedOnEveryPath.
+func Test_SpanEndedForEveryOperation(t *testing.T) {
+	doc := func() *bytes.Buffer { return bytes.NewBufferString(`{}`) }
+
+	operations := map[string]func(ctx context.Context, c *Client) error{
+		"HealthCheck": func(ctx context.Context, c *Client) error { _, err := c.HealthCheck(ctx); return err },
+		"Create":      func(ctx context.Context, c *Client) error { _, err := c.Create(ctx, "core", doc(), nil); return err },
+		"Update":      func(ctx context.Context, c *Client) error { _, err := c.Update(ctx, "core", doc(), nil); return err },
+		"Delete":      func(ctx context.Context, c *Client) error { _, err := c.Delete(ctx, "core", doc(), nil); return err },
+		"ListFields":  func(ctx context.Context, c *Client) error { _, err := c.ListFields(ctx, "core", nil); return err },
+		"Retrieve":    func(ctx context.Context, c *Client) error { _, err := c.Retrieve(ctx, "core", nil); return err },
+		"AddField":    func(ctx context.Context, c *Client) error { _, err := c.AddField(ctx, "core", doc()); return err },
+		"UpdateField": func(ctx context.Context, c *Client) error { _, err := c.UpdateField(ctx, "core", doc()); return err },
+		"DeleteField": func(ctx context.Context, c *Client) error { _, err := c.DeleteField(ctx, "core", doc()); return err },
+	}
+
+	for name, op := range operations {
+		t.Run(name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(htmlNotFound))
+			defer ts.Close()
+
+			client, tracer := newTracedClient(t, ts)
+
+			require.Error(t, op(t.Context(), client))
+			require.Len(t, tracer.spans, 1)
+			assert.Equal(t, 1, tracer.spans[0].ended, "span must be ended exactly once")
+			assert.Equal(t, name, tracer.spans[0].attrs["solr.type"].AsString())
 		})
 	}
 }
