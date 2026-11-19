@@ -100,20 +100,34 @@ func (r *redisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 // ProcessPipelineHook implements the redis.ProcessPipelineHook interface.
+// It logs every command it receives: all of a plain pipeline, and for a
+// transaction the MULTI and EXEC that go-redis wraps around the commands.
 func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
 
-		logged := cmds[:len(cmds)-1]
 		if r.config.hideArgs {
-			r.sendOperationStats(start, queryPipeline, maskPipeline(logged))
+			r.sendOperationStats(start, queryPipeline, maskPipeline(cmds))
 		} else {
-			r.sendOperationStats(start, queryPipeline, logged)
+			r.sendOperationStats(start, queryPipeline, pipelineStrings(cmds))
 		}
 
 		return err
 	}
+}
+
+// pipelineStrings renders each pipelined command with its reply, e.g.
+// "get key: value". A redis.Cmder has no exported fields, so logging the
+// commands themselves would print each one as {} in JSON.
+func pipelineStrings(cmds []redis.Cmder) []string {
+	logged := make([]string, len(cmds))
+
+	for i, cmd := range cmds {
+		logged[i] = cmd.String()
+	}
+
+	return logged
 }
 
 // maskCmdArgs keeps the command name (the first argument) and replaces every

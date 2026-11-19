@@ -3,6 +3,7 @@ package redis
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -129,35 +130,98 @@ func TestRedisHook_Args(t *testing.T) {
 				return err
 			},
 			query: queryPipeline,
-			// The hook logs every pipelined command but the last one.
 			wantArgs: []any{[]string{
 				"set " + masked + " " + masked + " " + masked + " " + masked,
 				"get " + masked,
+				"incr " + masked,
+			}},
+		},
+		{
+			desc: "pipeline logs every command",
+			run: func(ctx context.Context, rc *redis.Client) error {
+				_, err := rc.Pipelined(ctx, setThenGet(ctx))
+				return err
+			},
+			query:    queryPipeline,
+			wantArgs: []any{[]string{"set key value: OK", "get key: value"}},
+		},
+		{
+			desc: "transaction pipeline logs every command by default",
+			run: func(ctx context.Context, rc *redis.Client) error {
+				_, err := rc.TxPipelined(ctx, setThenGet(ctx))
+				return err
+			},
+			query: queryPipeline,
+			// go-redis reads each +QUEUED reply into the MULTI command, so it ends as QUEUED.
+			wantArgs: []any{[]string{"multi: QUEUED", "set key value: OK", "get key: value", "exec: []"}},
+		},
+		{
+			desc:     "transaction pipeline logs multi and exec around its commands",
+			hideArgs: true,
+			run: func(ctx context.Context, rc *redis.Client) error {
+				_, err := rc.TxPipelined(ctx, setThenGet(ctx))
+				return err
+			},
+			query: queryPipeline,
+			wantArgs: []any{[]string{
+				"multi",
+				"set " + masked + " " + masked,
+				"get " + masked,
+				"exec",
 			}},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			s, err := miniredis.Run()
-			require.NoError(t, err)
-
-			defer s.Close()
-
-			mockMetrics := NewMockMetrics(gomock.NewController(t))
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
-				"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-			recorder := &queryLogRecorder{}
-			rc := redis.NewClient(&redis.Options{Addr: s.Addr()})
-			rc.AddHook(&redisHook{config: &Config{hideArgs: tc.hideArgs}, logger: recorder, metrics: mockMetrics})
-
-			defer rc.Close()
+			rc, recorder := newHookedClient(t, tc.hideArgs)
 
 			require.NoError(t, tc.run(t.Context(), rc))
 
-			assert.Equal(t, tc.wantArgs, recorder.lastLog(t, tc.query).Args)
+			logged := recorder.lastLog(t, tc.query)
+			assert.Equal(t, tc.wantArgs, logged.Args)
+
+			// A container logs JSON, so the encoded args must match the plain values.
+			gotJSON, err := json.Marshal(logged)
+			require.NoError(t, err)
+
+			wantJSON, err := json.Marshal(tc.wantArgs)
+			require.NoError(t, err)
+
+			assert.Contains(t, string(gotJSON), `"args":`+string(wantJSON))
 		})
+	}
+}
+
+// newHookedClient returns a client on a fresh miniredis with the GoFr hook
+// added, and the recorder that the hook logs to.
+func newHookedClient(t *testing.T, hideArgs bool) (*redis.Client, *queryLogRecorder) {
+	t.Helper()
+
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
+
+	recorder := &queryLogRecorder{}
+	rc := redis.NewClient(&redis.Options{Addr: s.Addr()})
+	rc.AddHook(&redisHook{config: &Config{hideArgs: hideArgs}, logger: recorder, metrics: mockMetrics})
+
+	t.Cleanup(func() { _ = rc.Close() })
+
+	return rc, recorder
+}
+
+// setThenGet queues a SET and a GET of the same key on a pipeline.
+func setThenGet(ctx context.Context) func(redis.Pipeliner) error {
+	return func(pipe redis.Pipeliner) error {
+		pipe.Set(ctx, "key", "value", 0)
+		pipe.Get(ctx, "key")
+
+		return nil
 	}
 }
 
