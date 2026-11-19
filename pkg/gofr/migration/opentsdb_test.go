@@ -660,84 +660,86 @@ func setupDotPath(t *testing.T) (migrator, *container.Container, string) {
 	return migratorWithOpenTSDB, mockContainer, dotPath
 }
 
-func Test_OpenTSDBGetLastMigration(t *testing.T) {
-	migratorWithOpenTSDB, mockContainer, filePath := openTSDBSetup(t)
-
+func Test_OpenTSDBGetAppliedMigrations(t *testing.T) {
 	testCases := []struct {
-		desc           string
-		setupFunc      func()
-		expectedResult int64
+		desc      string
+		fileData  *string // nil means the migration file does not exist
+		inner     map[int64]struct{}
+		innerErr  error
+		skipInner bool
+		expected  map[int64]struct{}
+		expErr    error
+		expErrAny bool
 	}{
 		{
-			desc: "empty migration file",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, []byte("[]"), 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: 0,
+			desc:     "file versions merged with inner versions",
+			fileData: tsdbFileContent(`[{"version":1},{"version":3},{"version":4}]`),
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{1: {}, 2: {}, 3: {}, 4: {}},
 		},
 		{
-			desc: "file with migrations",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-
-				migrations := []tsdbMigrationRecord{
-					{Version: 1, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 0},
-					{Version: 3, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 100},
-					{Version: 2, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 50},
-				}
-				data, err := json.Marshal(migrations)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, data, 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: 3,
+			desc:     "empty migration file returns only inner set",
+			fileData: tsdbFileContent("[]"),
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
 		},
 		{
-			desc: "file doesn't exist",
-			setupFunc: func() {
-				t.Helper()
-				// No file
-			},
-			expectedResult: 0,
+			desc:     "file doesn't exist returns only inner set",
+			inner:    map[int64]struct{}{2: {}},
+			expected: map[int64]struct{}{2: {}},
 		},
 		{
-			desc: "invalid JSON file",
-			setupFunc: func() {
-				t.Helper()
-
-				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-				require.NoError(t, err)
-				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
-				require.NoError(t, err)
-			},
-			expectedResult: -1,
+			desc:      "invalid JSON file",
+			fileData:  tsdbFileContent("invalid json"),
+			skipInner: true,
+			expErrAny: true,
+		},
+		{
+			desc:     "inner migrator error",
+			fileData: tsdbFileContent(`[{"version":2}]`),
+			innerErr: errRandomDB,
+			expErr:   errRandomDB,
 		},
 	}
 
-	for i, tc := range testCases {
+	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			os.RemoveAll(filepath.Dir(filePath))
-			tc.setupFunc()
+			ctrl := gomock.NewController(t)
+			mockContainer, _ := container.NewMockContainer(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			filePath := filepath.Join(t.TempDir(), "migrations.json")
 
-			result, err := migratorWithOpenTSDB.getLastMigration(mockContainer)
-			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
-
-			if tc.expectedResult == -1 {
-				assert.Error(t, err, "TEST[%v] %v Failed! Expected error", i, tc.desc)
-			} else {
-				assert.NoError(t, err, "TEST[%v] %v Failed! Unexpected error", i, tc.desc)
+			if tc.fileData != nil {
+				require.NoError(t, os.WriteFile(filePath, []byte(*tc.fileData), 0600))
 			}
+
+			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
+
+			if !tc.skipInner {
+				mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(tc.inner, tc.innerErr)
+			}
+
+			applied, err := om.getAppliedMigrations(mockContainer)
+
+			if tc.expErrAny || tc.expErr != nil {
+				require.Error(t, err)
+
+				if tc.expErr != nil {
+					require.ErrorIs(t, err, tc.expErr)
+				}
+
+				assert.Nil(t, applied)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, applied)
 		})
 	}
 }
+
+func tsdbFileContent(s string) *string { return &s }
 
 // Test_OpenTSDBCommitMigration_ConcurrentAccess tests concurrent commits.
 func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
@@ -1527,39 +1529,6 @@ func Test_OpenTSDBCommitMigration_BaseMigratorAndUnused(t *testing.T) {
 
 			assert.Equal(t, tc.expErr, err)
 			assert.NoFileExists(t, filePath)
-		})
-	}
-}
-
-func Test_OpenTSDBGetLastMigration_BaseMigrator(t *testing.T) {
-	testCases := []struct {
-		desc       string
-		baseResp   int64
-		baseErr    error
-		expVersion int64
-		expErr     error
-	}{
-		{desc: "base version greater than file", baseResp: 9, expVersion: 9},
-		{desc: "base migrator error", baseErr: errRandomDB, expVersion: -1, expErr: errRandomDB},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockContainer, _ := container.NewMockContainer(t)
-			mockMigrator := NewMockmigrator(ctrl)
-			filePath := filepath.Join(t.TempDir(), "migrations.json")
-
-			require.NoError(t, os.WriteFile(filePath, []byte(`[{"version":2}]`), 0600))
-
-			om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
-
-			mockMigrator.EXPECT().getLastMigration(mockContainer).Return(tc.baseResp, tc.baseErr)
-
-			resp, err := om.getLastMigration(mockContainer)
-
-			assert.Equal(t, tc.expVersion, resp)
-			assert.Equal(t, tc.expErr, err)
 		})
 	}
 }
