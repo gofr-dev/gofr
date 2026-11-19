@@ -221,6 +221,153 @@ func TestConnection_ReadMessage(t *testing.T) {
 	assert.Equal(t, testMessage, message)
 }
 
+func TestConnection_ReadFailed(t *testing.T) {
+	tests := []struct {
+		desc     string
+		act      func(t *testing.T, conn *Connection)
+		expected bool
+	}{
+		{
+			desc:     "no read attempted",
+			act:      func(*testing.T, *Connection) {},
+			expected: false,
+		},
+		{
+			desc: "successful read",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+			},
+			expected: false,
+		},
+		{
+			desc: "bind fails to decode a successfully read message",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				var target struct{}
+
+				require.Error(t, conn.Bind(&target))
+			},
+			expected: false,
+		},
+		{
+			desc: "read after the peer closed the connection",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+
+				_, _, err = conn.ReadMessage()
+				require.Error(t, err)
+			},
+			expected: true,
+		},
+		{
+			desc: "bind after the peer closed the connection",
+			act: func(t *testing.T, conn *Connection) {
+				t.Helper()
+
+				_, _, err := conn.ReadMessage()
+				require.NoError(t, err)
+
+				var message string
+
+				require.Error(t, conn.Bind(&message))
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				_ = wsConn.WriteMessage(websocket.TextMessage, []byte("not json"))
+			})
+			defer server.Close()
+
+			conn, resp := connectToWebSocket(t, server.URL)
+
+			defer conn.Close()
+			defer resp.Body.Close()
+
+			assert.False(t, conn.ReadFailed())
+
+			tc.act(t, conn)
+
+			assert.Equal(t, tc.expected, conn.ReadFailed())
+		})
+	}
+}
+
+func TestConnection_ReadCount(t *testing.T) {
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte("one"))
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte("two"))
+	})
+	defer server.Close()
+
+	conn, resp := connectToWebSocket(t, server.URL)
+
+	defer conn.Close()
+	defer resp.Body.Close()
+
+	assert.Equal(t, uint64(0), conn.ReadCount())
+
+	var message string
+
+	require.NoError(t, conn.Bind(&message))
+	assert.Equal(t, uint64(1), conn.ReadCount())
+
+	_, _, err := conn.ReadMessage()
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), conn.ReadCount())
+
+	_, _, err = conn.ReadMessage()
+	require.Error(t, err)
+	assert.Equal(t, uint64(2), conn.ReadCount(), "a failed read must not be counted")
+}
+
+func TestConnection_ReadCount_AllReadPaths(t *testing.T) {
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte(`{"id":1}`))
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte(`not json`))
+		_ = wsConn.WriteMessage(websocket.TextMessage, []byte("raw"))
+	})
+	defer server.Close()
+
+	conn, resp := connectToWebSocket(t, server.URL)
+
+	defer conn.Close()
+	defer resp.Body.Close()
+
+	var payload struct {
+		ID int `json:"id"`
+	}
+
+	require.NoError(t, conn.ReadJSON(&payload))
+	assert.Equal(t, 1, payload.ID)
+	assert.Equal(t, uint64(1), conn.ReadCount())
+
+	require.Error(t, conn.ReadJSON(&payload), "malformed JSON must surface as an error")
+	assert.Equal(t, uint64(2), conn.ReadCount(), "a message that fails to decode was still read")
+	assert.False(t, conn.ReadFailed(), "a decode error is not a read failure")
+
+	messageType, reader, err := conn.NextReader()
+	require.NoError(t, err)
+	assert.Equal(t, websocket.TextMessage, messageType)
+	assert.NotNil(t, reader)
+	assert.Equal(t, uint64(3), conn.ReadCount())
+
+	_, _, err = conn.NextReader()
+	require.Error(t, err)
+	assert.True(t, conn.ReadFailed())
+	assert.Equal(t, uint64(3), conn.ReadCount())
+}
+
 // TestConnection_ReadMessage_ErrorHandling tests reading messages with error scenarios.
 func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 	tests := []struct {

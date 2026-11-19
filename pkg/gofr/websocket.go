@@ -112,18 +112,33 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
 	for {
+		reads := conn.ReadCount()
+
 		response, err := handler(ctx)
-		if handleWebSocketError(ctx, "error handling message", err) {
-			break
+		if err != nil {
+			// A handler error that consumed no message would repeat identically on the next pass, so end the loop.
+			if handleWebSocketError(ctx, "error handling message", err) || conn.ReadFailed() || conn.ReadCount() == reads {
+				break
+			}
+
+			continue
 		}
 
 		message, err := serializeMessage(response)
-		if handleWebSocketError(ctx, "failed to serialize message", err) {
+		if err != nil {
+			ctx.Errorf("failed to serialize message: %v", err)
+
 			continue
 		}
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
-		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
+		if err != nil {
+			ctx.Errorf("failed to write response to websocket: %v", err)
+
+			break
+		}
+
+		if conn.ReadFailed() {
 			break
 		}
 	}
@@ -136,10 +151,11 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 
 	ctx.Errorf("%s: %v", msg, err)
 
-	// Check if the error is a WebSocket close error or if the underlying TCP connection is closed.
+	// Check if the error is a WebSocket close error (of any close code) or if the underlying TCP connection is closed.
 	// This prevents unnecessary retries and avoids an infinite loop of read/write operations on the WebSocket.
-	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) ||
+	var closeErr *gWebsocket.CloseError
+
+	return errors.As(err, &closeErr) || errors.Is(err, net.ErrClosed) ||
 		strings.Contains(err.Error(), "broken pipe") ||
 		strings.Contains(err.Error(), "connection reset by peer")
 }
