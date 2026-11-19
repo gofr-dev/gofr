@@ -1226,3 +1226,24 @@ func TestAcceptedQueryMediaTypes(t *testing.T) {
 	assert.Contains(t, types, contentTypeOctetStream)
 	assert.NotContains(t, types, contentTypeBinary, "binary/octet-stream is an internal alias, do not advertise it")
 }
+
+// TestRequest_Bind_TypedNilPointer pins that a nil pointer of a concrete type
+// binds nothing and reports no error, as it always has: there is nowhere to
+// decode into. Bind decodes into the pointer it was given, and encoding/json
+// refuses a nil one with "json: Unmarshal(nil *T)", so bindJSON must catch the
+// nil first. Returning that error would turn a handler's 201 into a 500.
+func TestRequest_Bind_TypedNilPointer(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/",
+		strings.NewReader(`{"name":"x"}`)))
+	req.req.Header.Set("Content-Type", "application/json")
+
+	var p *payload
+
+	err := req.Bind(p)
+
+	require.NoError(t, err, "a typed-nil Bind target must keep returning nil")
+}
