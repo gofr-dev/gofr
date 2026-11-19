@@ -571,6 +571,15 @@ RBAC route check failed: rules match no registered route: config 1: GET /amdin/{
 protect nothing; fix each rule's path or methods, or remove it.
 ```
 
+A partly covered route lists the rules from every config that partly covers it, each prefixed with
+that config's number in the same way:
+
+```
+RBAC route check failed: routes only partly covered: GET /items/{id} (by config 1: GET
+/items/{id:[0-9]+} and config 2: GET /items/{id:[a-z]+}). Requests these rules do not match are
+served without role checks; add a rule that matches each route in full.
+```
+
 #### Choosing what a mismatch does
 
 Set `GOFR_RBAC_ROUTE_CHECK` in your config:

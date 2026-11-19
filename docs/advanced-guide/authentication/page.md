@@ -42,6 +42,8 @@ GoFr offers two ways to implement basic authentication:
 Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined credentials.
 It returns an error when no credentials, or an odd number of arguments, are passed; no middleware is
 installed in that case, so stop the app rather than serve routes unauthenticated.
+It also returns an error when a username or password is empty; the middleware is still installed without that pair,
+so it rejects every request for those credentials.
 
 ```go
 func main() {
@@ -126,7 +128,7 @@ It involves sending the prefix `Bearer` trailed by the encoded token within the 
 ### Usage in GoFr
 
 Enable OAuth 2.0 to authenticate requests. Use `EnableOAuth(jwks-endpoint, refresh_interval, options ...jwt.ParserOption)` to configure GoFr.
-It returns an error when the JWKS endpoint is not a valid `http`/`https` URL with a host; no middleware is installed in that case.
+It returns an error when the JWKS endpoint is not a valid `http`/`https` URL with a host, or when `refresh_interval` is not a positive number of seconds; no middleware is installed in that case.
 
 ```go
 func main() {

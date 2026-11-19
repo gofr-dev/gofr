@@ -219,10 +219,10 @@ func TestConnector_Connect_IAM(t *testing.T) {
 		configs fakeConfig
 	}{
 		{
-			// An IP-literal host keeps pgx from doing a DNS lookup before it calls the
-			// dial function, so the post-cleanup connect below stays offline.
+			// DB_HOST is the instance connection name, as documented. pgx must not try to
+			// resolve it as a hostname; the connect below has to reach the dialer.
 			name:    "postgres public ip",
-			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "127.0.0.1", "DB_USER": "u", "DB_NAME": "d"},
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "p:r:i", "DB_USER": "u", "DB_NAME": "d"},
 		},
 		{
 			name: "mysql private ip",
