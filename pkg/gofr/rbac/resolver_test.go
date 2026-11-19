@@ -453,6 +453,10 @@ func TestGetEndpointForRequest_LiteralPatternDoesNotBypassRegexConstraint(t *tes
 	endpoints := []EndpointMapping{
 		{Path: "/reports/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
 		{Path: "/reports/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"reports:read"}},
+		{Path: "/x/{id:[0-9]+}", Methods: []string{"GET"}, Public: true},
+		{Path: "/x/{id:[0-9]+}", Methods: []string{"*"}, RequiredPermissions: []string{"x:read"}},
+		{Path: "/wild/{id:[0-9]+}", Methods: []string{"*"}, Public: true},
+		{Path: "/wild/{name}", Methods: []string{"GET"}, RequiredPermissions: []string{"wild:read"}},
 	}
 
 	config := newTestConfig(t, endpoints, nil)
@@ -475,6 +479,18 @@ func TestGetEndpointForRequest_LiteralPatternDoesNotBypassRegexConstraint(t *tes
 			expectedPath:   "/reports/{name}",
 			expectedPublic: false,
 		},
+		{
+			desc:           "public explicit method skips protected wildcard exact hit",
+			path:           "/x/{id:[0-9]+}",
+			expectedPath:   "",
+			expectedPublic: false,
+		},
+		{
+			desc:           "public wildcard pattern text falls through to protected rule",
+			path:           "/wild/{id:[0-9]+}",
+			expectedPath:   "/wild/{name}",
+			expectedPublic: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -482,9 +498,15 @@ func TestGetEndpointForRequest_LiteralPatternDoesNotBypassRegexConstraint(t *tes
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, http.NoBody)
 			ep, isPublic := getEndpointForRequest(req, config)
 
+			assert.Equal(t, tc.expectedPublic, isPublic)
+
+			if tc.expectedPath == "" {
+				assert.Nil(t, ep)
+				return
+			}
+
 			require.NotNil(t, ep)
 			assert.Equal(t, tc.expectedPath, ep.Path)
-			assert.Equal(t, tc.expectedPublic, isPublic)
 		})
 	}
 }

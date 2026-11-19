@@ -253,7 +253,7 @@ func resolveEndpoint(methodUpper, path string, rules []endpointRule) (*EndpointM
 //
 // To prevent request bypasses where an incoming path literally matches a public mux pattern
 // (e.g. "/reports/{id:[0-9]+}") instead of satisfying the pattern's regex constraint, public
-// pattern hits fall through to the ordered rule scan unless allowPublicPatternExact is set.
+// pattern hits fall through to the ordered rule scan.
 func (c *Config) resolve(methodUpper, path string) (*EndpointMapping, bool) {
 	return c.resolveEndpointInternal(methodUpper, path, false)
 }
