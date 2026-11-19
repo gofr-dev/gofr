@@ -2,8 +2,12 @@ package gofr
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +18,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_ExportSpans(t *testing.T) {
@@ -49,6 +54,172 @@ func Test_ExportSpansError(t *testing.T) {
 
 	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
 	require.Error(t, err, "Expected error for failed request")
+}
+
+// TRACER_URL can carry credentials in its userinfo or query; a failed export must not write them to the log
+// or put them in the returned error.
+func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
+	rejecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer rejecting.Close()
+
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closed.Close()
+
+	closedHost := strings.TrimPrefix(closed.URL, "http://")
+	withCredentials := func(serverURL string) string {
+		return strings.Replace(serverURL, "http://", "http://bob:S3CRETPASS@", 1) + "/api/spans?api_key=TOPSECRETKEY"
+	}
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	tests := []struct {
+		desc      string
+		endpoint  string
+		ctx       context.Context
+		expErrs   []error
+		expURLErr bool   // a failed request keeps returning a *url.Error
+		expErrMsg string // a part of the returned error's text
+		expLog    string // a part of the log line; empty when nothing is logged
+	}{
+		{desc: "collector rejects the export", endpoint: withCredentials(rejecting.URL), ctx: t.Context(),
+			expErrs:   []error{errUnexpectedStatusCode},
+			expErrMsg: "failed to post spans on 'http://REDACTED@",
+			expLog:    "failed to post spans on 'http://REDACTED@"},
+		{desc: "collector unreachable", endpoint: withCredentials(closed.URL), ctx: t.Context(), expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans?REDACTED": dial tcp`,
+			expLog:    "failed to create spans, error: Post"},
+		{desc: "context canceled", endpoint: withCredentials(rejecting.URL), ctx: canceled, expURLErr: true,
+			expErrs:   []error{context.Canceled},
+			expErrMsg: `/api/spans?REDACTED": context canceled`,
+			expLog:    "failed to create spans, error: Post"},
+		{desc: "unparsable port", endpoint: "http://bob:S3CRETPASS@" + closedHost + "abc/api/spans?api_key=TOPSECRETKEY",
+			ctx: t.Context(), expURLErr: true,
+			expErrMsg: `failed to create HTTP request, error: parse "REDACTED@` + closedHost + `abc/api/spans?REDACTED"`},
+		{desc: "control character", endpoint: withCredentials(closed.URL) + "\n", ctx: t.Context(), expURLErr: true,
+			expErrMsg: `failed to create HTTP request, error: parse "REDACTED@`},
+		{desc: "schemeless endpoint", endpoint: "bob:S3CRETPASS@" + closedHost + "/api/spans?api_key=TOPSECRETKEY",
+			ctx: t.Context(), expURLErr: true,
+			expErrMsg: `unsupported protocol scheme "REDACTED"`,
+			expLog:    "unsupported protocol scheme"},
+		{desc: "username-only token", endpoint: "http://bobS3CRETPASS@" + closedHost + "/api/spans", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans": dial tcp`,
+			expLog:    "REDACTED@"},
+		{desc: "short credentials", endpoint: "http://a:b@" + closedHost + "/api/spans?v=1", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans?REDACTED": dial tcp ` + closedHost +
+				": connect: connection refused",
+			expLog: "dial tcp " + closedHost + ": connect: connection refused"},
+		{desc: "query-only key", endpoint: closed.URL + "/api/spans?api_key=TOPSECRETKEY", ctx: t.Context(),
+			expURLErr: true,
+			expErrMsg: `Post "` + closed.URL + `/api/spans?REDACTED": dial tcp`,
+			expLog:    "/api/spans?REDACTED"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var err error
+
+			logs := testutil.StderrOutputForFunc(func() {
+				exporter := NewExporter(tc.endpoint, logging.NewLogger(logging.INFO))
+				err = exporter.ExportSpans(tc.ctx, provideSampleSpan(t))
+			})
+
+			var urlErr *url.Error
+
+			require.Error(t, err)
+			assert.Equal(t, tc.expURLErr, errors.As(err, &urlErr))
+
+			for _, expErr := range tc.expErrs {
+				require.ErrorIs(t, err, expErr)
+			}
+
+			for _, secret := range []string{"S3CRETPASS", "TOPSECRETKEY", "bob"} {
+				assert.NotContains(t, logs, secret)
+				assert.NotContains(t, err.Error(), secret)
+			}
+
+			assert.Contains(t, err.Error(), tc.expErrMsg)
+			assert.Contains(t, logs, tc.expLog)
+		})
+	}
+}
+
+// A cause that quotes part of the endpoint's userinfo or query is rewritten and still matches its sentinel;
+// unquoted text, such as a dial address or an error word that contains a short credential, is left alone.
+func Test_redactCause(t *testing.T) {
+	const endpoint = "http://a:S3CRETPASS@collector:4318/api/spans?api_key=TOP%2BSECRET&v=1"
+
+	tests := []struct {
+		desc   string
+		cause  error
+		expMsg string
+	}{
+		{desc: "no credential in the cause", cause: context.Canceled, expMsg: "context canceled"},
+		{desc: "quoted username", cause: fmt.Errorf(`scheme "a": %w`, context.Canceled),
+			expMsg: `scheme "REDACTED": context canceled`},
+		{desc: "quoted password", cause: fmt.Errorf(`auth "S3CRETPASS": %w`, context.Canceled),
+			expMsg: `auth "REDACTED": context canceled`},
+		{desc: "quoted escaped query value", cause: fmt.Errorf(`key "TOP%%2BSECRET": %w`, context.Canceled),
+			expMsg: `key "REDACTED": context canceled`},
+		{desc: "quoted unescaped query value", cause: fmt.Errorf(`key "TOP+SECRET": %w`, context.Canceled),
+			expMsg: `key "REDACTED": context canceled`},
+		{desc: "quoted whole query", cause: fmt.Errorf(`query "api_key=TOP%%2BSECRET&v=1": %w`, context.Canceled),
+			expMsg: `query "REDACTED": context canceled`},
+		{desc: "short credentials inside an address and words",
+			cause:  fmt.Errorf("dial tcp 127.0.0.1:1830: connect: connection refused: %w", context.Canceled),
+			expMsg: "dial tcp 127.0.0.1:1830: connect: connection refused: context canceled"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := redactCause(tc.cause, endpoint)
+
+			assert.Equal(t, tc.expMsg, err.Error())
+			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
+// timeoutError is a cause that reports itself as a timeout and temporary, like a net.Error.
+type timeoutError struct{ msg string }
+
+func (e timeoutError) Error() string { return e.msg }
+
+func (timeoutError) Timeout() bool { return true }
+
+func (timeoutError) Temporary() bool { return true }
+
+// A redacted cause must not hide that the request timed out: (*url.Error).Timeout asks the cause directly.
+func Test_redactRequestError_KeepsTimeout(t *testing.T) {
+	const endpoint = "bob:S3CRETPASS@collector:4318/api/spans"
+
+	tests := []struct {
+		desc       string
+		cause      error
+		expTimeout bool
+	}{
+		{desc: "redacted timeout", cause: timeoutError{msg: `unsupported protocol scheme "bob"`}, expTimeout: true},
+		{desc: "unredacted timeout", cause: timeoutError{msg: "i/o timeout"}, expTimeout: true},
+		{desc: "redacted deadline", cause: fmt.Errorf(`scheme "bob": %w`, context.DeadlineExceeded), expTimeout: true},
+		{desc: "redacted non-timeout", cause: fmt.Errorf(`unsupported protocol scheme "bob": %w`, context.Canceled)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var urlErr *url.Error
+
+			err := redactRequestError(&url.Error{Op: "Post", URL: endpoint, Err: tc.cause}, endpoint)
+
+			require.ErrorAs(t, err, &urlErr)
+			assert.NotContains(t, err.Error(), "bob")
+			assert.Equal(t, tc.expTimeout, urlErr.Timeout())
+			assert.Equal(t, tc.expTimeout, urlErr.Temporary())
+		})
+	}
 }
 
 // Any 2xx is a successful export (Zipkin-compatible collectors return 202); non-2xx is an error.

@@ -113,6 +113,35 @@ func Test_redactEndpointInError(t *testing.T) {
 	}
 }
 
+// A message can quote one part of the endpoint on its own; only that quoted form is redacted, so short
+// credentials never mask an address or a word.
+func TestRedactMessage_QuotedCredentials(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      string
+		endpoint string
+		expected string
+	}{
+		{name: "schemeless username quoted as the scheme", msg: `unsupported protocol scheme "bob"`,
+			endpoint: "bob:s3cret@collector:4318/x", expected: `unsupported protocol scheme "REDACTED"`},
+		{name: "quoted password", msg: `bad "s3cret"`, endpoint: "https://user:s3cret@collector:4317",
+			expected: `bad "REDACTED"`},
+		{name: "quoted query value, raw and unescaped", msg: `"a%2Bb" "a+b"`, endpoint: "https://collector/x?key=a%2Bb",
+			expected: `"REDACTED" "REDACTED"`},
+		{name: "quoted credential in an unparsable endpoint", msg: `user "user"`,
+			endpoint: "https://user:s3cret@collector:abc", expected: `user "REDACTED"`},
+		{name: "unquoted short credentials are untouched", msg: "dial tcp 127.0.0.1:1830: connect: connection refused",
+			endpoint: "http://a:b@127.0.0.1:1830/x?v=1", expected: "dial tcp 127.0.0.1:1830: connect: connection refused"},
+		{name: "no credentials", msg: `scheme "https"`, endpoint: "https://collector:4317", expected: `scheme "https"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, RedactMessage(tt.msg, tt.endpoint))
+		})
+	}
+}
+
 // Test_builders_doNotLogCredentials drives every built-in builder with a
 // credential-bearing endpoint and asserts that neither the logs nor the returned
 // error carry it. It covers the log lines that name an endpoint or the configured
