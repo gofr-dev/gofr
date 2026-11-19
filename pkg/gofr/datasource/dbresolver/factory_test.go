@@ -94,6 +94,18 @@ func TestReplicaConfig_EmptyOverrideDoesNotFallBackToPrimary(t *testing.T) {
 	}
 }
 
+func TestReplicaConfig_InheritsPoolTimeLimits(t *testing.T) {
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_CONN_MAX_LIFETIME":  "30m",
+		"DB_CONN_MAX_IDLE_TIME": "5m",
+	})
+
+	replicaCfg := newReplicaConfig(mockConfig, "localhost", "3307", "replica_user", "replica_pass")
+
+	assert.Equal(t, "30m", replicaCfg.Get("DB_CONN_MAX_LIFETIME"))
+	assert.Equal(t, "5m", replicaCfg.Get("DB_CONN_MAX_IDLE_TIME"))
+}
+
 func TestReplicaConfig_GetOrDefault(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{})
 
