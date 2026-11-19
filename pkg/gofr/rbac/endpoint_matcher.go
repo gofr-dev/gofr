@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/internal/routemark"
 )
 
 const (
@@ -158,7 +161,19 @@ func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, b
 		return nil, false
 	}
 
-	return config.resolve(strings.ToUpper(r.Method), r.URL.Path)
+	method := strings.ToUpper(r.Method)
+	if method == http.MethodHead {
+		if route := routemark.Matched(r); route != nil {
+			methods, _ := route.GetMethods()
+			if slices.Contains(methods, http.MethodGet) {
+				// Implicit HEAD executes GET, so GET's policy must apply even when
+				// another HEAD rule is public. HEAD-only routes keep their own policy.
+				method = http.MethodGet
+			}
+		}
+	}
+
+	return config.resolve(method, r.URL.Path)
 }
 
 // ResolveRBACConfigPath resolves the RBAC config file path.
