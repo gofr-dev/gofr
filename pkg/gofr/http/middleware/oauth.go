@@ -121,13 +121,12 @@ func getPublicKeys(ctx context.Context, provider JWKSProvider, path string) (JWK
 	if resp.Body == nil {
 		return keys, errEmptyResponseBody
 	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return keys, err
 	}
-
-	resp.Body.Close()
 
 	err = json.Unmarshal(body, &keys)
 
