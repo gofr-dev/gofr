@@ -88,6 +88,18 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		return
 	}
 
+	// Assigned only when a real client came back. kafka.New returns a bare nil *kafkaClient when it
+	// rejects the config, and assigning that straight into the pubsub.Client interface is what
+	// creates the typed nil in the first place: a non-nil interface holding a nil pointer, which
+	// every `c.PubSub != nil` check in the codebase admits. The getters filter it as defense in
+	// depth, but they cannot help a direct reader of the exported field.
+	if client := kafka.New(c.kafkaConfigFromEnv(conf), c.Logger, c.metricsManager); client != nil {
+		c.PubSub = client
+	}
+}
+
+// kafkaConfigFromEnv builds the Kafka config from the PUBSUB_* and KAFKA_* environment variables.
+func (c *Container) kafkaConfigFromEnv(conf config.Config) *kafka.Config {
 	partition, err := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 	if err != nil {
 		c.Logger.Error("Invalid value for PARTITION_SIZE, using default: 0")
@@ -100,25 +112,10 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
 	// This is particularly important for scenarios like message replay, recovery from failures,
 	// or when you only want to process messages that arrive after the consumer is initialized.
-	offSet, err := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-	if err != nil {
-		c.Logger.Error("Invalid value for PUBSUB_OFFSET, using default: -1")
-	}
-
-	batchSize, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_SIZE, using default: %d", kafka.DefaultBatchSize)
-	}
-
-	batchBytes, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_BYTES, using default: %d", kafka.DefaultBatchBytes)
-	}
-
-	batchTimeout, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
-	if err != nil {
-		c.Logger.Errorf("Invalid value for KAFKA_BATCH_TIMEOUT, using default: %d", kafka.DefaultBatchTimeout)
-	}
+	offSet := c.kafkaInt(conf, "PUBSUB_OFFSET", -1)
+	batchSize := c.kafkaInt(conf, "KAFKA_BATCH_SIZE", kafka.DefaultBatchSize)
+	batchBytes := c.kafkaInt(conf, "KAFKA_BATCH_BYTES", kafka.DefaultBatchBytes)
+	batchTimeout := c.kafkaInt(conf, "KAFKA_BATCH_TIMEOUT", kafka.DefaultBatchTimeout)
 
 	tlsConf := kafka.TLSConfig{
 		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
@@ -127,15 +124,8 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == configTrue,
 	}
 
-	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
-
-	// Assigned only when a real client came back. kafka.New returns a bare nil *kafkaClient when it
-	// rejects the config, and assigning that straight into the pubsub.Client interface is what
-	// creates the typed nil in the first place: a non-nil interface holding a nil pointer, which
-	// every `c.PubSub != nil` check in the codebase admits. The getters filter it as defense in
-	// depth, but they cannot help a direct reader of the exported field.
-	if client := kafka.New(&kafka.Config{
-		Brokers:          pubsubBrokers,
+	return &kafka.Config{
+		Brokers:          strings.Split(conf.Get("PUBSUB_BROKER"), ","),
 		Partition:        partition,
 		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
 		OffSet:           offSet,
@@ -147,9 +137,21 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
 		SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
 		TLS:              tlsConf,
-	}, c.Logger, c.metricsManager); client != nil {
-		c.PubSub = client
 	}
+}
+
+// kafkaInt returns the int configured for key, or defaultVal if unset or invalid. Atoi returns 0 on
+// failure, which Kafka rejects for the batch settings and which means "earliest" for the offset, so
+// the default has to be assigned, not just logged.
+func (c *Container) kafkaInt(conf config.Config, key string, defaultVal int) int {
+	val, err := strconv.Atoi(conf.GetOrDefault(key, strconv.Itoa(defaultVal)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for %s, using default: %d", key, defaultVal)
+
+		return defaultVal
+	}
+
+	return val
 }
 
 func (c *Container) createGooglePubSub(conf config.Config) {
