@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/directory"
 	azfile "github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/file"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/fileerror"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/share"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -28,7 +30,7 @@ var (
 	errSameSourceOrDest          = errors.New("source and destination are the same")
 	errFailedToCreateReader      = errors.New("failed to create reader")
 	errFailedToCreateRangeReader = errors.New("failed to create range reader")
-	errObjectNotFound            = errors.New("object not found")
+	errObjectNotFound            = notFoundError("object not found")
 	errFailedToGetProperties     = errors.New("failed to get properties")
 	errFailedToDeleteObject      = errors.New("failed to delete object")
 	errFailedToCopyObject        = errors.New("failed to copy object")
@@ -39,6 +41,24 @@ var (
 	errNegativeOffset            = errors.New("negative offset")
 	errShareNameEmpty            = errors.New("share name cannot be empty")
 )
+
+// notFoundError is the type of errObjectNotFound. It also matches os.ErrNotExist, so the
+// file store records a missing object as NOT_FOUND instead of ERROR.
+type notFoundError string
+
+func (e notFoundError) Error() string { return string(e) }
+
+func (notFoundError) Is(target error) bool { return target == os.ErrNotExist }
+
+// propertiesError wraps a failed GetProperties call: errObjectNotFound only when Azure
+// reported the file, directory or share missing, errFailedToGetProperties otherwise.
+func propertiesError(name string, err error) error {
+	if fileerror.HasCode(err, fileerror.ResourceNotFound, fileerror.ParentNotFound, fileerror.ShareNotFound) {
+		return fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
+	}
+
+	return fmt.Errorf("%w for %q: %w", errFailedToGetProperties, name, err)
+}
 
 const (
 	contentTypeDirectory   = "application/x-directory"
@@ -364,7 +384,7 @@ func (s *storageAdapter) statDirectory(ctx context.Context, name string) (*file.
 
 	props, err := dirClient.GetProperties(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
+		return nil, propertiesError(name, err)
 	}
 
 	var lastModified time.Time
@@ -390,7 +410,7 @@ func (s *storageAdapter) statFile(ctx context.Context, name string) (*file.Objec
 
 	props, err := fileClient.GetProperties(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w %q: %w", errObjectNotFound, name, err)
+		return nil, propertiesError(name, err)
 	}
 
 	contentType := ""

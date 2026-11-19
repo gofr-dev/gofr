@@ -523,6 +523,7 @@ func TestStorageAdapter_StatObject_NotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, info)
 	require.ErrorIs(t, err, errObjectNotFound)
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 // ListObjects Tests

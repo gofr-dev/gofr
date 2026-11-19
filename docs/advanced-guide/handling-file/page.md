@@ -480,6 +480,8 @@ if err != nil {
 }
 ```
 
+> Note: For GCS, Azure and FTP, `ReadAt` follows `io.ReaderAt`: when it fills fewer than `len(b)` bytes it returns an error. That error is `io.EOF` when the read reached the end of the object, or the storage error (for example a dropped connection) otherwise, together with the bytes read before it.
+
 ### Getting Information of the file/directory
 
 Stat retrieves details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
