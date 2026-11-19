@@ -10,6 +10,7 @@ import (
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/internal/rbaccheck"
+	"gofr.dev/pkg/gofr/internal/rbaclink"
 	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/rbac"
 )
@@ -155,7 +156,7 @@ func (a *App) rbacRouteCheckMode() string {
 
 // checkRBACRoutes runs the RBAC route check against the route table httpServerSetup collected, and
 // logs one line for each kind of mismatch it finds. It reports whether any mismatch can leave a
-// request served without role checks.
+// request served without role checks; under defaultPolicy deny that is a dead rule only.
 func (a *App) checkRBACRoutes() bool {
 	endpoints := make([][]rbac.EndpointMapping, len(a.rbacConfigs))
 	for i, config := range a.rbacConfigs {
@@ -175,8 +176,7 @@ func (a *App) checkRBACRoutes() bool {
 	}
 
 	if len(m.Uncovered) > 0 {
-		logger.Errorf("RBAC route check failed: routes covered by no rule: %s. They are served without role "+
-			"checks; add a rule for each, with \"public\": true for a route meant to be open.", strings.Join(m.Uncovered, ", "))
+		a.reportUncovered(strings.Join(m.Uncovered, ", "))
 	}
 
 	if len(m.PartlyCovered) > 0 {
@@ -185,11 +185,60 @@ func (a *App) checkRBACRoutes() bool {
 			partly[i] = p.String()
 		}
 
-		logger.Errorf("RBAC route check failed: routes only partly covered: %s. Requests these rules do not "+
-			"match are served without role checks; add a rule that matches each route in full.", strings.Join(partly, ", "))
+		a.reportPartlyCovered(strings.Join(partly, ", "))
+	}
+
+	// Under defaultPolicy deny, an uncovered or partly covered route is closed, not open, so only a
+	// dead rule, which leaves the route it was written for unguarded, still fails.
+	if a.rbacDeny {
+		return len(m.DeadRules) > 0
 	}
 
 	return m.Failed()
+}
+
+// reportUncovered logs the routes no rule covers: an error where they are served without role checks,
+// a warning under defaultPolicy deny, where they are blocked.
+func (a *App) reportUncovered(routes string) {
+	if a.rbacDeny {
+		a.Logger().Warnf("RBAC route check: routes covered by no rule: %s. Under defaultPolicy deny they are "+
+			"blocked; add a rule to make them reachable.", routes)
+
+		return
+	}
+
+	a.Logger().Errorf("RBAC route check failed: routes covered by no rule: %s. They are served without role "+
+		"checks; add a rule for each, with \"public\": true for a route meant to be open.", routes)
+}
+
+// reportPartlyCovered logs the routes only some requests of which a rule matches, as reportUncovered does.
+func (a *App) reportPartlyCovered(routes string) {
+	if a.rbacDeny {
+		a.Logger().Warnf("RBAC route check: routes only partly covered: %s. Under defaultPolicy deny the "+
+			"requests these rules do not match are blocked; add a rule that matches each route in full to make "+
+			"them reachable.", routes)
+
+		return
+	}
+
+	a.Logger().Errorf("RBAC route check failed: routes only partly covered: %s. Requests these rules do not "+
+		"match are served without role checks; add a rule that matches each route in full.", routes)
+}
+
+// linkRBACConfigs lets the installed RBAC configs see each other, so that defaultPolicy deny can tell a
+// route one config covers from a route none does, and records whether any config denies. It runs once,
+// when every route is registered and before a request is served.
+func (a *App) linkRBACConfigs() {
+	if len(a.rbacConfigs) == 0 {
+		return
+	}
+
+	configs := make([]any, len(a.rbacConfigs))
+	for i, config := range a.rbacConfigs {
+		configs[i] = config
+	}
+
+	a.rbacDeny = rbaclink.Link(configs)
 }
 
 // rbacRouteCollector builds the route table the RBAC route check reads, from the router walk
@@ -197,41 +246,11 @@ func (a *App) checkRBACRoutes() bool {
 type rbacRouteCollector struct {
 	enabled bool
 	seen    map[rbaccheck.Route]bool
-
-	// builtInFrom and builtInTo bound, as positions in the router walk, the routes GoFr registers
-	// itself; walked is the position of the next route add sees. The routes are told apart by
-	// where they were registered rather than by their path, so that an application route under
-	// /.well-known/ is still checked.
-	builtInFrom, builtInTo, walked int
-
-	routes []rbaccheck.Route
+	routes  []rbaccheck.Route
 }
 
 func newRBACRouteCollector(enabled bool) *rbacRouteCollector {
 	return &rbacRouteCollector{enabled: enabled, seen: make(map[rbaccheck.Route]bool)}
-}
-
-// startBuiltIns marks the routes registered on router from now on as GoFr's own, until endBuiltIns.
-func (c *rbacRouteCollector) startBuiltIns(router *mux.Router) {
-	if c.enabled {
-		c.builtInFrom = countRoutes(router)
-	}
-}
-
-// endBuiltIns ends the run of routes startBuiltIns began.
-func (c *rbacRouteCollector) endBuiltIns(router *mux.Router) {
-	if c.enabled {
-		c.builtInTo = countRoutes(router)
-	}
-}
-
-// nextIsBuiltIn reports whether the route at the next walk position is one of GoFr's own, and
-// moves past it.
-func (c *rbacRouteCollector) nextIsBuiltIn() bool {
-	position := c.walked
-	c.walked++
-
-	return position >= c.builtInFrom && position < c.builtInTo
 }
 
 // countRoutes returns how many routes a walk of router visits.
@@ -247,9 +266,26 @@ func countRoutes(router *mux.Router) int {
 	return n
 }
 
+// markBuiltIns marks every route a walk of router visits after the first skip as one of GoFr's own
+// (routemark.MarkBuiltIn). httpServerSetup calls it right after registering its built-in routes,
+// with the count taken right before, so exactly those routes are marked, in one walk.
+func markBuiltIns(router *mux.Router, skip int) {
+	position := 0
+
+	_ = router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		if position >= skip {
+			routemark.MarkBuiltIn(route)
+		}
+
+		position++
+
+		return nil
+	})
+}
+
 // add records route once per method, "*" for a route with no method matcher, as built in when it
-// falls between startBuiltIns and endBuiltIns. A prefix route gets a trailing catch-all segment, so
-// that it stands for every path under the prefix.
+// carries routemark's built-in mark. A prefix route gets a trailing catch-all segment, so that it
+// stands for every path under the prefix.
 // GoFr's PathPrefix("/") catch-all is left out: it answers 404 for every path no other route
 // serves, and would otherwise make every rule look live.
 func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
@@ -257,7 +293,7 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 		return
 	}
 
-	builtIn := c.nextIsBuiltIn()
+	builtIn := routemark.IsBuiltIn(route)
 
 	if routemark.IsCatchAll(route) {
 		return

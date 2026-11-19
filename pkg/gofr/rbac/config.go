@@ -38,11 +38,20 @@ var (
 	// errInvalidPermissionsClaimPath is returned when permissionsClaimPath cannot be parsed, which would
 	// otherwise deny every request without a word.
 	errInvalidPermissionsClaimPath = errors.New("permissionsClaimPath cannot be parsed")
+
+	// errInvalidDefaultPolicy is returned when defaultPolicy is neither "allow" nor "deny".
+	errInvalidDefaultPolicy = errors.New(`defaultPolicy must be "allow" or "deny"`)
 )
 
 // extractionFailuresMetric counts requests whose role or permissions could not be read. App.EnableRBAC
 // registers it, once per app.
 const extractionFailuresMetric = "rbac_role_extraction_failures"
+
+// Values of Config.DefaultPolicy, compared after folding case and trimming spaces.
+const (
+	policyAllow = "allow"
+	policyDeny  = "deny"
+)
 
 // Modes reported in the startup line, naming where authorization reads from.
 const (
@@ -127,6 +136,17 @@ type Config struct {
 	// and expiry checks on EnableOAuth with jwt.WithAudience and jwt.WithExpirationRequired.
 	PermissionsClaimPath string `json:"permissionsClaimPath,omitempty" yaml:"permissionsClaimPath,omitempty"`
 
+	// DefaultPolicy is what happens to a request no rule matches: "allow" serves it, "deny" refuses it.
+	// The value ignores letter case and surrounding spaces. Empty means "allow", so existing configs
+	// are unchanged; any other value fails the config load.
+	// It is read when the config is loaded (LoadPermissions), so changing it afterwards has no effect. A
+	// Config built in code is neither validated nor linked with the app's other configs: DefaultPolicy
+	// takes effect only through LoadPermissions or EnableRBAC.
+	// With "deny" the caller's role is read first: a role that cannot be read is a 401, one that can
+	// is a 403. A request GoFr's catch-all answers (404, 405), a CORS preflight and GoFr's own routes
+	// are left alone. See the Default Policy section of the RBAC guide.
+	DefaultPolicy string `json:"defaultPolicy,omitempty" yaml:"defaultPolicy,omitempty"`
+
 	// ErrorHandler is called when authorization fails
 	// If nil, default error response is sent
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, role, route string, err error)
@@ -155,6 +175,13 @@ type Config struct {
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
 	rules []endpointRule `json:"-" yaml:"-"`
+
+	// deny is DefaultPolicy read as a switch; processUnifiedConfig sets it.
+	deny bool
+
+	// group is every config the app installed, which gofr sets once routes are registered. It is nil
+	// for a config used on its own, which then stands for itself.
+	group *group
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -209,10 +236,17 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	return &config, nil
 }
 
-// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+// logStartup logs the mode and default policy RBAC runs with, and warns about a roles section
+// permissions mode never reads.
 func (c *Config) logStartup(logger datasource.Logger) {
 	mode, source := c.mode()
-	logger.Infof("RBAC enabled: mode=%s, source=%s", mode, source)
+
+	policy := policyAllow
+	if c.deny {
+		policy = policyDeny
+	}
+
+	logger.Infof("RBAC enabled: mode=%s, source=%s, defaultPolicy=%s", mode, source, policy)
 
 	if mode == modePermissions && len(c.Roles) > 0 {
 		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
@@ -244,6 +278,10 @@ func (c *Config) validate() error {
 		return err
 	}
 
+	if _, err := c.policy(); err != nil {
+		return err
+	}
+
 	// Validate endpoints: non-public endpoints must have RequiredPermissions
 	// Also validate that paths use mux patterns only (no wildcards or old regex)
 	for i, endpoint := range c.Endpoints {
@@ -258,6 +296,24 @@ func (c *Config) validate() error {
 	}
 
 	return nil
+}
+
+// policy reports whether DefaultPolicy denies. Case and surrounding spaces are ignored, as for
+// GOFR_RBAC_ROUTE_CHECK. An empty value allows, and anything else but "allow" and "deny" is an
+// error: a typo in a security setting must not quietly mean allow.
+func (c *Config) policy() (deny bool, err error) {
+	if c.DefaultPolicy == "" {
+		return false, nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.DefaultPolicy)) {
+	case policyAllow:
+		return false, nil
+	case policyDeny:
+		return true, nil
+	default:
+		return false, fmt.Errorf("%w, got %q", errInvalidDefaultPolicy, c.DefaultPolicy)
+	}
 }
 
 // validateClaimModes rejects claim settings that would otherwise be ambiguous or silently ignored.
@@ -345,8 +401,12 @@ func (*Config) checkRegexIndicators(path string, index int) error {
 
 // processUnifiedConfig processes the unified Roles and Endpoints config
 // and builds internal maps for efficient lookup.
-// Config is read-only after initialization, so no mutex is needed.
+// Config is written during setup and read-only once requests are served, so no mutex is needed. The group
+// pointer is the one field written later, once, when gofr links the configs before serving.
 func (c *Config) processUnifiedConfig() error {
+	// A value validate would have rejected reads as allow here: a Config built in code skips validate.
+	c.deny, _ = c.policy()
+
 	c.initializeMaps()
 	c.buildRolePermissionsMap()
 

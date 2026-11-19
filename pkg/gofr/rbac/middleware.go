@@ -160,7 +160,15 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// If no endpoint match found in RBAC config, allow request to proceed to route matching
 			// RBAC only enforces authorization for endpoints that are explicitly configured
 			// Routes not in RBAC config are handled by normal route matching (may return 404 if route doesn't exist)
+			// Under defaultPolicy deny such a request is refused instead, unless GoFr answers it itself or
+			// another config covers it.
 			if endpoint == nil {
+				if config.rejectsUnmatched(r) {
+					denyUnmatched(w, r, config, &warnings)
+
+					return
+				}
+
 				handler.ServeHTTP(w, r)
 
 				return
@@ -210,6 +218,28 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// denyUnmatched refuses a request no rule matched, under defaultPolicy deny. It reads what the
+// request holds first, as for a covered route: a failure is the usual extraction-failure answer, and
+// anything that can be read holds nothing that grants access, so it is a denial that names the role
+// (or counts the roles held). The route is reported as unmatched.
+func denyUnmatched(w http.ResponseWriter, r *http.Request, config *Config, warnings *extractionWarnings) {
+	h, err := extractHeld(r, config)
+	if err != nil {
+		reportExtractionFailure(r, config, err, warnings)
+		handleAuthError(w, r, config, &denial{route: unknownRouteLabel, err: bareError(err)})
+
+		return
+	}
+
+	if h.multi() {
+		handleAuthError(w, r, config, &denial{route: unknownRouteLabel, heldCount: h.count(), err: ErrAccessDenied})
+
+		return
+	}
+
+	handleAuthError(w, r, config, &denial{role: h.str, route: unknownRouteLabel, err: ErrAccessDenied})
 }
 
 // extractionWarnings holds the one-shot guards for the warnings reportExtractionFailure can raise, so

@@ -147,6 +147,7 @@ identity provider to put a flat key with dots into a signed token.
 | `permissionsClaimPath` | string | permissions mode | JWT claim that holds the permissions themselves, e.g. `scope` |
 | `roles` | array | header and roles modes | Role → permission mapping (see below) |
 | `endpoints` | array | all modes | Route & method → required permission mapping (see below) |
+| `defaultPolicy` | string | all modes | What happens to a request no rule matches: `allow` (default) or `deny` (see [Default Policy](#default-policy)) |
 
 Exactly one mode is active:
 
@@ -158,13 +159,105 @@ Exactly one mode is active:
 
 - both `jwtClaimPath` and `permissionsClaimPath` are set;
 - `permissionsClaimPath` cannot be parsed, for example `scope[x]` (a path that can never be read
-  would deny every request without a word).
+  would deny every request without a word);
+- `defaultPolicy` is not `allow` or `deny`, for example `block` (error: `defaultPolicy must be "allow"
+  or "deny", got "block"`).
 
-At startup RBAC logs one line naming the mode it runs in, for example:
+At startup RBAC logs one line naming the mode it runs in and its default policy, for example:
 
 ```
-RBAC enabled: mode=permissions, source=scope
+RBAC enabled: mode=permissions, source=scope, defaultPolicy=allow
 ```
+
+### Default Policy
+
+By default, a request that no rule matches is served without a role check. Set `defaultPolicy` to
+`deny` to close that gap: a request to a route no rule covers is refused instead.
+
+| Value | Behavior |
+|---|---|
+| `allow` (default, also when unset) | A request no rule matches is served. |
+| `deny` | A request no rule matches is refused. |
+
+The value ignores letter case and surrounding spaces, so `deny`, `Deny` and ` DENY ` all work. An
+empty or missing value means `allow`; a value of only spaces is an error. Any other value, such as
+`block`, fails the config load like any other config error (see
+[Config Load Failures](#config-load-failures)): `EnableRBAC` returns and logs an error and installs
+no middleware. A typo in a security setting never quietly
+means `allow`.
+
+Under `deny`, GoFr reads the caller's role or permissions the same way it does for a route with a
+rule. A caller who presents no role (no role header, no JWT claims, or no role claim) gets `401`. A
+caller whose claim cannot be read as a role, or who holds no permissions in
+[permissions mode](#permissions-mode-scope-claim), gets `403`, as on a route with a rule. The
+`rbac_role_extraction_failures` metric counts every request whose role or permissions could not be
+read; a token with no permissions claim is not counted, it simply holds none. A caller whose role can
+be read gets `403`. The audit log records the denial as on any other route: the role, or only how many
+roles or permissions were held when there are several. A custom `ErrorHandler` gets the role (empty
+when several are held), the route and the error. The route is `<unmatched>` in both. Traces record no
+role. A route with no rule grants nobody access, so every caller with a readable role is refused.
+
+`deny` refuses only requests that would run one of your handlers. It leaves these alone:
+
+- **The `404` and `405` answers.** A request to a path no route serves keeps its `404`, and a
+  request with a method the path does not serve keeps its `405` and `Allow` header.
+- **CORS preflights.** GoFr answers every `OPTIONS` request in its CORS middleware, before RBAC
+  runs, so browsers are never blocked.
+- **GoFr's own routes:** health, alive, `/favicon.ico`, and the OpenAPI, Swagger and GraphQL
+  Playground pages. GoFr knows them by how they were registered, not by their path, so a route your
+  application registers under `/.well-known/`, such as `/.well-known/jwks.json`, is refused unless a
+  rule covers it. A rule you write for one of GoFr's own routes still applies to it.
+
+GoFr also serves the `./static` directory at `/static` (when it exists) and `/graphql` (when GraphQL
+is enabled), but these are not exempt: they need a rule like your own routes.
+
+A request is refused only when no rule matches it. A route with a rule for `GET` only is covered
+for `GET`. If your app also serves `DELETE` on that path, that request matches no rule and is refused
+under `deny`; if it does not, the path answers `405`, as above.
+
+When `EnableRBAC` is called more than once, a request is refused only when no config has a rule for
+it. A route that one config covers is left to that config, which enforces its own rule. If any
+config sets `deny`, a route no config covers is refused, even when the other configs leave
+`defaultPolicy` unset or set it to `allow`. The first config, in the order `EnableRBAC` was called, whose own
+`defaultPolicy` is `deny` does the refusing. It reads the caller's role with its own role header or
+claim path. A config that is not `deny` passes such a request on.
+
+In JSON:
+
+```json
+{
+  "defaultPolicy": "deny",
+  "roleHeader": "X-User-Role",
+  "roles": [{"name": "admin", "permissions": ["users:read"]}],
+  "endpoints": [
+    {"path": "/api/users", "methods": ["GET"], "requiredPermissions": ["users:read"]},
+    {"path": "/login", "methods": ["POST"], "public": true}
+  ]
+}
+```
+
+In YAML:
+
+```yaml
+defaultPolicy: deny
+roleHeader: X-User-Role
+roles:
+  - name: admin
+    permissions: [users:read]
+endpoints:
+  - path: /api/users
+    methods: [GET]
+    requiredPermissions: [users:read]
+  - path: /login
+    methods: [POST]
+    public: true
+```
+
+With this config, `GET /api/users` needs `users:read`, `POST /login` is open, and any other route
+your application registers is refused. If your app has a `./static` directory, GoFr serves it
+automatically and it needs a rule too: add public rules for it (see
+[Startup Route Check](#startup-route-check)). To open a route on purpose, give it a rule with
+`"public": true`. The [Startup Route Check](#startup-route-check) lists the routes `deny` refuses.
 
 ### Role Arrays
 
@@ -473,8 +566,10 @@ the path exists from the `401`, so the `405` adds no authorization bypass.
 
 The RBAC config is a second copy of your route table, written by hand, so the two can drift apart.
 When the app starts (inside `app.Run()`, after every route has been registered), GoFr compares
-them and logs each kind of mismatch below as an **error**. By default the app keeps starting, so
-read the startup logs: each line names a route that is not protected the way the config intends.
+them and logs each kind of mismatch below as an **error** (under
+[`defaultPolicy: deny`](#default-policy), uncovered and partly covered routes are warnings, see below).
+By default the app keeps starting, so read the startup logs: each line names a route that is not
+protected the way the config intends, or, under `deny`, one that is blocked.
 [`GOFR_RBAC_ROUTE_CHECK`](#choosing-what-a-mismatch-does) can make a mismatch stop startup instead.
 
 Paths are compared exactly as written, the same way requests are matched: `/api/users/` and
@@ -521,6 +616,27 @@ RBAC route check failed: routes only partly covered: * /static/{path:.*} (by GET
 Requests these rules do not match are served without role checks; add a rule that matches each
 route in full.
 ```
+
+Under [`defaultPolicy: deny`](#default-policy) the two kinds above, an uncovered route and a partly
+covered one, are blocked, not open. They are logged as **warnings**, not errors, and they do not stop
+startup when `GOFR_RBAC_ROUTE_CHECK=fail`. The messages say so, and they start with
+`RBAC route check:` without the word "failed", so an alert that matches "route check failed" does not
+fire for them:
+
+```
+RBAC route check: routes covered by no rule: GET /api/posts. Under defaultPolicy deny they are
+blocked; add a rule to make them reachable.
+```
+
+```
+RBAC route check: routes only partly covered: * /static/{path:.*} (by GET /static/{path:.*}).
+Under defaultPolicy deny the requests these rules do not match are blocked; add a rule that matches
+each route in full to make them reachable.
+```
+
+When `EnableRBAC` is called more than once, this applies as soon as any config sets `deny`. Dead
+rules are still logged as errors and still stop startup when `GOFR_RBAC_ROUTE_CHECK=fail`, and a dead
+public rule is still a warning.
 
 A rule set that opens the static directory and a login route:
 
@@ -586,9 +702,9 @@ Set `GOFR_RBAC_ROUTE_CHECK` in your config:
 
 | Value | Behavior |
 |---|---|
-| `warn` (default) | Log each mismatch as an error and keep starting. |
-| `fail` | Log each mismatch, release what startup opened, and exit with status 1. A dead public rule is only a warning and does not stop startup. |
-| `off` | Skip the check. For apps that leave routes without a rule on purpose and rely on [Unmatched Routes Behavior](#unmatched-routes-behavior). |
+| `warn` (default) | Log each mismatch as an error and keep starting. Under `defaultPolicy: deny`, uncovered and partly covered routes are logged as warnings. |
+| `fail` | Log each mismatch, release what startup opened, and exit with status 1. A dead public rule is only a warning and does not stop startup. Under `defaultPolicy: deny`, only a dead rule stops startup. |
+| `off` | Skip the check. For apps that leave routes without a rule on purpose and rely on [Unmatched Routes Behavior](#unmatched-routes-behavior). `off` skips only the check; `defaultPolicy: deny` is still enforced. |
 
 Any other value is logged as an error and treated as `warn`.
 
@@ -855,8 +971,14 @@ Or use role inheritance to avoid duplication:
 - Review role permissions - ensure `roles[].permissions` includes the required permission
 - Enable debug logging - check debug logs for authorization decisions
 
+**Every caller gets 403 (or 401) on one route, under `defaultPolicy: deny`**
+- No rule covers that route or method, so it is refused. Check the startup logs for a warning that
+  names the route (unless `GOFR_RBAC_ROUTE_CHECK=off`), then add a rule for it, with `"public": true` if it should be open
+- A method the app serves but no rule lists (a rule for `GET`, a request with `DELETE`) is refused too
+
 **Permission always allowed**
-- Check if endpoint is in RBAC config - routes not in config are allowed to proceed
+- Check if endpoint is in RBAC config - routes not in config are allowed to proceed (under the default
+  `defaultPolicy: allow`; set `deny` to refuse them, see [Default Policy](#default-policy))
 - Check public endpoints - verify endpoint is not marked as `public: true`
 - Review endpoint configuration - ensure `endpoints[].requiredPermissions` is set correctly
 - Verify permission check - check logs to see if permission check is being performed
@@ -890,7 +1012,8 @@ Or use role inheritance to avoid duplication:
   not cover the others on that path
 - Check the startup logs for `invalid mux pattern` — a pattern whose constraint is not valid regex
   loads but never matches, leaving that endpoint unenforced
-- Remember: Routes not in RBAC config are allowed to proceed (not blocked)
+- Remember: Routes not in RBAC config are allowed to proceed (not blocked) under the default
+  `defaultPolicy: allow`; under `deny` they are refused
 
 **The wrong permission is being required on a path two entries match**
 - The more specific pattern governs — see [Rule Resolution](#rule-resolution)
@@ -910,6 +1033,10 @@ The middleware automatically handles all authorization - you just define routes 
 ### Unmatched Routes Behavior
 
 **Important**: RBAC only enforces authorization for endpoints that are **explicitly configured** in the RBAC config file.
+
+This is the behavior under the default, `defaultPolicy: allow`. With [`defaultPolicy: deny`](#default-policy),
+a request no rule matches is refused with `401` or `403` instead, except for `404` and `405` answers,
+CORS preflights and GoFr's own routes.
 
 - ✅ **Routes in RBAC config**: Authorization is enforced (requires valid role and permissions)
 - ✅ **Routes NOT in RBAC config**: Requests are allowed to proceed to normal route matching
@@ -939,7 +1066,7 @@ At startup, the app in this example logs an error for `POST /api/users` and `GET
 they are registered but covered by no rule (see [Startup Route Check](#startup-route-check)).
 Give every registered route a rule, and a route meant to be open one with `"public": true`.
 The runtime behavior above still applies to a request no rule matches, for example one to a route
-the check reported as only partly covered, or to any route when `GOFR_RBAC_ROUTE_CHECK=off`.
+the check reported as only partly covered, or, under `defaultPolicy: allow`, to any route when `GOFR_RBAC_ROUTE_CHECK=off`.
 
 ## Security and Privacy
 
