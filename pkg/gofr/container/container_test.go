@@ -588,6 +588,8 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_go_sys",
 		"app_sql_open_connections",
 		"app_sql_inUse_connections",
+		"app_redis_open_connections",
+		"app_redis_idle_connections",
 	}
 	for _, gauge := range gauges {
 		mockMetrics.EXPECT().NewGauge(gauge, gomock.Any()).Times(1)
@@ -603,6 +605,10 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 		"app_http_retry_count",
 		"app_http_retry_budget_exhausted_total",
 		"app_circuit_open_count",
+		"app_redis_pool_hits_total",
+		"app_redis_pool_misses_total",
+		"app_redis_pool_timeouts_total",
+		"app_redis_pool_stale_conns_total",
 	}
 	for _, counter := range counters {
 		mockMetrics.EXPECT().NewCounter(counter, gomock.Any()).Times(1)
@@ -806,6 +812,10 @@ func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 		"app_pubsub_publish_success_count",
 		"app_pubsub_subscribe_total_count",
 		"app_pubsub_subscribe_success_count",
+		"app_redis_pool_hits_total",
+		"app_redis_pool_misses_total",
+		"app_redis_pool_timeouts_total",
+		"app_redis_pool_stale_conns_total",
 	}
 	for _, name := range counters {
 		m.IncrementCounter(ctx, name)
@@ -832,6 +842,8 @@ func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
 		"app_http_circuit_breaker_state",
 		"app_sql_open_connections",
 		"app_sql_inUse_connections",
+		"app_redis_open_connections",
+		"app_redis_idle_connections",
 	}
 	for _, name := range gauges {
 		m.SetGauge(name, 0)
@@ -902,10 +914,17 @@ func frameworkMetricContract() map[string]metricContract {
 		"app_sql_stats":                         {"Response time of SQL queries in milliseconds.", "histogram"},
 		"app_sql_open_connections":              {"Number of open SQL connections.", "gauge"},
 		"app_sql_inUse_connections":             {"Number of inUse SQL connections.", "gauge"},
-		"app_pubsub_publish_total_count":        {"Number of total publish operations.", "counter"},
-		"app_pubsub_publish_success_count":      {"Number of successful publish operations.", "counter"},
-		"app_pubsub_subscribe_total_count":      {"Number of total subscribe operations.", "counter"},
-		"app_pubsub_subscribe_success_count":    {"Number of successful subscribe operations.", "counter"},
+		"app_redis_pool_hits_total":             {"Number of times a free connection was found in the Redis pool.", "counter"},
+		"app_redis_pool_misses_total": {
+			"Number of times no free connection was found in the Redis pool, so a new one was dialed.", "counter"},
+		"app_redis_pool_timeouts_total":      {"Number of times waiting for a Redis pool connection timed out.", "counter"},
+		"app_redis_pool_stale_conns_total":   {"Number of stale connections removed from the Redis pool.", "counter"},
+		"app_redis_open_connections":         {"Number of connections in the Redis pool.", "gauge"},
+		"app_redis_idle_connections":         {"Number of idle connections in the Redis pool.", "gauge"},
+		"app_pubsub_publish_total_count":     {"Number of total publish operations.", "counter"},
+		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
+		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
+		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
 	}
 }
 
