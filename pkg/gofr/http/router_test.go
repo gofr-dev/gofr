@@ -1280,7 +1280,8 @@ func Test_Router_AllowedMethods_DoesNotScanEveryRoute(t *testing.T) {
 			assert.Zero(t, calls.Load(), "an unregistered path must not match any route")
 
 			wrongMethod := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/route-7", http.NoBody)
-			assert.Equal(t, []string{http.MethodGet, http.MethodHead}, r.AllowedMethods(wrongMethod))
+			// These routes bypass Router.Add and explicitly accept GET only.
+			assert.Equal(t, []string{http.MethodGet}, r.AllowedMethods(wrongMethod))
 			assert.EqualValues(t, 1, calls.Load(), "only the route registered at the path is matched")
 		})
 	}
