@@ -141,10 +141,11 @@ func TestSettings_PostgresDSN_Escaping(t *testing.T) {
 }
 
 func TestSettings_ConnectorOptions(t *testing.T) {
-	// IAM auth plus exactly one IP-type dial option, for every IP type.
+	// IAM auth, exactly one IP-type dial option, and the explicit WithBuiltInMetrics(false) that
+	// keeps cloudsqlconn v1.26.0's default-on built-in metrics turned off, for every IP type.
 	for _, ip := range []string{ipTypePublic, ipTypePrivate, ipTypePSC, ""} {
 		s := settings{ipType: normalizeIPType(ip)}
-		assert.Len(t, s.connectorOptions(), 2, "ip=%q", ip)
+		assert.Len(t, s.connectorOptions(), 3, "ip=%q", ip)
 	}
 }
 
