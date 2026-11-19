@@ -299,7 +299,11 @@ func getPublicKeyFunc(provider PublicKeyProvider) (func(token *jwt.Token) (any, 
 	}
 
 	return func(token *jwt.Token) (any, error) {
-		kid, _ := token.Header["kid"].(string)
+		var kid string
+		if v := token.Header["kid"]; v != nil {
+			kid = fmt.Sprint(v)
+		}
+
 		jwks := provider.Get(kid)
 
 		if jwks == nil {

@@ -305,7 +305,12 @@ func Test_getPublicKeyFunc(t *testing.T) {
 	}{
 		{err: errEmptyProvider},
 		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}, token: &jwt.Token{}},
-		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}, token: &jwt.Token{Header: map[string]any{"kid": "test-key-id"}}},
+		{
+			provider: emptyPublicKeyProvider{},
+			response: nil,
+			funcErr:  JWKNotFound{},
+			token:    &jwt.Token{Header: map[string]any{"kid": "test-key-id"}},
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -467,19 +472,53 @@ func TestOAuth_TokenWithoutKid(t *testing.T) {
 		}
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256,
-		jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()}).
-		SignedString(key)
-	require.NoError(t, err)
+	signTokenWithKid := func(kid any) string {
+		tkn := jwt.NewWithClaims(jwt.SigningMethodRS256,
+			jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()})
+		if kid != nil {
+			tkn.Header["kid"] = kid
+		}
+		str, sErr := tkn.SignedString(key)
+		require.NoError(t, sErr)
+		return str
+	}
 
 	tests := []struct {
 		desc    string
+		token   string
 		jwks    []JSONWebKey
 		expCode int
 	}{
-		{desc: "single key without kid", jwks: []JSONWebKey{jwk("")}, expCode: http.StatusOK},
-		{desc: "single key with kid", jwks: []JSONWebKey{jwk("k1")}, expCode: http.StatusOK},
-		{desc: "two keys with kids", jwks: []JSONWebKey{jwk("k1"), jwk("k2")}, expCode: http.StatusUnauthorized},
+		{
+			desc:    "single key without kid",
+			token:   signTokenWithKid(nil),
+			jwks:    []JSONWebKey{jwk("")},
+			expCode: http.StatusOK,
+		},
+		{
+			desc:    "single key with kid",
+			token:   signTokenWithKid(nil),
+			jwks:    []JSONWebKey{jwk("k1")},
+			expCode: http.StatusOK,
+		},
+		{
+			desc:    "two keys with kids",
+			token:   signTokenWithKid(nil),
+			jwks:    []JSONWebKey{jwk("k1"), jwk("k2")},
+			expCode: http.StatusUnauthorized,
+		},
+		{
+			desc:    "non-string integer kid matches string key",
+			token:   signTokenWithKid(123),
+			jwks:    []JSONWebKey{jwk("123"), jwk("other")},
+			expCode: http.StatusOK,
+		},
+		{
+			desc:    "array kid fails against single-key JWKS",
+			token:   signTokenWithKid([]string{"k1"}),
+			jwks:    []JSONWebKey{jwk("k1")},
+			expCode: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tc := range tests {
@@ -490,7 +529,7 @@ func TestOAuth_TokenWithoutKid(t *testing.T) {
 			}))
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Authorization", "Bearer "+tc.token)
 
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)

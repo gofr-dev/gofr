@@ -67,7 +67,10 @@ func validateOAuth(ctx context.Context, key auth.PublicKeyProvider, regex *regex
 	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		kid, _ := token.Header["kid"].(string)
+		var kid string
+		if v := token.Header["kid"]; v != nil {
+			kid = fmt.Sprint(v)
+		}
 
 		jwks := key.Get(kid)
 		if jwks == nil {
