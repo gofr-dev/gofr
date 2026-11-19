@@ -2424,6 +2424,7 @@ func Test_HTTPHEAD_RBACPolicy(t *testing.T) {
 				app.httpServer.router.ServeHTTP(rec, req)
 
 				assert.Equal(t, tc.status, rec.Code)
+
 				if tc.status == http.StatusOK {
 					assert.Equal(t, "GET", rec.Header().Get("X-Handler"))
 				} else {

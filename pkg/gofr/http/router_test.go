@@ -143,6 +143,7 @@ func TestRouter_HEADExistingRoutes(t *testing.T) {
 			router.UseMiddleware(func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					calls++
+
 					w.Header().Set("X-Method", r.Method)
 					w.Header().Set("X-Route", RouteTemplate(r))
 
