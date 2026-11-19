@@ -262,6 +262,37 @@ func Test_getPublicKeys(t *testing.T) {
 	}
 }
 
+type failingBody struct {
+	closed bool
+}
+
+func (*failingBody) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func (b *failingBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+type failingJWKSProvider struct {
+	body *failingBody
+}
+
+func (p failingJWKSProvider) GetWithHeaders(_ context.Context, _ string, _ map[string]any,
+	_ map[string]string) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: p.body}, nil
+}
+
+func Test_getPublicKeys_ClosesBodyOnReadError(t *testing.T) {
+	body := &failingBody{}
+
+	_, err := getPublicKeys(t.Context(), failingJWKSProvider{body: body}, "/jwks")
+
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.True(t, body.closed, "the response body must be closed when reading it fails")
+}
+
 func TestPublicKeys_updateKeys(t *testing.T) {
 	testCases := []struct {
 		keys          map[string]*rsa.PublicKey
