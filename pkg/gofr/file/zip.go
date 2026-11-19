@@ -12,11 +12,13 @@ import (
 )
 
 const (
-	maxFileSize = 100 * 1024 * 1024 // 100MB
+	maxFileSize  = 100 * 1024 * 1024 // 100MB
+	maxTotalSize = 100 * 1024 * 1024 // 100MB, for all files in the zip together
 )
 
 var (
 	errMaxFileSize   = errors.New("uncompressed file is greater than file size limit of 100MBs")
+	errMaxTotalSize  = errors.New("uncompressed zip content is greater than total size limit of 100MBs")
 	errPathTraversal = errors.New("path traversal attempt detected")
 )
 
@@ -34,6 +36,8 @@ func NewZip(content []byte) (*Zip, error) {
 	// Create a map to store file contents
 	files := make(map[string]file)
 
+	var totalSize int
+
 	for _, zrf := range zipReader.File {
 		// Validate file name to prevent path traversal attacks at ZIP parse time. Reject entries with absolute paths or path traversal sequences
 		cleanName := filepath.Clean(zrf.Name)
@@ -49,6 +53,14 @@ func NewZip(content []byte) (*Zip, error) {
 		buf, err := copyToBuffer(f, zrf.UncompressedSize64)
 		if err != nil {
 			return nil, err
+		}
+
+		// check that all unzipped files together stay within the limit, so many small entries can't add up to gigabytes
+		totalSize += buf.Len()
+		if totalSize > maxTotalSize {
+			f.Close()
+
+			return nil, errMaxTotalSize
 		}
 
 		files[cleanName] = file{
