@@ -39,6 +39,11 @@ const configTrue = "true"
 const pubsubBackendsLinked = true
 
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
+	return mqtt.New(c.mqttConfigFromEnv(conf), c.Logger, c.metricsManager)
+}
+
+// mqttConfigFromEnv builds the MQTT config from the MQTT_* environment variables.
+func (c *Container) mqttConfigFromEnv(conf config.Config) *mqtt.Config {
 	var qos byte
 
 	port, err := strconv.Atoi(conf.GetOrDefault("MQTT_PORT", "0"))
@@ -47,6 +52,8 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	}
 
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+
+	publishRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_PUBLISH_RETAINED", "false"))
 
 	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
 
@@ -66,7 +73,7 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 		qos = 0
 	}
 
-	configs := &mqtt.Config{
+	return &mqtt.Config{
 		Protocol:         conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
 		Hostname:         conf.Get("MQTT_HOST"),
 		Port:             port,
@@ -75,12 +82,11 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 		ClientID:         conf.Get("MQTT_CLIENT_ID_SUFFIX"),
 		QoS:              qos,
 		Order:            order,
+		PublishRetained:  publishRetained,
 		RetrieveRetained: retrieveRetained,
 		KeepAlive:        keepAlive,
 		CloseTimeout:     0 * time.Millisecond,
 	}
-
-	return mqtt.New(configs, c.Logger, c.metricsManager)
 }
 
 func (c *Container) createKafkaPubSub(conf config.Config) {
