@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -92,6 +94,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !isWebSocket && h.requestTimeout == 0 {
+		defer h.removeMultipartFiles(r)
+
 		result, err = h.serveInline(c, spanCtx)
 	} else {
 		result, err = h.serveWithGoroutine(c, spanCtx, r)
@@ -194,6 +198,10 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	watchCtx := c.Context
 
 	go func() {
+		// The handler may outlive the request timeout and still read its upload, so its temporary files are
+		// removed here, once it returns or panics, rather than when ServeHTTP returns.
+		defer h.removeMultipartFiles(r)
+
 		defer func() {
 			panicRecoveryHandler(recover(), h.container.Logger, panicked)
 		}()
@@ -226,6 +234,20 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 	return result, err
 }
 
+// removeMultipartFiles deletes the temporary files that binding a multipart form spooled to disk, the parts above
+// its in-memory limit. net/http does this only for the request it passed to the server's handler, and the request
+// GoFr's handler sees is a derived copy (the tracer's WithContext, the router's path variables), so without this
+// every large upload would leave its file in the temp directory until the process exits.
+func (h handler) removeMultipartFiles(r *http.Request) {
+	if r.MultipartForm == nil {
+		return
+	}
+
+	if err := r.MultipartForm.RemoveAll(); err != nil {
+		h.container.Logger.Errorf("failed to remove the temporary files of a multipart upload: %v", err)
+	}
+}
+
 func liveHandler(*Context) (any, error) {
 	return struct {
 		Status string `json:"status"`
@@ -246,6 +268,49 @@ func faviconHandler(*Context) (any, error) {
 
 func catchAllHandler(*Context) (any, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
+}
+
+func methodNotAllowedHandler(*Context) (any, error) {
+	return nil, gofrHTTP.ErrorMethodNotAllowed{}
+}
+
+// catchAll answers every request no registered route matched: 405 when the path is registered for
+// other methods, 404 when it is not registered at all.
+//
+// It is installed as a real PathPrefix("/") route rather than as mux's NotFoundHandler and
+// MethodNotAllowedHandler because mux applies the middleware chain only to a matched route
+// (gorilla/mux mux.go, guarded by MatchErr == nil). Served from those two fields, a 404 or 405
+// skips Tracer, Logging, Metrics and CORS — the CORS preflight to a GET-only path is answered 405
+// with no CORS headers, and every unknown path disappears from logs and metrics. As a route it
+// always matches, mux clears the method mismatch left by the routes before it (route.go, the else
+// arm of the matcher loop), and the whole chain runs.
+func (a *App) catchAll() http.Handler {
+	router := a.httpServer.router
+	notFound := handler{function: catchAllHandler, container: a.container}
+	methodNotAllowed := handler{function: methodNotAllowedHandler, container: a.container}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods := router.AllowedMethods(r)
+		if len(methods) == 0 {
+			notFound.ServeHTTP(w, r)
+
+			return
+		}
+
+		// OPTIONS is listed because the CORS middleware answers it for every path before any route
+		// handler runs, so the resource does support it; RFC 9110 §10.2.1 has Allow list exactly that.
+		// A route registered for OPTIONS on the router itself has already put it in the list.
+		if !slices.Contains(methods, http.MethodOptions) {
+			methods = append(methods, http.MethodOptions)
+		}
+
+		// Sort after adding OPTIONS so the header is fully ordered, not "registered methods first,
+		// OPTIONS last". RFC 9110 treats Allow as an unordered set, so order is for readability only.
+		slices.Sort(methods)
+
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		methodNotAllowed.ServeHTTP(w, r)
+	})
 }
 
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {

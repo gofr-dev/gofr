@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -527,6 +528,60 @@ func TestContainer_Health_RecoversAfterHungBackendAnswers(t *testing.T) {
 		"health never recovered after the hung backend answered — the round claim leaked")
 }
 
+// probeGoroutinePatterns returns the function names the health probe's goroutines carry on their
+// stacks. One timed-out probe leaves one goroutine of each kind behind: the abandoned check, the
+// waiter and the release of the round claim.
+func probeGoroutinePatterns() []string {
+	return []string{
+		"container.runCheck.func",
+		"container.waitForChecks.func",
+		"container.(*Container).runHealthChecks.func",
+	}
+}
+
+// probeGoroutines counts the goroutines the health probe started, per pattern in
+// probeGoroutinePatterns(), found by the probe's functions on their stacks. runtime.NumGoroutine counts
+// the whole process, which also holds whatever earlier tests left running — a Redis, SQL or MQTT
+// retry loop that completes a connection mid-test adds the client's reader, writer and keepalive
+// goroutines to the total.
+func probeGoroutines() map[string]int {
+	buf := make([]byte, 1<<20)
+
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+
+			break
+		}
+
+		buf = make([]byte, 2*len(buf))
+	}
+
+	patterns := probeGoroutinePatterns()
+	counts := make(map[string]int, len(patterns))
+
+	for _, stack := range strings.Split(string(buf), "\n\n") {
+		for _, pattern := range patterns {
+			if strings.Contains(stack, pattern) {
+				counts[pattern]++
+			}
+		}
+	}
+
+	return counts
+}
+
+func sumGoroutines(counts map[string]int) int {
+	total := 0
+
+	for _, n := range counts {
+		total += n
+	}
+
+	return total
+}
+
 // The point of the in-flight guard is that goroutines do not accumulate. Counting them directly is
 // the only assertion that actually proves it: the round count could stay at one while each timed-out
 // round still left a waiter behind.
@@ -561,7 +616,15 @@ func TestContainer_Health_TimeoutsDoNotAccumulateGoroutines(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	baseline := runtime.NumGoroutine()
+	baseline := probeGoroutines()
+
+	// The first timed-out probe keeps an abandoned check, a waiter and a release goroutine, so a
+	// pattern with zero here no longer matches the probe's functions and would pass vacuously. Every
+	// pattern is checked, not the total, so one stale pattern cannot hide behind the others.
+	for _, pattern := range probeGoroutinePatterns() {
+		require.Positive(t, baseline[pattern],
+			"probeGoroutines found no goroutine matching %q in the baseline; was it renamed?", pattern)
+	}
 
 	for range 25 {
 		_ = c.Health(t.Context())
@@ -569,12 +632,15 @@ func TestContainer_Health_TimeoutsDoNotAccumulateGoroutines(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	growth := runtime.NumGoroutine() - baseline
+	baselineTotal := sumGoroutines(baseline)
+	growth := sumGoroutines(probeGoroutines()) - baselineTotal
 
 	// Without the guard each probe leaves behind its own check plus a waiter, so 25 probes grow
-	// the count by roughly 50. A couple of goroutines of slack absorbs the runtime's own churn.
+	// the count by roughly 50. Only the probe's own goroutines are counted, so a connection another
+	// test's retry loop happens to complete meanwhile cannot move the number; a couple of goroutines
+	// of slack absorbs the rest.
 	assert.LessOrEqual(t, growth, 5,
 		"25 timed-out probes grew the goroutine count by %d; rounds are accumulating", growth)
 
-	t.Logf("25 timed-out probes: goroutine growth %d (baseline %d)", growth, baseline)
+	t.Logf("25 timed-out probes: goroutine growth %d (baseline %d)", growth, baselineTotal)
 }

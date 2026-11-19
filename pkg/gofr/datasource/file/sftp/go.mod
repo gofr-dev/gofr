@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/file/sftp
 go 1.26.0
 
 require (
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.12
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.62.0
@@ -16,5 +16,5 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sys v0.49.0 // indirect
-	google.golang.org/api v0.302.0 // indirect
+	google.golang.org/api v0.311.0 // indirect
 )
