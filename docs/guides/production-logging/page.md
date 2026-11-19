@@ -24,7 +24,7 @@ GoFr's logger writes JSON when the output is not a terminal (verified in `pkg/go
 | `trace_id`    | W3C trace ID, `omitempty` — present only when the call site supplies a trace context |
 | `gofrVersion` | Framework version baked into the binary     |
 
-For HTTP request logs (emitted by the request-logging middleware), the value of `message` is itself a structured `RequestLog` object with the fields `trace_id`, `span_id`, `start_time`, `response_time`, `method`, `user_agent`, `ip`, `uri`, and `response`. So on a request log line you will see `trace_id` both at the top level and nested inside `message` — by design: the top-level field is for log aggregators, the nested copy is part of the request record.
+For HTTP request logs (emitted by the request-logging middleware), the value of `message` is itself a structured `RequestLog` object with the fields `trace_id`, `span_id`, `start_time`, `response_time`, `response_time_unit` (value `µs`, the unit of `response_time`), `method`, `user_agent`, `ip`, `uri`, and `response`. So on a request log line you will see `trace_id` both at the top level and nested inside `message` — by design: the top-level field is for log aggregators, the nested copy is part of the request record.
 
 A typical container log stream therefore looks like:
 
