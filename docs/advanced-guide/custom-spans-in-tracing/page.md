@@ -43,6 +43,46 @@ The defer statement ensures that the span is closed even if an error occurs to e
 
 > ##### Check out the example of creating a custom span in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/main.go#L58)
 
+## Using the context from another goroutine
+
+`Trace()` makes the new span the parent of everything that follows, by replacing the context held by `c`.
+Because it changes `c`, call it only from the goroutine that runs the handler. Calling it from a goroutine
+the handler started, while the handler keeps using `c`, is a data race.
+
+From another goroutine, use `WithContext`. It returns a new `*gofr.Context` that carries the given context,
+and leaves `c` unchanged. Its logs carry the trace ID of that context:
+
+```go
+import (
+	"sync"
+
+	"go.opentelemetry.io/otel"
+)
+
+func MyHandler(c *gofr.Context) (any, error) {
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		spanCtx, span := otel.Tracer("my-service").Start(c, "parallel-work")
+		defer span.End()
+
+		pc := c.WithContext(spanCtx)
+
+		pc.Info("working in parallel") // logged with the parallel-work span's trace ID
+		// pass pc (not c) to datasource calls made on this goroutine
+	})
+
+	// ... the handler keeps using c here ...
+
+	wg.Wait()
+
+	return nil, nil
+}
+```
+
+The copy shares the request, the container and the response with `c`, so use it only while the request is still
+being handled.
+
 ## Related production guides
 
 - **Production Tracing**: [Configure OpenTelemetry exporters and samplers](/docs/guides/production-tracing) — wire your custom spans into a real OTLP collector.

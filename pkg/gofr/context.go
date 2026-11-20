@@ -60,6 +60,10 @@ We can write this at the start of function and because of how defer works, trace
 but End will be called after function ends.
 
 Developer Note: If you chain methods in a defer statement, everything except the last function will be evaluated at call time.
+
+Trace replaces c's context with the span's, so spans and logs that follow are children of it. Because it
+changes c, call it only from the goroutine running the handler. From any other goroutine, start the span
+from c without assigning it back, and use [Context.WithContext] to get a Context for that goroutine.
 */
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
@@ -71,6 +75,26 @@ func (c *Context) Trace(name string) trace.Span {
 	c.Context = ctx
 
 	return span
+}
+
+// WithContext returns a copy of c that carries ctx, leaving c unchanged, so it is safe to call
+// while another goroutine uses c. The copy's logs carry ctx's trace ID, matching its GetCorrelationID.
+//
+// The copy shares the request, the response and the container with c, so use it only while the
+// request is being handled.
+func (c *Context) WithContext(ctx context.Context) *Context {
+	cp := *c
+	cp.Context = ctx
+
+	// A hand-built Context has no ContextLogger and builds one from its own context on each log
+	// call (see logger), so the copy does the same. Otherwise rebuild it for ctx's trace ID.
+	if c.ContextLogger != (logging.ContextLogger{}) && c.Container != nil && c.Container.Logger != nil {
+		cp.ContextLogger = logging.ContextLoggerFor(ctx, c.Container.Logger)
+	} else {
+		cp.ContextLogger = logging.ContextLogger{}
+	}
+
+	return &cp
 }
 
 func (c *Context) Bind(i any) error {

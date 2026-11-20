@@ -3,10 +3,12 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -377,6 +379,121 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		expected := "00000000000000000000000000000000"
 		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
 	})
+}
+
+// logTraceIDs returns the trace_id of every JSON log line in out whose message contains needle.
+func logTraceIDs(t *testing.T, out, needle string) []any {
+	t.Helper()
+
+	var ids []any
+
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		var entry map[string]any
+
+		require.NoError(t, json.Unmarshal([]byte(line), &entry), "log line is not JSON: %q", line)
+
+		if strings.Contains(fmt.Sprint(entry["message"]), needle) {
+			ids = append(ids, entry["trace_id"])
+		}
+	}
+
+	return ids
+}
+
+// Issue #3823: WithContext derives a Context for another context without touching the receiver,
+// and the derived Context's logs and correlation ID follow the new context's trace.
+func TestContext_WithContext(t *testing.T) {
+	tp := trace.NewTracerProvider()
+	tr := tp.Tracer("test")
+
+	reqCtx, reqSpan := tr.Start(t.Context(), "request")
+	defer reqSpan.End()
+
+	var (
+		c, derived           *Context
+		newCtx               context.Context
+		reqTraceID, newTrace string
+	)
+
+	out := testutil.StdoutOutputForFunc(func() {
+		cntnr := &container.Container{Logger: logging.NewLogger(logging.INFO)}
+		req := httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/x", http.NoBody)
+
+		c = newContext(nil, gofrHTTP.NewRequest(req), cntnr)
+
+		// A span with a fresh root, so its trace ID differs from the request's.
+		var span oteltrace.Span
+
+		newCtx, span = tr.Start(context.Background(), "other-trace")
+		defer span.End()
+
+		derived = c.WithContext(newCtx)
+
+		derived.Info("from derived")
+		c.Info("from receiver")
+	})
+
+	reqTraceID = reqSpan.SpanContext().TraceID().String()
+	newTrace = oteltrace.SpanFromContext(newCtx).SpanContext().TraceID().String()
+	require.NotEqual(t, reqTraceID, newTrace)
+
+	require.NotSame(t, c, derived, "WithContext must return a new Context")
+	assert.Equal(t, reqCtx, c.Context, "the receiver's context must not change")
+	assert.Equal(t, newCtx, derived.Context)
+
+	assert.Equal(t, reqTraceID, c.GetCorrelationID())
+	assert.Equal(t, newTrace, derived.GetCorrelationID())
+
+	assert.Equal(t, []any{newTrace}, logTraceIDs(t, out, "from derived"), "derived logs carry the new trace ID")
+	assert.Equal(t, []any{reqTraceID}, logTraceIDs(t, out, "from receiver"), "receiver logs keep the request's trace ID")
+
+	assert.Equal(t, c.Request, derived.Request, "the request is shared")
+	assert.Same(t, c.Container, derived.Container, "the container is shared")
+}
+
+// A Context built as a struct literal has no ContextLogger; the derived one falls back the same way,
+// using the new context's trace ID.
+func TestContext_WithContext_HandBuiltContext(t *testing.T) {
+	tr := trace.NewTracerProvider().Tracer("test")
+
+	newCtx, span := tr.Start(context.Background(), "other-trace")
+	defer span.End()
+
+	out := testutil.StdoutOutputForFunc(func() {
+		c := &Context{Context: t.Context(), Container: &container.Container{Logger: logging.NewLogger(logging.INFO)}}
+
+		c.WithContext(newCtx).Info("hand-built derived")
+	})
+
+	assert.Equal(t, []any{span.SpanContext().TraceID().String()}, logTraceIDs(t, out, "hand-built derived"))
+}
+
+// Issue #3823: the shape of a generated stream wrapper. A goroutine started by the handler traces
+// each message while the handler waits on ctx.Done(). With Trace() that is a data race on c.Context;
+// with WithContext it is not. Only meaningful under -race (CI does not run -race).
+func TestContext_WithContext_ConcurrentWithHandler(t *testing.T) {
+	tr := trace.NewTracerProvider().Tracer("test")
+
+	reqCtx, cancel := context.WithCancel(t.Context())
+	c := &Context{Context: reqCtx, Container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}}
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		defer cancel()
+
+		for range 100 {
+			spanCtx, span := tr.Start(c, "Recv")
+			_ = c.WithContext(spanCtx)
+
+			span.End()
+		}
+	})
+
+	<-c.Done()
+	wg.Wait()
+
+	assert.Equal(t, reqCtx, c.Context)
 }
 
 // BenchmarkContext_New measures the cost of constructing a fresh
