@@ -215,15 +215,17 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 // extractionWarnings holds the one-shot guards for the warnings reportExtractionFailure can raise, so
 // each is logged once per Config however many requests hit it.
 type extractionWarnings struct {
-	callOrder  sync.Once
-	unreadable sync.Once
+	callOrder        sync.Once
+	unreadable       sync.Once
+	extractorTimeout sync.Once
 }
 
 // extractionFailure is why a role or permissions could not be read. Its Error is the bare sentinel
 // (ErrRoleNotFound or ErrAccessDenied) a custom ErrorHandler has always received; reason and cause
-// feed the metric label and the logs and never reach the client or the handler.
+// feed the metric label and the logs and never reach the client or the handler. In extractor mode the
+// sentinel is the extractor's own error, or a 503 error wrapping the context's on a timeout.
 type extractionFailure struct {
-	sentinel error  // ErrRoleNotFound (401) or ErrAccessDenied (403)
+	sentinel error  // ErrRoleNotFound (401), ErrAccessDenied (403), or the extractor's error
 	cause    error  // what went wrong, for logs; may be nil
 	reason   string // the reason label on the extraction failures metric
 }
@@ -258,6 +260,15 @@ func reportExtractionFailure(r *http.Request, config *Config, err error, warning
 	}
 
 	switch {
+	case f.reason == reasonExtractorError:
+		// Logged for every request, unlike the warnings: the cause can change from one request to the
+		// next. It goes to the log only, never the response.
+		config.Logger.Errorf("RBAC: extractor failed, request denied (trace %s): %v",
+			trace.SpanFromContext(r.Context()).SpanContext().TraceID(), f.cause)
+	case f.reason == reasonExtractorTimeout:
+		warnings.extractorTimeout.Do(func() {
+			config.Logger.Warnf("RBAC: extractor did not return within %s; request denied with 503", config.extractorTimeout)
+		})
 	case f.reason == reasonUnreadableClaim:
 		warnings.unreadable.Do(func() {
 			_, path := config.mode()
@@ -316,6 +327,16 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, d *
 		return
 	}
 
+	// An extractor's error can choose its status, if that status is an error. Only the status text is
+	// sent, so the error's own message never reaches the client.
+	var sc gofrHTTP.StatusCodeResponder
+	if errors.As(d.err, &sc) && sc.StatusCode() >= http.StatusBadRequest {
+		code := sc.StatusCode()
+		http.Error(w, http.StatusText(code), code)
+
+		return
+	}
+
 	// Default error handling. A 401 means no usable credential was presented; a 403 means it was, but
 	// holds nothing that grants access. Only the status codes follow RFC 6750 §3.1; no WWW-Authenticate
 	// header is set.
@@ -329,13 +350,16 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, d *
 }
 
 // extractHeld extracts what the request holds for authorization.
-// Supports permissions-mode extraction (via PermissionsClaimPath), role extraction from JWT claims
-// (via JWTClaimPath), or header-based role extraction (via RoleHeader), in that order of precedence.
+// Supports the application's extractor (via LoadPermissionsWithExtractor), permissions-mode extraction (via
+// PermissionsClaimPath), role extraction from JWT claims (via JWTClaimPath), or header-based role
+// extraction (via RoleHeader), in that order of precedence.
 // When a JWT claim path is set the header is never consulted, even if JWT extraction fails.
 // No default role is supported - role must be explicitly provided.
 // A failure is an *extractionFailure.
 func extractHeld(r *http.Request, config *Config) (held, error) {
 	switch mode, _ := config.mode(); mode {
+	case modeExtractor:
+		return extractHeldFromExtractor(r, config)
 	case modePermissions, modeRoles:
 		return extractHeldFromJWT(r, config)
 	case modeHeader:

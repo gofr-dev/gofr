@@ -1,0 +1,7 @@
+{
+  "endpoints": [
+    { "path": "/status", "methods": ["GET"], "public": true },
+    { "path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"] },
+    { "path": "/orders", "methods": ["POST"], "requiredPermissions": ["orders:write"] }
+  ]
+}
