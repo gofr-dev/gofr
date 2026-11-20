@@ -107,6 +107,12 @@ func (m *MockLogger) Infof(format string, args ...any) {
 	m.ctrl.Call(m, "Infof", varargs...)
 }
 
+func (mr *MockLoggerMockRecorder) Infof(format any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{format}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Infof", reflect.TypeOf((*MockLogger)(nil).Infof), varargs...)
+}
+
 func (mr *MockLoggerMockRecorder) Error(args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Error", reflect.TypeOf((*MockLogger)(nil).Error), args...)
