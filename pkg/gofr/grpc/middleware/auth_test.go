@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -460,4 +461,38 @@ func TestAuthStreamInterceptors(t *testing.T) {
 			assert.Equal(t, tc.expValue, gotValue)
 		})
 	}
+}
+
+// kidRecordingProvider returns key only for the kid it is asked with, so a test sees which kid the interceptor used.
+type kidRecordingProvider struct {
+	kid string
+	key *rsa.PublicKey
+}
+
+func (p kidRecordingProvider) Get(kid string) *rsa.PublicKey {
+	if kid != p.kid {
+		return nil
+	}
+
+	return p.key
+}
+
+func TestOAuthUnaryInterceptor_TokenWithoutKid(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256,
+		jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()}).
+		SignedString(key)
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{"Bearer " + token}})
+
+	// A missing kid header must be looked up as "", not as fmt.Sprint(nil).
+	interceptor := OAuthUnaryInterceptor(kidRecordingProvider{kid: "", key: &key.PublicKey})
+
+	resp, err := interceptor(ctx, nil, nil, func(context.Context, any) (any, error) { return "ok", nil })
+
+	require.NoError(t, err)
+	require.Equal(t, "ok", resp)
 }
