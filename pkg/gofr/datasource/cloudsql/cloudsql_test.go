@@ -129,15 +129,34 @@ func TestSettings_PostgresDSN(t *testing.T) {
 // TestSettings_PostgresDSN_Escaping verifies values containing DSN-significant
 // characters are quoted instead of breaking out into additional libpq keywords.
 func TestSettings_PostgresDSN_Escaping(t *testing.T) {
-	s := settings{
-		instanceConnectionName: "proj:us-central1:inst",
-		user:                   "app-sa@proj.iam",
-		database:               "ap p' sslmode=require",
+	testCases := []struct {
+		desc     string
+		database string
+		expOut   string
+	}{
+		{
+			desc:     "space and quote",
+			database: "ap p' sslmode=require",
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p\' sslmode=require' sslmode=disable`,
+		},
+		{
+			desc:     "tab",
+			database: "ap\tdb",
+			expOut:   "host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap\tdb' sslmode=disable",
+		},
 	}
 
-	assert.Equal(t,
-		`host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p\' sslmode=require' sslmode=disable`,
-		s.postgresDSN())
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := settings{
+				instanceConnectionName: "proj:us-central1:inst",
+				user:                   "app-sa@proj.iam",
+				database:               tc.database,
+			}
+
+			assert.Equal(t, tc.expOut, s.postgresDSN())
+		})
+	}
 }
 
 func TestSettings_ConnectorOptions(t *testing.T) {
