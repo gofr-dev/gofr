@@ -1449,6 +1449,61 @@ func TestShutdown_StopsCron(t *testing.T) {
 	}
 }
 
+// Issue #4632: Shutdown cancels a running cron job's context, so a job that honors ctx.Done()
+// ends promptly and Shutdown does not sit out the whole grace period waiting for it.
+func TestShutdown_CancelsRunningCronJob(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	jobErr := make(chan error, 1)
+
+	t.Cleanup(func() { close(release) })
+
+	app.AddCronJob("* * * * * *", "ctx-aware-job", func(ctx *Context) {
+		select {
+		case started <- struct{}{}:
+		default:
+			return // only the first run blocks; later ticks are irrelevant here
+		}
+
+		select {
+		case <-ctx.Done():
+		case <-release:
+		}
+
+		jobErr <- ctx.Err()
+	})
+
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("cron job did not start")
+	}
+
+	const grace = 5 * time.Second
+
+	ctx, cancel := context.WithTimeout(t.Context(), grace)
+	defer cancel()
+
+	begin := time.Now()
+
+	_ = app.Shutdown(ctx)
+
+	elapsed := time.Since(begin)
+
+	select {
+	case err := <-jobErr:
+		require.ErrorIs(t, err, context.Canceled, "the running job must see its context canceled")
+	default:
+		t.Fatal("Shutdown returned while the job was still running: its context was never canceled")
+	}
+
+	assert.Less(t, elapsed, grace/2, "Shutdown waited for the deadline instead of canceling the job")
+}
+
 func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
 		testutil.NewServerConfigs(t)

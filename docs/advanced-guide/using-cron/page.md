@@ -95,4 +95,33 @@ GoFr automatically collects metrics for all registered cron jobs. These metrics 
 
 Each metric is labeled with the `job` (user-defined name) to allow fine-grained filtering and monitoring.
 
+### Shutdown and cancellation
+
+Each run of a cron job gets its own `*gofr.Context`. That context is canceled as soon as the application
+begins shutting down (or when the scheduler is stopped), so `ctx.Done()` fires and `ctx.Err()` returns
+`context.Canceled`. No new runs start after that point.
+
+The application then waits for the jobs that are still running, but only until `SHUTDOWN_GRACE_PERIOD`
+(default `30s`) expires. A job still running after that is left behind, and shutdown carries on without it.
+
+To stop promptly, a long-running job should check `ctx.Done()` between units of work and pass `ctx` to
+datasource and HTTP calls, so those return early too:
+
+```go
+app.AddCronJob("*/5 * * * *", "sync-orders", func(ctx *gofr.Context) {
+	for _, id := range pendingOrderIDs(ctx) {
+		select {
+		case <-ctx.Done():
+			ctx.Logger.Infof("sync-orders stopped early: %v", ctx.Err())
+			return
+		default:
+		}
+
+		syncOrder(ctx, id)
+	}
+})
+```
+
+Logs written through `ctx.Logger` during a run carry the trace ID of that run's span.
+
 > #### Check out the example on how to add cron jobs in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-cron-jobs/main.go)
