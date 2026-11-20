@@ -1,13 +1,19 @@
 package gofr
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -845,6 +851,113 @@ func TestCrontab_Stop(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("done channel is not closed")
 	}
+}
+
+// everySecondJob returns a job that fires on the tick used by runScheduled in these tests.
+func everySecondJob(name string, fn CronFunc) *job {
+	return &job{
+		sec:       map[int]struct{}{1: {}},
+		min:       map[int]struct{}{1: {}},
+		hour:      map[int]struct{}{1: {}},
+		day:       map[int]struct{}{1: {}},
+		month:     map[int]struct{}{1: {}},
+		dayOfWeek: map[int]struct{}{1: {}},
+		name:      name,
+		fn:        fn,
+	}
+}
+
+// Issue #4632: a job's context must be canceled when the scheduler stops, so a job that
+// waits on ctx.Done() ends on Stop instead of holding the join open.
+func TestCrontab_Stop_CancelsInFlightJobContext(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	jobErr := make(chan error, 1)
+
+	// If cancellation is missing the job never sees ctx.Done(); releasing it here keeps a
+	// failing run from leaking a blocked goroutine (and Stop) past the test.
+	t.Cleanup(func() { close(release) })
+
+	c := &Crontab{
+		ticker:    time.NewTicker(time.Second),
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+		done:      make(chan struct{}),
+		jobs: []*job{everySecondJob("ctx-aware-job", func(ctx *Context) {
+			close(started)
+
+			select {
+			case <-ctx.Done():
+			case <-release:
+			}
+
+			jobErr <- ctx.Err()
+		})},
+	}
+
+	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+	<-started
+
+	stopped := make(chan struct{})
+
+	go func() {
+		c.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not return: the running job's context was not canceled")
+	}
+
+	require.ErrorIs(t, <-jobErr, context.Canceled, "the job must observe its context as canceled")
+}
+
+// Issue #4632: the job's logger is built from the job's span context, so every log line of a
+// run carries the same trace ID as ctx.GetCorrelationID().
+func TestCron_JobLoggerCarriesTraceID(t *testing.T) {
+	otel.SetTracerProvider(sdktrace.NewTracerProvider())
+	t.Cleanup(func() { otel.SetTracerProvider(tracenoop.NewTracerProvider()) })
+
+	var correlationID string
+
+	out := testutil.StdoutOutputForFunc(func() {
+		c := &Crontab{
+			ticker:    time.NewTicker(time.Second),
+			container: &container.Container{Logger: logging.NewLogger(logging.INFO)},
+			done:      make(chan struct{}),
+			jobs: []*job{everySecondJob("traced-job", func(ctx *Context) {
+				correlationID = ctx.GetCorrelationID()
+				ctx.Info("inside traced-job")
+			})},
+		}
+
+		c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+		c.Stop()
+	})
+
+	require.NotEmpty(t, correlationID)
+	require.NotEqual(t, "00000000000000000000000000000000", correlationID, "the job span must be a real, sampled span")
+
+	var seen int
+
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		var entry map[string]any
+
+		require.NoError(t, json.Unmarshal([]byte(line), &entry), "log line is not JSON: %q", line)
+
+		msg := fmt.Sprint(entry["message"])
+		if !strings.Contains(msg, "traced-job") {
+			continue
+		}
+
+		seen++
+
+		assert.Equal(t, correlationID, entry["trace_id"], "log line %q must carry the job's trace ID", msg)
+	}
+
+	// Starting, the job's own line, and Finished.
+	assert.Equal(t, 3, seen, "expected three log lines for the job, got output:\n%s", out)
 }
 
 func TestErrParsing_Error(t *testing.T) {

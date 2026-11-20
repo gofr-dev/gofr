@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -104,9 +105,11 @@ func (c *Crontab) Stop() {
 	c.stop(nil)
 }
 
-// stop is Stop with an optional abort channel for the join, so an application
-// shutdown is never held open past its own deadline by a long-running job.
-func (c *Crontab) stop(abort <-chan struct{}) {
+// halt stops dispatching new runs and cancels the context of every run in
+// flight (closing done is the signal), without waiting for them. It is safe to
+// call more than once. Shutdown calls it first, so jobs hear about the shutdown
+// while the servers drain instead of after.
+func (c *Crontab) halt() {
 	c.once.Do(func() {
 		c.ticker.Stop()
 
@@ -116,6 +119,12 @@ func (c *Crontab) stop(abort <-chan struct{}) {
 
 		close(c.done)
 	})
+}
+
+// stop is Stop with an optional abort channel for the join, so an application
+// shutdown is never held open past its own deadline by a long-running job.
+func (c *Crontab) stop(abort <-chan struct{}) {
+	c.halt()
 
 	joined := make(chan struct{})
 
@@ -154,12 +163,14 @@ func (c *Crontab) runScheduled(t time.Time) {
 		go func(j *job) {
 			defer c.wg.Done()
 
-			j.run(c.container)
+			j.run(c.container, c.done)
 		}(j)
 	}
 }
 
-func (j *job) run(cntnr *container.Container) {
+// run executes one run of the job. done is the scheduler's stop signal: when it
+// closes, the run's context is canceled so the job can wind down.
+func (j *job) run(cntnr *container.Container, done <-chan struct{}) {
 	// A job runs on its own goroutine, detached from whoever scheduled it, so a
 	// container that is nil or half-built (no logger) has to be handled here
 	// rather than assumed away — every log below would otherwise nil-panic on a
@@ -168,12 +179,31 @@ func (j *job) run(cntnr *container.Container) {
 		return
 	}
 
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// A nil done (a Crontab built without one) never fires; the deferred
+	// cancel then ends this goroutine when the run returns.
+	go func() {
+		select {
+		case <-done:
+			cancel()
+		case <-base.Done():
+		}
+	}()
+
 	ctx, span := otel.GetTracerProvider().Tracer("gofr-"+version.Framework).
-		Start(context.Background(), j.name)
+		Start(base, j.name)
 	defer span.End()
 
-	c := newContext(nil, &noopRequest{}, cntnr)
-	c.Context = ctx
+	// Built from the span context, not via newContext(noopRequest), so the
+	// logger carries this run's trace ID.
+	c := &Context{
+		Context:       ctx,
+		Request:       noopRequest{},
+		Container:     cntnr,
+		ContextLogger: logging.ContextLoggerFor(ctx, cntnr.Logger),
+	}
 
 	c.Infof("Starting cron job: %s", j.name)
 
