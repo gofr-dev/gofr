@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,6 +160,26 @@ func grpcPanicHandler(logger logging.Logger) grpc_recovery.RecoveryHandlerFuncCo
 	}
 }
 
+// boxUnaryInterceptor hands the handler its context inside a ctxBox. gofr-cli's generated
+// wrappers build their gofr.Context by hand from that context, so it holds a box from the start
+// and Trace never has to write the field while other goroutines read it (issue #3823).
+func boxUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return handler(newCtxBox(ctx), req)
+}
+
+// boxStreamInterceptor is boxUnaryInterceptor for streams: the handler's stream.Context() is a ctxBox.
+func boxStreamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return handler(srv, &boxedServerStream{ServerStream: ss, ctx: newCtxBox(ss.Context())})
+}
+
+type boxedServerStream struct {
+	grpc.ServerStream
+
+	ctx context.Context
+}
+
+func (s *boxedServerStream) Context() context.Context { return s.ctx }
+
 // registerGRPCMetrics registers essential gRPC metrics.
 func registerGRPCMetrics(c *container.Container) {
 	c.Metrics().NewGauge("grpc_server_status", "gRPC server status (1=running, 0=stopped)")
@@ -184,8 +205,10 @@ func (g *grpcServer) ensureServer() (*grpc.Server, error) {
 		return g.server, nil
 	}
 
-	interceptorOption := grpc.ChainUnaryInterceptor(g.interceptors...)
-	streamOpt := grpc.ChainStreamInterceptor(g.streamInterceptors...)
+	// The box interceptors go last, after the user's, so no interceptor can wrap the box away
+	// before the handler sees it.
+	interceptorOption := grpc.ChainUnaryInterceptor(append(slices.Clip(g.interceptors), boxUnaryInterceptor)...)
+	streamOpt := grpc.ChainStreamInterceptor(append(slices.Clip(g.streamInterceptors), boxStreamInterceptor)...)
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	srv := grpc.NewServer(g.options...)

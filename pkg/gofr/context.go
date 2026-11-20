@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync/atomic"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -60,15 +62,20 @@ We can write this at the start of function and because of how defer works, trace
 but End will be called after function ends.
 
 Developer Note: If you chain methods in a defer statement, everything except the last function will be evaluated at call time.
+
+Trace is safe to call from goroutines the handler starts while others use the Context. The new span becomes the
+Context's current span, also for a context.Context taken from c.Context earlier.
 */
 func (c *Context) Trace(name string) trace.Span {
+	b := c.box()
+
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
-	ctx, span := tr.Start(c.Context, name)
+	ctx, span := tr.Start(b.load(), name)
 	// TODO: If we don't close the span using `defer` and run the http-server example by hitting `/trace` endpoint, we are
 	// getting incomplete redis spans when viewing the trace using correlationID. If we remove assigning the ctx to GoFr
 	// context then spans are coming correct but then parent-child span relationship is being hindered.
 
-	c.Context = ctx
+	b.store(ctx)
 
 	return span
 }
@@ -186,19 +193,26 @@ type httpContext struct {
 	ctx  Context
 	req  gofrHTTP.Request
 	resp gofrHTTP.Responder
+	box  boxedContext
 }
 
 // newHTTPContext builds the request Context for the HTTP server in a single
 // allocation. The other transports (CMD, GraphQL, cron, subscribers) supply
 // their own Request implementations and keep using newContext.
 func newHTTPContext(w http.ResponseWriter, r *http.Request, c *container.Container) *Context {
+	return newHTTPContextWith(r.Context(), w, r, c)
+}
+
+// newHTTPContextWith is newHTTPContext with the Context's initial context.Context given
+// explicitly (ServeHTTP passes the request-timeout context), derived from r.Context().
+func newHTTPContextWith(ctx context.Context, w http.ResponseWriter, r *http.Request, c *container.Container) *Context {
 	a := &httpContext{
 		req:  gofrHTTP.RequestFor(r),
 		resp: gofrHTTP.ResponderFor(w, r.Method),
 	}
 
 	a.ctx = Context{
-		Context:       r.Context(),
+		Context:       a.box.init(ctx),
 		Request:       &a.req,
 		responder:     &a.resp,
 		Container:     c,
@@ -210,7 +224,7 @@ func newHTTPContext(w http.ResponseWriter, r *http.Request, c *container.Contain
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{
-		Context:       r.Context(),
+		Context:       newCtxBox(r.Context()),
 		Request:       r,
 		responder:     w,
 		Container:     c,
@@ -220,13 +234,96 @@ func newContext(w Responder, r Request, c *container.Container) *Context {
 
 func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
 	return &Context{
-		Context:       r.Context(),
+		Context:       newCtxBox(r.Context()),
 		responder:     w,
 		Request:       r,
 		Container:     c,
 		Out:           out,
 		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
+}
+
+// ctxBox is the context.Context a GoFr-built Context embeds. It forwards to a current context
+// held in an atomic pointer, so Trace can move the current span with an atomic store while
+// other goroutines call Done, Err, Deadline or Value on the same Context (issue #3823).
+//
+// The box must never hold a context derived from the box itself: a Value lookup for a missing
+// key would then walk box -> ctx -> box forever. Derive from load (or Context.currentContext),
+// never from the box.
+type ctxBox struct {
+	cur atomic.Pointer[ctxRef]
+}
+
+// ctxRef holds one context.Context. atomic.Value cannot be used instead: it panics when the
+// stored concrete type changes, and the stored contexts differ in type.
+type ctxRef struct {
+	ctx context.Context
+}
+
+// boxedContext is a box together with its first ref, so creating a box is one allocation,
+// and none when it is embedded in a larger struct (httpContext).
+type boxedContext struct {
+	box   ctxBox
+	first ctxRef
+}
+
+func newCtxBox(ctx context.Context) *ctxBox {
+	return (&boxedContext{}).init(ctx)
+}
+
+// init stores ctx as the first context of bc's box and returns the box.
+func (bc *boxedContext) init(ctx context.Context) *ctxBox {
+	bc.first.ctx = ctx
+	bc.box.cur.Store(&bc.first)
+
+	return &bc.box
+}
+
+func (b *ctxBox) load() context.Context { return b.cur.Load().ctx }
+
+func (b *ctxBox) store(ctx context.Context) { b.cur.Store(&ctxRef{ctx: ctx}) }
+
+func (b *ctxBox) Deadline() (deadline time.Time, ok bool) { return b.load().Deadline() }
+
+func (b *ctxBox) Done() <-chan struct{} { return b.load().Done() }
+
+func (b *ctxBox) Err() error { return b.load().Err() }
+
+func (b *ctxBox) Value(key any) any { return b.load().Value(key) }
+
+// box returns the box c embeds. A Context built as a struct literal holds a plain
+// context.Context; box wraps it on first use. That one write is not atomic, so on such a Context
+// the first Trace must not race other goroutines using it.
+func (c *Context) box() *ctxBox {
+	if b, ok := c.Context.(*ctxBox); ok {
+		return b
+	}
+
+	b := newCtxBox(c.Context)
+	c.Context = b
+
+	return b
+}
+
+// currentContext returns the context c forwards to. Derive new contexts from it, not from
+// c.Context, before passing them to setContext.
+func (c *Context) currentContext() context.Context {
+	if b, ok := c.Context.(*ctxBox); ok {
+		return b.load()
+	}
+
+	return c.Context
+}
+
+// setContext makes ctx the context c forwards to, keeping c's box so Trace stays race-free.
+// ctx must be derived from currentContext, never from c.Context (see ctxBox).
+func (c *Context) setContext(ctx context.Context) {
+	if b, ok := c.Context.(*ctxBox); ok {
+		b.store(ctx)
+		return
+	}
+
+	c.Context = ctx
 }
 
 func (c *Context) GetCorrelationID() string {
