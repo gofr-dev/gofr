@@ -283,6 +283,16 @@ A token's claims are fixed until the token expires. When permissions live in you
 database table, a policy service — and a change there must take effect on the next request, let the
 application supply the permissions with `EnableRBACWithExtractor`:
 
+> **⚠️ A route no rule matches is served with no authorization.** The extractor is called only for
+> routes a rule in the config file protects. Every other route is served to anyone, in this mode as in
+> every other (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). Forget a rule for one
+> endpoint and that endpoint ships open, while the extractor guarding the others gives a false sense
+> of coverage. Give every route a rule (`"public": true` for a route meant to be open), and set
+> `GOFR_RBAC_ROUTE_CHECK=fail` so that an app with an uncovered route
+> [stops at startup](#choosing-what-a-mismatch-does) instead of logging an error and serving it.
+> The [`using-rbac-extractor` example](https://github.com/gofr-dev/gofr/tree/development/examples/using-rbac-extractor)
+> does both.
+
 ```go
 func main() {
 	app := gofr.New()

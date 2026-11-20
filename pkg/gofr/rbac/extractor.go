@@ -25,8 +25,9 @@ type Extractor func(c *container.Container, r *http.Request) ([]string, error)
 // option changes how loadPermissions builds a Config.
 type option func(*Config)
 
-// defaultExtractorTimeout bounds an extractor call when no timeout is given.
-const defaultExtractorTimeout = 5 * time.Second
+// DefaultExtractorTimeout bounds an extractor call when no positive timeout is given. It is the one
+// source of the default: App.EnableRBACWithExtractor names it in its invalid-timeout warning.
+const DefaultExtractorTimeout = 5 * time.Second
 
 // Values of the reason label on the extraction failures metric, in extractor mode.
 const (
@@ -48,7 +49,7 @@ var (
 // receives c, and runs under timeout; a timeout that is zero or negative means 5 seconds.
 func withExtractor(fn Extractor, c *container.Container, timeout time.Duration) option {
 	if timeout <= 0 {
-		timeout = defaultExtractorTimeout
+		timeout = DefaultExtractorTimeout
 	}
 
 	return func(cfg *Config) {

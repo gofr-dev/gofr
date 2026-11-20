@@ -379,8 +379,8 @@ func TestWithExtractor(t *testing.T) {
 		wantTimeout time.Duration
 	}{
 		{desc: "a positive timeout is kept", timeout: time.Second, wantTimeout: time.Second},
-		{desc: "zero uses the default", timeout: 0, wantTimeout: defaultExtractorTimeout},
-		{desc: "a negative timeout uses the default", timeout: -time.Second, wantTimeout: defaultExtractorTimeout},
+		{desc: "zero uses the default", timeout: 0, wantTimeout: DefaultExtractorTimeout},
+		{desc: "a negative timeout uses the default", timeout: -time.Second, wantTimeout: DefaultExtractorTimeout},
 	}
 
 	for i, tc := range testCases {

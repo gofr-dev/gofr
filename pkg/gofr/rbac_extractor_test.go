@@ -144,6 +144,12 @@ func TestEnableRBACWithExtractor(t *testing.T) {
 			assert.Equal(t, tc.wantWarn, strings.Contains(stdout, "invalid RBAC_EXTRACTOR_TIMEOUT"),
 				"TEST[%d], Failed.\n%s", i, tc.desc)
 
+			if tc.wantWarn {
+				// The warning names the default the rbac package applies, so the two cannot drift.
+				assert.Contains(t, stdout, "Using "+rbac.DefaultExtractorTimeout.String()+".",
+					"TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+
 			if tc.wantWindow > 0 {
 				assert.InDelta(t, tc.wantWindow.Seconds(), window.Seconds(), 1, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}

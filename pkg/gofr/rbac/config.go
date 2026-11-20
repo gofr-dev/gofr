@@ -179,7 +179,7 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 
 // LoadPermissionsWithExtractor is LoadPermissions for a config whose permissions come from fn, the
 // application's Extractor, instead of a header or a JWT claim. fn receives c and runs under timeout;
-// a timeout that is zero or negative means 5 seconds. It returns an error if fn is nil, or if the
+// a timeout that is zero or negative means DefaultExtractorTimeout. It returns an error if fn is nil, or if the
 // config file sets jwtClaimPath or permissionsClaimPath.
 func LoadPermissionsWithExtractor(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer,
 	fn Extractor, c *container.Container, timeout time.Duration) (*Config, error) {

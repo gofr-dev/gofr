@@ -55,10 +55,6 @@ func (a *App) EnableRBAC(configPath ...string) error {
 // rbacExtractorTimeoutKey names the Go duration an RBAC extractor call may take.
 const rbacExtractorTimeoutKey = "RBAC_EXTRACTOR_TIMEOUT"
 
-// rbacExtractorDefaultTimeout is what an unset or invalid rbacExtractorTimeoutKey means; the rbac package
-// applies it when it is given a zero timeout.
-const rbacExtractorDefaultTimeout = "5s"
-
 // rbacExtractor is the application's extractor and the deadline it runs under.
 type rbacExtractor struct {
 	fn      rbac.Extractor
@@ -75,9 +71,14 @@ type rbacExtractor struct {
 // allowed if any of them is one of the rule's requiredPermissions. Public routes and routes no rule
 // matches never call fn.
 //
-// fn runs with a deadline on the request context: 5 seconds, or the Go duration in
-// RBAC_EXTRACTOR_TIMEOUT; a value that is not a positive duration is logged as a warning and the
-// 5 seconds are used, so authorization stays on. The deadline makes the request fail with a 503, but the
+// Warning: a route no rule matches is served with no authorization at all, as in every RBAC mode, and
+// by default the startup route check only logs such a route as an error. Give every route a rule
+// ("public": true for one meant to be open) and set GOFR_RBAC_ROUTE_CHECK=fail, so that a route
+// without a rule stops startup instead of shipping open.
+//
+// fn runs with a deadline on the request context: rbac.DefaultExtractorTimeout (5 seconds), or the Go
+// duration in RBAC_EXTRACTOR_TIMEOUT; a value that is not a positive duration is logged as a warning
+// and the default is used, so authorization stays on. The deadline makes the request fail with a 503, but the
 // call is not abandoned: an extractor that ignores its context keeps the request waiting until it
 // returns. An error from fn denies the request: with the status of an error that has a StatusCode() int
 // method, a 401 for rbac.ErrRoleNotFound, and a 403 otherwise.
@@ -107,7 +108,7 @@ func (a *App) rbacExtractorTimeout() time.Duration {
 	timeout, err := time.ParseDuration(value)
 	if err != nil || timeout <= 0 {
 		a.Logger().Warnf("invalid %s=%q: use a positive Go duration, such as 2s. Using %s.",
-			rbacExtractorTimeoutKey, value, rbacExtractorDefaultTimeout)
+			rbacExtractorTimeoutKey, value, rbac.DefaultExtractorTimeout)
 
 		return 0
 	}
