@@ -143,6 +143,12 @@ func TestSettings_PostgresDSN_Escaping(t *testing.T) {
 func TestSettings_ConnectorOptions(t *testing.T) {
 	// IAM auth, exactly one IP-type dial option, and the explicit WithBuiltInMetrics(false) that
 	// keeps cloudsqlconn v1.26.0's default-on built-in metrics turned off, for every IP type.
+	//
+	// This count catches the WithBuiltInMetrics(false) option being removed (the count drops to 2).
+	// It cannot catch it being flipped to true or swapped: cloudsqlconn.Dialer exposes no accessor
+	// for the built-in-metrics state, and the metric client uses its own channel, not WithDialFunc,
+	// so the "metrics stay off" behavior is not unit-assertable. That behavior is verified by a
+	// live check: a dialer built from these options makes no request to monitoring.googleapis.com.
 	for _, ip := range []string{ipTypePublic, ipTypePrivate, ipTypePSC, ""} {
 		s := settings{ipType: normalizeIPType(ip)}
 		assert.Len(t, s.connectorOptions(), 3, "ip=%q", ip)
