@@ -334,6 +334,115 @@ func TestMockSQL_HealthCheck(t *testing.T) {
 	assert.Equal(t, expectedHealth, resultHealth)
 }
 
+// Every Expect* call must return a handle that stays valid after later Expect* calls, so a test can declare
+// all its expectations first and fill them in afterwards.
+func TestMockSQL_HandlesStayValidAfterLaterExpectations(t *testing.T) {
+	const count = 5 // enough expectations that the stored list has to grow
+
+	tests := []struct {
+		desc   string
+		expect func(t *testing.T, m *Mocks) func(i int)
+		call   func(t *testing.T, c *Container) any
+		want   func(i int) any
+	}{
+		{
+			desc: "ExpectSelect",
+			expect: func(t *testing.T, m *Mocks) func(int) {
+				t.Helper()
+
+				var dest []string
+
+				h := m.SQL.ExpectSelect(t.Context(), &dest, "SELECT id FROM users")
+
+				return func(i int) { h.ReturnsResponse([]string{fmt.Sprint(i)}) }
+			},
+			call: func(t *testing.T, c *Container) any {
+				t.Helper()
+
+				var got []string
+
+				c.SQL.Select(t.Context(), &got, "SELECT id FROM users")
+
+				return got
+			},
+			want: func(i int) any { return []string{fmt.Sprint(i)} },
+		},
+		{
+			desc: "ExpectDialect",
+			expect: func(_ *testing.T, m *Mocks) func(int) {
+				h := m.SQL.ExpectDialect()
+
+				return func(i int) { h.WillReturnString(fmt.Sprint("dialect-", i)) }
+			},
+			call: func(_ *testing.T, c *Container) any { return c.SQL.Dialect() },
+			want: func(i int) any { return fmt.Sprint("dialect-", i) },
+		},
+		{
+			desc: "ExpectHealthCheck",
+			expect: func(_ *testing.T, m *Mocks) func(int) {
+				h := m.SQL.ExpectHealthCheck()
+
+				return func(i int) { h.WillReturnHealthCheck(&datasource.Health{Status: fmt.Sprint("status-", i)}) }
+			},
+			call: func(_ *testing.T, c *Container) any { return c.SQL.HealthCheck() },
+			want: func(i int) any { return &datasource.Health{Status: fmt.Sprint("status-", i)} },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, mocks := NewMockContainer(t)
+
+			fills := make([]func(int), count)
+			for i := range fills {
+				fills[i] = tc.expect(t, mocks)
+			}
+
+			for i, fill := range fills {
+				fill(i)
+			}
+
+			for i := range count {
+				assert.Equal(t, tc.want(i), tc.call(t, c), "call %d", i)
+			}
+		})
+	}
+}
+
+func TestMockSQL_WillReturnHealthCheck(t *testing.T) {
+	tests := []struct {
+		desc string
+		fill func(h *health)
+		want *datasource.Health
+	}{
+		{
+			desc: "health result is returned",
+			fill: func(h *health) { h.WillReturnHealthCheck(&datasource.Health{Status: "UP"}) },
+			want: &datasource.Health{Status: "UP"},
+		},
+		{
+			desc: "nil health result is returned as nil",
+			fill: func(h *health) { h.WillReturnHealthCheck(nil) },
+			want: nil,
+		},
+		{
+			desc: "expectation that is never filled returns an empty health",
+			fill: func(*health) {},
+			want: &datasource.Health{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			c, mocks := NewMockContainer(t)
+
+			tc.fill(mocks.SQL.ExpectHealthCheck())
+
+			assert.Equal(t, tc.want, c.SQL.HealthCheck())
+		})
+	}
+}
+
 func TestExpectSelect_ArgCountMismatch(t *testing.T) {
 	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
 	ctrl := gomock.NewController(t)
@@ -353,7 +462,7 @@ func TestExpectSelect_ArgCountMismatch(t *testing.T) {
 
 type sqlMockSelectCase struct {
 	desc         string
-	expectations []queryWithArgs
+	expectations []*queryWithArgs
 	dest         any
 	query        string
 	args         []any
@@ -424,36 +533,36 @@ const (
 )
 
 func sqlMockSelectCases() []sqlMockSelectCase {
-	exp := queryWithArgs{queryText: selectMockQuery, arguments: []any{"u1"}, value: []string{"1"}}
+	exp := &queryWithArgs{queryText: selectMockQuery, arguments: []any{"u1"}, value: []string{"1"}}
 
 	return []sqlMockSelectCase{
 		{
-			desc: "matching call fills dest", expectations: []queryWithArgs{exp},
+			desc: "matching call fills dest", expectations: []*queryWithArgs{exp},
 			dest: new([]string), query: selectMockQuery, args: []any{"u1"},
 			expDest: &[]string{"1"},
 		},
 		{
 			desc:         "matching slice arg fills dest",
-			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{[]int{1, 2}}, value: []string{"1"}}},
+			expectations: []*queryWithArgs{{queryText: selectMockQuery, arguments: []any{[]int{1, 2}}, value: []string{"1"}}},
 			dest:         new([]string), query: selectMockQuery, args: []any{[]int{1, 2}},
 			expDest: &[]string{"1"},
 		},
 		{
-			desc: "query mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			desc: "query mismatch leaves dest untouched", expectations: []*queryWithArgs{exp},
 			dest: new([]string), query: selectMockOtherQuery, args: []any{"u1"},
 			logFormat: "expected query: %q, actual query: %q", logArgs: []any{selectMockQuery, selectMockOtherQuery}, logTimes: 1,
 			expErrs: []string{`expected query: "SELECT id FROM users WHERE id=?", actual query: "SELECT name FROM users WHERE id=?"`},
 			expDest: new([]string),
 		},
 		{
-			desc: "arg count mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			desc: "arg count mismatch leaves dest untouched", expectations: []*queryWithArgs{exp},
 			dest: new([]string), query: selectMockQuery, args: []any{"u1", "u2"},
 			logFormat: "expected %d args, actual %d", logArgs: []any{1, 2}, logTimes: 1,
 			expErrs: []string{"expected 1 args, actual 2"},
 			expDest: new([]string),
 		},
 		{
-			desc: "arg value mismatch leaves dest untouched", expectations: []queryWithArgs{exp},
+			desc: "arg value mismatch leaves dest untouched", expectations: []*queryWithArgs{exp},
 			dest: new([]string), query: selectMockQuery, args: []any{"u2"},
 			logFormat: selectMockArgMismatch, logArgs: []any{0, "u1", "u1", "u2", "u2"}, logTimes: 1,
 			expErrs: []string{"expected arg 0: u1 (string), actual: u2 (string)"},
@@ -461,35 +570,35 @@ func sqlMockSelectCases() []sqlMockSelectCase {
 		},
 		{
 			desc:         "same arg value with different type",
-			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{1}, value: []string{"1"}}},
+			expectations: []*queryWithArgs{{queryText: selectMockQuery, arguments: []any{1}, value: []string{"1"}}},
 			dest:         new([]string), query: selectMockQuery, args: []any{int64(1)},
 			logFormat: selectMockArgMismatch, logArgs: []any{0, 1, 1, int64(1), int64(1)}, logTimes: 1,
 			expErrs: []string{"expected arg 0: 1 (int), actual: 1 (int64)"},
 			expDest: new([]string),
 		},
 		{
-			desc: "non-pointer dest", expectations: []queryWithArgs{exp},
+			desc: "non-pointer dest", expectations: []*queryWithArgs{exp},
 			dest: []string(nil), query: selectMockQuery, args: []any{"u1"},
 			logFormat: selectMockBadDest, logArgs: []any{[]string(nil)}, logTimes: 1,
 			expErrs: []string{"expected a non-nil pointer, actual []string"},
 			expDest: []string(nil),
 		},
 		{
-			desc: "nil dest", expectations: []queryWithArgs{exp},
+			desc: "nil dest", expectations: []*queryWithArgs{exp},
 			dest: nil, query: selectMockQuery, args: []any{"u1"},
 			logFormat: selectMockBadDest, logArgs: []any{nil}, logTimes: 1,
 			expErrs: []string{"expected a non-nil pointer, actual <nil>"},
 			expDest: nil,
 		},
 		{
-			desc: "typed nil pointer dest", expectations: []queryWithArgs{exp},
+			desc: "typed nil pointer dest", expectations: []*queryWithArgs{exp},
 			dest: (*[]string)(nil), query: selectMockQuery, args: []any{"u1"},
 			logFormat: selectMockBadDest, logArgs: []any{(*[]string)(nil)}, logTimes: 1,
 			expErrs: []string{"expected a non-nil pointer, actual *[]string"},
 			expDest: (*[]string)(nil),
 		},
 		{
-			desc: "response type does not match dest", expectations: []queryWithArgs{exp},
+			desc: "response type does not match dest", expectations: []*queryWithArgs{exp},
 			dest: new([]int), query: selectMockQuery, args: []any{"u1"},
 			logFormat: selectMockBadResponse, logArgs: []any{[]string{"1"}, new([]int)}, logTimes: 1,
 			expErrs: []string{"cannot assign response of type []string to destination of type *[]int"},
@@ -497,7 +606,7 @@ func sqlMockSelectCases() []sqlMockSelectCase {
 		},
 		{
 			desc:         "ReturnsResponse never called",
-			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}, value: new([]string)}},
+			expectations: []*queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}, value: new([]string)}},
 			dest:         new([]string), query: selectMockQuery, args: []any{"u1"},
 			logFormat: selectMockBadResponse, logArgs: []any{new([]string), new([]string)}, logTimes: 1,
 			expErrs: []string{"cannot assign response of type *[]string to destination of type *[]string"},
@@ -505,7 +614,7 @@ func sqlMockSelectCases() []sqlMockSelectCase {
 		},
 		{
 			desc:         "nil response",
-			expectations: []queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}}},
+			expectations: []*queryWithArgs{{queryText: selectMockQuery, arguments: []any{"u1"}}},
 			dest:         new([]string), query: selectMockQuery, args: []any{"u1"},
 			logFormat: "received different expectations: %q", logArgs: []any{selectMockQuery}, logTimes: 1,
 			expErrs: []string{`received different expectations: "SELECT id FROM users WHERE id=?"`},
