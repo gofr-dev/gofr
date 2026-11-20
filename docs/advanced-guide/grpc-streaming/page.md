@@ -227,6 +227,8 @@ func (s *ChatServiceGoFrServer) BiDiStream(ctx *gofr.Context, stream ChatService
 - Return appropriate gRPC status codes for errors
 - Monitor `stream.Context().Done()` to handle client disconnections
 - Use channels to coordinate between goroutines
+- Do not call `ctx.Trace()` from the goroutine: it changes `ctx`, which the handler is still using. To log or trace
+  from the goroutine, derive a context for it with `ctx.WithContext(...)` (see [Custom Spans in Tracing](/docs/advanced-guide/custom-spans-in-tracing))
 
 ## Generating gRPC Streaming Client Code
 
