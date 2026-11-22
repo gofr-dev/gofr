@@ -115,6 +115,32 @@ func WSHandler(ctx *gofr.Context) (any, error) {
 ```
 > #### Check out the example on how to read/write through a WebSocket in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-web-socket/main.go)
 
+## Connection Lifecycle
+
+GoFr keeps one long-lived connection per client and calls your handler repeatedly, once per message. A handler
+usually reads with `ctx.Bind`, which blocks until the client sends a message or the connection fails. The loop
+stops in the following cases:
+
+- **The client closes the connection**, with any close code, for example `ws.close()` in a browser (1005), 1008,
+  1011 or an application code in the range 4000-4999.
+- **A read fails**, for example the connection drops, the read limit is exceeded, or a read deadline expires. A
+  failed read is permanent: every later read returns the same error, so a read deadline cannot be used to poll
+  the connection and continue afterwards.
+- **A write fails.**
+- **A handler keeps failing without reading anything.** If the handler returns an error, or returns a value that
+  cannot be serialized, and no message was read, the next pass would repeat it forever. GoFr retries once and
+  then closes the connection.
+
+A handler error is never sent to the client, and neither is a response that cannot be serialized: GoFr logs the
+error and writes no frame. If the handler read a message before failing, the connection stays open and the handler
+is called again for the next message. Otherwise, as described above, the connection is closed after one retry.
+
+Since GoFr owns the read loop, read input through `ctx.Bind`. Reads made through the `websocket.Connection` that
+your handler can obtain from the container (`ctx.Container.GetConnectionFromContext(ctx)`) are tracked as well.
+Reads made directly on the underlying gorilla connection, such as `ReadJSON`, `NextReader` or
+`c.Conn.ReadMessage()`, still work, but GoFr cannot see them, so a handler that only reads that way and returns an
+error is treated as having read nothing and its connection is closed after the retry.
+
 ## Inter-Service WebSocket Communication
 
 GoFr also supports Inter-Service WebSocket Communication, enabling seamless communication between services using WebSocket connections. 

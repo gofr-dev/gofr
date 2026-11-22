@@ -110,38 +110,60 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 	}()
 }
 
+// maxFailuresWithoutRead is how many consecutive failed passes a connection tolerates when the handler read no
+// message in between. A handler that fails before it reads (an auth guard, say), or returns a value that cannot
+// be serialized, would otherwise repeat that pass forever. The second pass exists because a message read directly
+// from the embedded connection is invisible here: retrying lets such a handler block on its next read instead of
+// losing the connection.
+const maxFailuresWithoutRead = 2
+
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
+	failuresWithoutRead := 0
+
 	for {
 		reads := conn.ReadCount()
 
-		response, err := handler(ctx)
-		if err != nil {
-			// A handler error that consumed no message would repeat identically on the next pass, so end the loop.
-			if handleWebSocketError(ctx, "error handling message", err) || conn.ReadFailed() || conn.ReadCount() == reads {
-				break
-			}
-
-			continue
-		}
-
-		message, err := serializeMessage(response)
-		if err != nil {
-			ctx.Errorf("failed to serialize message: %v", err)
-
-			continue
-		}
-
-		err = conn.WriteMessage(websocket.TextMessage, message)
-		if err != nil {
-			ctx.Errorf("failed to write response to websocket: %v", err)
-
+		stop, failed := handleWebSocketPass(ctx, conn, handler)
+		if stop {
 			break
 		}
 
-		if conn.ReadFailed() {
+		if !failed || conn.ReadCount() != reads {
+			failuresWithoutRead = 0
+
+			continue
+		}
+
+		failuresWithoutRead++
+
+		if failuresWithoutRead >= maxFailuresWithoutRead {
 			break
 		}
 	}
+}
+
+// handleWebSocketPass runs the handler once and writes its response. stop reports that the loop must end;
+// failed reports that this pass produced no response to send.
+func handleWebSocketPass(ctx *Context, conn *websocket.Connection, handler Handler) (stop, failed bool) {
+	response, err := handler(ctx)
+	if err != nil {
+		return handleWebSocketError(ctx, "error handling message", err) || conn.ReadFailed(), true
+	}
+
+	message, err := serializeMessage(response)
+	if err != nil {
+		ctx.Errorf("failed to serialize message: %v", err)
+
+		return conn.ReadFailed(), true
+	}
+
+	if err = conn.WriteMessage(websocket.TextMessage, message); err != nil {
+		ctx.Errorf("failed to write response to websocket: %v", err)
+
+		return true, true
+	}
+
+	return conn.ReadFailed(), false
 }
 
 func handleWebSocketError(ctx *Context, msg string, err error) bool {

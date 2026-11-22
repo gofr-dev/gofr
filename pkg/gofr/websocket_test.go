@@ -727,11 +727,11 @@ func Test_WebSocket_HandlerErrorBeforeReadingStopsLoop(t *testing.T) {
 	defer ws.Close()
 	defer resp.Body.Close()
 
-	require.Eventually(t, func() bool { return calls.Load() == 1 }, 3*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return calls.Load() >= 1 }, 3*time.Second, time.Millisecond)
 
 	requireHandlerLoopEnded(t, app)
 
-	assert.Equal(t, int32(1), calls.Load())
+	assert.Equal(t, int32(maxFailuresWithoutRead), calls.Load())
 
 	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
 
@@ -765,6 +765,65 @@ func Test_WebSocket_SerializeFailureDoesNotSendFrame(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "hello", string(message))
+}
+
+func Test_WebSocket_HandlerErrorAfterDirectReadKeepsConnectionOpen(t *testing.T) {
+	app, wsURL := newWebSocketTestApp(t, func(ctx *Context) (any, error) {
+		conn := ctx.Request.(*gofrWebsocket.Connection)
+
+		_, message, err := conn.Conn.ReadMessage()
+		if err != nil {
+			return nil, err
+		}
+
+		if string(message) == "bad" {
+			return nil, errInvalidPayload
+		}
+
+		return string(message), nil
+	})
+
+	ws := dialWebSocket(t, app, wsURL)
+
+	for _, payload := range []string{"bad", "good"} {
+		require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte(payload)))
+	}
+
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+
+	assert.Equal(t, "good", string(message))
+}
+
+func Test_WebSocket_SerializeFailureWithoutReadStopsLoop(t *testing.T) {
+	var calls atomic.Int32
+
+	app, wsURL := newWebSocketTestApp(t, func(*Context) (any, error) {
+		calls.Add(1)
+
+		return make(chan int), nil
+	})
+
+	// The handler fails as soon as the connection is registered, so it may already be gone by the time
+	// dialWebSocket would look for it.
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	require.Eventually(t, func() bool { return calls.Load() >= 1 }, 3*time.Second, time.Millisecond)
+
+	requireHandlerLoopEnded(t, app)
+
+	assert.Equal(t, int32(maxFailuresWithoutRead), calls.Load())
+
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(3*time.Second)))
+
+	_, _, err = ws.ReadMessage()
+	require.Error(t, err, "the client must see the connection close, not a frame")
 }
 
 func Test_handleWebSocketError(t *testing.T) {
