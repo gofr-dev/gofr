@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -38,7 +37,7 @@ type Crontab struct {
 	container *container.Container
 
 	mu sync.RWMutex
-	// stopped is set under mu before done is closed, so a tick that is already
+	// stopped is set under mu before ctx is canceled, so a tick that is already
 	// inside runScheduled cannot dispatch a new job goroutine after Stop has
 	// begun waiting for the in-flight ones.
 	stopped bool
@@ -47,8 +46,11 @@ type Crontab struct {
 	// (an App, or a test's container) has been torn down.
 	wg sync.WaitGroup
 
-	done chan struct{}
-	once sync.Once
+	// ctx is the parent of every run's context; halt cancels it so jobs in
+	// flight hear about the shutdown.
+	ctx    context.Context
+	cancel context.CancelFunc
+	once   sync.Once
 }
 
 type job struct {
@@ -74,11 +76,14 @@ type tick struct {
 
 // NewCron initializes and returns new cron tab.
 func NewCron(cntnr *container.Container) *Crontab {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	c := &Crontab{
 		ticker:    time.NewTicker(time.Second),
 		container: cntnr,
 		jobs:      make([]*job, 0),
-		done:      make(chan struct{}),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 
 	c.registerMetrics()
@@ -88,7 +93,7 @@ func NewCron(cntnr *container.Container) *Crontab {
 			select {
 			case t := <-c.ticker.C:
 				c.runScheduled(t)
-			case <-c.done:
+			case <-c.ctx.Done():
 				return
 			}
 		}
@@ -106,7 +111,7 @@ func (c *Crontab) Stop() {
 }
 
 // halt stops dispatching new runs and cancels the context of every run in
-// flight (closing done is the signal), without waiting for them. It is safe to
+// flight (canceling ctx is the signal), without waiting for them. It is safe to
 // call more than once. Shutdown calls it first, so jobs hear about the shutdown
 // while the servers drain instead of after.
 func (c *Crontab) halt() {
@@ -117,7 +122,7 @@ func (c *Crontab) halt() {
 		c.stopped = true
 		c.mu.Unlock()
 
-		close(c.done)
+		c.cancel()
 	})
 }
 
@@ -163,14 +168,15 @@ func (c *Crontab) runScheduled(t time.Time) {
 		go func(j *job) {
 			defer c.wg.Done()
 
-			j.run(c.container, c.done)
+			j.run(c.ctx, c.container)
 		}(j)
 	}
 }
 
-// run executes one run of the job. done is the scheduler's stop signal: when it
-// closes, the run's context is canceled so the job can wind down.
-func (j *job) run(cntnr *container.Container, done <-chan struct{}) {
+// run executes one run of the job. The run's context derives from parent, the
+// scheduler's context, so it is canceled when the scheduler halts and the job
+// can wind down.
+func (j *job) run(parent context.Context, cntnr *container.Container) {
 	// A job runs on its own goroutine, detached from whoever scheduled it, so a
 	// container that is nil or half-built (no logger) has to be handled here
 	// rather than assumed away — every log below would otherwise nil-panic on a
@@ -179,31 +185,12 @@ func (j *job) run(cntnr *container.Container, done <-chan struct{}) {
 		return
 	}
 
-	base, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// A nil done (a Crontab built without one) never fires; the deferred
-	// cancel then ends this goroutine when the run returns.
-	go func() {
-		select {
-		case <-done:
-			cancel()
-		case <-base.Done():
-		}
-	}()
-
 	ctx, span := otel.GetTracerProvider().Tracer("gofr-"+version.Framework).
-		Start(base, j.name)
+		Start(parent, j.name)
 	defer span.End()
 
-	// Built from the span context, not via newContext(noopRequest), so the
-	// logger carries this run's trace ID.
-	c := &Context{
-		Context:       ctx,
-		Request:       noopRequest{},
-		Container:     cntnr,
-		ContextLogger: logging.ContextLoggerFor(ctx, cntnr.Logger),
-	}
+	// The request carries the span context so the logger gets this run's trace ID.
+	c := newContext(nil, noopRequest{ctx: ctx}, cntnr)
 
 	c.Infof("Starting cron job: %s", j.name)
 
@@ -299,10 +286,16 @@ func (e errParsing) Error() string {
 // noopRequest is a non-operating implementation of Request interface
 // this is required to prevent panics while executing cron jobs.
 type noopRequest struct {
+	// ctx is what Context returns; the zero value yields context.Background().
+	ctx context.Context
 }
 
-func (noopRequest) Context() context.Context {
-	return context.Background()
+func (n noopRequest) Context() context.Context {
+	if n.ctx == nil {
+		return context.Background()
+	}
+
+	return n.ctx
 }
 
 func (noopRequest) Param(string) string {

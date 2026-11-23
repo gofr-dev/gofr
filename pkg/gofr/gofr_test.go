@@ -1436,7 +1436,7 @@ func TestShutdown_StopsCron(t *testing.T) {
 
 	require.NotNil(t, app.cron, "cron should be initialized after AddCronJob")
 
-	doneCh := app.cron.done
+	doneCh := app.cron.ctx.Done()
 
 	err := app.Shutdown(t.Context())
 	require.NoError(t, err, "Shutdown should not return an error")

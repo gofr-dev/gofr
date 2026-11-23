@@ -720,11 +720,7 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 
 					c.jobs = []*job{j}
 				} else {
-					c = &Crontab{
-						ticker:    time.NewTicker(time.Second),
-						container: cntnr,
-						jobs:      []*job{j},
-					}
+					c = newTestCrontab(cntnr, j)
 				}
 
 				c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
@@ -750,21 +746,7 @@ func TestCronTab_runScheduled_NilLoggerAndContainer(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			ran := make(chan struct{}, 1)
 
-			c := &Crontab{
-				ticker:    time.NewTicker(time.Second),
-				container: tc.cntnr,
-				done:      make(chan struct{}),
-				jobs: []*job{{
-					sec:       map[int]struct{}{1: {}},
-					min:       map[int]struct{}{1: {}},
-					hour:      map[int]struct{}{1: {}},
-					day:       map[int]struct{}{1: {}},
-					month:     map[int]struct{}{1: {}},
-					dayOfWeek: map[int]struct{}{1: {}},
-					name:      "nil-logger-job",
-					fn:        func(*Context) { ran <- struct{}{} },
-				}},
-			}
+			c := newTestCrontab(tc.cntnr, everySecondJob("nil-logger-job", func(*Context) { ran <- struct{}{} }))
 
 			// A panic here happens on the job's own goroutine and kills the test
 			// binary, so reaching Stop at all is the assertion.
@@ -781,24 +763,11 @@ func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
 
 	var runs atomic.Int64
 
-	c := &Crontab{
-		ticker:    time.NewTicker(time.Second),
-		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
-		done:      make(chan struct{}),
-		jobs: []*job{{
-			sec:       map[int]struct{}{1: {}},
-			min:       map[int]struct{}{1: {}},
-			hour:      map[int]struct{}{1: {}},
-			day:       map[int]struct{}{1: {}},
-			month:     map[int]struct{}{1: {}},
-			dayOfWeek: map[int]struct{}{1: {}},
-			name:      "slow-job",
-			fn: func(*Context) {
-				runs.Add(1)
-				<-release
-			},
-		}},
-	}
+	c := newTestCrontab(&container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+		everySecondJob("slow-job", func(*Context) {
+			runs.Add(1)
+			<-release
+		}))
 
 	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
 
@@ -845,11 +814,58 @@ func TestCrontab_Stop(t *testing.T) {
 
 	c.Stop()
 
-	select {
-	case _, ok := <-c.done:
-		assert.False(t, ok, "done channel should be closed")
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("done channel is not closed")
+	require.ErrorIs(t, c.ctx.Err(), context.Canceled, "Stop must cancel the scheduler context")
+}
+
+// newTestCrontab builds a Crontab by hand, without the ticker goroutine NewCron starts.
+func newTestCrontab(cntnr *container.Container, jobs ...*job) *Crontab {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &Crontab{
+		ticker:    time.NewTicker(time.Second),
+		container: cntnr,
+		jobs:      jobs,
+		ctx:       ctx,
+		cancel:    cancel,
+	}
+}
+
+// halt cancels the scheduler context that every run derives from.
+func TestCrontab_halt_CancelsContext(t *testing.T) {
+	c := NewCron(&container.Container{Logger: logging.NewMockLogger(logging.ERROR)})
+
+	require.NoError(t, c.ctx.Err(), "the context must be live until halt")
+
+	c.halt()
+
+	require.ErrorIs(t, c.ctx.Err(), context.Canceled)
+}
+
+// A run derives from the parent it is given, so a canceled parent reaches the job as canceled.
+func TestJob_run_ParentCanceled(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var got error
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		everySecondJob("parent-canceled", func(ctx *Context) { got = ctx.Err() }).
+			run(parent, &container.Container{Logger: logging.NewLogger(logging.INFO)})
+	})
+
+	require.ErrorIs(t, got, context.Canceled)
+	assert.Contains(t, logs, "Finished cron job: parent-canceled")
+}
+
+func BenchmarkJobRun(b *testing.B) {
+	cntnr := &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}
+	j := everySecondJob("bench", func(*Context) {})
+	ctx := context.Background()
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		j.run(ctx, cntnr)
 	}
 }
 
@@ -878,11 +894,8 @@ func TestCrontab_Stop_CancelsInFlightJobContext(t *testing.T) {
 	// failing run from leaking a blocked goroutine (and Stop) past the test.
 	t.Cleanup(func() { close(release) })
 
-	c := &Crontab{
-		ticker:    time.NewTicker(time.Second),
-		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
-		done:      make(chan struct{}),
-		jobs: []*job{everySecondJob("ctx-aware-job", func(ctx *Context) {
+	c := newTestCrontab(&container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+		everySecondJob("ctx-aware-job", func(ctx *Context) {
 			close(started)
 
 			select {
@@ -891,8 +904,7 @@ func TestCrontab_Stop_CancelsInFlightJobContext(t *testing.T) {
 			}
 
 			jobErr <- ctx.Err()
-		})},
-	}
+		}))
 
 	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
 	<-started
@@ -922,15 +934,11 @@ func TestCron_JobLoggerCarriesTraceID(t *testing.T) {
 	var correlationID string
 
 	out := testutil.StdoutOutputForFunc(func() {
-		c := &Crontab{
-			ticker:    time.NewTicker(time.Second),
-			container: &container.Container{Logger: logging.NewLogger(logging.INFO)},
-			done:      make(chan struct{}),
-			jobs: []*job{everySecondJob("traced-job", func(ctx *Context) {
+		c := newTestCrontab(&container.Container{Logger: logging.NewLogger(logging.INFO)},
+			everySecondJob("traced-job", func(ctx *Context) {
 				correlationID = ctx.GetCorrelationID()
 				ctx.Info("inside traced-job")
-			})},
-		}
+			}))
 
 		c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
 		c.Stop()
