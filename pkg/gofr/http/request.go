@@ -209,11 +209,11 @@ func (r *Request) bindJSON(i any) error {
 	// sent a string for an int got "Go struct field .b" instead of "T.b".
 	//
 	// A typed nil pointer (var p *T; Bind(p)) has nowhere to decode into, and
-	// encoding/json rejects it with "json: Unmarshal(nil *T)". Through &i it was
-	// silently accepted, so keep that: return nil rather than break handlers
-	// that answered 201 before.
+	// encoding/json rejects it with "json: Unmarshal(nil *T)". Decode it through
+	// &i, as before: a well-formed body (or null) is accepted and binds nothing,
+	// and a malformed or empty body is still a syntax error.
 	if reflect.ValueOf(i).IsNil() {
-		return nil
+		return json.Unmarshal(body, &i)
 	}
 
 	return json.Unmarshal(body, i)
