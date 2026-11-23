@@ -44,9 +44,11 @@ func newJWKSServer(t *testing.T, key *rsa.PrivateKey) *httptest.Server {
 	return srv
 }
 
-// TestRouteCheckFails guards the setting that makes a copy of this example safe: without it, a route
-// added with no rule is served with no authorization and startup only logs an error.
-func TestRouteCheckFails(t *testing.T) {
+// TestConfigKeepsRouteCheckFail checks that configs/.env keeps GOFR_RBAC_ROUTE_CHECK=fail, the setting
+// that makes a copy of this example safe: without it, a route added with no rule is served with no
+// authorization and startup only logs an error. The route check itself is tested in pkg/gofr
+// (TestRun_RBACRouteCheckFailExitsNonZero).
+func TestConfigKeepsRouteCheckFail(t *testing.T) {
 	env, err := os.ReadFile("configs/.env")
 	require.NoError(t, err)
 
