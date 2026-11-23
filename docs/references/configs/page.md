@@ -688,14 +688,14 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  PUBSUB_OFFSET
--  Offset to start consuming messages from. -1 for earliest, 0 for latest.
+-  Where a consumer group starts reading a partition that has no committed offset. Must be a number: `0` for the earliest message, `-1` for the latest (only messages published after the consumer starts). A value that is not a number is logged as an error and the default is used.
 -  -1
 
 ---
 
 - KAFKA_BATCH_SIZE
 - Number of messages to batch before sending to Kafka
-- 1
+- 100
 
 ---
 
@@ -706,8 +706,8 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - KAFKA_BATCH_TIMEOUT
-- Time to wait before sending a batch to Kafka
-- 100ms
+- Time to wait before sending an incomplete batch to Kafka, in milliseconds. Publish waits for its batch to be sent, so a larger value adds up to that much latency to each publish when traffic is low.
+- 10
 
 ---
 
