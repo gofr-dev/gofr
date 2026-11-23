@@ -46,6 +46,9 @@ type handler struct {
 	function       Handler
 	container      *container.Container
 	requestTimeout time.Duration
+
+	// builtIn marks a route GoFr registered for itself; httpServerSetup reads it during its walk.
+	builtIn bool
 }
 
 // handlerOutcome carries the (result, error) pair from the per-request

@@ -64,22 +64,12 @@ func CatchAllAnswered(r *http.Request) bool {
 
 // MarkBuiltIn marks route as one GoFr registered for itself and returns it. GoFr tells these routes
 // apart by where they were registered, not by path, so that an application route under
-// /.well-known/ is not mistaken for one. A route that already has a name keeps it and is not marked:
-// mux refuses a second name and would put the route in error. A nil route is a no-op.
+// /.well-known/ is not mistaken for one. Only unnamed routes created by App.add reach it.
 func MarkBuiltIn(route *mux.Route) *mux.Route {
-	if route == nil || route.GetName() != "" {
-		return route
-	}
-
 	return route.Name(builtInName)
 }
 
 // IsBuiltIn reports whether route is one MarkBuiltIn marked. A nil route is not.
 func IsBuiltIn(route *mux.Route) bool {
 	return route != nil && route.GetName() == builtInName
-}
-
-// BuiltInAnswered reports whether one of GoFr's own routes is the route that matched r.
-func BuiltInAnswered(r *http.Request) bool {
-	return IsBuiltIn(Matched(r))
 }

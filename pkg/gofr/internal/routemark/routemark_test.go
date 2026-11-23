@@ -42,7 +42,6 @@ func TestIsBuiltIn(t *testing.T) {
 		{"second route marked with the same name", MarkBuiltIn(router.Path("/favicon.ico")), true},
 		{"unmarked route", router.Path("/.well-known/jwks.json"), false},
 		{"catch-all is not built in", MarkCatchAll(router.PathPrefix("/")), false},
-		{"named route keeps its name and is not marked", MarkBuiltIn(router.Path("/named").Name("app")), false},
 		{"nil route", nil, false},
 	}
 
@@ -53,8 +52,6 @@ func TestIsBuiltIn(t *testing.T) {
 			require.NoError(t, tc.route.GetError(), "TEST[%d], Failed.\n%s: marking must not break the route", i, tc.desc)
 		}
 	}
-
-	assert.Nil(t, MarkBuiltIn(nil), "marking a nil route is a no-op")
 }
 
 func TestMatched(t *testing.T) {
@@ -63,8 +60,6 @@ func TestMatched(t *testing.T) {
 
 	assert.Nil(t, Matched(req), "an unrouted request has no matched route")
 	assert.False(t, CatchAllAnswered(req), "an unrouted request was not answered by the catch-all")
-	assert.False(t, BuiltInAnswered(req), "an unrouted request was not answered by a built-in route")
-	assert.True(t, BuiltInAnswered(With(req, MarkBuiltIn(route))), "a request a marked route matched")
 	assert.Same(t, req, With(req, nil), "no route must not copy the request")
 	assert.Same(t, route, Matched(With(req, route)), "the route put in the context must come back")
 }

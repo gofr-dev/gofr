@@ -204,36 +204,6 @@ func newRBACRouteCollector(enabled bool) *rbacRouteCollector {
 	return &rbacRouteCollector{enabled: enabled, seen: make(map[rbaccheck.Route]bool)}
 }
 
-// countRoutes returns how many routes a walk of router visits.
-func countRoutes(router *mux.Router) int {
-	n := 0
-
-	_ = router.Walk(func(*mux.Route, *mux.Router, []*mux.Route) error {
-		n++
-
-		return nil
-	})
-
-	return n
-}
-
-// markBuiltIns marks every route a walk of router visits after the first skip as one of GoFr's own
-// (routemark.MarkBuiltIn). httpServerSetup calls it right after registering its built-in routes,
-// with the count taken right before, so exactly those routes are marked, in one walk.
-func markBuiltIns(router *mux.Router, skip int) {
-	position := 0
-
-	_ = router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-		if position >= skip {
-			routemark.MarkBuiltIn(route)
-		}
-
-		position++
-
-		return nil
-	})
-}
-
 // add records route once per method, "*" for a route with no method matcher, as built in when it
 // carries routemark's built-in mark. A prefix route gets a trailing catch-all segment, so that it
 // stands for every path under the prefix.

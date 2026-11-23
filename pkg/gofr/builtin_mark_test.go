@@ -27,7 +27,7 @@ func TestHTTPServerSetup_MarksBuiltInRoutes(t *testing.T) {
 	}{
 		{"health", "/.well-known/health", true},
 		{"alive", "/.well-known/alive", true},
-		{"favicon", faviconPath, true},
+		{"favicon", "/favicon.ico", true},
 		{"openapi document", "/.well-known/openapi.json", true},
 		{"swagger UI", "/.well-known/swagger", true},
 		{"swagger UI asset", "/.well-known/swagger-ui.css", true},
@@ -50,7 +50,7 @@ func TestHTTPServerSetup_MarksBuiltInRoutes(t *testing.T) {
 
 			app.httpServer.router.Use(func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					answered[r.URL.Path] = routemark.BuiltInAnswered(r)
+					answered[r.URL.Path] = routemark.IsBuiltIn(routemark.Matched(r))
 					next.ServeHTTP(w, r)
 				})
 			})
@@ -86,6 +86,41 @@ func TestHTTPServerSetup_MarksBuiltInRoutes(t *testing.T) {
 			})
 
 			assert.GreaterOrEqual(t, marked, 6, "health, alive, favicon, openapi, swagger and assets")
+		})
+	}
+}
+
+// TestHTTPServerSetup_MarksByRegistration proves a route is marked because GoFr registered it during
+// setup, not because of its path or its position in the walk: an application route registered before
+// setup at a built-in path stays unmarked, while the built-in registered at the same path is marked.
+func TestHTTPServerSetup_MarksByRegistration(t *testing.T) {
+	for _, matcher := range []string{"mux", "trie"} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv("GOFR_ROUTER", matcher)
+
+			app := New()
+			app.GET("/.well-known/alive", func(*Context) (any, error) { return "mine", nil })
+			app.httpServerSetup()
+
+			var appRoutes, builtIns int
+
+			_ = app.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+				if tmpl, _ := route.GetPathTemplate(); tmpl != "/.well-known/alive" {
+					return nil
+				}
+
+				if routemark.IsBuiltIn(route) {
+					builtIns++
+				} else {
+					appRoutes++
+				}
+
+				return nil
+			})
+
+			assert.Equal(t, 1, appRoutes, "the application route stays unmarked")
+			assert.Equal(t, 1, builtIns, "GoFr's own alive route is marked")
+			assert.False(t, app.registeringBuiltIns, "the flag is cleared after setup")
 		})
 	}
 }
