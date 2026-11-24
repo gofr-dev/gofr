@@ -349,8 +349,8 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 		wantStatus  string
 	}{
 		{
-			name:     "successful stat for file",
-			fileName: "file.txt",
+			name:       "successful stat for file",
+			fileName:   "file.txt",
 			statInfo:   &ObjectInfo{Name: "file.txt", Size: 100, ContentType: "text/plain", LastModified: now},
 			wantStatus: StatusSuccess,
 		},

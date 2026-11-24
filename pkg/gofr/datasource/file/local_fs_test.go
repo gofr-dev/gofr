@@ -8,7 +8,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
+
+// TestLocalFileSystem_StatMissingNameIsNotFound checks that Stat of a path that does not exist on
+// the local store records NOT_FOUND: os.ReadDir fails with an error matching os.ErrNotExist, and
+// Stat must take its status from that error rather than record ERROR.
+func TestLocalFileSystem_StatMissingNameIsNotFound(t *testing.T) {
+	logger := NewMockLogger(gomock.NewController(t))
+	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	metrics := &recordingMetrics{}
+	fs := &CommonFileSystem{Provider: &localProvider{}, Location: localLocation, Logger: logger, Metrics: metrics}
+
+	_, err := fs.Stat(filepath.Join(t.TempDir(), "nope"))
+
+	require.ErrorIs(t, err, os.ErrNotExist)
+	assert.Equal(t, []string{statusNotFound}, metrics.statuses())
+}
 
 func TestLocalProvider_NewReaderAndNewRangeReader_LimitedAndFull(t *testing.T) {
 	provider := &localProvider{}
