@@ -6,27 +6,48 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 const (
-	maxFileSize  = 100 * 1024 * 1024 // 100MB
-	maxTotalSize = 100 * 1024 * 1024 // 100MB, for all files in the zip together
+	maxFileSize  = 100 * 1024 * 1024  // 100MB
+	maxTotalSize = 1024 * 1024 * 1024 // 1GB, for all files in the zip together
 )
 
 var (
-	errMaxFileSize   = errors.New("uncompressed file is greater than file size limit of 100MBs")
-	errMaxTotalSize  = errors.New("uncompressed zip content is greater than total size limit of 100MBs")
+	errMaxFileSize   = errZipTooLarge{msg: "uncompressed file is greater than file size limit of 100MBs"}
+	errMaxTotalSize  = errZipTooLarge{msg: "uncompressed zip content is greater than total size limit of 1GB"}
 	errPathTraversal = errors.New("path traversal attempt detected")
 )
+
+// errZipTooLarge is returned when an uploaded zip exceeds a size limit, so the
+// request is answered with 413 rather than 500.
+type errZipTooLarge struct {
+	msg string
+}
+
+func (e errZipTooLarge) Error() string {
+	return e.msg
+}
+
+func (errZipTooLarge) StatusCode() int {
+	return http.StatusRequestEntityTooLarge
+}
 
 type Zip struct {
 	Files map[string]file
 }
 
 func NewZip(content []byte) (*Zip, error) {
+	return newZip(content, maxTotalSize)
+}
+
+// newZip is NewZip with the total size limit as a parameter, so tests can check it without
+// unzipping a gigabyte.
+func newZip(content []byte, maxTotal int) (*Zip, error) {
 	reader := bytes.NewReader(content)
 
 	zipReader, err := zip.NewReader(reader, int64(len(content)))
@@ -55,9 +76,9 @@ func NewZip(content []byte) (*Zip, error) {
 			return nil, err
 		}
 
-		// check that all unzipped files together stay within the limit, so many small entries can't add up to gigabytes
+		// Reject the archive when all unzipped files together exceed maxTotalSize.
 		totalSize += buf.Len()
-		if totalSize > maxTotalSize {
+		if totalSize > maxTotal {
 			f.Close()
 
 			return nil, errMaxTotalSize

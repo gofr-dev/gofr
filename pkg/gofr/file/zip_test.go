@@ -404,26 +404,45 @@ func TestNewZip_EntryErrors(t *testing.T) {
 }
 
 func TestNewZip_TotalSizeLimit(t *testing.T) {
+	const limit = 1000
+
 	tests := []struct {
 		name     string
 		sizes    []int
 		expFiles int
 		expErr   error
 	}{
-		{name: "entries adding up to the limit", sizes: []int{maxTotalSize / 2, maxTotalSize / 2}, expFiles: 2},
-		{name: "entries adding up to one byte over the limit", sizes: []int{maxTotalSize / 2, maxTotalSize/2 + 1},
+		{name: "entries adding up to the limit", sizes: []int{limit / 2, limit / 2}, expFiles: 2},
+		{name: "entries adding up to one byte over the limit", sizes: []int{limit / 2, limit/2 + 1},
 			expErr: errMaxTotalSize},
-		{name: "many entries each under the file limit", sizes: []int{maxFileSize / 2, maxFileSize / 2, maxFileSize / 2},
+		{name: "many small entries over the limit", sizes: []int{limit / 4, limit / 4, limit / 4, limit / 4, 1},
 			expErr: errMaxTotalSize},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			z, err := NewZip(zeroFilledZip(t, tt.sizes...))
+			z, err := newZip(zeroFilledZip(t, tt.sizes...), limit)
 
 			require.ErrorIs(t, err, tt.expErr)
 			assert.Equal(t, tt.expFiles, fileCount(z))
 		})
+	}
+}
+
+// Two 60 MB entries are accepted, as they were before the total limit existed.
+func TestNewZip_AcceptsEntriesOverOldTotal(t *testing.T) {
+	z, err := NewZip(zeroFilledZip(t, 60<<20, 60<<20))
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, fileCount(z))
+}
+
+func TestZipSizeErrors_StatusCode(t *testing.T) {
+	for _, err := range []error{errMaxFileSize, errMaxTotalSize} {
+		var responder interface{ StatusCode() int }
+
+		require.ErrorAs(t, err, &responder)
+		assert.Equal(t, 413, responder.StatusCode(), err.Error())
 	}
 }
 

@@ -101,8 +101,8 @@ type Data struct {
   - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
   - Uploads larger than 32 MB are written to temporary files on disk. GoFr removes them when the handler returns, so
     a `*multipart.FileHeader` must be opened and read inside the handler, not in a goroutine that outlives it.
-  - A `file.Zip` field is unzipped in memory. Each file in it, and all of its files together, must be at most 100 MB
-    uncompressed; a larger archive makes `Bind` return an error.
+  - A `file.Zip` field is unzipped in memory. Each file in it must be at most 100 MB uncompressed, and all of its
+    files together at most 1 GB; a larger archive makes `Bind` return an error with status `413`.
 
 
 - `HostName()` - to access the host name for the incoming request
