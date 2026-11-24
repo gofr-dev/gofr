@@ -531,7 +531,7 @@ err := ctx.File.Rename("old_name.text", "new_name.text")
 err := ctx.File.Remove("my_dir")
 ```
 
-The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory will be reset to its parent directory.
+The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory is left as it is, so change to an existing directory before you use relative paths again.
 
 > Note: In S3, RemoveAll only supports deleting directories and will return an error if a file path (as indicated by a file extension) is provided for S3.
 > GCS and Azure File Storage handle both files and directories.

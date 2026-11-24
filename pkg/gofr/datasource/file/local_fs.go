@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -139,8 +138,8 @@ func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (Fil
 }
 
 // RemoveAll removes dirPath and everything under it like os.RemoveAll, and returns nil
-// if dirPath does not exist. If the working directory is dirPath or inside it, the
-// working directory is moved to dirPath's parent so that relative paths keep working.
+// if dirPath does not exist. Like os.RemoveAll, it leaves the working directory as it
+// is, even when it removes it.
 func (l *localFileSystem) RemoveAll(dirPath string) error {
 	var msg string
 
@@ -149,20 +148,9 @@ func (l *localFileSystem) RemoveAll(dirPath string) error {
 
 	defer l.Observe(OpRemoveAll, startTime, &st, &msg)
 
-	// Both must be read before the removal: Getwd fails once the working directory is gone.
-	wd, wdErr := os.Getwd()
-	absPath, absErr := filepath.Abs(dirPath)
-
 	if err := os.RemoveAll(dirPath); err != nil {
 		msg = fmt.Sprintf("failed to remove %q: %v", dirPath, err)
 		return err
-	}
-
-	if wdErr == nil && absErr == nil && isSameOrInside(wd, absPath) && !pathExists(wd) {
-		if err := os.Chdir(filepath.Dir(absPath)); err != nil {
-			msg = fmt.Sprintf("removed %q but failed to leave it: %v", dirPath, err)
-			return err
-		}
 	}
 
 	st = StatusSuccess
@@ -238,20 +226,6 @@ func notFound(err error) error {
 	}
 
 	return err
-}
-
-// pathExists reports whether path can be stat'ed.
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-
-	return err == nil
-}
-
-// isSameOrInside reports whether path is dir or lies inside it. Both must be absolute.
-func isSameOrInside(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // moveAcrossDevices moves a regular file to another filesystem, where os.Rename cannot:

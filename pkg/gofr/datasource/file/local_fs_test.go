@@ -257,51 +257,18 @@ func TestLocalFileSystem_RemoveAll_RemovesOnlyTheTarget(t *testing.T) {
 	require.NoError(t, fs.RemoveAll("missing"))
 }
 
-func TestLocalFileSystem_RemoveAll_LeavesRemovedWorkingDirectory(t *testing.T) {
-	parent := t.TempDir()
-	parent, err := filepath.EvalSymlinks(parent) // Getwd reports the resolved path
-	require.NoError(t, err)
-
-	testCases := []struct {
-		desc   string
-		wd     string
-		remove string
-	}{
-		{desc: "working directory removed by a relative path", wd: "current", remove: "../current"},
-		{desc: "working directory inside the removed directory", wd: filepath.Join("removed", "deeper"),
-			remove: filepath.Join(parent, "removed")},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			wd := filepath.Join(parent, tc.wd)
-			require.NoError(t, os.MkdirAll(wd, 0o755))
-			t.Chdir(wd)
-
-			require.NoError(t, newTestLocalFS(t).RemoveAll(tc.remove))
-
-			got, err := os.Getwd()
-			require.NoError(t, err)
-			assert.Equal(t, parent, got)
-		})
-	}
-}
-
-func TestLocalFileSystem_RemoveAll_EmptyPathKeepsWorkingDirectory(t *testing.T) {
-	wd := t.TempDir()
+func TestLocalFileSystem_RemoveAll_LeavesWorkingDirectory(t *testing.T) {
+	wd := filepath.Join(t.TempDir(), "current")
+	require.NoError(t, os.Mkdir(wd, 0o755))
 	t.Chdir(wd)
-	writeTestFile(t, "keep.txt", "kept")
 
-	wd, err := os.Getwd()
-	require.NoError(t, err)
+	// Like os.RemoveAll, removing the working directory does not move the process out of it.
+	require.NoError(t, newTestLocalFS(t).RemoveAll("../current"))
+	assert.NoDirExists(t, wd)
 
-	// os.RemoveAll("") removes nothing, so the working directory must not change.
-	require.NoError(t, newTestLocalFS(t).RemoveAll(""))
-
-	got, err := os.Getwd()
-	require.NoError(t, err)
-	assert.Equal(t, wd, got)
-	assert.Equal(t, "kept", readTestFile(t, "keep.txt"))
+	if got, err := os.Getwd(); err == nil {
+		assert.NotEqual(t, filepath.Dir(wd), got)
+	}
 }
 
 func TestLocalFileSystem_RemoveAll_Error(t *testing.T) {
