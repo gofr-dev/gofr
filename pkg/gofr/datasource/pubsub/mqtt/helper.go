@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -137,7 +139,7 @@ func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffe
 // createMqttHandler builds the paho callback that converts an arriving MQTT message into a
 // pubsub.Message and queues it. Instrumentation lives in Subscribe, at the point the message is
 // actually handed to a caller, so nothing here needs the topic or a context.
-func (*MQTT) createMqttHandler(msgs chan *pubsub.Message) mqtt.MessageHandler {
+func (*MQTT) createMqttHandler(msgs chan *pubsub.Message, done <-chan struct{}) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		ctx := context.Background()
 
@@ -153,8 +155,11 @@ func (*MQTT) createMqttHandler(msgs chan *pubsub.Message) mqtt.MessageHandler {
 
 		messg.Committer = &message{msg: msg}
 
-		// store the message in the channel
-		msgs <- messg
+		// store the message in the channel, or drop it once Unsubscribe has closed done
+		select {
+		case msgs <- messg:
+		case <-done:
+		}
 	}
 }
 
@@ -175,10 +180,10 @@ func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.M
 	}
 }
 
+// Unsubscribe unsubscribes from the topic on the broker. When that succeeds, a Subscribe call waiting
+// on the topic returns nil, nil; a later Subscribe call for the topic subscribes to it again.
 func (m *MQTT) Unsubscribe(topic string) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	// The broker round trip runs without the lock, so it does not hold up Subscribe on other topics.
 	token := m.Client.Unsubscribe(topic)
 	token.Wait()
 
@@ -188,9 +193,12 @@ func (m *MQTT) Unsubscribe(topic string) error {
 		return token.Error()
 	}
 
-	sub, ok := m.subscriptions[topic]
-	if ok {
-		close(sub.msgs)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Only the call that removes the topic closes done, so concurrent calls cannot close it twice.
+	if sub, ok := m.subscriptions[topic]; ok {
+		close(sub.done)
 		delete(m.subscriptions, topic)
 	}
 
@@ -204,12 +212,14 @@ func (m *MQTT) Close() error {
 }
 
 func (m *MQTT) Disconnect(waitTime uint) error {
+	// Unsubscribe takes the write lock, so collect the topics instead of holding the read lock across it.
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	topics := slices.Collect(maps.Keys(m.subscriptions))
+	m.mu.RUnlock()
 
 	var err error
 
-	for topic := range m.subscriptions {
+	for _, topic := range topics {
 		unsubscribeErr := m.Unsubscribe(topic)
 		if err != nil {
 			err = errors.Join(err, unsubscribeErr)
