@@ -3,7 +3,6 @@ package file
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -93,7 +92,6 @@ func TestLocalFile_FileInfo(t *testing.T) {
 	modTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	writeTestFile(t, "data.txt", "hello")
-	require.NoError(t, os.Chmod("data.txt", 0o640))
 	require.NoError(t, os.Chtimes("data.txt", modTime, modTime))
 	require.NoError(t, os.Mkdir("dir", 0o755))
 
@@ -102,6 +100,7 @@ func TestLocalFile_FileInfo(t *testing.T) {
 	f, err := fs.Open("data.txt")
 	require.NoError(t, err)
 
+	// As on the other stores, the metadata is the file's when it was opened.
 	assertInfo := func(t *testing.T) {
 		t.Helper()
 
@@ -109,36 +108,41 @@ func TestLocalFile_FileInfo(t *testing.T) {
 		assert.Equal(t, int64(5), f.Size())
 		assert.True(t, f.ModTime().Equal(modTime))
 		assert.False(t, f.IsDir())
-		assert.Equal(t, os.FileMode(0o640), f.Mode())
-		assert.NotNil(t, f.Sys())
+		assert.Equal(t, DefaultFileMode, f.Mode())
+		assert.Nil(t, f.Sys())
 	}
 
 	assertInfo(t)
-
-	// After Close the metadata saved at Close is returned.
 	require.NoError(t, f.Close())
 	assertInfo(t)
 
 	d, err := fs.Open("dir")
 	require.NoError(t, err)
 	assert.True(t, d.IsDir())
-	assert.True(t, d.Mode().IsDir())
+	assert.Equal(t, DefaultDirMode, d.Mode())
 	require.NoError(t, d.Close())
 }
 
-func TestLocalFile_FileInfo_WithoutMetadata(t *testing.T) {
-	osFile, err := os.Create(filepath.Join(t.TempDir(), "f.txt"))
+func TestLocalFile_FileInfo_WriteOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	f, err := newTestLocalFS(t).Create("out.bin")
 	require.NoError(t, err)
-	require.NoError(t, osFile.Close())
 
-	// The file could not be stat'ed when it was opened, nor since.
-	f := newLocalFile(osFile, nil, nil, localLocation)
+	_, err = f.Write([]byte("hello world"))
+	require.NoError(t, err)
 
+	// As before, a file created for writing reports no size or time, and ReadAll does
+	// not read it.
+	assert.Equal(t, "out.bin", f.Name())
 	assert.Zero(t, f.Size())
 	assert.True(t, f.ModTime().IsZero())
-	assert.False(t, f.IsDir())
-	assert.Zero(t, f.Mode())
-	assert.Nil(t, f.Sys())
+
+	_, err = f.ReadAll()
+	require.ErrorIs(t, err, errFileNotOpenForReading)
+
+	require.NoError(t, f.Close())
+	assert.Equal(t, "hello world", readTestFile(t, "out.bin"))
 }
 
 func TestLocalFile_ReadAll(t *testing.T) {
@@ -187,20 +191,6 @@ func TestLocalFile_ReadAll(t *testing.T) {
 	require.NoError(t, csvFile.Close())
 }
 
-func TestLocalFile_MetadataAfterWritesAndClose(t *testing.T) {
-	t.Chdir(t.TempDir())
-
-	f, err := newTestLocalFS(t).Create("out.bin")
-	require.NoError(t, err)
-
-	_, err = f.Write([]byte("hello world"))
-	require.NoError(t, err)
-	require.NoError(t, f.Close())
-
-	// The size written before Close is kept, not the empty size at Create.
-	assert.Equal(t, int64(11), f.Size())
-}
-
 func TestLocalFile_ConcurrentUse(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTestFile(t, "data.txt", "hello world")
@@ -227,6 +217,7 @@ func TestLocalFile_ConcurrentUse(t *testing.T) {
 	assert.Equal(t, int64(11), f.Size())
 }
 
+// TestLocalFile_ReadAt checks the bounds that every store uses for ReadAt.
 func TestLocalFile_ReadAt(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTestFile(t, "data.txt", "0123456789")
@@ -243,8 +234,8 @@ func TestLocalFile_ReadAt(t *testing.T) {
 		wantErr error
 	}{
 		{desc: "inside the file", off: 2, want: "2345"},
-		{desc: "running into the end", off: 8, want: "89", wantErr: io.EOF},
-		{desc: "at the end", off: 10, wantErr: io.EOF},
+		{desc: "cut short by the end", off: 8, want: "89"},
+		{desc: "at the end", off: 10, wantErr: ErrOutOfRange},
 		{desc: "past the end", off: 11, wantErr: ErrOutOfRange},
 		{desc: "negative offset", off: -1, wantErr: ErrOutOfRange},
 	}
@@ -265,11 +256,6 @@ func TestLocalFile_ReadAt(t *testing.T) {
 			require.ErrorIs(t, readErr, tc.wantErr)
 		})
 	}
-
-	// io.SectionReader relies on io.EOF at the end of the file.
-	tail, err := io.ReadAll(io.NewSectionReader(f, 8, 4))
-	require.NoError(t, err)
-	assert.Equal(t, "89", string(tail))
 }
 
 func TestLocalFile_Seek(t *testing.T) {
@@ -323,6 +309,32 @@ func TestLocalFile_Seek(t *testing.T) {
 		require.ErrorIs(t, err, os.ErrClosed)
 		require.NotErrorIs(t, err, ErrOutOfRange)
 	}
+}
+
+func TestLocalFile_Seek_ReadOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeTestFile(t, "data.txt", "0123456789")
+
+	f, err := newTestLocalFS(t).Open("data.txt")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = f.Close() })
+
+	// A file opened only for reading keeps the bounds of the other stores: the offset
+	// can reach the end but not move past it.
+	pos, err := f.Seek(0, io.SeekEnd)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), pos)
+
+	_, err = f.Seek(1, io.SeekEnd)
+	require.ErrorIs(t, err, ErrOutOfRange)
+
+	_, err = f.Seek(11, io.SeekStart)
+	require.ErrorIs(t, err, ErrOutOfRange)
+
+	pos, err = f.Seek(0, io.SeekCurrent)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), pos)
 }
 
 func TestLocalFile_CloseTwice(t *testing.T) {

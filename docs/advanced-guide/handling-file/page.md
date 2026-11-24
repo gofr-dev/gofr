@@ -483,7 +483,7 @@ if err != nil {
 }
 ```
 
-> Note: On the local file system, `Open`, `OpenFile` and `Create` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. `ReadAt` returns `io.EOF` when the read reaches the end of the file, and `file.ErrOutOfRange` for a negative offset or one past the end. `Seek` can move past the end of the file, where a later `Write` extends it, and returns an error matching `file.ErrOutOfRange` for a negative offset.
+> Note: On the local file system, `Open` and `OpenFile` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. If `Create` cannot create the file, the returned file's `Write` and `Close` return the error. As on the other stores, `ReadAt` returns `file.ErrOutOfRange` for a negative offset or one at or past the end of the file, and `Seek` returns an error matching `file.ErrOutOfRange` for a negative offset or, on a file opened only for reading, one past the end. A file opened for writing can seek past the end, where a later `Write` extends it.
 
 ### Getting Information of the file/directory
 

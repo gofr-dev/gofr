@@ -592,24 +592,23 @@ func TestLocalFileSystem_Create(t *testing.T) {
 
 	_, err = f.Write([]byte("HELLO"))
 	require.NoError(t, err)
-	assert.Equal(t, int64(11), f.Size())
 	require.NoError(t, f.Close())
 
 	assert.Equal(t, "HELLO world", readTestFile(t, path))
 
-	// A failed Create returns the error, and also a file whose Write and Close return it,
-	// so code that ignores the error does not dereference a nil File.
+	// As before, a failed Create returns a nil error and a file whose Write and Close
+	// report the failure.
 	writeTestFile(t, "parent", "a file")
 	require.NoError(t, os.Mkdir("dir", 0o755))
 
 	for _, name := range []string{filepath.Join("parent", "child.txt"), "dir"} {
 		f, err := fs.Create(name)
-		require.Error(t, err, name)
+		require.NoError(t, err, name)
 		require.NotNil(t, f, name)
 
 		_, writeErr := f.Write([]byte("x"))
-		require.ErrorIs(t, writeErr, err, name)
-		require.ErrorIs(t, f.Close(), err, name)
+		require.Error(t, writeErr, name)
+		require.ErrorIs(t, f.Close(), writeErr, name)
 	}
 }
 

@@ -57,159 +57,107 @@ func (l *localFileSystem) Connect() {
 // every write-only open truncates. The local store calls the os package directly instead.
 
 // Create creates or truncates the named file like os.Create, creating missing parent
-// directories first. If the file cannot be created, Create returns the error together
-// with a non-nil File whose Write and Close return it, as earlier releases did.
+// directories first. As before, a failure is reported by the returned File: its Write
+// and Close return the error, and Create itself returns nil.
 func (l *localFileSystem) Create(name string) (File, error) {
-	var msg string
-
-	st := StatusError
 	startTime := time.Now()
 
-	defer l.Observe(OpCreate, startTime, &st, &msg)
+	f, err := createFile(name)
+	l.observe(OpCreate, name, startTime, err, fmt.Sprintf("Created %q for writing", name))
 
-	if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
-		msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
-		return l.failedFile(name, err), err
-	}
-
-	f, err := os.Create(name)
 	if err != nil {
-		msg = fmt.Sprintf("failed to create %q: %v", name, err)
-		return l.failedFile(name, err), err
+		return l.failedFile(name, err), nil
 	}
 
-	st = StatusSuccess
-	msg = fmt.Sprintf("Created %q for writing", name)
-
-	return l.newFile(f), nil
+	return l.newFile(f, os.O_WRONLY), nil
 }
 
 // Open opens the named file for reading like os.Open. A missing file returns
 // ErrFileNotFound.
 func (l *localFileSystem) Open(name string) (File, error) {
-	var msg string
-
-	st := StatusError
 	startTime := time.Now()
 
-	defer l.Observe(OpOpen, startTime, &st, &msg)
-
 	f, err := os.Open(name)
+	l.observe(OpOpen, name, startTime, err, fmt.Sprintf("Opened %q for reading", name))
+
 	if err != nil {
-		msg = fmt.Sprintf("failed to open %q: %v", name, err)
 		return nil, notFound(err)
 	}
 
-	st = StatusSuccess
-	msg = fmt.Sprintf("Opened %q for reading", name)
-
-	return l.newFile(f), nil
+	return l.newFile(f, os.O_RDONLY), nil
 }
 
 // OpenFile opens the named file with the given flags and permissions like os.OpenFile.
 // With O_CREATE, missing parent directories are created first. A missing file returns
 // ErrFileNotFound. If a file opened for writing cannot be opened, the error is returned
-// together with a non-nil File whose Write and Close return it, as earlier releases did.
+// together with a non-nil File whose Write and Close return it.
 func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
-	var msg string
-
-	st := StatusError
 	startTime := time.Now()
 
-	defer l.Observe(OpOpenFile, startTime, &st, &msg)
+	f, err := openFile(name, flag, perm)
+	l.observe(OpOpenFile, name, startTime, err, fmt.Sprintf("Opened %q with flags %d", name, flag))
 
-	if flag&os.O_CREATE != 0 {
-		if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
-			msg = fmt.Sprintf("failed to create parent directories of %q: %v", name, err)
-			return l.failedOpen(name, flag, err)
-		}
-	}
-
-	f, err := os.OpenFile(name, flag, perm)
 	if err != nil {
-		msg = fmt.Sprintf("failed to open %q: %v", name, err)
 		return l.failedOpen(name, flag, notFound(err))
 	}
 
-	st = StatusSuccess
-	msg = fmt.Sprintf("Opened %q with flags %d", name, flag)
-
-	return l.newFile(f), nil
+	return l.newFile(f, flag), nil
 }
 
 // RemoveAll removes dirPath and everything under it like os.RemoveAll, and returns nil
 // if dirPath does not exist. Like os.RemoveAll, it leaves the working directory as it
 // is, even when it removes it.
 func (l *localFileSystem) RemoveAll(dirPath string) error {
-	var msg string
-
-	st := StatusError
 	startTime := time.Now()
 
-	defer l.Observe(OpRemoveAll, startTime, &st, &msg)
+	err := os.RemoveAll(dirPath)
+	l.observe(OpRemoveAll, dirPath, startTime, err,
+		fmt.Sprintf("Directory %q and all contents deleted successfully", dirPath))
 
-	if err := os.RemoveAll(dirPath); err != nil {
-		msg = fmt.Sprintf("failed to remove %q: %v", dirPath, err)
-		return err
-	}
-
-	st = StatusSuccess
-	msg = fmt.Sprintf("Directory %q and all contents deleted successfully", dirPath)
-
-	return nil
+	return err
 }
 
 // Rename moves oldname to newname like os.Rename, creating newname's missing parent
 // directories first. If the two paths are on different filesystems, a regular file is
 // copied and the original removed.
 func (l *localFileSystem) Rename(oldname, newname string) error {
-	var msg string
-
-	st := StatusError
 	startTime := time.Now()
 
-	defer l.Observe(OpRename, startTime, &st, &msg)
+	err := renameFile(oldname, newname)
+	l.observe(OpRename, oldname, startTime, err, fmt.Sprintf("Renamed %q to %q successfully", oldname, newname))
 
-	// Check the source first so that a failed rename does not leave new directories behind.
-	if _, err := os.Lstat(oldname); err != nil {
-		msg = fmt.Sprintf("failed to rename %q: %v", oldname, err)
-		return err
-	}
-
-	if err := os.MkdirAll(filepath.Dir(newname), DefaultDirMode); err != nil {
-		msg = fmt.Sprintf("failed to create parent directories of %q: %v", newname, err)
-		return err
-	}
-
-	err := os.Rename(oldname, newname)
-	if isCrossDeviceError(err) {
-		err = moveAcrossDevices(oldname, newname, err)
-	}
-
-	if err != nil {
-		msg = fmt.Sprintf("failed to rename %q to %q: %v", oldname, newname, err)
-		return err
-	}
-
-	st = StatusSuccess
-	msg = fmt.Sprintf("Renamed %q to %q successfully", oldname, newname)
-
-	return nil
+	return err
 }
 
-func (l *localFileSystem) newFile(f *os.File) File {
-	return newLocalFile(f, l.Logger, l.Metrics, l.Location)
+// observe records an operation of the local store like CommonFileSystem.Observe.
+func (l *localFileSystem) observe(operation, name string, startTime time.Time, err error, successMsg string) {
+	st, msg := outcome(operation, name, err, successMsg)
+	l.Observe(operation, startTime, &st, &msg)
 }
 
-// failedFile returns the File that earlier releases returned when a file could not be
-// created: its Write and Close return err. Returning it alongside err keeps code that
-// ignores the error from dereferencing a nil File.
+// outcome returns the status and message to observe for an operation on name that
+// returned err. io.EOF is how a read reports the end of a file, not a failure.
+func outcome(operation, name string, err error, successMsg string) (status, message string) {
+	if err != nil && !errors.Is(err, io.EOF) {
+		return StatusError, fmt.Sprintf("%s on %q failed: %v", operation, name, err)
+	}
+
+	return StatusSuccess, successMsg
+}
+
+func (l *localFileSystem) newFile(f *os.File, flag int) File {
+	return newLocalFile(f, flag, l.Logger, l.Metrics, l.Location)
+}
+
+// failedFile returns the File that reports a failed create, as earlier releases did:
+// its Write and Close return err.
 func (l *localFileSystem) failedFile(name string, err error) File {
 	return NewCommonFileWriter(l.Provider, name, &failWriter{err: err}, l.Logger, l.Metrics, l.Location)
 }
 
 // failedOpen returns the result of an OpenFile call that failed with err: a failedFile
-// when the file was opened for writing, as earlier releases returned, and nil otherwise.
+// when the file was opened for writing, so that code ignoring the error does not
+// dereference a nil File, and nil otherwise.
 func (l *localFileSystem) failedOpen(name string, flag int, err error) (File, error) {
 	if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
 		return l.failedFile(name, err), err
@@ -223,6 +171,48 @@ func (l *localFileSystem) failedOpen(name string, flag int, err error) (File, er
 func notFound(err error) error {
 	if errors.Is(err, os.ErrNotExist) {
 		return ErrFileNotFound
+	}
+
+	return err
+}
+
+// createFile creates or truncates name like os.Create, creating missing parent
+// directories first.
+func createFile(name string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
+		return nil, err
+	}
+
+	return os.Create(name)
+}
+
+// openFile opens name like os.OpenFile, first creating missing parent directories when
+// flag has O_CREATE.
+func openFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	if flag&os.O_CREATE != 0 {
+		if err := os.MkdirAll(filepath.Dir(name), DefaultDirMode); err != nil {
+			return nil, err
+		}
+	}
+
+	return os.OpenFile(name, flag, perm)
+}
+
+// renameFile moves oldname to newname like os.Rename, creating newname's missing parent
+// directories first, and copies a regular file across filesystems.
+func renameFile(oldname, newname string) error {
+	// Check the source first so that a failed rename does not leave new directories behind.
+	if _, err := os.Lstat(oldname); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newname), DefaultDirMode); err != nil {
+		return err
+	}
+
+	err := os.Rename(oldname, newname)
+	if isCrossDeviceError(err) {
+		return moveAcrossDevices(oldname, newname, err)
 	}
 
 	return err
