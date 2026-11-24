@@ -141,10 +141,17 @@ func TestSettings_PostgresDSN_Escaping(t *testing.T) {
 }
 
 func TestSettings_ConnectorOptions(t *testing.T) {
-	// IAM auth plus exactly one IP-type dial option, for every IP type.
+	// IAM auth, exactly one IP-type dial option, and the explicit WithBuiltInMetrics(false) that
+	// keeps cloudsqlconn v1.26.0's default-on built-in metrics turned off, for every IP type.
+	//
+	// This count catches the WithBuiltInMetrics(false) option being removed (the count drops to 2).
+	// It cannot catch it being flipped to true or swapped: cloudsqlconn.Dialer exposes no accessor
+	// for the built-in-metrics state, and the metric client uses its own channel, not WithDialFunc,
+	// so the "metrics stay off" behavior is not unit-assertable. That behavior is verified by a
+	// live check: a dialer built from these options makes no request to monitoring.googleapis.com.
 	for _, ip := range []string{ipTypePublic, ipTypePrivate, ipTypePSC, ""} {
 		s := settings{ipType: normalizeIPType(ip)}
-		assert.Len(t, s.connectorOptions(), 2, "ip=%q", ip)
+		assert.Len(t, s.connectorOptions(), 3, "ip=%q", ip)
 	}
 }
 
@@ -219,10 +226,10 @@ func TestConnector_Connect_IAM(t *testing.T) {
 		configs fakeConfig
 	}{
 		{
-			// An IP-literal host keeps pgx from doing a DNS lookup before it calls the
-			// dial function, so the post-cleanup connect below stays offline.
+			// DB_HOST is the instance connection name, as documented. pgx must not try to
+			// resolve it as a hostname; the connect below has to reach the dialer.
 			name:    "postgres public ip",
-			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "127.0.0.1", "DB_USER": "u", "DB_NAME": "d"},
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres", "DB_HOST": "p:r:i", "DB_USER": "u", "DB_NAME": "d"},
 		},
 		{
 			name: "mysql private ip",
