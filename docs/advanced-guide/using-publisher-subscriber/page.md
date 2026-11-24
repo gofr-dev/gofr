@@ -827,50 +827,40 @@ func order(ctx *gofr.Context) (any, error) {
 > ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-subscriber/main.go)
 > ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-publisher/main.go)
 
-### Publishing with a key (Kafka)
+### Publishing with a partition key
 
-Use the optional `pubsub.KeyedPublisher` interface when related messages must reach
-the same Kafka partition, for example all batches of a job or events for an order.
-The existing `pubsub.Publisher` and `pubsub.Client` interfaces are unchanged.
+Configure a top-level JSON field per topic when related messages should reach
+the same partition, for example batches of a job or events for an order:
 
-```go
-import (
-	"fmt"
-
-	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
-)
-
-func publishOrder(ctx *gofr.Context) (any, error) {
-	publisher, ok := ctx.GetPublisher().(pubsub.KeyedPublisher)
-	if !ok {
-		return nil, fmt.Errorf("configured pubsub backend does not support keyed publishing")
-	}
-
-	err := publisher.PublishWithKey(ctx, "order-events", []byte("order-123"), []byte(`{"status":"created"}`))
-	if err != nil {
-		return nil, err
-	}
-
-	return "Published", nil
-}
+```dotenv
+PUBSUB_KEY_FIELDS=order-events:orderId,customer-events:customerId
 ```
 
-Kafka supports this optional capability; other backends need not implement it.
-Check the type assertion rather than assuming support. Falling back to `Publish`
-does not preserve key-based partition affinity.
+The existing publishing call does not change:
 
-Kafka writers use the `kafka-go` `Hash` balancer by default. Non-empty keys use
-FNV-1a hashing with signed modulo partition selection (compatible with Sarama's
-hash partitioner), not the Java producer's default Murmur2 partitioning.
-Producers using different partitioners can send the same key to different
-partitions.
+```go
+err := ctx.GetPublisher().Publish(ctx, "order-events", []byte(`{"orderId":"order-123","status":"created"}`))
+```
 
-`Publish` sends a nil key and retains round-robin routing. `PublishWithKey` treats
-both nil and empty keys (`[]byte{}`) as unkeyed records, also using round-robin
-routing. Identical non-empty keys select the same partition while the partition
-count is unchanged; different keys may share a partition. Increasing the
-partition count can move a key to another partition.
+GoFr extracts `order-123` as the partition key. Mappings are comma-separated
+`topic:field` pairs with optional surrounding whitespace; the last mapping for
+a topic wins, and malformed mappings are ignored. Fields must be top-level JSON
+strings, numbers, or booleans. Missing, null, empty-string, object, or array
+values and non-JSON payloads fall back to an unkeyed record with a debug log;
+key extraction never fails publication or logs payload/key values.
+
+Kafka receives the extracted value as `kafka.Message.Key`. Its writer uses the
+`Hash` balancer only when a valid key mapping is configured. This uses FNV-1a
+with signed modulo partition selection (compatible with Sarama), not the Java
+producer's default Murmur2. Unmapped topics and records without a usable key
+retain round-robin routing. Without `PUBSUB_KEY_FIELDS`, writer behavior is
+unchanged. Identical keys select the same partition while the partition count
+is unchanged; different keys can share a partition.
+
+Azure EventHub receives the same extracted value as `PartitionKey` when its
+client is registered through `app.AddPubSub`. NATS, MQTT, Redis, SQS, and Google
+Pub/Sub ignore this configuration. SQS FIFO message-group IDs and Google
+ordering keys are not enabled by this setting.
 
 ## Distributed Tracing
 

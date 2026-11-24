@@ -9,60 +9,22 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/internal/keyfields"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestKafkaClient_PublishWithKey(t *testing.T) {
-	for _, key := range [][]byte{nil, {}, []byte("organization:ticket:command")} {
-		t.Run(string(key), func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			writer := NewMockWriter(ctrl)
-			metrics := NewMockMetrics(ctrl)
-			client := &kafkaClient{
-				writer: writer, metrics: metrics, logger: logging.NewMockLogger(logging.DEBUG),
-				config: Config{Brokers: []string{"localhost:9092"}},
-			}
-
-			var publisher pubsub.KeyedPublisher = client
-
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-
-			payload := []byte("payload")
-
-			writer.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).DoAndReturn(
-				func(publishCtx context.Context, messages ...kafkago.Message) error {
-					assert.Equal(t, ctx.Done(), publishCtx.Done())
-					require.Len(t, messages, 1)
-					assert.Equal(t, "topic", messages[0].Topic)
-
-					if len(key) == 0 {
-						assert.Nil(t, messages[0].Key)
-					} else {
-						assert.Equal(t, key, messages[0].Key)
-					}
-					assert.Equal(t, payload, messages[0].Value)
-					assert.False(t, messages[0].Time.IsZero())
-
-					return nil
-				},
-			)
-			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "topic")
-			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "topic")
-			require.NoError(t, publisher.PublishWithKey(ctx, "topic", key, payload))
-		})
-	}
-}
-
-func TestKafkaClient_PublishWithEmptyKeyRoutesRoundRobin(t *testing.T) {
+func TestKafkaClient_ConfiguredKey(t *testing.T) {
 	for _, tt := range []struct {
-		name string
-		key  []byte
+		name, mapping, topic, payload string
+		key                           []byte
 	}{
-		{name: "nil"},
-		{name: "empty", key: []byte{}},
+		{"configured", "orders:orderId", "orders", `{"orderId":"order-123"}`, []byte("order-123")},
+		{"other topic", "orders:orderId", "events", `{"orderId":"order-123"}`, nil},
+		{"no config", "", "orders", `{"orderId":"order-123"}`, nil},
+		{"missing field", "orders:orderId", "orders", `{}`, nil},
+		{"not JSON", "orders:orderId", "orders", `payload`, nil},
+		{"empty key", "orders:orderId", "orders", `{"orderId":""}`, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -70,7 +32,7 @@ func TestKafkaClient_PublishWithEmptyKeyRoutesRoundRobin(t *testing.T) {
 			metrics := NewMockMetrics(ctrl)
 			client := &kafkaClient{
 				writer: writer, metrics: metrics, logger: logging.NewMockLogger(logging.DEBUG),
-				config: Config{Brokers: []string{"localhost:9092"}},
+				config: Config{Brokers: []string{"localhost:9092"}}, keyFields: keyfields.Parse(tt.mapping),
 			}
 			balancer := &kafkago.Hash{}
 			partitions := make([]int, 0, 6)
@@ -78,58 +40,82 @@ func TestKafkaClient_PublishWithEmptyKeyRoutesRoundRobin(t *testing.T) {
 			writer.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Times(6).DoAndReturn(
 				func(_ context.Context, messages ...kafkago.Message) error {
 					require.Len(t, messages, 1)
-					assert.Nil(t, messages[0].Key)
+					assert.Equal(t, tt.key, messages[0].Key)
+					assert.Equal(t, []byte(tt.payload), messages[0].Value)
+					assert.Equal(t, tt.topic, messages[0].Topic)
 					partitions = append(partitions, balancer.Balance(messages[0], 0, 1, 2))
 
 					return nil
 				},
 			)
-			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "topic").Times(6)
-			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "topic").Times(6)
+			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", tt.topic).Times(6)
+			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", tt.topic).Times(6)
 
 			for range 6 {
-				require.NoError(t, client.PublishWithKey(t.Context(), "topic", tt.key, []byte("payload")))
+				require.NoError(t, client.Publish(t.Context(), tt.topic, []byte(tt.payload)))
 			}
 
-			assert.Equal(t, []int{0, 1, 2, 0, 1, 2}, partitions)
+			if tt.key == nil {
+				assert.Equal(t, []int{0, 1, 2, 0, 1, 2}, partitions)
+			} else {
+				for _, partition := range partitions {
+					assert.Equal(t, partitions[0], partition)
+				}
+			}
 		})
 	}
 }
 
-func TestKafkaClient_PublishWithKeyError(t *testing.T) {
+func TestKafkaClient_ConfiguredKeyPublishError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	writer := NewMockWriter(ctrl)
 	metrics := NewMockMetrics(ctrl)
 	publishErr := testutil.CustomError{ErrorMessage: "publish failed"}
-	client := &kafkaClient{writer: writer, metrics: metrics, logger: logging.NewMockLogger(logging.DEBUG)}
+	client := &kafkaClient{
+		writer: writer, metrics: metrics, logger: logging.NewMockLogger(logging.DEBUG),
+		keyFields: keyfields.Parse("orders:orderId"),
+	}
 	writer.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Return(publishErr)
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "topic")
-	require.ErrorIs(t, client.PublishWithKey(t.Context(), "topic", []byte("key"), []byte("payload")), publishErr)
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "orders")
+	require.ErrorIs(t, client.Publish(t.Context(), "orders", []byte(`{"orderId":"123"}`)), publishErr)
 }
 
-func TestKafkaWriterKeyPartitioning(t *testing.T) {
-	writer := createKafkaWriter(&Config{
-		Brokers: []string{"localhost:9092"}, BatchSize: 1, BatchBytes: DefaultBatchBytes, BatchTimeout: DefaultBatchTimeout,
-	}, &kafkago.Dialer{}, logging.NewMockLogger(logging.DEBUG))
+func TestKafkaWriterConfiguredBalancer(t *testing.T) {
+	for _, mapping := range []string{"", "invalid", "orders:orderId"} {
+		t.Run(mapping, func(t *testing.T) {
+			writer := createKafkaWriter(&Config{
+				Brokers: []string{"localhost:9092"}, BatchSize: 1,
+				BatchBytes: DefaultBatchBytes, BatchTimeout: DefaultBatchTimeout, KeyFields: mapping,
+			}, &kafkago.Dialer{}, logging.NewMockLogger(logging.DEBUG))
 
-	t.Cleanup(func() { require.NoError(t, writer.Close()) })
+			t.Cleanup(func() { require.NoError(t, writer.Close()) })
 
-	concrete, ok := writer.(*kafkago.Writer)
-	require.True(t, ok)
-	balancer, ok := concrete.Balancer.(*kafkago.Hash)
-	require.True(t, ok)
+			concrete, ok := writer.(*kafkago.Writer)
+			require.True(t, ok)
 
-	keyed := kafkago.Message{Key: []byte("organization:ticket:command")}
-	partition := balancer.Balance(keyed, 0, 1, 2)
-
-	for range 10 {
-		assert.Equal(t, partition, balancer.Balance(keyed, 0, 1, 2))
+			if mapping == "orders:orderId" {
+				assert.IsType(t, &kafkago.Hash{}, concrete.Balancer)
+			} else {
+				assert.IsType(t, &kafkago.RoundRobin{}, concrete.Balancer)
+			}
+		})
 	}
+}
 
-	seen := make(map[int]bool)
-	for range 3 {
-		seen[balancer.Balance(kafkago.Message{}, 0, 1, 2)] = true
-	}
+func TestNewParsesKeyMappings(t *testing.T) {
+	stubConnectToBrokers(t, nil)
 
-	assert.Len(t, seen, 3, "nil keys must preserve round-robin routing")
+	ctrl := gomock.NewController(t)
+	client := New(&Config{
+		Brokers: []string{"localhost:9092"}, BatchSize: 1,
+		BatchBytes: DefaultBatchBytes, BatchTimeout: DefaultBatchTimeout, KeyFields: "orders:orderId",
+	}, logging.NewMockLogger(logging.DEBUG), NewMockMetrics(ctrl))
+	require.NotNil(t, client)
+
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	assert.Equal(t, keyfields.Fields{"orders": "orderId"}, client.keyFields)
+
+	writer, ok := client.snapshotWriter().(*kafkago.Writer)
+	require.True(t, ok)
+	assert.IsType(t, &kafkago.Hash{}, writer.Balancer)
 }
