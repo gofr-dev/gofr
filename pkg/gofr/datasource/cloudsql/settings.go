@@ -95,10 +95,15 @@ func (s *settings) postgresDSN() string {
 // quotePGValue renders a libpq connection-string value. Values without a unicode
 // space, single quote or backslash are returned as-is (keeping the common case
 // readable); otherwise the value is single-quoted with backslash escaping, so it
-// stays a single token and can't inject further keywords. An empty value is quoted
-// too, matching the copy in datasource/sql, which cannot be shared: this module
-// does not import gofr.dev.
+// stays a single token and can't inject further keywords. A value libpq already
+// reads back as written is left alone, so .env files quoted by hand keep connecting.
+// An empty value is quoted too, matching the copy in datasource/sql, which cannot
+// be shared: this module does not import gofr.dev.
 func quotePGValue(v string) string {
+	if isQuotedPGValue(v) || isEscapedPGValue(v) {
+		return v
+	}
+
 	if v != "" && !strings.ContainsAny(v, "'\\") && !strings.ContainsFunc(v, unicode.IsSpace) {
 		return v
 	}
@@ -118,6 +123,66 @@ func quotePGValue(v string) string {
 	b.WriteByte('\'')
 
 	return b.String()
+}
+
+// isQuotedPGValue reports whether v is already one complete single quoted libpq token:
+// wrapped in single quotes, with every quote and backslash inside escaped. libpq reads
+// such a token back as the value it was, so quoting it again would add the quotes.
+func isQuotedPGValue(v string) bool {
+	if len(v) < 2 || v[0] != '\'' || v[len(v)-1] != '\'' {
+		return false
+	}
+
+	escaped := false
+
+	for _, r := range v[1 : len(v)-1] {
+		if escaped {
+			escaped = false
+
+			continue
+		}
+
+		switch r {
+		case '\\':
+			escaped = true
+		case '\'':
+			return false
+		}
+	}
+
+	return !escaped
+}
+
+// isEscapedPGValue reports whether v already escapes a space, a quote or a backslash by hand,
+// the way `p@ss\ w0rd`, `it\'s` and `ab\\cd` were written before this fix. A bare `ab\cd` has no
+// pair, so it is still quoted, and a value starting with a quote is left to isQuotedPGValue.
+func isEscapedPGValue(v string) bool {
+	if strings.HasPrefix(v, "'") {
+		return false
+	}
+
+	escaped, skipping := false, false
+
+	for _, r := range v {
+		if skipping {
+			skipping = false
+
+			if r == '\\' || r == '\'' || unicode.IsSpace(r) {
+				escaped = true
+			}
+
+			continue
+		}
+
+		switch {
+		case r == '\\':
+			skipping = true
+		case unicode.IsSpace(r):
+			return false
+		}
+	}
+
+	return escaped && !skipping
 }
 
 func normalizeDialect(d string) string {

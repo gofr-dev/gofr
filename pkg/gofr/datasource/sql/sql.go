@@ -522,9 +522,14 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 // quotePGValue renders a value for a libpq key/value connection string. lib/pq ends an
 // unquoted value at the first unicode space and reads a backslash as an escape, so a value
 // holding either of those, or a single quote, is single quoted with backslashes and quotes
-// escaped. An empty value is quoted too, matching the copy in cloudsql/settings.go, which
-// cannot be shared: that datasource is its own module and does not import gofr.dev.
+// escaped. A value libpq already reads back as written is left alone, so .env files quoted
+// by hand keep connecting. An empty value is quoted too, matching the copy in
+// cloudsql/settings.go, which cannot be shared: that datasource is its own module.
 func quotePGValue(value string) string {
+	if isQuotedPGValue(value) || isEscapedPGValue(value) {
+		return value
+	}
+
 	if value != "" && !strings.ContainsAny(value, "'\\") && !strings.ContainsFunc(value, unicode.IsSpace) {
 		return value
 	}
@@ -544,6 +549,67 @@ func quotePGValue(value string) string {
 	b.WriteByte('\'')
 
 	return b.String()
+}
+
+// isQuotedPGValue reports whether value is already one complete single quoted libpq token:
+// wrapped in single quotes, with every quote and backslash inside escaped. libpq reads such
+// a token back as the value it was, so quoting it again would add the quotes to the value.
+func isQuotedPGValue(value string) bool {
+	if len(value) < 2 || value[0] != '\'' || value[len(value)-1] != '\'' {
+		return false
+	}
+
+	escaped := false
+
+	for _, r := range value[1 : len(value)-1] {
+		if escaped {
+			escaped = false
+
+			continue
+		}
+
+		switch r {
+		case '\\':
+			escaped = true
+		case '\'':
+			return false
+		}
+	}
+
+	return !escaped
+}
+
+// isEscapedPGValue reports whether value already escapes a space, a quote or a backslash by
+// hand, the way `p@ss\ w0rd`, `it\'s` and `ab\\cd` were written before this fix. A bare `ab\cd`
+// has no pair, so it is still quoted, and a value starting with a quote is left to
+// isQuotedPGValue, which decides those.
+func isEscapedPGValue(value string) bool {
+	if strings.HasPrefix(value, "'") {
+		return false
+	}
+
+	escaped, skipping := false, false
+
+	for _, r := range value {
+		if skipping {
+			skipping = false
+
+			if r == '\\' || r == '\'' || unicode.IsSpace(r) {
+				escaped = true
+			}
+
+			continue
+		}
+
+		switch {
+		case r == '\\':
+			skipping = true
+		case unicode.IsSpace(r):
+			return false
+		}
+	}
+
+	return escaped && !skipping
 }
 
 func pushDBMetrics(database *DB, metrics Metrics) {

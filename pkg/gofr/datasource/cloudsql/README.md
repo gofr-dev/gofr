@@ -59,6 +59,11 @@ including query logging, metrics and health checks.
 | `DB_CLOUDSQL_IP_TYPE` | `PUBLIC` (default), `PRIVATE` or `PSC`                                |
 | `DB_MAX_IDLE_CONNECTION` / `DB_MAX_OPEN_CONNECTION` | Pool sizing; zero uses GoFr defaults    |
 
+On Postgres, `DB_HOST`, `DB_USER` and `DB_NAME` follow libpq quoting in the connection string: a
+value holding a space, a quote or a backslash is single quoted and escaped, while a value already
+written the way libpq reads it is passed through and arrives decoded — `'x'` as `x`, `my\ db` as
+`my db`, `a\\b` as `a\b`. Plain values are sent unchanged.
+
 ## How it works
 
 `New` returns a `*Connector` that GoFr drives via `AddSQLDB`, which calls its

@@ -577,6 +577,78 @@ var postgresQuotingTestCases = []struct {
 		},
 		expOut: "host=host port=3201 user=user password=p@ssw0rd dbname=test sslmode=disable",
 	},
+	{
+		desc: "password already wrapped in single quotes is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `'p@ss w0rd'`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='p@ss w0rd' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "quoted password with an escaped quote is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `'a\'b'`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='a\'b' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with a doubled backslash is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `ab\\cd`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password=ab\\cd dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with an escaped space is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `p@ss\ w0rd`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password=p@ss\ w0rd dbname=test sslmode=disable`,
+	},
+	{
+		desc: "unbalanced quote is not taken for a quoted value",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `'abc`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='\'abc' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "quoted value ending in a bare backslash is escaped again",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `'abc\'`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='\'abc\\\'' dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with an escaped quote is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `\'abc`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password=\'abc dbname=test sslmode=disable`,
+	},
+	{
+		desc: "password with an escaped quote inside a word is left alone",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `it\'s`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password=it\'s dbname=test sslmode=disable`,
+	},
+	{
+		desc: "leading quote with an escaped pair is quoted, not passed through",
+		configs: &DBConfig{
+			Dialect: "postgres", HostName: "host", User: "user", Password: `'a\\b`,
+			Port: "3201", Database: "test", SSLMode: "disable",
+		},
+		expOut: `host=host port=3201 user=user password='\'a\\\\b' dbname=test sslmode=disable`,
+	},
 }
 
 func TestSQL_getDBConnectionString_PostgresQuoting(t *testing.T) {
@@ -617,6 +689,41 @@ func TestSQL_getDBConnectionString_PostgresParsedBack(t *testing.T) {
 	assert.Equal(t, configs.Database, parsed.Database)
 	assert.Equal(t, configs.Port, fmt.Sprint(parsed.Port))
 	assert.Equal(t, configs.SSLMode, string(parsed.SSLMode))
+}
+
+// TestSQL_getDBConnectionString_PostgresHandEncoded checks that values already quoted or
+// escaped by hand go out untouched and lib/pq reads back what those .env files used to get.
+func TestSQL_getDBConnectionString_PostgresHandEncoded(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		password  string
+		expParsed string
+	}{
+		{desc: "quoted", password: `'p@ss w0rd'`, expParsed: "p@ss w0rd"},
+		{desc: "quoted with an escaped quote", password: `'a\'b'`, expParsed: "a'b"},
+		{desc: "doubled backslash", password: `ab\\cd`, expParsed: `ab\cd`},
+		{desc: "escaped space", password: `p@ss\ w0rd`, expParsed: "p@ss w0rd"},
+		{desc: "escaped quote", password: `\'abc`, expParsed: "'abc"},
+		{desc: "escaped quote inside a word", password: `it\'s`, expParsed: "it's"},
+		{desc: "leading quote with a doubled backslash", password: `'a\\b`, expParsed: `'a\\b`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			configs := &DBConfig{
+				Dialect: "postgres", HostName: "host", User: "user", Password: tc.password,
+				Port: "3201", Database: "test", SSLMode: "disable",
+			}
+
+			connString, err := getDBConnectionString(configs)
+			require.NoError(t, err)
+
+			parsed, err := pq.NewConfig(connString)
+			require.NoError(t, err, "lib/pq rejected the connection string: %s", connString)
+
+			assert.Equal(t, tc.expParsed, parsed.Password)
+		})
+	}
 }
 
 func Test_NewSQLMock(t *testing.T) {
