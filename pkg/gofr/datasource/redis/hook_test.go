@@ -178,19 +178,75 @@ func TestRedisHook_Args(t *testing.T) {
 
 			require.NoError(t, tc.run(t.Context(), rc))
 
-			logged := recorder.lastLog(t, tc.query)
-			assert.Equal(t, tc.wantArgs, logged.Args)
-
-			// A container logs JSON, so the encoded args must match the plain values.
-			gotJSON, err := json.Marshal(logged)
-			require.NoError(t, err)
-
-			wantJSON, err := json.Marshal(tc.wantArgs)
-			require.NoError(t, err)
-
-			assert.Contains(t, string(gotJSON), `"args":`+string(wantJSON))
+			assertLoggedArgs(t, recorder.lastLog(t, tc.query), tc.wantArgs)
 		})
 	}
+}
+
+// assertLoggedArgs checks that logged prints wantArgs in every log format. The
+// args may be built lazily, so it compares the printed output, not the values.
+func assertLoggedArgs(t *testing.T, logged *QueryLog, wantArgs any) {
+	t.Helper()
+
+	want := &QueryLog{Query: logged.Query, Duration: logged.Duration, Args: wantArgs}
+	assert.Equal(t, want.String(), logged.String())
+
+	var gotOut, wantOut bytes.Buffer
+
+	logged.PrettyPrint(&gotOut)
+	want.PrettyPrint(&wantOut)
+	assert.Equal(t, wantOut.String(), gotOut.String())
+
+	// A container logs JSON, so the encoded args must match the plain values.
+	gotJSON, err := json.Marshal(logged)
+	require.NoError(t, err)
+
+	wantJSON, err := json.Marshal(wantArgs)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(gotJSON), `"args":`+string(wantJSON))
+}
+
+// discardLogger is a datasource.Logger that drops every entry, as the real
+// logger does with a Debug entry when LOG_LEVEL is above DEBUG.
+type discardLogger struct{}
+
+func (discardLogger) Debug(...any)          {}
+func (discardLogger) Debugf(string, ...any) {}
+func (discardLogger) Info(...any)           {}
+func (discardLogger) Infof(string, ...any)  {}
+func (discardLogger) Warn(...any)           {}
+func (discardLogger) Warnf(string, ...any)  {}
+func (discardLogger) Error(...any)          {}
+func (discardLogger) Errorf(string, ...any) {}
+
+type discardMetrics struct{}
+
+func (discardMetrics) RecordHistogram(context.Context, string, float64, ...string) {}
+func (discardMetrics) IncrementCounter(context.Context, string, ...string)         {}
+
+// A pipeline's log text must be built only when the entry is written, so a
+// dropped entry costs the same however many commands the pipeline holds.
+func TestProcessPipelineHook_DroppedEntryBuildsNoText(t *testing.T) {
+	ctx := t.Context()
+	hook := (&redisHook{config: &Config{}, logger: discardLogger{}, metrics: discardMetrics{}}).
+		ProcessPipelineHook(func(context.Context, []redis.Cmder) error { return nil })
+
+	pipeline := func(n int) []redis.Cmder {
+		cmds := make([]redis.Cmder, n)
+		for i := range cmds {
+			cmds[i] = redis.NewStringCmd(ctx, "get", "key")
+		}
+
+		return cmds
+	}
+
+	small, large := pipeline(3), pipeline(12)
+
+	smallAllocs := testing.AllocsPerRun(100, func() { _ = hook(ctx, small) })
+	largeAllocs := testing.AllocsPerRun(100, func() { _ = hook(ctx, large) })
+
+	assert.InDelta(t, smallAllocs, largeAllocs, 0, "allocations grow with the pipeline size")
 }
 
 // newHookedClient returns a client on a fresh miniredis with the GoFr hook
