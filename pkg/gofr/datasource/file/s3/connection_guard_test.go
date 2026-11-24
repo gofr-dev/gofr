@@ -19,6 +19,20 @@ func TestFileOperationsBeforeConnectReturnError(t *testing.T) {
 	assertDisconnectedOperations(t, f)
 }
 
+// A call on a FileSystem that has no logger yet must return the error, not panic
+// in the deferred sendOperationStats. New installs no logger, so this exercises
+// the nil-logger branch directly.
+func TestFileOperationBeforeLoggerReturnsErrorWithoutPanic(t *testing.T) {
+	f, ok := New(&Config{BucketName: "test-bucket"}).(*FileSystem)
+	require.True(t, ok, "New should return *FileSystem")
+	require.Nil(t, f.logger, "New must not install a logger")
+
+	require.NotPanics(t, func() {
+		_, err := f.Create("a.txt")
+		require.ErrorIs(t, err, errS3ClientNotInitialized)
+	})
+}
+
 // Exercise the actual Connect failure rather than only constructing an
 // uninitialized FileSystem. The missing profile fails before a client is set up.
 func TestFileOperationsAfterFailedConnectReturnError(t *testing.T) {
