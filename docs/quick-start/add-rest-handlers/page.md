@@ -18,9 +18,12 @@ If the custom handlers ain't implemented on the struct, GoFr provides default ha
 - **Create**: `/entity` Inserts a new record based on data provided in a JSON request body.
 - **Read**:
   - **GET**:  `/entity` Retrieves all entities of the type specified by the struct.
-  - **GET**:  `/entity/{id}` Retrieves a specific entity identified by the {id} path parameter.
-- **Update**: `/entity/{id}` Updates an existing record identified by the {id} path parameter, based on data provided in a JSON request body.
-- **Delete**  `/entity/{id}` Deletes an existing record identified by the {id} path parameter.
+  - **GET**:  `/entity/{primary_key}` Retrieves a specific entity identified by the {primary_key} path parameter.
+- **Update**: `/entity/{primary_key}` Updates an existing record identified by the {primary_key} path parameter, based on data provided in a JSON request body.
+- **Delete**  `/entity/{primary_key}` Deletes an existing record identified by the {primary_key} path parameter.
+
+`{primary_key}` is the snake_case name of the struct's first field, for example `id` for `ID` and `book_id` for `BookID`.
+GET and DELETE return `404 Not Found` when no row matches.
 
 > [!NOTE]
 > The registered routes will have the same name as the given struct, but if we want to change route name, we can implement `RestPath` method in the struct:
@@ -139,7 +142,7 @@ GoFr assumes that struct fields in snake_case match the database column names.
 
 **3. Primary Key**
 
-The first field of the struct is typically used as the primary key for data operations. However, this behavior can be customized using GoFr's features.
+The first field of the struct is always used as the primary key for data operations, and its snake_case name is the path parameter in `/entity/{primary_key}`.
 
 **4. Datatype Conversions**
 
