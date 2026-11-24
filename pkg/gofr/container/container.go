@@ -30,7 +30,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/redis"
-	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/logging/remotelogger"
 	"gofr.dev/pkg/gofr/metrics"
@@ -154,10 +153,7 @@ func (c *Container) Create(conf config.Config) {
 		c.Redis = rc
 	}
 
-	// Assign only a non-nil *sql.DB: storing a nil pointer in the DB interface makes c.SQL == nil false.
-	if db := sql.NewSQL(conf, c.Logger, c.metricsManager); db != nil {
-		c.SQL = db
-	}
+	c.createSQL(conf)
 
 	c.createPubSub(conf)
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -157,63 +156,40 @@ func TestNewSQL_DialectLogs(t *testing.T) {
 	}
 }
 
-func TestNewSQL_DBAuth(t *testing.T) {
-	// The IAM host is an instance connection name: were a connection attempted, it would
-	// log a "could not connect" error, which the iam cases assert never happens.
-	iam := map[string]string{"DB_DIALECT": dialectPostgres, "DB_HOST": "p:r:i", "DB_USER": "u", "DB_NAME": "d"}
-
+// NewSQL opens whatever connection its config describes and ignores DB_AUTH: the
+// container decides whether to call it. dbresolver calls NewSQL for each replica with
+// the app's config, so a replica with its own user and password must still open when
+// the primary uses DB_AUTH=iam.
+func TestNewSQL_IgnoresDBAuth(t *testing.T) {
 	testCases := []struct {
-		desc       string
-		base       map[string]string
-		auth       string
-		legacyIAM  string
-		wantOpened bool
-		wantLog    string
+		desc      string
+		auth      string
+		legacyIAM string
 	}{
-		{desc: "unset defaults to password", base: nil, wantOpened: true},
-		{desc: "password opens the connection", base: nil, auth: "password", wantOpened: true},
-		{desc: "legacy flag false keeps password", base: nil, legacyIAM: "false", wantOpened: true},
-		{desc: "iam skips the connection", base: iam, auth: "iam", wantLog: "app.AddSQLDB"},
-		{desc: "iam is case-insensitive", base: iam, auth: " IAM ", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag means iam", base: iam, legacyIAM: "true", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag accepts ParseBool spellings", base: iam, legacyIAM: "1", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag agreeing with iam", base: iam, auth: "iam", legacyIAM: "true", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag conflicting with password", base: iam, auth: "password", legacyIAM: "true",
-			wantLog: errConflictingDBAuth.Error()},
-		{desc: "unknown value", base: iam, auth: "token", wantLog: errUnsupportedDBAuth.Error()},
-		{desc: "iam with sqlite", base: nil, auth: "iam", wantLog: errIAMAuthSQLite.Error()},
+		{desc: "iam", auth: "iam"},
+		{desc: "legacy flag", legacyIAM: "true"},
+		{desc: "unknown value", auth: "token"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			conf := tc.base
-			if conf == nil {
-				conf = map[string]string{"DB_DIALECT": sqlite, "DB_NAME": filepath.Join(t.TempDir(), "t.db")}
+			conf := map[string]string{
+				"DB_DIALECT":  sqlite,
+				"DB_NAME":     filepath.Join(t.TempDir(), "t.db"),
+				"DB_AUTH":     tc.auth,
+				"DB_IAM_AUTH": tc.legacyIAM,
 			}
-
-			conf = maps.Clone(conf)
-			conf["DB_AUTH"] = tc.auth
-			conf["DB_IAM_AUTH"] = tc.legacyIAM
 
 			var db *DB
 
-			logs := testutil.StderrOutputForFunc(func() {
-				fmt.Fprint(os.Stderr, testutil.StdoutOutputForFunc(func() {
+			testutil.StderrOutputForFunc(func() {
+				testutil.StdoutOutputForFunc(func() {
 					db = NewSQL(config.NewMockConfig(conf), logging.NewLogger(logging.DEBUG), newConnectorMetrics(t))
-				}))
+				})
 			})
 
-			if tc.wantOpened {
-				require.NotNil(t, db)
-				require.NoError(t, db.Close())
-			} else {
-				assert.Nil(t, db)
-				assert.NotContains(t, logs, "could not connect")
-			}
-
-			if tc.wantLog != "" {
-				assert.Contains(t, logs, tc.wantLog)
-			}
+			require.NotNil(t, db)
+			require.NoError(t, db.Close())
 		})
 	}
 }

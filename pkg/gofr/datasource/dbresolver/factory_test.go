@@ -246,6 +246,24 @@ func TestCreateReplicaConnection(t *testing.T) {
 				"DB_DIALECT": "sqlite",
 			},
 		},
+		{
+			// A primary on IAM auth (its connection comes from app.AddSQLDB) can have
+			// replicas with their own user and password; DB_AUTH must not skip them.
+			name: "initialized when the primary uses DB_AUTH=iam",
+			configs: map[string]string{
+				"DB_NAME":    filepath.Join(t.TempDir(), "replica-iam.db"),
+				"DB_DIALECT": "sqlite",
+				"DB_AUTH":    "iam",
+			},
+		},
+		{
+			name: "initialized when the primary uses DB_IAM_AUTH=true",
+			configs: map[string]string{
+				"DB_NAME":     filepath.Join(t.TempDir(), "replica-legacy.db"),
+				"DB_DIALECT":  "sqlite",
+				"DB_IAM_AUTH": "true",
+			},
+		},
 	}
 
 	for _, tc := range tests {
