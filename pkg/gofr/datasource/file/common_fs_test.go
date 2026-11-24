@@ -754,7 +754,10 @@ func TestCommonFileSystem_OpenFile_LocalRDWR(t *testing.T) {
 	_, err = f.ReadAt(buf, 0)
 	require.ErrorIs(t, err, errProviderNil)
 
-	_ = f.Close()
+	// Close fails with "file already closed": the handle's reader and writer are the same
+	// *os.File, which CommonFile closes twice. #4578 gives the local store its own file
+	// type, after which this local O_RDWR path is removed.
+	require.ErrorIs(t, f.Close(), os.ErrClosed)
 
 	content, err := os.ReadFile("data.txt")
 	require.NoError(t, err)
