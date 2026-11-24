@@ -99,6 +99,8 @@ type Data struct {
 
   - The `form` tag is used to bind non-file fields.
   - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
+  - Uploads larger than 32 MB are written to temporary files on disk. GoFr removes them when the handler returns, so
+    a `*multipart.FileHeader` must be opened and read inside the handler, not in a goroutine that outlives it.
 
 
 - `HostName()` - to access the host name for the incoming request
