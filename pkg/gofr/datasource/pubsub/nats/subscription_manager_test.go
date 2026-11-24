@@ -2,9 +2,13 @@ package nats
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -335,6 +339,102 @@ func TestSubscriptionManager_Close(t *testing.T) {
 	sm.Close()
 
 	assert.Empty(t, sm.consumers)
+}
+
+// TestSubscriptionManager_Subscribe_DoesNotPrefetch drives a real JetStream server
+// and pins the redelivery fix: only the message a Subscribe call asks for is
+// fetched, so nothing can sit past AckWait and get redelivered while the handler
+// works through a backlog.
+func TestSubscriptionManager_Subscribe_DoesNotPrefetch(t *testing.T) {
+	opts := &server.Options{
+		Host:      "127.0.0.1",
+		Port:      -1, // Random available port
+		JetStream: true,
+		StoreDir:  t.TempDir(),
+	}
+
+	ns, err := server.NewServer(opts)
+	require.NoError(t, err)
+
+	go ns.Start()
+	defer ns.Shutdown()
+
+	require.True(t, ns.ReadyForConnections(10*time.Second), "NATS server not ready for connections")
+
+	addr := ns.Addr().(*net.TCPAddr)
+
+	nc, err := nats.Connect(fmt.Sprintf("nats://%s:%d", addr.IP.String(), addr.Port))
+	require.NoError(t, err)
+
+	defer nc.Close()
+
+	js, err := jetstream.New(nc)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+
+	_, err = js.CreateStream(ctx, jetstream.StreamConfig{
+		Name:     "prefetch-stream",
+		Subjects: []string{"prefetch.>"},
+	})
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+	metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	sm := newSubscriptionManager()
+	cfg := &Config{
+		Consumer: "prefetch-consumer",
+		Stream:   StreamConfig{Stream: "prefetch-stream"},
+		MaxWait:  500 * time.Millisecond,
+	}
+	topic := "prefetch.orders"
+
+	// The consumer is created with DeliverNewPolicy, so it only sees what is
+	// published after it exists.
+	cons, err := sm.consumerFor(ctx, js, topic, cfg)
+	require.NoError(t, err)
+
+	const total = 5
+
+	for i := 0; i < total; i++ {
+		_, err = js.Publish(ctx, topic, []byte(fmt.Sprintf("msg-%d", i)))
+		require.NoError(t, err)
+	}
+
+	msg, err := sm.Subscribe(ctx, topic, js, cfg, logging.NewMockLogger(logging.DEBUG), metrics)
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	assert.Equal(t, []byte("msg-0"), msg.Value)
+
+	// The old prefetch loop had drained the whole stream into its buffer by this
+	// point. Nothing beyond the requested message may be in flight, otherwise
+	// its AckWait starts running against the handler.
+	time.Sleep(300 * time.Millisecond)
+
+	info, err := cons.Info(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(total-1), info.NumPending, "messages beyond the requested one must not be fetched")
+	assert.Equal(t, 1, info.NumAckPending, "only the requested message is delivered")
+
+	// The rest arrives one per Subscribe call, each exactly once.
+	seen := make(map[string]int, total)
+
+	for i := 1; i < total; i++ {
+		m, err := sm.Subscribe(ctx, topic, js, cfg, logging.NewMockLogger(logging.DEBUG), metrics)
+		require.NoError(t, err)
+		require.NotNil(t, m)
+
+		seen[string(m.Value)]++
+		m.Committer.Commit()
+	}
+
+	for i := 1; i < total; i++ {
+		assert.Equal(t, 1, seen[fmt.Sprintf("msg-%d", i)], "msg-%d must be delivered exactly once", i)
+	}
+
+	msg.Committer.Commit()
 }
 
 func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
