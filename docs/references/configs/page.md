@@ -256,7 +256,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - HTTP_HIDE_INTERNAL_ERRORS
-- When `true`, error responses say `Internal Server Error` instead of the error's own text for every 500 and for errors that do not declare a status code, so internal details such as driver or SQL text do not reach clients. The status code does not change, and the original error is still logged with the trace ID — see [Hiding Internal Error Details](/docs/advanced-guide/gofr-errors#hiding-internal-error-details). Defaults to `false`.
+- When `true`, error responses say `Internal Server Error` instead of the error's own text for every error sent as a 500 (including status 0) and for errors that do not declare a status code, so driver or SQL text does not reach clients through the message. Errors with other status codes, such as 502 or 503, keep their text, which can include dial addresses, and custom `ResponseMarshaller` fields are still returned, so this is not a guarantee that no internal detail leaves the server. The status code does not change, and the original error is still logged with the trace ID — see [Hiding Internal Error Details](/docs/advanced-guide/gofr-errors#hiding-internal-error-details). Defaults to `false`.
 
 ---
 

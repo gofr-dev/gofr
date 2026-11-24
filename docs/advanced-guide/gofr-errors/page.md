@@ -176,11 +176,17 @@ When it is enabled, the `message` is replaced with `Internal Server Error` when 
 
 - the error does not implement `StatusCode() int` (an unclassified error, such as one from `errors.New`, or a GoFr
   error wrapped with `fmt.Errorf("...: %w", err)`), or
-- the error's `StatusCode()` is 500, such as `datasource.ErrorDB`, `ErrorPanicRecovery`, or a custom error that
-  declares 500.
+- the error's `StatusCode()` is 500 or 0 (GoFr sends status 0 as 500), such as `datasource.ErrorDB`,
+  `ErrorPanicRecovery`, or a custom error that declares 500.
 
 Errors with any other status code keep their message, because that text was written for clients: for example,
-`ErrorEntityNotFound` (404), `ErrorInvalidParam` (400) or `ErrorServiceUnavailable` (503).
+`ErrorEntityNotFound` (404), `ErrorInvalidParam` (400) or `ErrorServiceUnavailable` (503). An error that declares
+502 or 503 and wraps a dial error keeps its text, which can include the dial address.
+
+> [!WARNING]
+> This option only replaces the `message` of errors that are sent as 500. It is not a guarantee that no internal
+> detail leaves the server: custom `ResponseMarshaller` fields are still returned, and errors with other status codes
+> keep their text.
 
 #### Example:
 ```go
