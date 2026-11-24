@@ -173,7 +173,8 @@ func (j *job) run(cntnr *container.Container) {
 	defer span.End()
 
 	c := newContext(nil, &noopRequest{}, cntnr)
-	c.Context = ctx
+	// Keep the box newContext made, so a job calling Trace from its own goroutines does not race.
+	c.setContext(ctx)
 
 	c.Infof("Starting cron job: %s", j.name)
 

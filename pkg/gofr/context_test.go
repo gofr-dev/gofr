@@ -509,6 +509,43 @@ func TestContext_Trace_NoCycle(t *testing.T) {
 	assert.NoError(t, c.Err())
 }
 
+// A cron job's Context must already hold a box when the job starts: a job that calls Trace from
+// its own goroutines while others read the Context must not write the field. Run with -race.
+func TestContext_Trace_CronJobContext(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	var boxed bool
+
+	j := &job{name: "trace-job", fn: func(c *Context) {
+		_, boxed = c.Context.(*ctxBox)
+
+		hammerTrace(c)
+	}}
+
+	j.run(&container.Container{Logger: logging.NewMockLogger(logging.ERROR)})
+
+	assert.True(t, boxed, "a cron job's Context must hold a ctxBox before its first Trace")
+}
+
+// The same holds for the Context given to OnStart hooks. Run with -race.
+func TestContext_Trace_OnStartHookContext(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	var boxed bool
+
+	app := New()
+	app.OnStart(func(c *Context) error {
+		_, boxed = c.Context.(*ctxBox)
+
+		hammerTrace(c)
+
+		return nil
+	})
+
+	require.NoError(t, app.runOnStartHooks(t.Context()))
+	assert.True(t, boxed, "an OnStart hook's Context must hold a ctxBox before its first Trace")
+}
+
 // BenchmarkContext_New measures the cost of constructing a fresh
 // *gofr.Context per request via newContext. Today this allocates the
 // Context struct itself plus a ContextLogger that re-extracts the
