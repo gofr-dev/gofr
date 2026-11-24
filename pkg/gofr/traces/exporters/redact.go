@@ -155,10 +155,13 @@ func RedactMessage(msg, endpoint string) string {
 
 	// A cause can also quote one part of the endpoint on its own: a schemeless
 	// user:pass@host parses with "user" as the scheme, and net/http reports
-	// `unsupported protocol scheme "user"`. Only the quoted form is replaced, so a
-	// short credential such as "a" or "1" never masks part of an address or a word.
+	// `unsupported protocol scheme "user"`; url.Parse lowercases a scheme, so the
+	// lower-case form is replaced too. Only the quoted form is replaced, so a short
+	// credential such as "a" or "1" never masks part of an address or a word.
 	for _, credential := range endpointCredentials(endpoint) {
-		msg = strings.ReplaceAll(msg, strconv.Quote(credential), strconv.Quote(redactedPlaceholder))
+		for _, form := range []string{credential, strings.ToLower(credential)} {
+			msg = strings.ReplaceAll(msg, strconv.Quote(form), strconv.Quote(redactedPlaceholder))
+		}
 	}
 
 	return msg

@@ -104,6 +104,10 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 			ctx: t.Context(), expURLErr: true,
 			expErrMsg: `unsupported protocol scheme "REDACTED"`,
 			expLog:    "unsupported protocol scheme"},
+		{desc: "mixed-case schemeless endpoint", endpoint: "Bob:S3CRETPASS@" + closedHost + "/api/spans?api_key=TOPSECRETKEY",
+			ctx: t.Context(), expURLErr: true,
+			expErrMsg: `unsupported protocol scheme "REDACTED"`,
+			expLog:    "unsupported protocol scheme"},
 		{desc: "username-only token", endpoint: "http://bobS3CRETPASS@" + closedHost + "/api/spans", ctx: t.Context(),
 			expURLErr: true,
 			expErrMsg: `Post "http://REDACTED@` + closedHost + `/api/spans": dial tcp`,
@@ -137,7 +141,7 @@ func Test_ExportSpans_RedactsEndpointCredentials(t *testing.T) {
 				require.ErrorIs(t, err, expErr)
 			}
 
-			for _, secret := range []string{"S3CRETPASS", "TOPSECRETKEY", "bob"} {
+			for _, secret := range []string{"S3CRETPASS", "TOPSECRETKEY", "bob", "Bob"} {
 				assert.NotContains(t, logs, secret)
 				assert.NotContains(t, err.Error(), secret)
 			}

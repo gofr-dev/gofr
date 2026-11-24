@@ -124,6 +124,8 @@ func TestRedactMessage_QuotedCredentials(t *testing.T) {
 	}{
 		{name: "schemeless username quoted as the scheme", msg: `unsupported protocol scheme "bob"`,
 			endpoint: "bob:s3cret@collector:4318/x", expected: `unsupported protocol scheme "REDACTED"`},
+		{name: "mixed-case schemeless username quoted lower-cased", msg: `unsupported protocol scheme "bob"`,
+			endpoint: "Bob:s3cret@collector:4318/x", expected: `unsupported protocol scheme "REDACTED"`},
 		{name: "quoted password", msg: `bad "s3cret"`, endpoint: "https://user:s3cret@collector:4317",
 			expected: `bad "REDACTED"`},
 		{name: "quoted query value, raw and unescaped", msg: `"a%2Bb" "a+b"`, endpoint: "https://collector/x?key=a%2Bb",
