@@ -528,6 +528,16 @@ func TestCommonFile_ReadAt(t *testing.T) {
 			wantN: 2, wantData: "ab", wantErr: errTest, wantState: StatusError,
 		},
 		{
+			name: "connection dropped mid-body is not a clean end", size: 10, off: 0,
+			body:  &errAfterReader{data: []byte("ab"), err: io.ErrUnexpectedEOF},
+			wantN: 2, wantData: "ab", wantErr: io.ErrUnexpectedEOF, wantState: StatusError,
+		},
+		{
+			name: "read reaching the known size without io.EOF is a clean end", size: 6, off: 4,
+			body:  &errAfterReader{data: []byte("ab"), err: io.ErrUnexpectedEOF},
+			wantN: 2, wantData: "ab", wantErr: io.EOF, wantState: StatusSuccess,
+		},
+		{
 			name: "empty range returns io.EOF", size: 10, off: 0, body: bytes.NewReader(nil),
 			wantN: 0, wantErr: io.EOF, wantState: StatusSuccess,
 		},

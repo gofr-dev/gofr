@@ -164,10 +164,12 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	}
 	defer reader.Close()
 
-	// io.ReaderAt requires a non-nil error whenever n < len(p): io.EOF when the object ended,
-	// the storage error otherwise.
-	n, err := io.ReadFull(reader, p)
-	if errors.Is(err, io.ErrUnexpectedEOF) {
+	// io.ReaderAt requires a non-nil error whenever n < len(p): io.EOF only when the object
+	// really ended (the reader said so, or the known size was reached), the reader's own error
+	// otherwise. io.ReadFull is not used because it turns the reader's early io.EOF into
+	// io.ErrUnexpectedEOF, which is also what net/http returns for a body cut short.
+	n, err := readUntilDone(reader, p)
+	if f.endedAtSize(err, off, n) {
 		err = io.EOF
 	}
 
@@ -180,6 +182,33 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	msg = fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.name, off)
 
 	return n, err
+}
+
+// endedAtSize reports whether a range read cut short with io.ErrUnexpectedEOF stopped exactly at
+// the object's known size, which is a clean end of the object rather than a truncated body.
+func (f *CommonFile) endedAtSize(err error, off int64, n int) bool {
+	return f.size >= 0 && errors.Is(err, io.ErrUnexpectedEOF) && off+int64(n) == f.size
+}
+
+// readUntilDone fills p from r, stopping early only on an error, which it returns unchanged
+// (including io.EOF and io.ErrUnexpectedEOF) so the caller can tell a clean end from a cut body.
+func readUntilDone(r io.Reader, p []byte) (int, error) {
+	n := 0
+
+	for n < len(p) {
+		m, err := r.Read(p[n:])
+		n += m
+
+		if err != nil {
+			if n == len(p) && errors.Is(err, io.EOF) {
+				return n, nil
+			}
+
+			return n, err
+		}
+	}
+
+	return n, nil
 }
 
 // Write implements io.Writer.

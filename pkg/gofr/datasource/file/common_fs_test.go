@@ -351,16 +351,8 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 		{
 			name:     "successful stat for file",
 			fileName: "file.txt",
-			statInfo: &ObjectInfo{
-				Name:         "file.txt",
-				Size:         100,
-				ContentType:  "text/plain",
-				LastModified: now,
-				IsDir:        false,
-			},
-			expectError: false,
-			expectedDir: false,
-			wantStatus:  StatusSuccess,
+			statInfo:   &ObjectInfo{Name: "file.txt", Size: 100, ContentType: "text/plain", LastModified: now},
+			wantStatus: StatusSuccess,
 		},
 		{
 			name:     "file not found, but directory exists",
@@ -369,7 +361,6 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			listObjects: []ObjectInfo{
 				{Name: "testdir/file.txt", Size: 100, LastModified: now, IsDir: false},
 			},
-			expectError: false,
 			expectedDir: true,
 			wantStatus:  StatusSuccess,
 		},
@@ -394,6 +385,14 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			name:        "missing object and empty prefix is recorded as not found",
 			fileName:    "missing",
 			statErr:     fmt.Errorf("head missing: %w", os.ErrNotExist),
+			expectError: true,
+			wantStatus:  statusNotFound,
+		},
+		{
+			name:        "missing name whose listing reports not exist is recorded as not found",
+			fileName:    "gone",
+			statErr:     fmt.Errorf("head gone: %w", os.ErrNotExist),
+			listErr:     fmt.Errorf("list gone/: %w", os.ErrNotExist),
 			expectError: true,
 			wantStatus:  statusNotFound,
 		},
@@ -430,6 +429,21 @@ func TestCommonFileSystem_Stat(t *testing.T) {
 			assert.Equal(t, []string{tt.wantStatus}, metrics.statuses())
 		})
 	}
+}
+
+// A prefix holding only subfolders has no object to take a modification time from, so Stat
+// reports the zero time for it (intended).
+func TestCommonFileSystem_Stat_SubfoldersOnlyHasZeroModTime(t *testing.T) {
+	ctrl, mockProvider, fs := setupCommonFS(t)
+	defer ctrl.Finish()
+
+	expectStatLookup(mockProvider, "parent", nil, os.ErrNotExist, nil, []string{"parent/child/"}, nil)
+
+	info, err := fs.Stat("parent")
+
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.True(t, info.ModTime().IsZero())
 }
 
 // expectStatLookup sets the provider calls Stat makes: StatObject, then ListDir on the

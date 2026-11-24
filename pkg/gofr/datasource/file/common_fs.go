@@ -346,7 +346,9 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 
 	objects, prefixes, listErr := c.Provider.ListDir(ctx, prefix)
 	if listErr != nil {
+		st = missingStatus(listErr)
 		msg = fmt.Sprintf("failed to stat %q: %v", name, listErr)
+
 		return nil, listErr
 	}
 

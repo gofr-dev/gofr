@@ -764,6 +764,11 @@ func (s *storageAdapter) ListDir(ctx context.Context, prefix string) ([]file.Obj
 	for pager.More() {
 		page, err := pager.NextPage(ctx)
 		if err != nil {
+			// A missing directory or share also matches os.ErrNotExist, so Stat records it NOT_FOUND.
+			if fileerror.HasCode(err, fileerror.ResourceNotFound, fileerror.ParentNotFound, fileerror.ShareNotFound) {
+				return nil, nil, fmt.Errorf("%w %q: %w: %w", errFailedToListDirectory, prefix, errObjectNotFound, err)
+			}
+
 			return nil, nil, fmt.Errorf("%w %q: %w", errFailedToListDirectory, prefix, err)
 		}
 
