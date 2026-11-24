@@ -9,6 +9,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	// The password cases open SQLite. The non-test driver registration is behind the
+	// gofr_nosqldrivers build tag, so the test imports the driver itself and passes
+	// in both builds, as the sql package's tests do.
+	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/testutil"
