@@ -458,6 +458,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- DB_REDACT_ARGS
+- Set to `true` to hide query arguments: each value in the debug query log becomes `*****`, so only the count stays visible. Covers queries on the DB and inside transactions, for the SQL datasource GoFr creates from config (not a connection passed to `NewSQLFromDB`).
+- false
+
+---
+
 - SUPABASE_CONNECTION_TYPE 
 - Connection type to Supabase. Supported values: direct, session, transaction 
 - direct
@@ -516,6 +522,12 @@ This document lists all the configuration options supported by the GoFr framewor
 - REDIS_DB
 - Database number to use for the Redis server.
 -  0
+
+---
+
+- REDIS_REDACT_ARGS
+- Set to `true` to hide command arguments (keys and values): each one becomes `*****` in the debug query log, and trace spans drop the `db.statement` attribute but are still named after the command. Redis pub/sub message bodies are masked in the debug log too.
+-  false
 
 ---
 

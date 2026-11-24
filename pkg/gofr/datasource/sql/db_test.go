@@ -780,6 +780,95 @@ func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
 	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
 }
 
+// queryLogRecorder is a datasource.Logger that keeps every *Log passed to Debug,
+// so a test can assert on the logged Args rather than on printed output.
+type queryLogRecorder struct {
+	logs []*Log
+}
+
+func (r *queryLogRecorder) Debug(args ...any) {
+	for _, a := range args {
+		if l, ok := a.(*Log); ok {
+			r.logs = append(r.logs, l)
+		}
+	}
+}
+
+func (*queryLogRecorder) Debugf(string, ...any) {}
+func (*queryLogRecorder) Info(...any)           {}
+func (*queryLogRecorder) Infof(string, ...any)  {}
+func (*queryLogRecorder) Warn(...any)           {}
+func (*queryLogRecorder) Warnf(string, ...any)  {}
+func (*queryLogRecorder) Error(...any)          {}
+func (*queryLogRecorder) Errorf(string, ...any) {}
+
+func TestSendStats(t *testing.T) {
+	const query = "UPDATE employee SET name = ? WHERE id = ?"
+
+	testCases := []struct {
+		desc     string
+		hideArgs bool
+		run      func(t *testing.T, db *DB, mock sqlmock.Sqlmock)
+		wantArgs []any
+	}{
+		{
+			desc: "args shown by default",
+			run: func(_ *testing.T, db *DB, _ sqlmock.Sqlmock) {
+				sendStats(db.logger, nil, db.config, time.Now(), "Exec", query, "doe", 2)
+			},
+			wantArgs: []any{"doe", 2},
+		},
+		{
+			desc:     "args masked when hidden",
+			hideArgs: true,
+			run: func(_ *testing.T, db *DB, _ sqlmock.Sqlmock) {
+				sendStats(db.logger, nil, db.config, time.Now(), "Exec", query, "doe", 2)
+			},
+			wantArgs: []any{redactedPassword, redactedPassword},
+		},
+		{
+			desc:     "no args stays empty when hidden",
+			hideArgs: true,
+			run: func(_ *testing.T, db *DB, _ sqlmock.Sqlmock) {
+				sendStats(db.logger, nil, db.config, time.Now(), "Exec", "SELECT 1")
+			},
+			wantArgs: nil,
+		},
+		{
+			desc:     "args masked inside a transaction",
+			hideArgs: true,
+			run: func(t *testing.T, db *DB, mock sqlmock.Sqlmock) {
+				t.Helper()
+
+				tx := getTransaction(db, mock)
+				mock.ExpectExec(query).WithArgs("doe", 2).WillReturnResult(sqlmock.NewResult(1, 1))
+
+				_, err := tx.Exec(query, "doe", 2)
+				require.NoError(t, err)
+			},
+			wantArgs: []any{redactedPassword, redactedPassword},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			db, mock := getDB(t, logging.DEBUG)
+			defer db.DB.Close()
+
+			recorder := &queryLogRecorder{}
+			db.logger = recorder
+			db.config.hideArgs = tc.hideArgs
+
+			tc.run(t, db, mock)
+
+			require.NotEmpty(t, recorder.logs)
+
+			last := recorder.logs[len(recorder.logs)-1]
+			assert.Equal(t, tc.wantArgs, last.Args)
+		})
+	}
+}
+
 // --- Tx method tests ---
 
 func TestTx_Query(t *testing.T) {

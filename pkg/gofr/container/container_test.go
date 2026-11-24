@@ -89,6 +89,28 @@ func TestContainer_SQLNilWhenNotInitialized(t *testing.T) {
 	}
 }
 
+func TestContainer_RedisNilWhenNotInitialized(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		configs map[string]string
+	}{
+		{desc: "no redis settings", configs: map[string]string{}},
+		{desc: "port without host", configs: map[string]string{"REDIS_PORT": "6379"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			c := NewContainer(config.NewMockConfig(tc.configs))
+
+			// Compare the interface itself: assert.Nil also passes for a typed nil (*redis.Redis)(nil),
+			// which is exactly the value apps can't guard against with c.Redis == nil.
+			if c.Redis != nil {
+				t.Errorf("expected untyped nil Redis, got %T", c.Redis)
+			}
+		})
+	}
+}
+
 func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	testCases := []struct {
 		desc    string
