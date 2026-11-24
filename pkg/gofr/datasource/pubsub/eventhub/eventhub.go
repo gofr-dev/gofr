@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
-	"gofr.dev/pkg/gofr/datasource/pubsub/internal/partitionkey"
+	"gofr.dev/pkg/gofr/datasource/pubsub/internal/keyfields"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -85,6 +85,7 @@ type Client struct {
 	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
 	cfg          Config
+	keyFields    keyfields.Fields
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
@@ -166,6 +167,13 @@ func (c *Client) UseMetrics(metrics any) {
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
+	}
+}
+
+// UseConfig reads per-topic partition key mappings when registered with AddPubSub.
+func (c *Client) UseConfig(cfg any) {
+	if conf, ok := cfg.(interface{ Get(string) string }); ok {
+		c.keyFields = keyfields.Parse(conf.Get("PUBSUB_KEY_FIELDS"))
 	}
 }
 
@@ -457,7 +465,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	newBatchOptions := &azeventhubs.EventDataBatchOptions{}
-	if key := partitionkey.FromContext(ctx); key != nil {
+	if key := c.keyFields.Key(topic, message, c.logger); key != nil {
 		newBatchOptions.PartitionKey = to.Ptr(string(key))
 	}
 

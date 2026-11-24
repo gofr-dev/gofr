@@ -829,33 +829,38 @@ func order(ctx *gofr.Context) (any, error) {
 
 ### Publishing with a partition key
 
-Attach an explicit key to a derived context when related messages should reach
-the same partition (import `gofr.dev/pkg/gofr/datasource/pubsub`):
+Configure a top-level JSON field per topic when related messages should reach
+the same partition, for example batches of a job or events for an order:
 
-```go
-publishCtx := pubsub.WithPartitionKey(ctx, []byte("order-123"))
-err := ctx.GetPublisher().Publish(publishCtx, "order-events", payload)
+```dotenv
+PUBSUB_KEY_FIELDS=order-events:orderId,customer-events:customerId
 ```
 
-GoFr does not decode or inspect the payload. JSON, protobuf, and arbitrary bytes
-are sent unchanged. The application calculates the key before serialization;
-no publisher type assertion or separate publishing method is required.
+The existing publishing call does not change:
 
-The helper copies the key and preserves cancellation, deadlines, and tracing.
-Absent, nil, or empty keys select unkeyed publication. A nil or empty key on a
-derived context overrides any inherited key. Use a message-specific context
-rather than reusing a keyed context for unrelated publications.
+```go
+err := ctx.GetPublisher().Publish(ctx, "order-events", []byte(`{"orderId":"order-123","status":"created"}`))
+```
 
-Kafka receives the key as `kafka.Message.Key` and uses FNV-1a hash partitioning
-(compatible with Sarama), not Java's default Murmur2. For nil keys, the hash
-balancer delegates to round-robin with the same sequence as the original
-balancer. Identical non-empty keys select the same partition while the
-partition count remains unchanged; different keys may share a partition.
+GoFr extracts `order-123` as the partition key. Mappings are comma-separated
+`topic:field` pairs with optional surrounding whitespace; the last mapping for
+a topic wins, and malformed mappings are ignored. Fields must be top-level JSON
+strings, numbers, or booleans. Missing, null, empty-string, object, or array
+values and non-JSON payloads fall back to an unkeyed record with a debug log;
+key extraction never fails publication or logs payload/key values.
 
-Azure EventHub receives the key as `PartitionKey`; use UTF-8 keys because its
-SDK represents the key as a string. NATS, MQTT, Redis, SQS, and Google Pub/Sub
-ignore this metadata. SQS FIFO groups and Google ordering keys are outside
-the scope of this feature.
+Kafka receives the extracted value as `kafka.Message.Key`. Its writer uses the
+`Hash` balancer only when a valid key mapping is configured. This uses FNV-1a
+with signed modulo partition selection (compatible with Sarama), not the Java
+producer's default Murmur2. Unmapped topics and records without a usable key
+retain round-robin routing. Without `PUBSUB_KEY_FIELDS`, writer behavior is
+unchanged. Identical keys select the same partition while the partition count
+is unchanged; different keys can share a partition.
+
+Azure EventHub receives the same extracted value as `PartitionKey` when its
+client is registered through `app.AddPubSub`. NATS, MQTT, Redis, SQS, and Google
+Pub/Sub ignore this configuration. SQS FIFO message-group IDs and Google
+ordering keys are not enabled by this setting.
 
 ## Distributed Tracing
 

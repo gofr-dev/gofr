@@ -662,6 +662,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Pub/Sub message broker backend wired automatically by `gofr.New()`. Accepted values: `kafka`, `google`, `mqtt`, `redis` (case-insensitive). Other backends (NATS JetStream, AWS SQS, Azure Event Hub) are wired explicitly via `app.AddPubSub(...)`.
 -  
 
+---
+
+- PUBSUB_KEY_FIELDS
+- Comma-separated `topic:field` mappings, e.g. `order-events:orderId`. Extracts a top-level JSON scalar as the Kafka record key or Azure EventHub partition key. Missing/invalid values fall back to unkeyed publication with a debug log. Other backends ignore this setting.
+- Empty (no partition key)
+
 {% /table %}
 
 **Kafka**

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/config"
 )
 
 type partitionKeyProducer struct {
@@ -31,16 +31,16 @@ func (*partitionKeyProducer) SendEventDataBatch(
 
 func (*partitionKeyProducer) Close(context.Context) error { return nil }
 
-func TestPublishPartitionKey(t *testing.T) {
+func TestPublishConfiguredPartitionKey(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		key      []byte
-		explicit bool
+		name, mapping, payload, expected string
 	}{
-		{name: "absent"},
-		{name: "explicit nil", explicit: true},
-		{name: "empty", key: []byte{}, explicit: true},
-		{name: "keyed", key: []byte("order-123"), explicit: true},
+		{"configured", "event-hub-name:orderId", `{"orderId":"order-123"}`, "order-123"},
+		{"other topic", "orders:orderId", `{"orderId":"order-123"}`, ""},
+		{"no config", "", `{"orderId":"order-123"}`, ""},
+		{"missing", "event-hub-name:orderId", `{}`, ""},
+		{"invalid JSON", "event-hub-name:orderId", `payload`, ""},
+		{"empty", "event-hub-name:orderId", `{"orderId":""}`, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -49,25 +49,34 @@ func TestPublishPartitionKey(t *testing.T) {
 			client := New(getTestConfigs())
 			client.UseLogger(logger)
 			client.UseMetrics(metrics)
+			client.UseConfig(config.NewMockConfig(map[string]string{"PUBSUB_KEY_FIELDS": tt.mapping}))
 			client.producer = producer
 
 			metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "event-hub-name")
 			logger.EXPECT().Errorf("failed to create event batch %v", context.Canceled)
 
-			ctx := t.Context()
-			if tt.explicit {
-				ctx = pubsub.WithPartitionKey(ctx, tt.key)
+			switch tt.name {
+			case "missing", "empty":
+				logger.EXPECT().Debugf(gomock.Any(), "event-hub-name", "orderId")
+			case "invalid JSON":
+				logger.EXPECT().Debugf(gomock.Any(), "event-hub-name")
 			}
 
-			require.ErrorIs(t, client.Publish(ctx, "event-hub-name", []byte{0xff, 0x00, 0x81}), context.Canceled)
+			require.ErrorIs(t, client.Publish(t.Context(), "event-hub-name", []byte(tt.payload)), context.Canceled)
 			require.NotNil(t, producer.options)
 
-			if len(tt.key) == 0 {
+			if tt.expected == "" {
 				require.Nil(t, producer.options.PartitionKey)
 			} else {
 				require.NotNil(t, producer.options.PartitionKey)
-				require.Equal(t, string(tt.key), *producer.options.PartitionKey)
+				require.Equal(t, tt.expected, *producer.options.PartitionKey)
 			}
 		})
 	}
+}
+
+func TestUseConfigUnsupportedValue(t *testing.T) {
+	client := New(getTestConfigs())
+	client.UseConfig(nil)
+	require.Empty(t, client.keyFields)
 }
