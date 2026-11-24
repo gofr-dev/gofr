@@ -1664,6 +1664,12 @@ func (marshaledServerError) Response() map[string]any {
 	return map[string]any{"code": "DB_UNAVAILABLE", "message": "ignored"}
 }
 
+// zeroStatusError is an app error whose StatusCode is 0, which the responder sends as a 500.
+type zeroStatusError struct{}
+
+func (zeroStatusError) Error() string   { return "secret: vault token rejected" }
+func (zeroStatusError) StatusCode() int { return 0 }
+
 func TestHandler_HideInternalErrors(t *testing.T) {
 	testCases := []struct {
 		desc       string
@@ -1690,6 +1696,12 @@ func TestHandler_HideInternalErrors(t *testing.T) {
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
 		{"classified 400 with data keeps its message", true, "partial", gofrHTTP.ErrorInvalidParam{Params: []string{"id"}},
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"'1' invalid parameter(s): id"}}`},
+		{"status 0 is sent as 500, switch off keeps the message", false, nil, zeroStatusError{},
+			http.StatusInternalServerError, `{"error":{"message":"secret: vault token rejected"}}`},
+		{"status 0 is sent as 500 and hidden", true, nil, zeroStatusError{},
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
+		{"status 0 with data is 206 and hidden", true, "partial", zeroStatusError{},
+			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
 		{"ResponseMarshaller 500 keeps custom fields, hides message", true, nil, marshaledServerError{},
 			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error","code":"DB_UNAVAILABLE"}}`},
 	}

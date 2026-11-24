@@ -31,17 +31,23 @@ func readHideInternalErrors(cfg config.Config, logger logging.Logger) bool {
 }
 
 // hidesMessage reports whether err's message is replaced when HTTP_HIDE_INTERNAL_ERRORS is on: an
-// error that declares no status code, or one that declares 500. Other statuses carry text written
-// for clients, so they are kept. The direct type assertion matches the responder's own status code
-// choice, so a hidden error is exactly one the client receives as a 500 (or 206 with data).
+// error that declares no status code, or one that declares 500 or 0 (the responder sends status 0
+// as 500). Other statuses carry text written for clients, so they are kept. The direct type
+// assertion matches the responder's own status code choice, so a hidden error is exactly one the
+// client receives as a 500 (or 206 with data).
 func hidesMessage(err error) bool {
 	if err == nil {
 		return false
 	}
 
 	e, ok := err.(gofrHTTP.StatusCodeResponder)
+	if !ok {
+		return true
+	}
 
-	return !ok || e.StatusCode() == http.StatusInternalServerError
+	code := e.StatusCode()
+
+	return code == 0 || code == http.StatusInternalServerError
 }
 
 // internalError stands in for an error whose message is hidden from the client. It keeps the 500
