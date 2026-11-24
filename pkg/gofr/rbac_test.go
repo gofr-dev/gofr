@@ -255,7 +255,7 @@ func TestApp_loadRBACConfig(t *testing.T) {
 			)
 
 			testutil.StderrOutputForFunc(func() {
-				config, err = a.loadRBACConfig(path, nil)
+				config, err = a.loadRBACConfig(path)
 			})
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -55,7 +57,7 @@ func TestConfigKeepsRouteCheckFail(t *testing.T) {
 	assert.Contains(t, string(env), "\nGOFR_RBAC_ROUTE_CHECK=fail\n")
 }
 
-func TestRBACExtractor(t *testing.T) {
+func TestLivePermissions(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
@@ -107,32 +109,56 @@ func TestRBACExtractor(t *testing.T) {
 	require.Eventually(t, func() bool { return call(http.MethodGet, "/orders", alice) == http.StatusOK },
 		5*time.Second, 50*time.Millisecond)
 
-	testCases := []struct {
-		desc       string
-		method     string
-		path       string
-		bearer     string
-		wantStatus int
-	}{
-		{desc: "a granted permission allows the request", method: http.MethodPost, path: "/orders",
-			bearer: alice, wantStatus: http.StatusCreated},
-		{desc: "a permission the store does not grant is denied", method: http.MethodPost, path: "/orders",
-			bearer: token("bob"), wantStatus: http.StatusForbidden},
-		{desc: "a subject the store does not know holds nothing", method: http.MethodGet, path: "/orders",
-			bearer: token("carol"), wantStatus: http.StatusForbidden},
-		{desc: "a token without a subject is unauthenticated", method: http.MethodGet, path: "/orders",
-			bearer: token(""), wantStatus: http.StatusUnauthorized},
-		{desc: "a public route skips the extractor", method: http.MethodGet, path: "/status",
-			bearer: token("carol"), wantStatus: http.StatusOK},
-	}
+	// What the store holds decides each request, per subject.
+	assert.Equal(t, http.StatusCreated, call(http.MethodPost, "/orders", alice), "alice holds orders:write")
+	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", token("bob")), "bob does not hold orders:write")
+	assert.Equal(t, http.StatusForbidden, call(http.MethodGet, "/orders", token("carol")), "an unknown subject holds nothing")
+	assert.Equal(t, http.StatusForbidden, call(http.MethodGet, "/orders", token("")), "a token without a subject holds nothing")
 
-	for i, tc := range testCases {
-		assert.Equal(t, tc.wantStatus, call(tc.method, tc.path, tc.bearer), "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-
-	// Revoking in the store denies the next request, though alice's token is still valid.
+	// Revoking in the store denies the next request with the SAME token; granting restores it.
 	store.revoke("alice", "orders:write")
 
-	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", alice), "revoked permission must be denied")
+	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", alice), "a revoked permission must be denied")
 	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/orders", alice), "a permission not revoked must still allow")
+
+	store.grant("alice", "orders:write")
+
+	assert.Equal(t, http.StatusCreated, call(http.MethodPost, "/orders", alice), "a re-granted permission must allow again")
+
+	// A store outage fails closed with a 503 on every protected route.
+	store.setFailing(true)
+	t.Cleanup(func() { store.setFailing(false) })
+
+	assert.Equal(t, http.StatusServiceUnavailable, call(http.MethodGet, "/orders", alice))
+	assert.Equal(t, http.StatusServiceUnavailable, call(http.MethodPost, "/orders", alice))
+
+	// Public and built-in routes never reach the store, so they still answer during the outage.
+	before := store.lookups.Load()
+
+	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/status", alice))
+	assert.Equal(t, http.StatusOK, call(http.MethodGet, "/.well-known/alive", ""))
+	assert.Equal(t, before, store.lookups.Load(), "public and /.well-known/ routes must not call the store")
 }
+
+// TestLivePermissionsTimeout checks that a lookup that outlives its timeout is answered with a 503
+// and never reaches the next handler.
+func TestLivePermissionsTimeout(t *testing.T) {
+	slow := func(ctx context.Context, _ string) ([]string, error) {
+		<-ctx.Done()
+
+		return nil, ctx.Err()
+	}
+
+	reached := false
+	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true })
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/orders", http.NoBody)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, jwt.MapClaims{"sub": "alice"}))
+	rec := httptest.NewRecorder()
+
+	livePermissions(slow, 20*time.Millisecond)(next).ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.False(t, reached)
+}
+

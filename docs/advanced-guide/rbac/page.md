@@ -118,14 +118,6 @@ error still shows why every route is unprotected.
 }
 ```
 
-**From your application** (permissions from a live store, see
-[Permissions from Your Application](#permissions-from-your-application-extractor)):
-```go
-app.EnableRBACWithExtractor(func(c *container.Container, r *http.Request) ([]string, error) {
-	return lookUpPermissions(r.Context(), c, r)
-})
-```
-
 **Precedence**: If both are set, **only JWT is considered**. The header is not checked when `jwtClaimPath` is configured, even if JWT extraction fails.
 
 **JWT Claim Path Formats**:
@@ -158,8 +150,6 @@ identity provider to put a flat key with dots into a signed token.
 
 Exactly one mode is active:
 
-- **Extractor mode** when RBAC is enabled with `EnableRBACWithExtractor` (see
-  [Permissions from Your Application](#permissions-from-your-application-extractor)).
 - **Permissions mode** when `permissionsClaimPath` is set.
 - **Roles mode** when `jwtClaimPath` is set.
 - **Header mode** when only `roleHeader` is set.
@@ -277,138 +267,84 @@ that grants access. No `WWW-Authenticate` header is set. A custom `ErrorHandler`
 - With `permissionsClaimPath` set, a `roles` section is never consulted; RBAC logs a WARN at startup
   if one is present, so a section left over from roles mode is not mistaken for one that applies.
 
-### Permissions from Your Application (Extractor)
+### Permissions that change before the token expires
 
-A token's claims are fixed until the token expires. When permissions live in your own store — a
-database table, a policy service — and a change there must take effect on the next request, let the
-application supply the permissions with `EnableRBACWithExtractor`:
-
-> **⚠️ A route no rule matches is served with no authorization.** The extractor is called only for
-> routes a rule in the config file protects. Every other route is served to anyone, in this mode as in
-> every other (see [Unmatched Routes Behavior](#unmatched-routes-behavior)). Forget a rule for one
-> endpoint and that endpoint ships open, while the extractor guarding the others gives a false sense
-> of coverage. Give every route a rule (`"public": true` for a route meant to be open), and set
-> `GOFR_RBAC_ROUTE_CHECK=fail` so that an app with an uncovered route
-> [stops at startup](#choosing-what-a-mismatch-does) instead of logging an error and serving it.
-> The [`using-rbac-extractor` example](https://github.com/gofr-dev/gofr/tree/development/examples/using-rbac-extractor)
-> does both.
+A token's claims are fixed until the token expires. If a user holds `orders:write` in a token that
+lasts an hour, and an admin revokes that grant five minutes in, the user can still write orders for
+another 55 minutes, because RBAC only sees what the token says. When the permissions live in your own
+store (a database table, a policy service) and a change must take effect on the next request, add the
+live permissions to the request yourself, with an app middleware that runs between `EnableOAuth` and
+`EnableRBAC`. It uses released APIs only: the middleware puts a `permissions` claim in the request, and
+`EnableRBAC` reads it through `permissionsClaimPath`.
 
 ```go
-func main() {
-	app := gofr.New()
-
-	if err := app.EnableOAuth(app.Config.Get("JWKS_URL"), 10); err != nil {
-		app.Logger().Fatalf("%v", err)
-	}
-
-	if err := app.EnableRBACWithExtractor(permissionsFromStore); err != nil {
-		app.Logger().Fatalf("%v", err)
-	}
-
-	app.GET("/orders", listOrders)
-	app.Run()
-}
-
-// permissionsFromStore returns what the caller may do right now, keyed on the verified token's
-// tenant and subject. A permission revoked in the store is denied on the next request.
-func permissionsFromStore(c *container.Container, r *http.Request) ([]string, error) {
-	claims, ok := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
-	if !ok {
-		return nil, rbac.ErrRoleNotFound // 401
-	}
-
-	tenant, _ := claims["tenant"].(string)
-	sub, _ := claims["sub"].(string)
-
-	rows, err := c.SQL.QueryContext(r.Context(),
-		"SELECT permission FROM grants WHERE tenant = ? AND subject = ?", tenant, sub)
-	if err != nil {
-		return nil, gofrHTTP.ErrorServiceUnavailable{Dependency: "grants store"} // 503
-	}
-	defer rows.Close()
-
-	var perms []string
-
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, err // 403
-		}
-
-		perms = append(perms, p)
-	}
-
-	return perms, rows.Err()
-}
+app.EnableOAuth(jwksURL, 10, jwt.WithIssuer(issuer), jwt.WithAudience("orders-api"), jwt.WithExpirationRequired())
+app.UseMiddleware(livePermissions(store.Permissions, 2*time.Second)) // runs after OAuth, before RBAC
+app.EnableRBAC() // configs/rbac.json: "permissionsClaimPath": "permissions"
 ```
-
-`EnableRBACWithExtractor(fn, configPath...)` takes the extractor and, like `EnableRBAC`, an optional
-config path that is read instead of the default paths. For example:
 
 ```go
-err := app.EnableRBACWithExtractor(permissionsFromStore, "configs/custom-rbac.json")
-```
+func livePermissions(lookup func(ctx context.Context, sub string) ([]string, error),
+	timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Public routes and GoFr's /.well-known/ routes need no permission check: skip the store.
+			if strings.HasPrefix(r.URL.Path, "/.well-known/") || publicRoutes[r.URL.Path] {
+				next.ServeHTTP(w, r)
 
-The config file then needs only `endpoints`:
+				return
+			}
 
-```json
-{
-  "endpoints": [
-    { "path": "/health", "methods": ["GET"], "public": true },
-    { "path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"] }
-  ]
+			claims, _ := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+
+			sub, _ := claims["sub"].(string)
+			if sub == "" {
+				next.ServeHTTP(w, r) // no permissions claim, so RBAC answers 403
+
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			defer cancel()
+
+			perms, err := lookup(ctx, sub)
+			if err != nil { // fail closed
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+
+				return
+			}
+
+			list := make([]any, len(perms)) // RBAC reads the claim as []any
+			for i, p := range perms {
+				list[i] = p
+			}
+
+			merged := maps.Clone(claims)
+			merged["permissions"] = list
+
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, merged)))
+		})
+	}
 }
 ```
 
-The extractor only answers "what does this caller hold?". Everything else stays in RBAC: endpoint
-matching, public routes, the audit log, metrics, tracing and the [startup route
-check](#startup-route-check). A request is allowed if the returned permissions hold **any** of the
-endpoint's `requiredPermissions`, by exact string match, the same as
-[permissions mode](#permissions-mode-scope-claim). The extractor is not called for a public route or
-for a route no rule matches.
+Two things to get right:
 
-What the extractor returns decides the response:
+- **Order.** `EnableOAuth`, `UseMiddleware` and `EnableRBAC` append to one middleware chain in the
+  order they are called. The middleware must be registered after `EnableOAuth`, which provides the
+  claims it reads, and before `EnableRBAC`. If the order is reversed, RBAC runs first, finds no
+  `permissions` claim, and every protected request gets a 403.
+- **Fail closed, and skip routes that need no check.** When the store lookup fails or times out, answer
+  503 instead of passing the request on, so an outage never grants access. Skip the lookup for public
+  routes and GoFr's built-in `/.well-known/` routes, so health checks do not hit the store and keep
+  working while it is down. The sketch's `publicRoutes` table lists the routes marked
+  `"public": true` in `configs/rbac.json`.
 
-| Extractor returns | Response |
-|---|---|
-| permissions that include a required one | the request is served |
-| permissions that do not, `nil` or an empty slice | 403 |
-| an error that has a `StatusCode() int` method returning 400 or more, such as `gofrHTTP.ErrorServiceUnavailable` | that status, with its standard text as the body |
-| `rbac.ErrRoleNotFound`, or an error wrapping it | 401 |
-| any other error | 403 |
-| nothing before the timeout, or the request is canceled | 503 |
+To avoid a store lookup on every request, cache inside the lookup function and keep the cache
+short-lived, so that a revocation still takes effect quickly.
 
-An error never allows the request. The response body is only the status text; the error's own
-message is not sent to the client. A custom `ErrorHandler` still decides the response when it is
-set, and receives the extractor's error as its `err` (on a timeout, an error matching
-`context.DeadlineExceeded` with `errors.Is`).
-
-**Timeout.** The extractor runs with a deadline on `r.Context()`: 5 seconds, or the Go duration in
-`RBAC_EXTRACTOR_TIMEOUT` (for example `2s`). A value that does not parse, or is zero or negative, is
-logged as a warning and the 5 seconds are used, so a typo does not turn authorization off. Pass `r.Context()` to every call the extractor makes, as
-the example does: the deadline can only stop calls that receive it, and an extractor that ignores it
-holds the request until it returns, and is then denied with a 503.
-
-**Error text is logged.** Every error the extractor returns is logged with its full text at ERROR, once for
-each failed request, so a store outage writes one line per request. The client never sees it, but the log
-does: keep secrets such as connection strings, passwords and tokens out of the error text.
-
-**One source.** With an extractor, RBAC reads permissions only from it. A config file that also sets
-`jwtClaimPath` or `permissionsClaimPath` is an error at startup. A `roles` section or a `roleHeader`
-in the file is never consulted, and RBAC logs a WARN at startup if either is present. The startup
-line names the mode:
-
-```
-RBAC enabled: mode=extractor, source=application
-```
-
-**Calls per request.** The extractor runs once for each request RBAC checks. To avoid a store lookup
-on every request, cache inside the extractor, and keep the cache short-lived so that a revocation
-still takes effect quickly.
-
-The extractor receives the app's container, so it can reach any datasource the app has registered,
-in the same way as `EnableBasicAuthWithValidator`. A panic in the extractor is recovered by GoFr's
-request middleware and answered with a 500.
+For a runnable app, with tests that revoke a permission and show the same token turn from allowed to
+403, see [`examples/using-rbac-live-permissions`](https://github.com/gofr-dev/gofr/tree/development/examples/using-rbac-live-permissions).
 
 ### Roles and Permissions
 
@@ -1018,14 +954,6 @@ Or use role inheritance to avoid duplication:
   token's `aud` matches; with `jwt.WithExpirationRequired`, that it has an `exp`; with
   `jwt.WithIssuer`, that its `iss` matches
 
-**Every extractor-mode request gets a 503**
-- The extractor does not return within the timeout (5 seconds, or `RBAC_EXTRACTOR_TIMEOUT`), or it
-  returns an error with a 503 status. The `rbac_role_extraction_failures` metric counts the first
-  with the reason `extractor_timeout` and the second with `extractor_error`. The first timeout logs a
-  WARN; every extractor error is logged at ERROR with its cause and the request's trace ID. A request
-  the client cancels while the extractor runs is counted as `extractor_canceled` instead
-- Check that the extractor passes `r.Context()` to the calls it makes
-
 **Config file not found**
 - Ensure config file exists at the specified path — relative paths resolve against the process's
   working directory, which inside a container is often not where the file was copied
@@ -1113,8 +1041,7 @@ RBAC middleware implements industry-standard security practices to protect sensi
 - ✅ Status (allowed/denied) included
 - ✅ `rbac_role_extraction_failures` counts requests whose role or permissions could not be read,
   with a `reason` label: `no_jwt_claims` (RBAC is not behind OAuth), `missing_role` (no role claim or
-  header) or `unreadable_claim` (an IdP or client problem); in extractor mode, `extractor_error`,
-  `extractor_timeout` or `extractor_canceled` (the client went away while the extractor ran)
+  header) or `unreadable_claim` (an IdP or client problem)
 - ❌ Roles excluded (avoid high cardinality and PII concerns)
 
 **Logs:**

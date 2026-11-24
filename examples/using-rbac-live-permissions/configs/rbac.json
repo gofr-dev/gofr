@@ -1,4 +1,5 @@
 {
+  "permissionsClaimPath": "permissions",
   "endpoints": [
     { "path": "/status", "methods": ["GET"], "public": true },
     { "path": "/orders", "methods": ["GET"], "requiredPermissions": ["orders:read"] },
