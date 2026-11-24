@@ -135,7 +135,6 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	// every `c.PubSub != nil` check in the codebase admits. The getters filter it as defense in
 	// depth, but they cannot help a direct reader of the exported field.
 	if client := kafka.New(&kafka.Config{
-		KeyFields:        conf.Get("PUBSUB_KEY_FIELDS"),
 		Brokers:          pubsubBrokers,
 		Partition:        partition,
 		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
