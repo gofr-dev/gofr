@@ -114,6 +114,10 @@ func getPublicKeys(ctx context.Context, provider JWKSProvider, path string) (JWK
 		return keys, err
 	}
 
+	if resp.Body != nil {
+		defer resp.Body.Close()
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return keys, errInvalidURL
 	}
@@ -121,7 +125,6 @@ func getPublicKeys(ctx context.Context, provider JWKSProvider, path string) (JWK
 	if resp.Body == nil {
 		return keys, errEmptyResponseBody
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -276,21 +276,34 @@ func (b *failingBody) Close() error {
 }
 
 type failingJWKSProvider struct {
-	body *failingBody
+	statusCode int
+	body       *failingBody
 }
 
 func (p failingJWKSProvider) GetWithHeaders(_ context.Context, _ string, _ map[string]any,
 	_ map[string]string) (*http.Response, error) {
-	return &http.Response{StatusCode: http.StatusOK, Body: p.body}, nil
+	return &http.Response{StatusCode: p.statusCode, Body: p.body}, nil
 }
 
 func Test_getPublicKeys_ClosesBodyOnReadError(t *testing.T) {
 	body := &failingBody{}
 
-	_, err := getPublicKeys(t.Context(), failingJWKSProvider{body: body}, "/jwks")
+	_, err := getPublicKeys(t.Context(), failingJWKSProvider{statusCode: http.StatusOK, body: body}, "/jwks")
 
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.True(t, body.closed, "the response body must be closed when reading it fails")
+}
+
+func Test_getPublicKeys_ClosesBodyOnNonOKStatus(t *testing.T) {
+	body := &failingBody{}
+
+	_, err := getPublicKeys(t.Context(), failingJWKSProvider{
+		statusCode: http.StatusInternalServerError,
+		body:       body,
+	}, "/jwks")
+
+	require.ErrorIs(t, err, errInvalidURL)
+	assert.True(t, body.closed, "the response body must be closed when status is not 200 OK")
 }
 
 func TestPublicKeys_updateKeys(t *testing.T) {
