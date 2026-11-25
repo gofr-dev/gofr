@@ -727,12 +727,15 @@ func TestCommonFileSystem_Open_StatObjectError(t *testing.T) {
 	tests := []struct {
 		name       string
 		statErr    error
+		wantErr    error
 		wantStatus string
 	}{
-		{name: "provider error is recorded as error", statErr: errTest, wantStatus: StatusError},
+		// A store that is not connected, or a denied request, must not read as a missing file.
+		{name: "provider error is returned as is", statErr: errTest, wantErr: errTest, wantStatus: StatusError},
 		{
-			name:       "missing object is recorded as not found",
+			name:       "missing object is ErrFileNotFound",
 			statErr:    fmt.Errorf("head missing.txt: %w", os.ErrNotExist),
+			wantErr:    ErrFileNotFound,
 			wantStatus: statusNotFound,
 		},
 	}
@@ -751,8 +754,7 @@ func TestCommonFileSystem_Open_StatObjectError(t *testing.T) {
 
 			_, err := fs.Open("missing.txt")
 
-			require.Error(t, err)
-			assert.Equal(t, ErrFileNotFound, err)
+			require.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, []string{tt.wantStatus}, metrics.statuses())
 		})
 	}

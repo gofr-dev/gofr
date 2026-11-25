@@ -457,6 +457,14 @@ func (c *CommonFileSystem) Open(name string) (File, error) {
 	info, err := c.Provider.StatObject(ctx, name)
 	if err != nil {
 		st = missingStatus(err)
+
+		// Only a missing object is ErrFileNotFound; any other error (a store that has not
+		// connected, a denied request) is returned as is so it is not mistaken for one.
+		if st != statusNotFound {
+			msg = fmt.Sprintf("failed to open %q: %v", name, err)
+			return nil, err
+		}
+
 		msg = fmt.Sprintf("file %q not found: %v", name, err)
 
 		return nil, ErrFileNotFound
