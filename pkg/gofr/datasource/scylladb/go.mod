@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/gocql/gocql v1.7.0
-	github.com/stoewer/go-strcase v1.3.1
+	github.com/stoewer/go-strcase v1.4.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
