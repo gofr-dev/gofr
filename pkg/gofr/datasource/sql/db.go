@@ -152,14 +152,18 @@ func (d *DB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error
 	return d.DB.PrepareContext(ctx, query)
 }
 
-// Begin starts a transaction with context.Background(); use BeginTx to bind it to a context.
+// Begin starts a transaction with context.Background(); use BeginTxContext to bind it to a context.
 func (d *DB) Begin() (*Tx, error) {
-	return d.BeginTx(context.Background(), nil)
+	return d.BeginTxContext(context.Background(), nil)
 }
 
-// BeginTx starts a transaction bound to ctx: if ctx is canceled before Commit, the driver
-// rolls the transaction back. opts may be nil for the driver's default isolation level.
-func (d *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
+// BeginTxContext starts a transaction bound to ctx: if ctx is canceled before Commit, the
+// driver rolls the transaction back. opts may be nil for the driver's default isolation level.
+// Statements run on the returned Tx are logged and recorded in app_sql_stats.
+//
+// It is not named BeginTx because DB embeds *sql.DB, whose promoted BeginTx returns a
+// *sql.Tx; that method stays available unchanged, without GoFr's logging and metrics.
+func (d *DB) BeginTxContext(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
 	tx, err := d.DB.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err

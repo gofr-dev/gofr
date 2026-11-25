@@ -99,9 +99,11 @@ func Transfer(ctx *gofr.Context) (any, error) {
 
 `Begin` starts the transaction with `context.Background()`, so the request's deadline does not end
 the transaction itself; only the statements given `ctx` are bound to it. To tie the whole
-transaction to the request, or to set the isolation level or a read-only transaction, use `BeginTx`
-on the SQL datasource. If the request context is canceled before `Commit`, the driver rolls the
-transaction back.
+transaction to the request, or to set the isolation level or a read-only transaction, use
+`BeginTxContext` on the SQL datasource. If the request context is canceled before `Commit`, the
+driver rolls the transaction back. `BeginTxContext` returns the same logging transaction as `Begin`;
+the `BeginTx` that `*gofrSQL.DB` inherits from `*sql.DB` still returns a plain `*sql.Tx`, whose
+statements are not logged or recorded in `app_sql_stats`.
 
 ```go
 import (
@@ -112,10 +114,10 @@ import (
 
 db, ok := ctx.SQL.(*gofrSQL.DB)
 if !ok {
-	return nil, errors.New("BeginTx needs the built-in SQL datasource")
+	return nil, errors.New("BeginTxContext needs the built-in SQL datasource")
 }
 
-tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+tx, err := db.BeginTxContext(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 ```
 
 The type assertion works when `ctx.SQL` is the built-in SQL datasource. It fails when the

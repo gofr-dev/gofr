@@ -730,7 +730,11 @@ func TestDB_Begin(t *testing.T) {
 	}
 }
 
-func TestDB_BeginTx(t *testing.T) {
+// DB embeds *sql.DB, so the promoted BeginTx is part of DB's public API. Shadowing it with
+// a different signature would break applications that store its result as a *sql.Tx.
+var _ func(*DB, context.Context, *sql.TxOptions) (*sql.Tx, error) = (*DB).BeginTx
+
+func TestDB_BeginTxContext(t *testing.T) {
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -771,7 +775,7 @@ func TestDB_BeginTx(t *testing.T) {
 
 				tc.setup(mock)
 
-				tx, err := db.BeginTx(tc.ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+				tx, err := db.BeginTxContext(tc.ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 				if tc.wantErr != nil {
 					require.ErrorIs(t, err, tc.wantErr)
 					assert.Nil(t, tx)
@@ -798,7 +802,7 @@ func TestDB_BeginTx(t *testing.T) {
 		db := &DB{DB: sql.OpenDB(optsConnector{got: &got}), config: &DBConfig{}}
 		defer db.DB.Close()
 
-		tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+		tx, err := db.BeginTxContext(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit())
 
@@ -806,7 +810,7 @@ func TestDB_BeginTx(t *testing.T) {
 	})
 }
 
-// optsConnector opens connections that record the options BeginTx passes to the driver.
+// optsConnector opens connections that record the options BeginTxContext passes to the driver.
 type optsConnector struct{ got *driver.TxOptions }
 
 func (c optsConnector) Connect(context.Context) (driver.Conn, error) { return optsConn(c), nil }
