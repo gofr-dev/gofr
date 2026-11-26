@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -304,6 +305,56 @@ func Test_getPublicKeys_ClosesBodyOnNonOKStatus(t *testing.T) {
 
 	require.ErrorIs(t, err, errInvalidURL)
 	assert.True(t, body.closed, "the response body must be closed when status is not 200 OK")
+}
+
+// Test_getPublicKeys_ReusesConnection pins that getPublicKeys drains the body so the keep-alive
+// connection is reused across refreshes, on the success path and on the non-200 path. Without the
+// drain, net/http abandons the connection on Close and opens a new one for every fetch.
+func Test_getPublicKeys_ReusesConnection(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
+		var conns int32
+
+		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"keys":[]}`))
+		}))
+		srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+			if s == http.StateNew {
+				atomic.AddInt32(&conns, 1)
+			}
+		}
+		srv.Start()
+
+		client := &http.Client{Transport: &http.Transport{MaxIdleConns: 10, MaxIdleConnsPerHost: 10}}
+		provider := reusableJWKSProvider{client: client, url: srv.URL}
+
+		const fetches = 10
+		for range fetches {
+			_, _ = getPublicKeys(t.Context(), provider, "/jwks")
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		assert.LessOrEqualf(t, atomic.LoadInt32(&conns), int32(2),
+			"status %d: %d fetches opened %d connections; the body must be drained so the connection is reused",
+			status, fetches, atomic.LoadInt32(&conns))
+
+		srv.Close()
+	}
+}
+
+// reusableJWKSProvider is a real-client provider, like gofr's httpService: the response Body is a
+// real net/http body over a real keep-alive connection.
+type reusableJWKSProvider struct {
+	client *http.Client
+	url    string
+}
+
+func (p reusableJWKSProvider) GetWithHeaders(ctx context.Context, path string, _ map[string]any,
+	_ map[string]string) (*http.Response, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, p.url+path, http.NoBody)
+
+	return p.client.Do(req)
 }
 
 func TestPublicKeys_updateKeys(t *testing.T) {
