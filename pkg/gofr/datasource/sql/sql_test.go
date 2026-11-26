@@ -354,6 +354,54 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			expOut: "user:password@tcp(host:3201)/test?charset=utf8mb4&parseTime=True&loc=Local&interpolateParams=true",
 		},
 		{
+			desc: "mysql dialect with unsafe charset big5 omits interpolateParams",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "big5",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=big5&parseTime=True&loc=Local",
+		},
+		{
+			desc: "mysql dialect with unsafe charset sjis omits interpolateParams",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "sjis",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=sjis&parseTime=True&loc=Local",
+		},
+		{
+			desc: "mysql dialect with unsafe charset gbk omits interpolateParams",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "gbk",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=gbk&parseTime=True&loc=Local",
+		},
+		{
+			desc: "mysql dialect with unsafe charset cp932 omits interpolateParams",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "cp932",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=cp932&parseTime=True&loc=Local",
+		},
+		{
+			desc: "mysql dialect with unsafe charset gb18030 omits interpolateParams",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "gb18030",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=gb18030&parseTime=True&loc=Local",
+		},
+		{
+			desc: "mysql dialect unsafe charset match is case-insensitive",
+			configs: &DBConfig{
+				Dialect: "mysql", HostName: "host", User: "user", Password: "password",
+				Port: "3201", Database: "test", Charset: "GBK",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=GBK&parseTime=True&loc=Local",
+		},
+		{
 			desc: "postgresql dialect",
 			configs: &DBConfig{
 				Dialect:  "postgres",

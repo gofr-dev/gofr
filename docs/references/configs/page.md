@@ -453,7 +453,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 
 - DB_CHARSET
-- The character set for database connection
+- The character set for database connection. For MySQL, the charsets `big5`, `sjis`, `gbk`, `cp932` and `gb18030` disable `interpolateParams` in the DSN, because the driver rejects that combination; queries still run through server-side placeholders.
 - utf8
 
 ---

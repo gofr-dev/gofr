@@ -477,7 +477,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Charset = "utf8"
 		}
 
-		connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
+		connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 			dbConfig.User,
 			dbConfig.Password,
 			dbConfig.HostName,
@@ -485,6 +485,14 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		)
+
+		// go-sql-driver/mysql v1.10.2 rejects interpolateParams with a charset whose multi-byte
+		// encoding can contain a backslash, because client-side interpolation is then unsafe. Omit
+		// it for those charsets; the driver falls back to server-side placeholders. See
+		// isUnsafeMySQLCharset.
+		if !isUnsafeMySQLCharset(dbConfig.Charset) {
+			connStr += "&interpolateParams=true"
+		}
 
 		if tlsParam := getMySQLTLSParam(dbConfig.SSLMode); tlsParam != "" {
 			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
@@ -513,6 +521,19 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		return fmt.Sprintf("file:%s.db", s), nil
 	default:
 		return "", errUnsupportedDialect
+	}
+}
+
+// isUnsafeMySQLCharset reports whether charset is one go-sql-driver/mysql refuses to use with
+// interpolateParams: a backslash can appear inside a multi-byte character, so client-side
+// interpolation is unsafe. Keep the set in sync with the driver's unsafeCharsets (collations.go).
+// The match is case-insensitive and ignores surrounding space, like the driver.
+func isUnsafeMySQLCharset(charset string) bool {
+	switch strings.ToLower(strings.TrimSpace(charset)) {
+	case "big5", "sjis", "gbk", "cp932", "gb18030":
+		return true
+	default:
+		return false
 	}
 }
 
