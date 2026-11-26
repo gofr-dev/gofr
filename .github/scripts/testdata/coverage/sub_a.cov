@@ -1,0 +1,5 @@
+mode: atomic
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:12.50,15.2 2 4
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:17.40,19.2 1 0
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:12.50,15.2 2 1
+gofr.dev/pkg/gofr/datasource/mongo/mock_interfaces.go:5.10,9.2 3 9
