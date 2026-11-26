@@ -16,6 +16,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestQueryLog_PrettyPrint(t *testing.T) {
@@ -207,29 +209,16 @@ func assertLoggedArgs(t *testing.T, logged *QueryLog, wantArgs any) {
 	assert.Contains(t, string(gotJSON), `"args":`+string(wantJSON))
 }
 
-// discardLogger is a datasource.Logger that drops every entry, as the real
-// logger does with a Debug entry when LOG_LEVEL is above DEBUG.
-type discardLogger struct{}
-
-func (discardLogger) Debug(...any)          {}
-func (discardLogger) Debugf(string, ...any) {}
-func (discardLogger) Info(...any)           {}
-func (discardLogger) Infof(string, ...any)  {}
-func (discardLogger) Warn(...any)           {}
-func (discardLogger) Warnf(string, ...any)  {}
-func (discardLogger) Error(...any)          {}
-func (discardLogger) Errorf(string, ...any) {}
-
-type discardMetrics struct{}
-
-func (discardMetrics) RecordHistogram(context.Context, string, float64, ...string) {}
-func (discardMetrics) IncrementCounter(context.Context, string, ...string)         {}
-
 // A pipeline's log text must be built only when the entry is written, so a
 // dropped entry costs the same however many commands the pipeline holds.
 func TestProcessPipelineHook_DroppedEntryBuildsNoText(t *testing.T) {
 	ctx := t.Context()
-	hook := (&redisHook{config: &Config{}, logger: discardLogger{}, metrics: discardMetrics{}}).
+
+	// At ERROR level the logger drops the hook's Debug entry, as with LOG_LEVEL above DEBUG.
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	hook := (&redisHook{config: &Config{}, logger: logging.NewMockLogger(logging.ERROR), metrics: mockMetrics}).
 		ProcessPipelineHook(func(context.Context, []redis.Cmder) error { return nil })
 
 	pipeline := func(n int) []redis.Cmder {
