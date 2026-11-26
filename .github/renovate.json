@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["github-actions"],
+  "dependencyDashboard": false,
+  "schedule": ["before 6am on monday"],
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Dependabot owns `uses:` actions; turn every github-actions depType off.",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "description": "Allowlist: only runtime versions in `with:` (node-version, go-version), which Dependabot cannot update.",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "enabled": true,
+      "groupName": "runtime versions"
+    }
+  ]
+}
