@@ -2587,11 +2587,11 @@ const rbacGuardingAdmin = `{"roleHeader":"X-User-Role",` +
 	`"endpoints":[{"path":"/admin","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
 
 // Test_HTTPMethodNotAllowed_UnderRBAC pins the by-design interaction between RBAC and the 405
-// catch-all. HEAD fallback uses GET's policy; other unconfigured methods pass through to route matching
-// by design. A wrong method on an RBAC-guarded path is answered by the catch-all exactly as on
-// any other registered path: 405 with
-// an Allow header. RBAC governs authorization, not path concealment -- a caller refused the guarded
-// method already learns the path exists from the 401, and the 405 adds no authorization bypass.
+// catch-all. HEAD fallback uses GET's policy; other unconfigured methods pass through to route
+// matching by design. A wrong method on an RBAC-guarded path is answered by the catch-all
+// exactly as on any other registered path: 405 with an Allow header. RBAC governs authorization,
+// not path concealment -- a caller refused the guarded method already learns the path exists
+// from the 401, and the 405 adds no authorization bypass.
 func Test_HTTPMethodNotAllowed_UnderRBAC(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
