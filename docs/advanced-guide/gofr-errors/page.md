@@ -168,25 +168,33 @@ func (e ValidationError) Response() map[string]any {
 
 ## Hiding Internal Error Details
 
-By default, the `message` in an error response is the text of `err.Error()`. For an error GoFr cannot classify, or one
-that wraps a database or driver error, that text can include internal details such as SQL fragments, hostnames or
-driver messages. Set `HTTP_HIDE_INTERNAL_ERRORS=true` to keep that text out of client responses.
+By default, the message a client receives for an error is the text of `err.Error()`. For an error GoFr cannot
+classify, or a database error, that text can include internal details such as SQL fragments, hostnames or driver
+messages. Set `HIDE_INTERNAL_ERRORS=true` to keep that text away from clients.
 
-When it is enabled, the `message` is replaced with `Internal Server Error` when either:
+When it is enabled, the message is replaced with `Internal Server Error` when either (gRPC uses its own rule,
+described under [Where it applies](#where-it-applies)):
 
-- the error does not implement `StatusCode() int` (an unclassified error, such as one from `errors.New`, or a GoFr
-  error wrapped with `fmt.Errorf("...: %w", err)`), or
-- the error's `StatusCode()` is 500 or 0 (GoFr sends status 0 as 500), such as `datasource.ErrorDB`,
-  `ErrorPanicRecovery`, or a custom error that declares 500.
+- the error does not implement `StatusCode() int`, such as an error from `errors.New`, a raw driver error, or any
+  error wrapped with `fmt.Errorf("...: %w", err)` (the wrapper does not carry the status code of the error inside it), or
+- the error is a `datasource.ErrorDB` (or `*datasource.ErrorDB`), which usually carries the driver's own text.
 
-Errors with any other status code keep their message, because that text was written for clients: for example,
-`ErrorEntityNotFound` (404), `ErrorInvalidParam` (400) or `ErrorServiceUnavailable` (503). An error that declares
-502 or 503 and wraps a dial error keeps its text, which can include the dial address.
+Every other error keeps its message, because an error that declares a status code was written for clients. This
+includes GoFr's predefined errors, such as `ErrorEntityNotFound` or `ErrorInvalidParam`, and your own errors with a
+`StatusCode()`, **including a custom error that declares 500**.
+
+| Error returned by the handler | Message the client receives |
+|---|---|
+| `errors.New("pq: relation \"users\" does not exist")` | `Internal Server Error` |
+| `datasource.ErrorDB{Err: err, Message: "select failed"}` | `Internal Server Error` |
+| `fmt.Errorf("load user: %w", http.ErrorEntityNotFound{Name: "id", Value: "1"})` | `Internal Server Error` |
+| a custom error with `StatusCode()` 500 and the text `payment provider is down, retry later` | `payment provider is down, retry later` |
+| a custom error with `StatusCode()` 404, whatever its text | its own text |
 
 > [!WARNING]
-> This option only replaces the `message` of errors that are sent as 500. It is not a guarantee that no internal
-> detail leaves the server: custom `ResponseMarshaller` fields are still returned, and errors with other status codes
-> keep their text.
+> A message is kept whenever the error declares a status code, so text you put in your own errors still reaches
+> clients. Custom `ResponseMarshaller` fields are also still returned. This option keeps unclassified and database
+> error text out of responses; it does not inspect what your own errors say.
 
 #### Example:
 ```go
@@ -195,7 +203,7 @@ app.GET("/users/{id}", func(ctx *gofr.Context) (any, error) {
 })
 ```
 
-Without `HTTP_HIDE_INTERNAL_ERRORS` (or with `false`), the response is:
+Without `HIDE_INTERNAL_ERRORS` (or with `false`), the response is:
 ```json
 {
   "error": {
@@ -204,7 +212,7 @@ Without `HTTP_HIDE_INTERNAL_ERRORS` (or with `false`), the response is:
 }
 ```
 
-With `HTTP_HIDE_INTERNAL_ERRORS=true`, the response is:
+With `HIDE_INTERNAL_ERRORS=true`, the response is:
 ```json
 {
   "error": {
@@ -213,10 +221,31 @@ With `HTTP_HIDE_INTERNAL_ERRORS=true`, the response is:
 }
 ```
 
+#### Where it applies
+
+- **HTTP responses:** errors returned by handlers and errors written by GoFr's middleware (authentication, rate
+  limiting, the `QUERY` content-type check). Only `message` changes: the status code stays the same, custom
+  `ResponseMarshaller` fields are still included, and a handler that returns data together with an error still
+  responds with 206 (Partial Content) and its data.
+- **SSE and NDJSON streams:** the terminal error frame says `{"error":"Internal Server Error"}` when the stream's
+  source fails with such an error.
+- **GraphQL:** a resolver's error, or a panic in a resolver, appears in `errors[].message` as `Internal Server Error`.
+  Errors from parsing and validating the query are not affected.
+- **gRPC:** here an error is classified by its gRPC status, not by `StatusCode()`. An error that is not a gRPC
+  `status` error is sent as `codes.Internal` with the message `Internal Server Error`, instead of `codes.Unknown`
+  with the error's text. This includes your own errors with a `StatusCode()`, such as a custom 500 or
+  `ErrorEntityNotFound`: return a `status.Error` with the code and message you want the client to see. A `status`
+  error is sent with its own message, including one passed on from a downstream gRPC call; when it is wrapped with
+  `%w`, the client sees the wrapper's full text. `context.Canceled` and `context.DeadlineExceeded` keep their code;
+  when wrapped, the wrapper's text is dropped. With the option off, the interceptor chain is unchanged.
+- **MCP:** a tool's error, and an error from the hook that runs before a tool, reach the AI client as
+  `Internal Server Error`.
+
 > [!NOTE]
-> - The status code never changes, only the message. A 500 stays 500, and a handler that returns data together with
->   an unclassified error still responds with 206 (Partial Content) and its data.
-> - Custom fields from a `ResponseMarshaller` error are still included; only `message` is replaced.
-> - The original error is still logged on the server with the request's trace ID, so the real cause can be found for
->   the request the client reports.
+> - The original error is still logged on the server (for HTTP handlers, with the request's trace ID), so the real
+>   cause can be found for the request the client reports. Two exceptions: GoFr does not log a stream source's error,
+>   nor the error of a custom `AuthProvider` passed to `middleware.AuthMiddleware` (the built-in authentication
+>   errors have a status code and are not hidden), so log those where they are created if you need them.
+> - Two GoFr messages that contain no internal detail are not replaced: the stream frame
+>   `stream value could not be encoded` and the MCP tool panic text `tool execution failed`.
 > - Any value other than `true` or `false` logs a warning at startup and keeps the default behavior.

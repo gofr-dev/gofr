@@ -8,6 +8,7 @@ import (
 	"time"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/internal/errhide"
 )
 
 const (
@@ -118,10 +119,10 @@ func (r Responder) pump(rc *http.ResponseController, s resTypes.Stream, items <-
 }
 
 // finishStream writes the terminal frame — an error frame if the source failed or panicked, else
-// the done marker.
+// the done marker. The source's error text is replaced when HIDE_INTERNAL_ERRORS hides it.
 func (r Responder) finishStream(rc *http.ResponseController, s resTypes.Stream, readErr error) {
 	if readErr != nil {
-		_ = r.writeErrorFrame(rc, s.Format, readErr)
+		_ = r.writeErrorText(rc, s.Format, errhide.Apply(readErr))
 		return
 	}
 
@@ -151,7 +152,11 @@ func (r Responder) writeFrame(rc *http.ResponseController, format resTypes.Forma
 }
 
 func (r Responder) writeErrorFrame(rc *http.ResponseController, format resTypes.Format, streamErr error) error {
-	payload, err := json.Marshal(map[string]string{"error": streamErr.Error()})
+	return r.writeErrorText(rc, format, streamErr.Error())
+}
+
+func (r Responder) writeErrorText(rc *http.ResponseController, format resTypes.Format, text string) error {
+	payload, err := json.Marshal(map[string]string{"error": text})
 	if err != nil {
 		return err
 	}

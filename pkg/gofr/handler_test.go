@@ -30,6 +30,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/internal/errhide"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -1654,10 +1655,21 @@ func TestHandler_ServeHTTP_KeepsMultipartTempFilesUntilATimedOutHandlerReturns(t
 
 var errDriverDetail = errors.New("dial tcp 10.0.3.7:5432: connect: connection refused")
 
+// hideErrors turns HIDE_INTERNAL_ERRORS on or off for one test and restores the previous value.
+// The switch is process-wide, so tests that use it must not run in parallel.
+func hideErrors(t *testing.T, on bool) {
+	t.Helper()
+
+	prev := errhide.Enabled()
+
+	errhide.Enable(on)
+	t.Cleanup(func() { errhide.Enable(prev) })
+}
+
 // marshaledServerError is an app error that declares 500 and adds custom fields to the response.
 type marshaledServerError struct{}
 
-func (marshaledServerError) Error() string   { return "pq: relation users does not exist" }
+func (marshaledServerError) Error() string   { return "payment provider is down, retry later" }
 func (marshaledServerError) StatusCode() int { return http.StatusInternalServerError }
 
 func (marshaledServerError) Response() map[string]any {
@@ -1696,26 +1708,27 @@ func TestHandler_HideInternalErrors(t *testing.T) {
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
 		{"classified 400 with data keeps its message", true, "partial", gofrHTTP.ErrorInvalidParam{Params: []string{"id"}},
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"'1' invalid parameter(s): id"}}`},
-		{"status 0 is sent as 500, switch off keeps the message", false, nil, zeroStatusError{},
+		{"status 0 is sent as 500 and keeps its message", true, nil, zeroStatusError{},
 			http.StatusInternalServerError, `{"error":{"message":"secret: vault token rejected"}}`},
-		{"status 0 is sent as 500 and hidden", true, nil, zeroStatusError{},
+		{"custom 500 keeps its message and custom fields", true, nil, marshaledServerError{},
+			http.StatusInternalServerError, `{"error":{"message":"payment provider is down, retry later","code":"DB_UNAVAILABLE"}}`},
+		{"pointer to datasource.ErrorDB is hidden", true, nil, &datasource.ErrorDB{Err: errDriverDetail},
 			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
-		{"status 0 with data is 206 and hidden", true, "partial", zeroStatusError{},
-			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
-		{"ResponseMarshaller 500 keeps custom fields, hides message", true, nil, marshaledServerError{},
-			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error","code":"DB_UNAVAILABLE"}}`},
 	}
+
+	hideErrors(t, false)
 
 	for i, tc := range testCases {
 		w := httptest.NewRecorder()
+
+		errhide.Enable(tc.hide)
 
 		logs := testutil.StderrOutputForFunc(func() {
 			r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 			handler{
-				function:           func(*Context) (any, error) { return tc.data, tc.err },
-				container:          container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "DEBUG"})),
-				hideInternalErrors: tc.hide,
+				function:  func(*Context) (any, error) { return tc.data, tc.err },
+				container: container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "DEBUG"})),
 			}.ServeHTTP(w, r)
 		})
 
@@ -1742,9 +1755,11 @@ func TestApp_HideInternalErrorsConfig(t *testing.T) {
 		{"invalid value warns and keeps the original message", "yes", errDriverDetail.Error(), true},
 	}
 
+	hideErrors(t, false)
+
 	for i, tc := range testCases {
 		testutil.NewServerConfigs(t)
-		t.Setenv("HTTP_HIDE_INTERNAL_ERRORS", tc.value)
+		t.Setenv("HIDE_INTERNAL_ERRORS", tc.value)
 
 		w := httptest.NewRecorder()
 
@@ -1758,7 +1773,7 @@ func TestApp_HideInternalErrorsConfig(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.JSONEq(t, `{"error":{"message":"`+tc.message+`"}}`, w.Body.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Equal(t, tc.warned, strings.Contains(logs, "invalid value of config HTTP_HIDE_INTERNAL_ERRORS"),
+		assert.Equal(t, tc.warned, strings.Contains(logs, "invalid value of config HIDE_INTERNAL_ERRORS"),
 			"TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }

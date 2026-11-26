@@ -1,6 +1,7 @@
 // Package mcp exposes an ai.Tools set as agent-callable tools over the Model Context Protocol,
-// speaking JSON-RPC 2.0 over Streamable HTTP. It depends only on the standard library and
-// gofr.dev/pkg/gofr/ai.
+// speaking JSON-RPC 2.0 over Streamable HTTP. Besides the standard library, it uses
+// gofr.dev/pkg/gofr/ai and the framework's internal HIDE_INTERNAL_ERRORS rule (which classifies
+// datasource errors, so the datasource package is a dependency too).
 package mcp
 
 import (
@@ -11,6 +12,7 @@ import (
 	"net/http"
 
 	"gofr.dev/pkg/gofr/ai"
+	"gofr.dev/pkg/gofr/internal/errhide"
 )
 
 const maxRequestBytes = 1 << 20
@@ -145,7 +147,7 @@ func (s *Server) handleToolsCall(ctx context.Context, params json.RawMessage) (a
 
 	if s.hook != nil {
 		if err := s.hook(ctx, spec); err != nil {
-			return nil, &rpcError{Code: codeInternal, Message: err.Error()}
+			return nil, &rpcError{Code: codeInternal, Message: s.clientText(p.Name, err)}
 		}
 	}
 
@@ -159,8 +161,12 @@ func (s *Server) runTool(ctx context.Context, p callParams) *toolResult {
 	}
 
 	res, err := s.callTool(ctx, p.Name, args)
+	if errors.Is(err, errToolPanicked) {
+		return errorResult(err.Error()) // GoFr's own text, no internal detail
+	}
+
 	if err != nil {
-		return errorResult(err.Error())
+		return errorResult(s.clientText(p.Name, err))
 	}
 
 	raw, err := res.JSON()
@@ -206,6 +212,18 @@ func describe(spec ai.ToolSpec) toolDescriptor {
 	}
 
 	return d
+}
+
+// clientText is the text an AI client sees for a tool or hook error. With HIDE_INTERNAL_ERRORS on, an
+// error that declares no status code is replaced with a generic message and the original is logged.
+func (s *Server) clientText(tool string, err error) string {
+	if !errhide.Enabled() || !errhide.Hides(err) {
+		return err.Error()
+	}
+
+	s.logf("mcp tool %q failed: %v", tool, err)
+
+	return errhide.Message
 }
 
 func errorResult(text string) *toolResult {

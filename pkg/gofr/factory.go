@@ -9,6 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/internal/errhide"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -17,6 +18,9 @@ func New() *App {
 	app := &App{}
 	app.readConfig(false)
 	app.container = container.NewContainer(app.Config)
+
+	// Read before the servers are built: the gRPC server adds its interceptor only when this is on.
+	errhide.Enable(readHideInternalErrors(app.Config, app.container.Logger))
 
 	app.initTracer()
 	app.initMetricsServer()
@@ -31,7 +35,6 @@ func New() *App {
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config, app.container.Logger))
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
-	app.httpServer.hideInternalErrors = readHideInternalErrors(app.Config, app.container.Logger)
 	app.httpServer.staticFiles = make(map[string]string)
 
 	// Note: Default routes (health, alive, favicon, swagger) are registered in httpServerSetup()

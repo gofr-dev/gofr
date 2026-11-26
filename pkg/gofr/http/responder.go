@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/internal/errhide"
 )
 
 var (
@@ -387,8 +388,11 @@ type ResponseMarshaller interface {
 
 // createErrorResponse returns an error response that always contains a "message" field,
 // and if the error implements ResponseMarshaller, it merges custom fields into the response.
+// With HIDE_INTERNAL_ERRORS on, the message of an error that declares no status code, or of a
+// datasource.ErrorDB, is replaced with a generic one; the status code and custom fields are kept.
+// Every error response written through a Responder (handlers, middleware) passes through here.
 func createErrorResponse(err error) map[string]any {
-	resp := map[string]any{errorMessageKey: err.Error()}
+	resp := map[string]any{errorMessageKey: errhide.Apply(err)}
 
 	if rm, ok := err.(ResponseMarshaller); ok {
 		for k, v := range rm.Response() {
