@@ -100,9 +100,9 @@ that are specific for the type of message broker user wants to use.
 ---
 
 - `KAFKA_BATCH_TIMEOUT`
-- Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds). Publish waits for its batch to be sent, so a larger value adds up to that much latency to each publish when traffic is low.
+- Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).
 - `-`
-- `10`
+- `1000`
 - `300`
 - Positive int
 

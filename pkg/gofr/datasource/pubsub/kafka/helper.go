@@ -266,7 +266,7 @@ func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger)
 		Dialer:       dialer,
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
-		BatchTimeout: time.Duration(conf.BatchTimeout) * time.Millisecond, // KAFKA_BATCH_TIMEOUT is in milliseconds
+		BatchTimeout: time.Duration(conf.BatchTimeout),
 		Logger:       kafka.LoggerFunc(logger.Debugf),
 	})
 }

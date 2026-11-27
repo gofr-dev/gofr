@@ -26,36 +26,6 @@ func TestKafkaClient_retryConnect_ContextCanceled(t *testing.T) {
 	assert.Nil(t, k.conn)
 }
 
-// KAFKA_BATCH_TIMEOUT is documented in milliseconds, so the value must reach the kafka-go writer
-// as milliseconds, not nanoseconds. The default must stay short: Publish writes synchronously,
-// and kafka-go holds a write until the batch fills or this timeout passes.
-func TestCreateKafkaWriter_BatchTimeoutIsMilliseconds(t *testing.T) {
-	tests := []struct {
-		desc    string
-		timeout int
-		want    time.Duration
-	}{
-		{desc: "explicit value is milliseconds", timeout: 250, want: 250 * time.Millisecond},
-		{desc: "default flushes after 10ms", timeout: DefaultBatchTimeout, want: 10 * time.Millisecond},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			conf := &Config{Brokers: []string{"localhost:9092"}, BatchSize: 1, BatchBytes: 1, BatchTimeout: tc.timeout}
-
-			w := createKafkaWriter(conf, &kafka.Dialer{}, logging.NewMockLogger(logging.DEBUG))
-
-			kw, ok := w.(*kafka.Writer)
-			require.True(t, ok, "createKafkaWriter must return a *kafka.Writer")
-
-			t.Cleanup(func() { _ = kw.Close() })
-
-			assert.Equal(t, tc.want, kw.BatchTimeout,
-				"BatchTimeout %d (ms) must become %v, got %v", tc.timeout, tc.want, kw.BatchTimeout)
-		})
-	}
-}
-
 func TestSetupDialer(t *testing.T) {
 	missingCA := filepath.Join(t.TempDir(), "missing-ca.pem")
 

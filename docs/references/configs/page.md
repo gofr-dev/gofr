@@ -706,8 +706,8 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - KAFKA_BATCH_TIMEOUT
-- Time to wait before sending an incomplete batch to Kafka, in milliseconds. Publish waits for its batch to be sent, so a larger value adds up to that much latency to each publish when traffic is low.
-- 10
+- Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).
+- 1000
 
 ---
 

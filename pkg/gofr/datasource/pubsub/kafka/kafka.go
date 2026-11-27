@@ -17,7 +17,7 @@ import (
 const (
 	DefaultBatchSize    = 100
 	DefaultBatchBytes   = 1048576
-	DefaultBatchTimeout = 10   // ms; short because a synchronous Publish waits for the batch to flush
+	DefaultBatchTimeout = 1000
 	defaultMaxBytes     = 10e6 // 10MB
 	defaultMinBytes     = 10e3
 	defaultRetryTimeout = 10 * time.Second
