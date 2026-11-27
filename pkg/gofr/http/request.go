@@ -203,7 +203,20 @@ func (r *Request) bindJSON(i any) error {
 		return err
 	}
 
-	return json.Unmarshal(body, &i)
+	// i itself, not &i: Bind has already checked that i is a pointer. Decoding
+	// through &i adds a layer of `any`, and json/v2 (encoding/json's engine from
+	// Go 1.27) then leaves the struct name out of a type error, so a client that
+	// sent a string for an int got "Go struct field .b" instead of "T.b".
+	//
+	// A typed nil pointer (var p *T; Bind(p)) has nowhere to decode into, and
+	// encoding/json rejects it with "json: Unmarshal(nil *T)". Decode it through
+	// &i, as before: a well-formed body (or null) is accepted and binds nothing,
+	// and a malformed or empty body is still a syntax error.
+	if reflect.ValueOf(i).IsNil() {
+		return json.Unmarshal(body, &i)
+	}
+
+	return json.Unmarshal(body, i)
 }
 
 // mediaType extracts the bare media type from a Content-Type header value.
