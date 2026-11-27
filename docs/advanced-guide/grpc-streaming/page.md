@@ -398,6 +398,11 @@ The following metrics are automatically registered:
 - **app_gRPC-Stream_stats**: Histogram tracking stream operation duration (Send, Recv, SendAndClose, CloseSend)
 - **app_gRPC-Client-Stream_stats**: Histogram for client-side streaming operations
 
+The server stream histogram includes `method`, `status`, and `stream_type` labels.
+The `status` label is the numeric gRPC code as a string (`"0"` means OK); `stream_type` is `CLIENT_STREAM`, `SERVER_STREAM`, or `BIDIRECTIONAL`.
+Per-message operations recorded through `DocumentRPCLog` include `method` and `status` without `stream_type`.
+Filter histogram counts by `status!="0"` to monitor errors. The new label splits series by status, so aggregate across `status` when calculating total stream traffic.
+
 ### Tracing
 
 Each streaming operation (Send, Recv, SendAndClose, CloseSend) automatically creates spans for distributed tracing, allowing you to track the flow of messages through your system.
