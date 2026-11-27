@@ -312,6 +312,10 @@ func (r *remoteLogger) UpdateLogLevel() {
 	// Perform initial check immediately
 	checkAndUpdateLevel()
 
+	if r.levelFetchInterval <= 0 {
+		return
+	}
+
 	// Setup ticker for periodic checks
 	ticker := time.NewTicker(r.levelFetchInterval)
 	defer ticker.Stop()
