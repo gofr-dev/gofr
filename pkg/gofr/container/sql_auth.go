@@ -69,7 +69,7 @@ func opensSQLFromConfig(conf config.Config, logger logging.Logger) bool {
 		return false
 	}
 
-	logger.Infof("DB_AUTH is %s, so the SQL connection is not opened from the DB_* config; "+
+	logger.Infof("DB_AUTH=%s or DB_IAM_AUTH=true is set, so the SQL connection is not opened from the DB_* config; "+
 		"it is supplied by app.AddSQLDB", dbAuthIAM)
 
 	return false

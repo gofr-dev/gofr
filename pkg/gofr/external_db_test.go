@@ -188,6 +188,47 @@ func TestApp_AddSQLDB_DefersWhenNoConnector(t *testing.T) {
 	assert.Equal(t, existing, app.container.SQL, "a nil connector must keep the env SQL connection")
 }
 
+// TestApp_AddSQLDB_LogsWhenNoConnectionAtAll verifies that when the provider returns a
+// nil connector and the container opened no connection from the DB_* config, AddSQLDB
+// logs an error instead of leaving ctx.SQL nil in silence. This is the cloudsql case
+// with DB_AUTH=iam: the container skips the env connection, and a cloudsql version
+// that reads only DB_IAM_AUTH defers.
+func TestApp_AddSQLDB_LogsWhenNoConnectionAtAll(t *testing.T) {
+	var app *App
+
+	logs := testutil.StderrOutputForFunc(func() {
+		testutil.NewServerConfigs(t)
+		t.Setenv("DB_DIALECT", "postgres")
+		t.Setenv("DB_AUTH", "iam")
+
+		app = New()
+
+		app.AddSQLDB(fakeSQLConnector{}) // nil connector, nil error
+	})
+
+	assert.True(t, isNilDatasource(app.container.SQL), "no connection was opened")
+	assert.Contains(t, logs, "the SQL connector supplied no connection and none was opened from the DB_* config")
+}
+
+// TestApp_AddSQLDB_DefersQuietlyWithEnvConnection verifies that the error above is not
+// logged when the env-configured connection exists: deferring to it is the normal
+// password path.
+func TestApp_AddSQLDB_DefersQuietlyWithEnvConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logs := testutil.StderrOutputForFunc(func() {
+		testutil.NewServerConfigs(t)
+
+		app := New()
+		app.container.SQL = container.NewMockDB(ctrl)
+
+		app.AddSQLDB(fakeSQLConnector{})
+	})
+
+	assert.NotContains(t, logs, "the SQL connector supplied no connection")
+}
+
 // TestApp_AddSQLDB_ClosesExistingOnError verifies that a connector setup error tears
 // down the env-configured SQL (which on the IAM path is dialing the wrong host and
 // would retry forever) and leaves SQL unset, so health reports down instead of using

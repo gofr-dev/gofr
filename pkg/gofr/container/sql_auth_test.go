@@ -23,6 +23,9 @@ func TestContainer_DBAuth(t *testing.T) {
 	// log a "could not connect" error, which the iam cases assert never happens.
 	iam := map[string]string{"DB_DIALECT": "postgres", "DB_HOST": "p:r:i", "DB_USER": "u", "DB_NAME": "d"}
 
+	// The skip line names both keys, since either one selects iam.
+	const iamSkipLog = "DB_AUTH=iam or DB_IAM_AUTH=true is set, so the SQL connection is not opened"
+
 	testCases := []struct {
 		desc       string
 		base       map[string]string
@@ -34,11 +37,11 @@ func TestContainer_DBAuth(t *testing.T) {
 		{desc: "unset defaults to password", wantOpened: true},
 		{desc: "password opens the connection", auth: "password", wantOpened: true},
 		{desc: "legacy flag false keeps password", legacyIAM: "false", wantOpened: true},
-		{desc: "iam skips the connection", base: iam, auth: "iam", wantLog: "app.AddSQLDB"},
-		{desc: "iam is case-insensitive", base: iam, auth: " IAM ", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag means iam", base: iam, legacyIAM: "true", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag accepts ParseBool spellings", base: iam, legacyIAM: "1", wantLog: "app.AddSQLDB"},
-		{desc: "legacy flag agreeing with iam", base: iam, auth: "iam", legacyIAM: "true", wantLog: "app.AddSQLDB"},
+		{desc: "iam skips the connection", base: iam, auth: "iam", wantLog: iamSkipLog},
+		{desc: "iam is case-insensitive", base: iam, auth: " IAM ", wantLog: iamSkipLog},
+		{desc: "legacy flag means iam", base: iam, legacyIAM: "true", wantLog: iamSkipLog},
+		{desc: "legacy flag accepts ParseBool spellings", base: iam, legacyIAM: "1", wantLog: iamSkipLog},
+		{desc: "legacy flag agreeing with iam", base: iam, auth: "iam", legacyIAM: "true", wantLog: iamSkipLog},
 		{desc: "legacy flag conflicting with password", base: iam, auth: "password", legacyIAM: "true",
 			wantLog: errConflictingDBAuth.Error()},
 		{desc: "unknown value names the value", base: iam, auth: "token", wantLog: `unsupported DB_AUTH`},
