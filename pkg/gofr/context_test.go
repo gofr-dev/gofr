@@ -522,7 +522,7 @@ func TestContext_Trace_CronJobContext(t *testing.T) {
 		hammerTrace(c)
 	}}
 
-	j.run(&container.Container{Logger: logging.NewMockLogger(logging.ERROR)})
+	j.run(context.Background(), &container.Container{Logger: logging.NewMockLogger(logging.ERROR)})
 
 	assert.True(t, boxed, "a cron job's Context must hold a ctxBox before its first Trace")
 }

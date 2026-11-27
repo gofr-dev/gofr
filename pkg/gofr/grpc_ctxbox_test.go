@@ -4,6 +4,7 @@ package gofr
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 type ctxOnlyServerStream struct {
@@ -67,5 +71,50 @@ func TestBoxStreamInterceptor_HandlerGetsBox(t *testing.T) {
 		})
 	require.NoError(t, err)
 
+	assertTraceKeepsField(t, got)
+}
+
+// ctxRecordingHealth is a health server that hands each Check's context to the test.
+type ctxRecordingHealth struct {
+	grpc_health_v1.UnimplementedHealthServer
+
+	got chan context.Context
+}
+
+func (h *ctxRecordingHealth) Check(ctx context.Context, _ *grpc_health_v1.HealthCheckRequest) (
+	*grpc_health_v1.HealthCheckResponse, error) {
+	h.got <- ctx
+
+	return &grpc_health_v1.HealthCheckResponse{Status: grpc_health_v1.HealthCheckResponse_SERVING}, nil
+}
+
+// TestGRPCServer_HandlerGetsBoxAfterLateInterceptor pins that the box interceptor runs after every
+// user interceptor, including one added after the server was built, so a user interceptor that
+// replaces the context cannot hand the handler a context without the box.
+func TestGRPCServer_HandlerGetsBoxAfterLateInterceptor(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	type ctxKey struct{}
+
+	replaceCtx := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(context.WithValue(ctx, ctxKey{}, "set"), req)
+	}
+
+	app := New()
+	h := &ctxRecordingHealth{got: make(chan context.Context, 1)}
+	app.RegisterService(&grpc_health_v1.Health_ServiceDesc, h)
+	app.AddGRPCUnaryInterceptors(replaceCtx)
+
+	client := grpcHealthClient(t, app) // builds the server
+
+	app.AddGRPCUnaryInterceptors(replaceCtx) // added late, so it runs through runLateUnary
+
+	_, err := client.Check(t.Context(), &grpc_health_v1.HealthCheckRequest{})
+	require.NoError(t, err)
+
+	got := <-h.got
+	assert.Equal(t, "set", got.Value(ctxKey{}), "both user interceptors ran before the handler")
 	assertTraceKeepsField(t, got)
 }

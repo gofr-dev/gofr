@@ -64,8 +64,11 @@ type App struct {
 	// down. Set by initTracer; nil when tracing was never initialized.
 	shutdownTracer exporters.ShutdownFunc
 
-	grpcRegistered      bool
-	httpRegistered      bool
+	grpcRegistered bool
+	httpRegistered bool
+
+	// registeringBuiltIns is set while httpServerSetup registers GoFr's own routes.
+	registeringBuiltIns bool
 	rbacEnabled         bool // set by the first EnableRBAC that installs a config; guards its metric registration
 	subscriptionManager SubscriptionManager
 	graphqlManager      graphQLRunner
@@ -173,6 +176,12 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 // Shutdown stops the service(s) and close the application.
 // It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
 func (a *App) Shutdown(ctx context.Context) error {
+	// Cancel running cron jobs' contexts and stop new runs before the servers
+	// drain, so jobs get the whole grace period to wind down.
+	if a.cron != nil {
+		a.cron.halt()
+	}
+
 	var err error
 	if a.httpServer != nil {
 		err = errors.Join(err, a.httpServer.Shutdown(ctx))
@@ -241,8 +250,10 @@ func (a *App) httpServerSetup() {
 
 	routes := newRBACRouteCollector(len(a.rbacConfigs) > 0)
 
-	// Register default routes - these are only added when HTTP server is actually starting
-	routes.startBuiltIns(&a.httpServer.router.Router)
+	// Register default routes - these are only added when HTTP server is actually starting. They are
+	// marked as GoFr's own by where they were registered, not by path, so that an application route
+	// under /.well-known/ is not mistaken for one.
+	a.registeringBuiltIns = true
 
 	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
@@ -256,7 +267,7 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
 	}
 
-	routes.endBuiltIns(&a.httpServer.router.Router)
+	a.registeringBuiltIns = false
 
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
@@ -278,6 +289,10 @@ func (a *App) httpServerSetup() {
 			if !contains(registeredMethods, method) { // Check for uniqueness before adding
 				registeredMethods = append(registeredMethods, method)
 			}
+		}
+
+		if h, ok := route.GetHandler().(handler); ok && h.builtIn {
+			routemark.MarkBuiltIn(route)
 		}
 
 		routes.add(route, met)
