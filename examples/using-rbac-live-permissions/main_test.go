@@ -173,4 +173,3 @@ func TestLivePermissionsTimeout(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	assert.False(t, reached)
 }
-
