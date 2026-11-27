@@ -10,6 +10,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/internal/keyfields"
 )
 
 func validateConfigs(conf *Config) error {
@@ -261,9 +262,15 @@ var connectToBrokers = func(ctx context.Context, brokers []string, dialer *kafka
 }
 
 func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger) Writer {
+	var balancer kafka.Balancer
+	if len(keyfields.Parse(conf.KeyFields)) > 0 {
+		balancer = &kafka.Hash{}
+	}
+
 	return kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      conf.Brokers,
 		Dialer:       dialer,
+		Balancer:     balancer,
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
 		BatchTimeout: time.Duration(conf.BatchTimeout),

@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/internal/keyfields"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -70,7 +71,7 @@ type consumerClient interface {
 }
 
 type Client struct {
-	producer *azeventhubs.ProducerClient
+	producer eventProducer
 	// consumer is written once by Connect and read without synchronization by Health, Subscribe
 	// and Close, so Connect must happen-before any of them -- which is what AddPubSub does. Note
 	// that as an interface this is two words, so a concurrent Connect can be observed half-written
@@ -84,6 +85,7 @@ type Client struct {
 	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
 	cfg          Config
+	keyFields    keyfields.Fields
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
@@ -93,6 +95,12 @@ type Client struct {
 	// every health poll -- an unbounded leak. singleflight collapses concurrent polls onto the one
 	// parked probe, so a healthy broker still reports up to every caller.
 	probeGroup singleflight.Group
+}
+
+type eventProducer interface {
+	NewEventDataBatch(context.Context, *azeventhubs.EventDataBatchOptions) (*azeventhubs.EventDataBatch, error)
+	SendEventDataBatch(context.Context, *azeventhubs.EventDataBatch, *azeventhubs.SendEventDataBatchOptions) error
+	Close(context.Context) error
 }
 
 // New Creates the client for Event Hub.
@@ -159,6 +167,13 @@ func (c *Client) UseMetrics(metrics any) {
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
+	}
+}
+
+// UseConfig reads per-topic partition key mappings when registered with AddPubSub.
+func (c *Client) UseConfig(cfg any) {
+	if conf, ok := cfg.(interface{ Get(string) string }); ok {
+		c.keyFields = keyfields.Parse(conf.Get("PUBSUB_KEY_FIELDS"))
 	}
 }
 
@@ -450,6 +465,9 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	newBatchOptions := &azeventhubs.EventDataBatchOptions{}
+	if key := c.keyFields.Key(topic, message, c.logger); key != nil {
+		newBatchOptions.PartitionKey = to.Ptr(string(key))
+	}
 
 	batch, err := c.producer.NewEventDataBatch(ctx, newBatchOptions)
 	if err != nil {

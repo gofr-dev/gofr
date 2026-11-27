@@ -830,6 +830,41 @@ func order(ctx *gofr.Context) (any, error) {
 > ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-subscriber/main.go)
 > ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-publisher/main.go)
 
+### Publishing with a partition key
+
+Configure a top-level JSON field per topic when related messages should reach
+the same partition, for example batches of a job or events for an order:
+
+```dotenv
+PUBSUB_KEY_FIELDS=order-events:orderId,customer-events:customerId
+```
+
+The existing publishing call does not change:
+
+```go
+err := ctx.GetPublisher().Publish(ctx, "order-events", []byte(`{"orderId":"order-123","status":"created"}`))
+```
+
+GoFr extracts `order-123` as the partition key. Mappings are comma-separated
+`topic:field` pairs with optional surrounding whitespace; the last mapping for
+a topic wins, and malformed mappings are ignored. Fields must be top-level JSON
+strings, numbers, or booleans. Missing, null, empty-string, object, or array
+values and non-JSON payloads fall back to an unkeyed record with a debug log;
+key extraction never fails publication or logs payload/key values.
+
+Kafka receives the extracted value as `kafka.Message.Key`. Its writer uses the
+`Hash` balancer only when a valid key mapping is configured. This uses FNV-1a
+with signed modulo partition selection (compatible with Sarama), not the Java
+producer's default Murmur2. Unmapped topics and records without a usable key
+retain round-robin routing. Without `PUBSUB_KEY_FIELDS`, writer behavior is
+unchanged. Identical keys select the same partition while the partition count
+is unchanged; different keys can share a partition.
+
+Azure EventHub receives the same extracted value as `PartitionKey` when its
+client is registered through `app.AddPubSub`. NATS, MQTT, Redis, SQS, and Google
+Pub/Sub ignore this configuration. SQS FIFO message-group IDs and Google
+ordering keys are not enabled by this setting.
+
 ## Distributed Tracing
 
 GoFr automatically traces every publish and subscribe call across Kafka, NATS JetStream, Google Pub/Sub, Amazon SQS and MQTT. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.

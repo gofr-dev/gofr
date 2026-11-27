@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/internal/keyfields"
 )
 
 const (
@@ -41,6 +42,7 @@ const (
 var errEmptyTopicName = errors.New("topic name cannot be empty")
 
 type Config struct {
+	KeyFields        string
 	Brokers          []string
 	Partition        int
 	ConsumerGroupID  string
@@ -80,9 +82,10 @@ type kafkaClient struct {
 	// unreachable for a sustained period.
 	reconnectErrLogAt time.Time
 
-	logger  pubsub.Logger
-	config  Config
-	metrics Metrics
+	logger    pubsub.Logger
+	config    Config
+	keyFields keyfields.Fields
+	metrics   Metrics
 
 	// closed is shut by Close to stop the retryConnect goroutine New starts
 	// when the first connect attempt fails. Without it that goroutine runs
@@ -108,10 +111,11 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 	}
 
 	client := &kafkaClient{
-		logger:  logger,
-		config:  *conf,
-		metrics: metrics,
-		closed:  make(chan struct{}),
+		logger:    logger,
+		config:    *conf,
+		keyFields: keyfields.Parse(conf.KeyFields),
+		metrics:   metrics,
+		closed:    make(chan struct{}),
 	}
 	ctx := context.Background()
 
@@ -142,6 +146,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	err := writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic:   topic,
+			Key:     k.keyFields.Key(topic, message, k.logger),
 			Value:   message,
 			Headers: headers,
 			Time:    time.Now(),
