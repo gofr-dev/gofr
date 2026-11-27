@@ -9,7 +9,7 @@ nextjs:
 # Graceful Shutdown
 
 {% answer %}
-GoFr listens for `SIGINT` and `SIGTERM` and, on either signal, runs `App.Shutdown` which calls `Shutdown` on the HTTP, gRPC, and metrics servers, stops the cron scheduler and waits for jobs already running, then calls `Close` on the container's datasource connections. The shutdown is bounded by `SHUTDOWN_GRACE_PERIOD` (default `30s`); if it expires the process exits with whatever connections remain. Pair this with Kubernetes' `terminationGracePeriodSeconds` and a small `preStop` sleep to avoid losing in-flight requests during rolling restarts.
+GoFr listens for `SIGINT` and `SIGTERM` and, on either signal, runs `App.Shutdown` which first stops the cron scheduler and cancels the context of every running cron job, then calls `Shutdown` on the HTTP and gRPC servers, waits for the cron jobs still running, shuts down the metrics server, and then calls `Close` on the container's datasource connections. The shutdown is bounded by `SHUTDOWN_GRACE_PERIOD` (default `30s`); if it expires the process exits with whatever connections remain. Pair this with Kubernetes' `terminationGracePeriodSeconds` and a small `preStop` sleep to avoid losing in-flight requests during rolling restarts.
 {% /answer %}
 
 ## When to use
@@ -26,13 +26,14 @@ ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SI
 
 When that context is canceled, a goroutine creates a timeout context using `SHUTDOWN_GRACE_PERIOD` (default `30s`) and calls `App.Shutdown`. The order is fixed by the framework — see [`pkg/gofr/gofr.go`](https://github.com/gofr-dev/gofr/blob/main/pkg/gofr/gofr.go) — and `Shutdown` joins errors from each step:
 
-1. `httpServer.Shutdown(ctx)` — stops accepting new connections, waits for in-flight handlers
-2. `grpcServer.Shutdown(ctx)` — drains active streams
-3. Cron stop — halts the scheduler and waits for jobs already running, bounded by the shutdown deadline
-4. `metricServer.Shutdown(ctx)` — stops `/metrics`
-5. `mcpServer.Shutdown(ctx)` — stops the MCP server
-6. `container.ShutdownMetrics(ctx)` and `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
-7. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
+1. Cron halt — stops the scheduler so no new runs start, and cancels the context of every running job so it can begin winding down
+2. `httpServer.Shutdown(ctx)` — stops accepting new connections, waits for in-flight handlers
+3. `grpcServer.Shutdown(ctx)` — drains active streams
+4. Cron wait — waits for the jobs still running, bounded by the shutdown deadline
+5. `metricServer.Shutdown(ctx)` — stops `/metrics`
+6. `mcpServer.Shutdown(ctx)` — stops the MCP server
+7. `container.ShutdownMetrics(ctx)` and `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
+8. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
 
 `App.Run` does not return until that goroutine has finished, so a `main` that does nothing but call `app.Run()` cannot let the process exit halfway through the drain. The wait is bounded: if shutdown has not finished one second after `SHUTDOWN_GRACE_PERIOD` expires, GoFr logs `graceful shutdown did not finish` and returns anyway rather than holding the process open until Kubernetes `SIGKILL`s it.
 
@@ -91,7 +92,7 @@ For a service with 2s P99, that's 5s + 30s + 10s = 45–60s.
 - **SQL.** `database/sql` waits for active queries to finish on `Close()`. Long-running transactions can extend shutdown — keep request timeouts shorter than `SHUTDOWN_GRACE_PERIOD`.
 - **Redis / NoSQL.** Clients close idle connections immediately and wait for in-flight commands.
 - **Pub/Sub.** GoFr's subscription manager respects the shutdown context — consumers stop polling and commit current offsets where the broker supports it (Kafka, NATS JetStream).
-- **Cron jobs.** `App.Shutdown` stops the cron scheduler and waits for jobs that are already running before it closes datasource connections, so a job mid-write is not cut off by `container.Close()`. The wait is bounded by the shutdown deadline (`SHUTDOWN_GRACE_PERIOD`): if a job is still running when that expires, `Shutdown` returns and the job is abandoned. The jobs themselves run with `context.Background()`, so a job's own `ctx` is never canceled — anything that needs to be interruptible has to watch something else. For cron work that routinely outlasts `SHUTDOWN_GRACE_PERIOD`, run it as a Kubernetes `CronJob` in its own pod rather than inside the service.
+- **Cron jobs.** The first thing `App.Shutdown` does is stop the cron scheduler and cancel each running job's `ctx`, so `ctx.Done()` fires and calls that take `ctx` return early. It then waits for those jobs before it closes datasource connections, so a job mid-write is not cut off by `container.Close()`. The wait is bounded by the shutdown deadline (`SHUTDOWN_GRACE_PERIOD`): if a job is still running when that expires, `Shutdown` returns and the job is abandoned. See [Shutdown and cancellation](/docs/advanced-guide/using-cron#shutdown-and-cancellation) for how a job should watch `ctx`. For cron work that routinely outlasts `SHUTDOWN_GRACE_PERIOD`, run it as a Kubernetes `CronJob` in its own pod rather than inside the service.
 
 ## Verification
 
