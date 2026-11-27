@@ -147,8 +147,24 @@ func (d *DB) Prepare(query string) (*sql.Stmt, error) {
 	return d.DB.PrepareContext(context.Background(), query)
 }
 
+func (d *DB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	defer d.sendOperationStats(time.Now(), "PrepareContext", query)
+	return d.DB.PrepareContext(ctx, query)
+}
+
+// Begin starts a transaction with context.Background(); use BeginTxContext to bind it to a context.
 func (d *DB) Begin() (*Tx, error) {
-	tx, err := d.DB.BeginTx(context.Background(), nil)
+	return d.BeginTxContext(context.Background(), nil)
+}
+
+// BeginTxContext starts a transaction bound to ctx: if ctx is canceled before Commit,
+// database/sql rolls the transaction back and Commit then returns sql.ErrTxDone. opts may be nil for the driver's default isolation level.
+// Statements run on the returned Tx are logged and recorded in app_sql_stats.
+//
+// It is not named BeginTx because DB embeds *sql.DB, whose promoted BeginTx returns a
+// *sql.Tx; that method stays available unchanged, without GoFr's logging and metrics.
+func (d *DB) BeginTxContext(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
+	tx, err := d.DB.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +252,11 @@ func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {
 	return t.Tx.QueryContext(context.Background(), query, args...)
 }
 
+func (t *Tx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	defer t.sendOperationStats(time.Now(), "TxQueryContext", query, args...)
+	return t.Tx.QueryContext(ctx, query, args...)
+}
+
 func (t *Tx) QueryRow(query string, args ...any) *sql.Row {
 	defer t.sendOperationStats(time.Now(), "TxQueryRow", query, args...)
 	return t.Tx.QueryRowContext(context.Background(), query, args...)
@@ -261,14 +282,36 @@ func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
 	return t.Tx.PrepareContext(context.Background(), query)
 }
 
+func (t *Tx) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	defer t.sendOperationStats(time.Now(), "TxPrepareContext", query)
+	return t.Tx.PrepareContext(ctx, query)
+}
+
+// Select binds the result of the query, run inside the transaction, to data. It behaves
+// exactly like DB.Select.
+func (t *Tx) Select(ctx context.Context, data any, query string, args ...any) {
+	selectInto(ctx, t.logger, t.QueryContext, data, query, args...)
+}
+
 func (t *Tx) Commit() error {
 	defer t.sendOperationStats(time.Now(), "TxCommit", "COMMIT")
 	return t.Tx.Commit()
 }
 
+// Rollback aborts the transaction. Once the transaction is done (committed, rolled back, or
+// rolled back by database/sql after its context was canceled) it returns sql.ErrTxDone without
+// recording or logging a ROLLBACK, so `defer tx.Rollback()` after a successful Commit stays silent.
 func (t *Tx) Rollback() error {
-	defer t.sendOperationStats(time.Now(), "TxRollback", "ROLLBACK")
-	return t.Tx.Rollback()
+	start := time.Now()
+
+	err := t.Tx.Rollback()
+	if errors.Is(err, sql.ErrTxDone) {
+		return err
+	}
+
+	t.sendOperationStats(start, "TxRollback", "ROLLBACK")
+
+	return err
 }
 
 // Select runs a query with args and binds the result of the query to the data.
@@ -298,9 +341,18 @@ func (t *Tx) Rollback() error {
 //     }
 //     users := []user{}
 //     db.Select(ctx, &users, "select * from users")
+func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
+	selectInto(ctx, d.logger, d.QueryContext, data, query, args...)
+}
+
+// queryContextFunc runs a query; DB.QueryContext and Tx.QueryContext both satisfy it.
+type queryContextFunc func(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+
+// selectInto implements DB.Select and Tx.Select, running the query through queryContext.
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
+func selectInto(ctx context.Context, logger datasource.Logger, queryContext queryContextFunc,
+	data any, query string, args ...any) {
 	// If context is done, it is not needed
 	if ctx.Err() != nil {
 		return
@@ -309,7 +361,7 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Pointer {
-		d.logger.Error("we did not get a pointer. data is not settable.")
+		logger.Error("we did not get a pointer. data is not settable.")
 		return
 	}
 
@@ -319,20 +371,21 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 
 	switch rv.Kind() {
 	case reflect.Slice:
-		d.selectSlice(ctx, query, args, rvo, rv)
+		selectSlice(ctx, logger, queryContext, query, args, rvo, rv)
 
 	case reflect.Struct:
-		d.selectStruct(ctx, query, args, rv)
+		selectStruct(ctx, logger, queryContext, query, args, rv)
 
 	default:
-		d.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
+		logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 	}
 }
 
-func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv reflect.Value) {
-	rows, err := d.QueryContext(ctx, query, args...)
+func selectSlice(ctx context.Context, logger datasource.Logger, queryContext queryContextFunc,
+	query string, args []any, rvo, rv reflect.Value) {
+	rows, err := queryContext(ctx, query, args...)
 	if err != nil {
-		d.logger.Errorf("error running query: %v", err)
+		logger.Errorf("error running query: %v", err)
 		return
 	}
 
@@ -342,7 +395,7 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 		val := reflect.New(rv.Type().Elem())
 
 		if rv.Type().Elem().Kind() == reflect.Struct {
-			d.rowsToStruct(rows, val)
+			rowsToStruct(rows, val)
 		} else {
 			_ = rows.Scan(val.Interface())
 		}
@@ -351,7 +404,7 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 	}
 
 	if rows.Err() != nil {
-		d.logger.Errorf("error parsing rows : %v", rows.Err())
+		logger.Errorf("error parsing rows : %v", rows.Err())
 		return
 	}
 
@@ -360,26 +413,27 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 	}
 }
 
-func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv reflect.Value) {
-	rows, err := d.QueryContext(ctx, query, args...)
+func selectStruct(ctx context.Context, logger datasource.Logger, queryContext queryContextFunc,
+	query string, args []any, rv reflect.Value) {
+	rows, err := queryContext(ctx, query, args...)
 	if err != nil {
-		d.logger.Errorf("error running query: %v", err)
+		logger.Errorf("error running query: %v", err)
 		return
 	}
 
 	defer rows.Close()
 
 	for rows.Next() {
-		d.rowsToStruct(rows, rv)
+		rowsToStruct(rows, rv)
 	}
 
 	if rows.Err() != nil {
-		d.logger.Errorf("error parsing rows : %v", rows.Err())
+		logger.Errorf("error parsing rows : %v", rows.Err())
 		return
 	}
 }
 
-func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
+func rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
