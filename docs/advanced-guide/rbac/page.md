@@ -267,6 +267,89 @@ that grants access. No `WWW-Authenticate` header is set. A custom `ErrorHandler`
 - With `permissionsClaimPath` set, a `roles` section is never consulted; RBAC logs a WARN at startup
   if one is present, so a section left over from roles mode is not mistaken for one that applies.
 
+### Permissions that change before the token expires
+
+A token's claims are fixed until the token expires. If a user holds `orders:write` in a token that
+lasts an hour, and an admin revokes that grant five minutes in, the user can still write orders for
+another 55 minutes, because RBAC only sees what the token says. When the permissions live in your own
+store (a database table, a policy service) and a change must take effect on the next request, add the
+live permissions to the request yourself, with an app middleware that runs between `EnableOAuth` and
+`EnableRBAC`. It uses released APIs only: the middleware puts a `permissions` claim in the request, and
+`EnableRBAC` reads it through `permissionsClaimPath`.
+
+```go
+app.EnableOAuth(jwksURL, 10, jwt.WithIssuer(issuer), jwt.WithAudience("orders-api"), jwt.WithExpirationRequired())
+app.UseMiddleware(livePermissions(store.Permissions, 2*time.Second)) // runs after OAuth, before RBAC
+app.EnableRBAC() // configs/rbac.json: "permissionsClaimPath": "permissions"
+```
+
+```go
+func livePermissions(lookup func(ctx context.Context, sub string) ([]string, error),
+	timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Public routes and GoFr's /.well-known/ routes need no permission check: skip the store.
+			if strings.HasPrefix(r.URL.Path, "/.well-known/") || publicRoutes[r.URL.Path] {
+				next.ServeHTTP(w, r)
+
+				return
+			}
+
+			claims, _ := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+
+			sub, _ := claims["sub"].(string)
+			if sub == "" {
+				// Drop any permissions claim the token carries itself, so RBAC answers 403.
+				stripped := maps.Clone(claims)
+				delete(stripped, "permissions")
+
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, stripped)))
+
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			defer cancel()
+
+			perms, err := lookup(ctx, sub)
+			if err != nil { // fail closed
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+
+				return
+			}
+
+			list := make([]any, len(perms)) // RBAC reads the claim as []any
+			for i, p := range perms {
+				list[i] = p
+			}
+
+			merged := maps.Clone(claims)
+			merged["permissions"] = list
+
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, merged)))
+		})
+	}
+}
+```
+
+Two things to get right:
+
+- **Order.** `EnableOAuth`, `UseMiddleware` and `EnableRBAC` append to one middleware chain in the
+  order they are called. The middleware must be registered after `EnableOAuth`, which provides the
+  claims it reads, and before `EnableRBAC`. If the order is reversed, RBAC runs first, finds no
+  `permissions` claim, and every protected request gets a 403.
+- **Fail closed, and skip routes that need no check.** When the store lookup fails or times out, answer
+  503 instead of passing the request on, so an outage never grants access. Skip the lookup for public
+  routes and GoFr's built-in `/.well-known/` routes, so health checks do not hit the store and keep
+  working while it is down. The sketch's `publicRoutes` table lists the routes marked
+  `"public": true` in `configs/rbac.json`.
+
+To avoid a store lookup on every request, cache inside the lookup function and keep the cache
+short-lived, so that a revocation still takes effect quickly.
+
+For a runnable app, with tests that revoke a permission and show the same token turn from allowed to
+403, see [`examples/using-rbac-live-permissions`](https://github.com/gofr-dev/gofr/tree/development/examples/using-rbac-live-permissions).
+
 ### Roles and Permissions
 
 ```json
