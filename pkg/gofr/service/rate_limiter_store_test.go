@@ -113,6 +113,20 @@ func TestLocalRateLimiterStore_StopBeforeStartCleanup(t *testing.T) {
 	}
 
 	require.NotPanics(t, func() { store.StartCleanup(t.Context()) })
+
+	select {
+	case <-store.stopCh:
+	default:
+		t.Fatal("cleanup channel must remain closed after StartCleanup")
+	}
+}
+
+func TestLocalRateLimiterStore_StopCleanupNilChannel(t *testing.T) {
+	store := &LocalRateLimiterStore{}
+
+	require.NotPanics(t, func() {
+		store.StopCleanup()
+	})
 }
 
 func TestRedisRateLimiterStore_toInt64_ValidCases(t *testing.T) {

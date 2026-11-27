@@ -136,7 +136,9 @@ func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
 
 func (l *LocalRateLimiterStore) StopCleanup() {
 	l.stopOnce.Do(func() {
-		close(l.stopCh)
+		if l.stopCh != nil {
+			close(l.stopCh)
+		}
 	})
 }
 
