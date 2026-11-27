@@ -269,6 +269,40 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 }
 
+func TestGetConnDuration(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		value    string
+		want     time.Duration
+		wantWarn bool
+	}{
+		{desc: "unset means no limit", value: "", want: 0},
+		{desc: "zero means no limit", value: "0", want: 0},
+		{desc: "minutes", value: "30m", want: 30 * time.Minute},
+		{desc: "padded value", value: " 1h30m ", want: 90 * time.Minute},
+		{desc: "negative is ignored", value: "-5m", want: 0, wantWarn: true},
+		{desc: "missing unit is ignored", value: "30", want: 0, wantWarn: true},
+		{desc: "garbage is ignored", value: "soon", want: 0, wantWarn: true},
+		{desc: "under one second is applied with a warning", value: "1ns", want: time.Nanosecond, wantWarn: true},
+		{desc: "one second has no warning", value: "1s", want: time.Second},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var got time.Duration
+
+			out := testutil.StdoutOutputForFunc(func() {
+				got = getConnDuration("DB_CONN_MAX_LIFETIME",
+					config.NewMockConfig(map[string]string{"DB_CONN_MAX_LIFETIME": tc.value}),
+					logging.NewMockLogger(logging.WARN))
+			})
+
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantWarn, strings.Contains(out, "DB_CONN_MAX_LIFETIME"))
+		})
+	}
+}
+
 func TestGetDBConfig_RedactArgs(t *testing.T) {
 	testCases := []struct {
 		desc         string
@@ -1402,5 +1436,41 @@ func TestRetryConnection_StopsWhileWaiting(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("retryConnection did not return after stop signal")
+	}
+}
+
+func TestFinalizeConnection_LogsPoolLimits(t *testing.T) {
+	tests := []struct {
+		desc     string
+		lifetime time.Duration
+		idleTime time.Duration
+		expLog   string
+	}{
+		{"both set", 30 * time.Minute, 5 * time.Minute,
+			"connection max lifetime 30m0s, connection max idle time 5m0s"},
+		{"neither set", 0, 0,
+			"connection max lifetime not set, connection max idle time not set"},
+		{"only idle time set", 0, time.Minute,
+			"connection max lifetime not set, connection max idle time 1m0s"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			database, mock := newPingMockDB(t)
+			mock.ExpectPing()
+
+			database.metrics = newConnectorMetrics(t)
+			database.config.connMaxLifetime = tc.lifetime
+			database.config.connMaxIdleTime = tc.idleTime
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				database.logger = logging.NewMockLogger(logging.DEBUG)
+				database = finalizeConnection(database)
+			})
+
+			t.Cleanup(func() { _ = database.Close() })
+
+			assert.Contains(t, logs, tc.expLog)
+		})
 	}
 }
