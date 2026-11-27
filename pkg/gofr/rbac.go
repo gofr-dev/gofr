@@ -3,6 +3,8 @@ package gofr
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -279,6 +281,12 @@ func (c *rbacRouteCollector) add(route *mux.Route, methods []string) {
 	}
 
 	for _, method := range methods {
+		// An implicit HEAD shares the GET handler and authorization rule.
+		// It must not appear as a separately uncovered route.
+		if method == http.MethodHead && slices.Contains(methods, http.MethodGet) {
+			continue
+		}
+
 		r := rbaccheck.Route{Method: strings.ToUpper(method), Path: tmpl, BuiltIn: builtIn}
 		if c.seen[r] {
 			continue

@@ -345,6 +345,10 @@ Fix the name in the config to restore the inherited permissions.
 }
 ```
 
+### HEAD Authorization
+
+GoFr registers `HEAD` alongside every `GET` route. Because a HEAD request executes the same handler, GoFr enforces the `GET` route's RBAC policy even if an unrelated `HEAD` rule is public. A GET route needs only its GET rule in the RBAC route coverage check; the implicit HEAD method does not require a separate rule.
+
 ### Mux Pattern Syntax
 
 RBAC uses **gorilla/mux route pattern conventions** for endpoint matching. This ensures perfect alignment with how routes are registered in GoFr.

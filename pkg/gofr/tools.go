@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -69,6 +70,11 @@ func (rt *routerTools) List() []ai.ToolSpec {
 		}
 
 		for _, method := range methods {
+			// Implicit HEAD support does not create an extra MCP tool.
+			if method == http.MethodHead && slices.Contains(methods, http.MethodGet) {
+				continue
+			}
+
 			if spec, ok := rt.specFor(method, pathTemplate); ok {
 				specs = append(specs, spec)
 			}
@@ -147,6 +153,10 @@ func (rt *routerTools) route(name string) (method, pathTemplate string, found bo
 		}
 
 		for _, m := range methods {
+			if m == http.MethodHead && slices.Contains(methods, http.MethodGet) {
+				continue
+			}
+
 			if spec, ok := rt.specFor(m, pathT); ok && spec.Name == name {
 				method, pathTemplate, found = m, pathT, true
 			}

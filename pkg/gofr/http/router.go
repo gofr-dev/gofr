@@ -446,13 +446,19 @@ func isDotSegment(p string, idx int) bool {
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler.
+// GET routes also accept HEAD; net/http suppresses the response body on the wire.
 //
 // HTTP semconv attributes (http.method, http.route, http.status_code) are
 // recorded on the request span by the framework's Tracer middleware
 // directly, avoiding the per-request child span and attribute slice grow
 // that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	rou.markOwned(rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler))
+	methods := []string{method}
+	if strings.EqualFold(method, http.MethodGet) {
+		methods = append(methods, http.MethodHead)
+	}
+
+	rou.markOwned(rou.Router.NewRoute().Methods(methods...).Path(pattern).Handler(handler))
 }
 
 // markOwned records a route whose handler is the one GoFr installed and never

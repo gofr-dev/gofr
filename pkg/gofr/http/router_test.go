@@ -80,6 +80,173 @@ func TestRouterWithMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
+func TestRouter_HEAD(t *testing.T) {
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(RouterEnvVar, matcher)
+
+			router := NewRouter()
+			router.UseMiddleware(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("X-Request-Method", r.Method)
+					next.ServeHTTP(w, r)
+				})
+			})
+
+			router.Add(http.MethodGet, "/users/me", echoHandler("literal"))
+			router.Add(http.MethodGet, "/users/{id:[0-9]+}", echoHandler("parameter"))
+			router.Add(http.MethodGet, "/users/{id}", echoHandler("fallback parameter"))
+			router.Add("get", "/lowercase", echoHandler("lowercase registration"))
+			router.Add(http.MethodPost, "/post-only", echoHandler("POST"))
+
+			tests := []struct {
+				path string
+				tag  string
+				vars string
+			}{
+				{"/users/me", "literal", `[]`},
+				{"/users/42", "parameter", `[["id","42"]]`},
+				{"/users/other", "fallback parameter", `[["id","other"]]`},
+				{"/lowercase", "lowercase registration", `[]`},
+				{"//users/42/", "parameter", `[["id","42"]]`},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.path, func(t *testing.T) {
+					req := httptest.NewRequestWithContext(t.Context(), http.MethodHead, tc.path, http.NoBody)
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+
+					assert.Equal(t, http.StatusOK, rec.Code)
+					assert.Equal(t, http.MethodHead, rec.Header().Get("X-Request-Method"))
+					// A recorder retains writes; net/http suppresses the body on the wire.
+					assert.JSONEq(t, fmt.Sprintf(`{"tag":%q,"vars":%s}`, tc.tag, tc.vars), rec.Body.String())
+				})
+			}
+
+			assert.Equal(t, []string{http.MethodGet, http.MethodHead},
+				router.AllowedMethods(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/users/42", http.NoBody)))
+			assert.Equal(t, []string{http.MethodPost},
+				router.AllowedMethods(httptest.NewRequestWithContext(t.Context(), http.MethodHead, "/post-only", http.NoBody)))
+		})
+	}
+}
+
+func TestRouter_HEADExistingRoutes(t *testing.T) {
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		t.Run(matcher, func(t *testing.T) {
+			t.Setenv(RouterEnvVar, matcher)
+
+			router := NewRouter()
+			calls := 0
+
+			router.UseMiddleware(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					calls++
+
+					w.Header().Set("X-Method", r.Method)
+					w.Header().Set("X-Route", RouteTemplate(r))
+
+					if route := mux.CurrentRoute(r); route != nil {
+						template, _ := route.GetPathTemplate()
+						w.Header().Set("X-Mux-Route", template)
+					}
+
+					next.ServeHTTP(w, r)
+				})
+			})
+
+			router.Add(http.MethodGet, "/files/{name}", echoHandler("GET"))
+			router.Handle("/public", echoHandler("methodless"))
+
+			tests := []struct {
+				method, path, tag, template, vars string
+			}{
+				{http.MethodHead, "/files/other", "GET", "/files/{name}", `[["name","other"]]`},
+				{http.MethodGet, "/files/asset", "GET", "/files/{name}", `[["name","asset"]]`},
+				{http.MethodHead, "//files/other/", "GET", "/files/{name}", `[["name","other"]]`},
+				{http.MethodHead, "/public", "methodless", "/public", `[]`},
+			}
+
+			for _, tc := range tests {
+				req := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody)
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				assert.Equal(t, http.StatusOK, rec.Code)
+				assert.Equal(t, tc.method, req.Method)
+				assert.Equal(t, tc.method, rec.Header().Get("X-Method"))
+				assert.Equal(t, tc.template, rec.Header().Get("X-Route"))
+
+				if matcher == MatcherMux {
+					assert.Equal(t, tc.template, rec.Header().Get("X-Mux-Route"))
+				}
+
+				assert.JSONEq(t, fmt.Sprintf(`{"tag":%q,"vars":%s}`, tc.tag, tc.vars), rec.Body.String())
+			}
+
+			assert.Equal(t, len(tests), calls, "middleware must execute once per request")
+		})
+	}
+}
+
+func TestRouter_HEADSubrouterErrorHandlers(t *testing.T) {
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		for _, registration := range []string{"GET", "methodless"} {
+			t.Run(matcher+"/"+registration, func(t *testing.T) {
+				t.Setenv(RouterEnvVar, matcher)
+
+				router := NewRouter()
+				sub := router.PathPrefix("/api").Subrouter()
+				sub.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("X-Handler", "custom 405")
+					w.WriteHeader(http.StatusMethodNotAllowed)
+				})
+				sub.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("X-Handler", "custom 404")
+					w.WriteHeader(http.StatusNotFound)
+				})
+				sub.Use(func(next http.Handler) http.Handler {
+					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("X-Subrouter-Method", r.Method)
+						next.ServeHTTP(w, r)
+					})
+				})
+				getRoute := sub.HandleFunc("/users", func(w http.ResponseWriter, _ *http.Request) {
+					w.Header().Set("X-Handler", "GET")
+				})
+
+				if registration != "methodless" {
+					getRoute.Methods(http.MethodGet, http.MethodHead)
+				}
+
+				tests := []struct {
+					method, path, handler, subMethod string
+					status                           int
+				}{
+					{http.MethodGet, "/api/users", "GET", http.MethodGet, http.StatusOK},
+					{http.MethodHead, "/api/users", "GET", http.MethodHead, http.StatusOK},
+					{http.MethodPost, "/api/users", "custom 405", "", http.StatusMethodNotAllowed},
+					{http.MethodHead, "/api/missing", "custom 404", "", http.StatusNotFound},
+				}
+
+				for _, tc := range tests {
+					if registration == "methodless" && tc.method == http.MethodPost {
+						tc.handler, tc.subMethod, tc.status = "GET", http.MethodPost, http.StatusOK
+					}
+
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody))
+
+					assert.Equal(t, tc.status, rec.Code, "%s %s", tc.method, tc.path)
+					assert.Equal(t, tc.handler, rec.Header().Get("X-Handler"))
+					assert.Equal(t, tc.subMethod, rec.Header().Get("X-Subrouter-Method"))
+				}
+			})
+		}
+	}
+}
+
 // TestRouter_DoubleSlashPath_GET verifies that GET requests with double slashes
 // are normalized and routed correctly to the GET handler.
 func TestRouter_DoubleSlashPath_GET(t *testing.T) {
@@ -1014,6 +1181,38 @@ func BenchmarkRouter_Get_PathParam(b *testing.B) {
 	}
 }
 
+func BenchmarkRouter_GET_HEAD(b *testing.B) {
+	for _, matcher := range []string{MatcherMux, MatcherTrie} {
+		b.Run(matcher, func(b *testing.B) {
+			b.Setenv(RouterEnvVar, matcher)
+
+			for _, route := range []struct {
+				name, pattern, target string
+			}{
+				{"simple", "/users", "/users"},
+				{"parameter", "/users/{id}", "/users/42"},
+			} {
+				for _, method := range []string{http.MethodGet, http.MethodHead} {
+					b.Run(route.name+"/"+method, func(b *testing.B) {
+						router := NewRouter()
+						router.Add(http.MethodGet, route.pattern, noopHandler())
+						req := httptest.NewRequestWithContext(b.Context(), method, route.target, http.NoBody)
+						writer := &discardingResponseWriter{}
+						router.ServeHTTP(writer, req)
+
+						b.ReportAllocs()
+						b.ResetTimer()
+
+						for range b.N {
+							router.ServeHTTP(writer, req)
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
 func Test_Router_AllowedMethods(t *testing.T) {
 	r := NewRouter()
 	r.Add(http.MethodGet, "/users", noopHandler())
@@ -1030,13 +1229,13 @@ func Test_Router_AllowedMethods(t *testing.T) {
 		path     string
 		expected []string
 	}{
-		{"exact match with GET and POST", http.MethodPatch, "/users", []string{"GET", "POST"}},
+		{"exact match with GET and POST", http.MethodPatch, "/users", []string{"GET", "HEAD", "POST"}},
 		{"path param match with PUT and DELETE", http.MethodPatch, "/users/123", []string{"DELETE", "PUT"}},
 		{"unregistered path", http.MethodPatch, "/unknown", nil},
 		{"regexp parameter that does not match is not the route", http.MethodPatch, "/orders/abc", nil},
-		{"regexp parameter that matches", http.MethodPatch, "/orders/42", []string{"GET"}},
+		{"regexp parameter that matches", http.MethodPatch, "/orders/42", []string{"GET", "HEAD"}},
 		{"only the route whose path matches is listed", http.MethodGet, "/orders/new", []string{"POST"}},
-		{"the request's own method is listed when registered", http.MethodGet, "/users", []string{"GET", "POST"}},
+		{"the request's own method is listed when registered", http.MethodGet, "/users", []string{"GET", "HEAD", "POST"}},
 	}
 
 	for _, tc := range tests {
@@ -1081,6 +1280,7 @@ func Test_Router_AllowedMethods_DoesNotScanEveryRoute(t *testing.T) {
 			assert.Zero(t, calls.Load(), "an unregistered path must not match any route")
 
 			wrongMethod := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/route-7", http.NoBody)
+			// These routes bypass Router.Add and explicitly accept GET only.
 			assert.Equal(t, []string{http.MethodGet}, r.AllowedMethods(wrongMethod))
 			assert.EqualValues(t, 1, calls.Load(), "only the route registered at the path is matched")
 		})

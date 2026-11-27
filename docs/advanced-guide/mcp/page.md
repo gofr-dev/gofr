@@ -50,6 +50,8 @@ Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework
 never exposed. The safe-method rule is enforced at call time, not just in the tool listing — a write
 route cannot be invoked by guessing its tool name.
 
+Implicit `HEAD` support on a `GET` route does not create a second MCP tool. Tool discovery exposes the `get_*` tool for a GET route.
+
 ### Safety
 
 The MCP server binds to loopback (`127.0.0.1`) so it does not become a second network-reachable
