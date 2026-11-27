@@ -58,10 +58,16 @@ func iamRequested(conf Config) bool {
 
 // connectorOptions assembles the Cloud SQL connector options: IAM auth plus the
 // IP connectivity type.
+//
+// Built-in metrics are turned off explicitly. cloudsqlconn v1.26.0 made them default-on, which
+// would make every cloudsql app export to Cloud Monitoring and need roles/monitoring.metricWriter.
+// GoFr keeps the prior behavior here; a dependency bump must not add telemetry or an IAM
+// requirement on its own. A future opt-in can expose this as a setting.
 func (s *settings) connectorOptions() []cloudsqlconn.Option {
 	return []cloudsqlconn.Option{
 		cloudsqlconn.WithIAMAuthN(),
 		cloudsqlconn.WithDefaultDialOptions(s.ipDialOption()),
+		cloudsqlconn.WithBuiltInMetrics(false),
 	}
 }
 
