@@ -227,6 +227,16 @@ INFO  readiness: 1 app check(s) registered - framework checks: enabled, evaluate
 INFO  readiness: 2 app check(s) registered - framework checks: replaced by the app checks
 ```
 
+A readiness check is served only when GoFr starts the HTTP server — that is, when the app registers
+at least one HTTP route or has a `static/` directory. An app that registers a readiness check but
+has neither (a gRPC-only or cron-only app, or a pure-metrics app) starts no HTTP server, so
+`/.well-known/health` is never served. GoFr logs a single `WARN` at startup that names the mismatch,
+so the unreachable endpoint is not a silent surprise:
+
+```
+WARN  readiness: 1 app check(s) registered, but the HTTP server will not start - no route was registered and no static/ directory exists, so /.well-known/health is unreachable. Register at least one HTTP route.
+```
+
 A not-ready result responds `503` with `{"error":{"message":"DOWN"}}`. The reason — the error your
 check returned — is logged at `WARN`, not `ERROR`: a `503` here is expected during startup and
 rolling deploys, and Kubernetes probes it repeatedly.

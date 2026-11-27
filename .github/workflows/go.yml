@@ -38,6 +38,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# A pipe after the proxy makes the go command fall back to fetching from the
+# source repository on ANY proxy error, including a dropped connection or a
+# timeout. The default comma form falls back only on 404/410, so one bad
+# response from proxy.golang.org failed the whole job.
+env:
+  GOPROXY: https://proxy.golang.org|direct
+
 # Define the jobs that this workflow will run
 jobs:
   # Job for testing the examples directory
@@ -51,7 +58,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26','1.25', '1.24']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -59,35 +66,36 @@ jobs:
     services:
       # Kafka service
       #
-      # NOTE: the `bitnamilegacy` namespace is a frozen archive — Bitnami state
-      # it receives no further updates and "may be removed in the future". This
-      # image therefore still needs to move (to apache/kafka, or a mirror under
-      # gofr-dev), which is tracked separately in #3868: that migration rewrites
-      # the whole KAFKA_CFG_* block below, since those names are a Bitnami
-      # convention, and it cannot be validated without a live CI run. Kept here
-      # deliberately so this PR stays reviewable.
+      # The official apache/kafka image, pinned by digest like Zipkin and MinIO
+      # below: the former bitnamilegacy namespace is a frozen archive that "may
+      # be removed in the future" (#3868). Kept on 3.9.x until kafka-go is
+      # checked against Kafka 4.x. The image's README says it ignores ALL its
+      # built-in defaults once any KAFKA_* variable is set, so the single-node
+      # settings for the internal topics (replication factor 1, min ISR 1) are
+      # explicit.
       kafka:
-        image: bitnamilegacy/kafka:3.4.1
+        image: apache/kafka:3.9.2@sha256:05b4616e0702ef2729327705d54ad6b50ea70b271c4b730fabd2320789fb7b02
         ports:
           - "9092:9092"
         env:
-          KAFKA_ENABLE_KRAFT: yes
-          KAFKA_CFG_PROCESS_ROLES: broker,controller
-          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-          KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
-          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
-          KAFKA_BROKER_ID: 1
-          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
-          ALLOW_PLAINTEXT_LISTENER: yes
-          KAFKA_CFG_NODE_ID: 1
-        # kafka-topics.sh is on PATH in this image (/opt/bitnami/kafka/bin) and
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+        # kafka-topics.sh is NOT on PATH in this image, hence the full path. It
         # returns non-zero until the broker accepts connections. The 10s
         # timeout is deliberate — the check starts a JVM, so the 5s used for
         # redis/mysql would risk timing out on a broker that is actually fine.
         options: >-
-          --health-cmd "kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list"
+          --health-cmd "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list"
           --health-interval=10s
           --health-timeout=10s
           --health-retries=10
@@ -145,8 +153,7 @@ jobs:
         uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
-        run: |
-          go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Same treatment as the MinIO step below: pin the image and wait for the
       # service, not for `docker run -d` to return. `:latest` also meant the
@@ -251,7 +258,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version: ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26','1.25', '1.24']
       fail-fast: false
 
     steps:
@@ -273,8 +280,7 @@ jobs:
         uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
-        run: |
-          go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
@@ -459,7 +465,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        go-version:  ['1.26','1.25', '1.24']
+        go-version: ['1.27','1.26','1.25', '1.24']
       fail-fast: false
 
     steps:
@@ -880,7 +886,7 @@ jobs:
           cache: false
 
       - name: Get dependencies
-        run: go mod download
+        uses: ./.github/actions/go-mod-download
 
       # Replaces the signal the `go mod tidy` in Submodule-Unit-Testing was
       # accidentally providing. `-diff` (Go 1.23+) reports what tidy would
@@ -1002,8 +1008,9 @@ jobs:
           cache: false
 
       - name: Download dependencies for ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: go mod download
+        uses: ./.github/actions/go-mod-download
+        with:
+          working-directory: ${{ matrix.module }}
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
@@ -1032,7 +1039,7 @@ jobs:
       - name: Check for file names errors
         # Pinned to main: v2.3.1 still declares the deprecated node20 runtime.
         # 0c7f19c ("chore: run on the node24 runtime") is not in a tagged release yet.
-        uses: ls-lint/action@0c7f19c04594e52a801dec991aae70a7ae5c6665 # main, node24 runtime
+        uses: ls-lint/action@a87c5eb4fb26d7af1bd0adba203dd1e76f7e94eb # main, node24 runtime
         with:
           config: .ls-lint.yml
 

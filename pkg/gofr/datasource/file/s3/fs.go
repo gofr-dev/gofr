@@ -176,6 +176,11 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		Message:   &msg,
 	}, time.Now())
 
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
+
 	// S3 has no directories: a prefix comes into existence with the first
 	// object stored under it, so no parent path needs to pre-exist.
 	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
@@ -260,6 +265,11 @@ func (f *FileSystem) Remove(name string) error {
 		Message:   &msg,
 	}, time.Now())
 
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
+
 	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(f.config.BucketName),
 		Key:    aws.String(name),
@@ -292,6 +302,11 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(f.config.BucketName),
@@ -334,6 +349,11 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
 
 	// check if they have the same name or not
 	if oldname == newname {

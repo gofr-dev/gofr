@@ -509,6 +509,8 @@ func setupClientAndMocks(t *testing.T, ctrl *gomock.Controller) (*Client, *testM
 		subManager:    NewMockSubscriptionManagerInterface(ctrl),
 		messageChan1:  make(chan jetstream.Msg, 1),
 		messageChan2:  make(chan jetstream.Msg, 1),
+		drained1:      make(chan struct{}),
+		drained2:      make(chan struct{}),
 	}
 
 	client := &Client{
@@ -557,6 +559,7 @@ func testFirstSubscription(t *testing.T, client *Client, mocks *testMocks, wg *s
 	close(mocks.messageChan1)
 
 	assertHandlerCalled(t, firstHandlerCalled, "First handler")
+	assertDrained(t, mocks.drained1, "First subscription")
 }
 
 func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *sync.WaitGroup) {
@@ -575,6 +578,7 @@ func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *
 	close(mocks.messageChan2)
 
 	assertHandlerCalled(t, errorHandlerCalled, "Error handler")
+	assertDrained(t, mocks.drained2, "Second subscription")
 }
 
 func setupFirstSubscriptionExpectations(mocks *testMocks) {
@@ -596,7 +600,11 @@ func setupFirstSubscriptionExpectations(mocks *testMocks) {
 
 		mocks.messageBatch1.EXPECT().
 			Messages().
-			Return(nil).
+			DoAndReturn(func() <-chan jetstream.Msg {
+				close(mocks.drained1)
+
+				return nil
+			}).
 			Times(1),
 	)
 
@@ -630,7 +638,11 @@ func setupSecondSubscriptionExpectations(mocks *testMocks) {
 
 		mocks.messageBatch2.EXPECT().
 			Messages().
-			Return(nil).
+			DoAndReturn(func() <-chan jetstream.Msg {
+				close(mocks.drained2)
+
+				return nil
+			}).
 			Times(1),
 	)
 
@@ -687,6 +699,18 @@ func assertHandlerCalled(t *testing.T, handlerCalled <-chan bool, handlerName st
 	}
 }
 
+// assertDrained waits for the subscription goroutine to finish its work after the handler returns (ack or nak,
+// then the next fetch), which the handler's own completion signal does not cover.
+func assertDrained(t *testing.T, drained <-chan struct{}, name string) {
+	t.Helper()
+
+	select {
+	case <-drained:
+	case <-time.After(time.Second * 5):
+		t.Fatalf("%s did not fetch its next batch within the expected time", name)
+	}
+}
+
 func waitForHandlersToComplete(t *testing.T, wg *sync.WaitGroup) {
 	t.Helper()
 
@@ -717,6 +741,10 @@ type testMocks struct {
 	messageChan2  chan jetstream.Msg
 	msg2          *MockMsg
 	subManager    *MockSubscriptionManagerInterface
+	// drained1 and drained2 are closed once a subscription loop has handled its message and gone back for
+	// the next batch, so a test can wait for the loop's trailing mock calls before the controller verifies.
+	drained1 chan struct{}
+	drained2 chan struct{}
 }
 
 func TestClient_CreateStream(t *testing.T) {
