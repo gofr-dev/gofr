@@ -187,8 +187,9 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 		Path:   "/" + url.PathEscape(config.Database),
 	}
 
+	// url.UserPassword percent-encodes the credentials when the URL is built, so they must be passed unescaped.
 	if config.User != "" && config.Password != "" {
-		u.User = url.UserPassword(url.QueryEscape(config.User), url.QueryEscape(config.Password))
+		u.User = url.UserPassword(config.User, config.Password)
 	}
 
 	q := u.Query()
