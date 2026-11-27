@@ -478,8 +478,10 @@ func TestOAuth_TokenWithoutKid(t *testing.T) {
 		if kid != nil {
 			tkn.Header["kid"] = kid
 		}
+
 		str, sErr := tkn.SignedString(key)
 		require.NoError(t, sErr)
+
 		return str
 	}
 

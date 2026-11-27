@@ -481,18 +481,58 @@ func TestOAuthUnaryInterceptor_TokenWithoutKid(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256,
-		jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()}).
-		SignedString(key)
-	require.NoError(t, err)
+	signToken := func(kid any) string {
+		tkn := jwt.NewWithClaims(jwt.SigningMethodRS256,
+			jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()})
+		if kid != nil {
+			tkn.Header["kid"] = kid
+		}
 
-	ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{"Bearer " + token}})
+		str, sErr := tkn.SignedString(key)
+		require.NoError(t, sErr)
 
-	// A missing kid header must be looked up as "", not as fmt.Sprint(nil).
-	interceptor := OAuthUnaryInterceptor(kidRecordingProvider{kid: "", key: &key.PublicKey})
+		return str
+	}
 
-	resp, err := interceptor(ctx, nil, nil, func(context.Context, any) (any, error) { return "ok", nil })
+	tests := []struct {
+		desc      string
+		token     string
+		provider  auth.PublicKeyProvider
+		expStatus codes.Code
+	}{
+		{
+			desc:      "missing kid finds single-key provider registered for empty kid",
+			token:     signToken(nil),
+			provider:  kidRecordingProvider{kid: "", key: &key.PublicKey},
+			expStatus: codes.OK,
+		},
+		{
+			desc:      "integer kid 123 is formatted as string and finds key",
+			token:     signToken(123),
+			provider:  kidRecordingProvider{kid: "123", key: &key.PublicKey},
+			expStatus: codes.OK,
+		},
+		{
+			desc:      "array kid is formatted as string representation and rejected when not found",
+			token:     signToken([]string{"kA"}),
+			provider:  kidRecordingProvider{kid: "", key: &key.PublicKey},
+			expStatus: codes.Unauthenticated,
+		},
+	}
 
-	require.NoError(t, err)
-	require.Equal(t, "ok", resp)
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{"Bearer " + tc.token}})
+			interceptor := OAuthUnaryInterceptor(tc.provider)
+
+			resp, err := interceptor(ctx, nil, nil, func(context.Context, any) (any, error) { return "ok", nil })
+			if tc.expStatus == codes.OK {
+				require.NoError(t, err)
+				require.Equal(t, "ok", resp)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tc.expStatus, status.Code(err))
+			}
+		})
+	}
 }
