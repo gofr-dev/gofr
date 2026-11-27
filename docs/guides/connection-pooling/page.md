@@ -18,7 +18,7 @@ Default pool sizes are tuned for development. Under production load on Kubernete
 
 ## SQL connection pool
 
-GoFr reads two env vars in `pkg/gofr/datasource/sql` and applies them with `database/sql`:
+GoFr reads four env vars in `pkg/gofr/datasource/sql` and applies them with `database/sql`:
 
 | Env var | Default | Behavior |
 |---|---|---|
