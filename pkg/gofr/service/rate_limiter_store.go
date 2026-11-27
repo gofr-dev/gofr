@@ -88,13 +88,15 @@ func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
 
 // LocalRateLimiterStore implements RateLimiterStore using in-memory buckets.
 type LocalRateLimiterStore struct {
-	buckets *sync.Map
-	stopCh  chan struct{}
+	buckets  *sync.Map
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 func NewLocalRateLimiterStore() *LocalRateLimiterStore {
 	return &LocalRateLimiterStore{
 		buckets: &sync.Map{},
+		stopCh:  make(chan struct{}),
 	}
 }
 
@@ -115,8 +117,6 @@ func (l *LocalRateLimiterStore) Allow(_ context.Context, key string, config Rate
 }
 
 func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
-	l.stopCh = make(chan struct{})
-
 	go func() {
 		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
@@ -135,9 +135,11 @@ func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
 }
 
 func (l *LocalRateLimiterStore) StopCleanup() {
-	if l.stopCh != nil {
-		close(l.stopCh)
-	}
+	l.stopOnce.Do(func() {
+		if l.stopCh != nil {
+			close(l.stopCh)
+		}
+	})
 }
 
 func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {

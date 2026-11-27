@@ -86,6 +86,49 @@ func TestLocalRateLimiterStore_StartAndStopCleanup(t *testing.T) {
 	store.StopCleanup()
 }
 
+func TestLocalRateLimiterStore_StopCleanupIsIdempotent(t *testing.T) {
+	store := NewLocalRateLimiterStore()
+	store.StartCleanup(t.Context())
+
+	require.NotPanics(t, func() {
+		store.StopCleanup()
+		store.StopCleanup()
+	})
+
+	select {
+	case <-store.stopCh:
+	default:
+		t.Fatal("cleanup channel was not closed after StopCleanup")
+	}
+}
+
+func TestLocalRateLimiterStore_StopBeforeStartCleanup(t *testing.T) {
+	store := NewLocalRateLimiterStore()
+	store.StopCleanup()
+
+	select {
+	case <-store.stopCh:
+	default:
+		t.Fatal("cleanup channel must be closed when StopCleanup precedes StartCleanup")
+	}
+
+	require.NotPanics(t, func() { store.StartCleanup(t.Context()) })
+
+	select {
+	case <-store.stopCh:
+	default:
+		t.Fatal("cleanup channel must remain closed after StartCleanup")
+	}
+}
+
+func TestLocalRateLimiterStore_StopCleanupNilChannel(t *testing.T) {
+	store := &LocalRateLimiterStore{}
+
+	require.NotPanics(t, func() {
+		store.StopCleanup()
+	})
+}
+
 func TestRedisRateLimiterStore_toInt64_ValidCases(t *testing.T) {
 	tests := []struct {
 		input    any
