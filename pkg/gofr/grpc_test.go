@@ -16,10 +16,13 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -842,4 +845,132 @@ func TestGRPCSetters_NoServerIsANoOp(t *testing.T) {
 			assert.NotPanics(t, call, "%s must log and return when there is no server", name)
 		})
 	}
+}
+
+// panicValue is what the panicking test service panics with; it stands for data a client must never see.
+const panicValue = "db password=hunter2 failed"
+
+// panickingServiceDesc describes a service, written by hand so no generated code is needed, whose unary and
+// server-streaming methods both panic.
+func panickingServiceDesc() *grpc.ServiceDesc {
+	return &grpc.ServiceDesc{
+		ServiceName: "gofr.test.Panicker",
+		HandlerType: (*any)(nil),
+		Methods: []grpc.MethodDesc{{
+			MethodName: "Unary",
+			Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+				in := new(emptypb.Empty)
+				if err := dec(in); err != nil {
+					return nil, err
+				}
+
+				info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/gofr.test.Panicker/Unary"}
+
+				return interceptor(ctx, in, info, func(context.Context, any) (any, error) { panic(panicValue) })
+			},
+		}},
+		Streams: []grpc.StreamDesc{{
+			StreamName:    "Stream",
+			ServerStreams: true,
+			Handler:       func(any, grpc.ServerStream) error { panic(panicValue) },
+		}},
+	}
+}
+
+// A panicking handler must reach the client only as a generic Internal status, without the panic value or the
+// server's stack trace, while the server logs both and still records the RPC in its access log and metrics.
+func TestGRPC_PanickingHandlerIsRecovered(t *testing.T) {
+	tests := []struct {
+		desc      string
+		method    string
+		metric    string
+		metricArg []any
+		call      func(ctx context.Context, conn *grpc.ClientConn, desc *grpc.ServiceDesc) error
+	}{
+		{desc: "unary", method: "/gofr.test.Panicker/Unary", metric: "app_gRPC-Server_stats",
+			metricArg: []any{"method", "/gofr.test.Panicker/Unary"},
+			call: func(ctx context.Context, conn *grpc.ClientConn, _ *grpc.ServiceDesc) error {
+				return conn.Invoke(ctx, "/gofr.test.Panicker/Unary", &emptypb.Empty{}, &emptypb.Empty{})
+			}},
+		{desc: "server stream", method: "/gofr.test.Panicker/Stream", metric: "app_gRPC-Stream_stats",
+			metricArg: []any{"method", gomock.Any(), "stream_type", gomock.Any()},
+			call: func(ctx context.Context, conn *grpc.ClientConn, desc *grpc.ServiceDesc) error {
+				return recvFromPanickingStream(ctx, conn, &desc.Streams[0])
+			}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			var err error
+
+			stderr := ""
+			stdout := testutil.StdoutOutputForFunc(func() {
+				stderr = testutil.StderrOutputForFunc(func() {
+					// The logger keeps the stdout and stderr it is created with, so the server is built here.
+					c, mocks := container.NewMockContainer(t)
+					setupGRPCMetricExpectations(mocks.Metrics)
+					mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), tc.metric, gomock.Any(), tc.metricArg...).Times(1)
+
+					desc := panickingServiceDesc()
+					conn := servePanickingService(t, c, desc)
+
+					err = tc.call(t.Context(), conn, desc)
+				})
+			})
+
+			assert.Equal(t, codes.Internal, status.Code(err))
+			assert.Equal(t, "Internal Server Error", status.Convert(err).Message())
+			assert.NotContains(t, err.Error(), "hunter2")
+			assert.NotContains(t, err.Error(), "goroutine")
+
+			assert.Contains(t, stderr, panicValue)
+			assert.Contains(t, stderr, "stack_trace")
+			assert.Contains(t, stderr+stdout, tc.method)
+		})
+	}
+}
+
+// servePanickingService serves desc over an in-memory connection, behind the interceptors newGRPCServer installs
+// by default, and returns a client connection to it.
+func servePanickingService(t *testing.T, c *container.Container, desc *grpc.ServiceDesc) *grpc.ClientConn {
+	t.Helper()
+
+	port := testutil.GetFreePort(t)
+	g, err := newGRPCServer(c, port, createMockGRPCConfig(t, port, false))
+	require.NoError(t, err)
+
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(g.interceptors...), grpc.ChainStreamInterceptor(g.streamInterceptors...))
+	srv.RegisterService(desc, struct{}{})
+
+	lis := bufconn.Listen(1 << 20)
+
+	go func() { _ = srv.Serve(lis) }()
+
+	t.Cleanup(srv.Stop)
+
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return conn
+}
+
+// recvFromPanickingStream opens the server stream and returns the error its first receive gets.
+func recvFromPanickingStream(ctx context.Context, conn *grpc.ClientConn, desc *grpc.StreamDesc) error {
+	stream, err := conn.NewStream(ctx, desc, "/gofr.test.Panicker/Stream")
+	if err != nil {
+		return err
+	}
+
+	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
+		return err
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		return err
+	}
+
+	return stream.RecvMsg(&emptypb.Empty{})
 }

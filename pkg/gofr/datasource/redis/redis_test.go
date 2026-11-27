@@ -11,6 +11,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	otelglobal "go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -341,4 +344,82 @@ func TestRedis_Close_NilClient(t *testing.T) {
 
 	require.NoError(t, r.Close())
 	require.NoError(t, r.Close(), "closing twice must not panic on the stop signal")
+}
+
+func TestRetryConnect(t *testing.T) {
+	testCases := []struct {
+		desc          string
+		hideArgs      bool
+		wantStatement bool
+	}{
+		{desc: "statement recorded by default", hideArgs: false, wantStatement: true},
+		{desc: "statement dropped when hidden", hideArgs: true, wantStatement: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			exporter := tracetest.NewInMemoryExporter()
+			prevTP := otelglobal.GetTracerProvider()
+
+			otelglobal.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter)))
+			t.Cleanup(func() { otelglobal.SetTracerProvider(prevTP) })
+
+			// Redis is down when the client is created and comes up while retryConnect waits.
+			s, err := miniredis.Run()
+			require.NoError(t, err)
+
+			defer s.Close()
+
+			// miniredis cannot report its address while stopped.
+			addr, port := s.Addr(), s.Port()
+
+			s.Close()
+
+			rc := redis.NewClient(&redis.Options{Addr: addr})
+			defer rc.Close()
+
+			done := make(chan struct{})
+
+			go func() {
+				retryConnect(rc, &Config{hideArgs: tc.hideArgs}, logging.NewMockLogger(logging.ERROR),
+					10*time.Millisecond, make(chan struct{}))
+				close(done)
+			}()
+
+			require.NoError(t, s.Restart())
+
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("retryConnect did not connect after Redis came up")
+			}
+
+			require.NoError(t, rc.Set(t.Context(), "secret-key", "secret-value", 0).Err())
+
+			setSpan := findSpan(exporter.GetSpans(), "set", port)
+			require.NotNil(t, setSpan, "no set span was exported for this Redis")
+
+			assert.Equal(t, tc.wantStatement, hasAttribute(setSpan.Attributes, "db.statement"))
+		})
+	}
+}
+
+// findSpan returns the last span with the given name sent to the Redis on port, or nil.
+// Matching the port keeps out spans from clients of other tests that use the global provider.
+func findSpan(spans tracetest.SpanStubs, name, port string) *tracetest.SpanStub {
+	var found *tracetest.SpanStub
+
+	for i := range spans {
+		if spans[i].Name != name {
+			continue
+		}
+
+		for _, a := range spans[i].Attributes {
+			if a.Key == "server.port" && strconv.FormatInt(a.Value.AsInt64(), 10) == port {
+				found = &spans[i]
+			}
+		}
+	}
+
+	return found
 }

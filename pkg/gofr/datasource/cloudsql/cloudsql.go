@@ -118,8 +118,8 @@ func (c *Connector) Connect() (driver.Connector, func() error, error) {
 
 // postgresConnector builds a pgx driver.Connector that dials through the Cloud SQL
 // connector. It mirrors what cloudsqlconn's pgxv5 driver does internally (parse a
-// config, route its DialFunc through the dialer) but yields a connector for
-// sql.OpenDB instead of registering a process-global database/sql driver.
+// config, replace the host, route its DialFunc through the dialer) but yields a
+// connector for sql.OpenDB instead of registering a process-global database/sql driver.
 func postgresConnector(s *settings) (driver.Connector, func() error, error) {
 	dialer, err := cloudsqlconn.NewDialer(context.Background(), s.connectorOptions()...)
 	if err != nil {
@@ -133,7 +133,11 @@ func postgresConnector(s *settings) (driver.Connector, func() error, error) {
 		return nil, nil, fmt.Errorf("cloudsql: parse postgres config: %w", err)
 	}
 
+	// pgx resolves the host before calling DialFunc, and the instance connection name
+	// (project:region:instance) is not resolvable. The dialer ignores the address, so
+	// any resolvable host works; "localhost" is what cloudsqlconn's pgxv5 driver uses.
 	icn := s.instanceConnectionName
+	cfg.Host = "localhost"
 	cfg.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return dialer.Dial(ctx, icn)
 	}
