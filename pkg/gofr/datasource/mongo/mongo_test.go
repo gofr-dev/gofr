@@ -86,7 +86,7 @@ func TestGenerateMongoURI(t *testing.T) {
 				Port:     27017,
 				Database: "mydb",
 			},
-			expectedURI:   "mongodb://admin:p%2540%2523%2523word%253A@localhost:27017/mydb?authSource=admin",
+			expectedURI:   "mongodb://admin:p%40%23%23word%3A@localhost:27017/mydb?authSource=admin",
 			expectedHost:  "localhost",
 			expectedError: "",
 		},
@@ -161,6 +161,41 @@ func TestGenerateMongoURI(t *testing.T) {
 			} else {
 				assert.NoError(t, err, "Expected no error but got one")
 			}
+		})
+	}
+}
+
+func TestGenerateMongoURI_CredentialsRoundTrip(t *testing.T) {
+	tests := []struct {
+		name     string
+		user     string
+		password string
+		host     string
+		expHost  string
+	}{
+		{name: "plain", user: "admin", password: "password", host: "localhost", expHost: "localhost"},
+		{name: "at, colon and hash", user: "admin", password: "p@##word:", host: "localhost", expHost: "localhost"},
+		{name: "slash and question mark", user: "admin", password: "a/b?c", host: "localhost", expHost: "localhost"},
+		{name: "percent and plus", user: "admin", password: "100%+1", host: "localhost", expHost: "localhost"},
+		{name: "spaces", user: "admin", password: " pass word ", host: "localhost", expHost: "localhost"},
+		{name: "all special characters", user: "us@r:n/me", password: "p@ss:w#rd/1%2+3 ", host: "localhost", expHost: "localhost"},
+		{name: "IPv6 host", user: "admin", password: "p@ss:w#rd", host: "::1", expHost: "::1"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uri, host, err := generateMongoURI(&Config{
+				User: tc.user, Password: tc.password, Host: tc.host, Port: 27017, Database: "mydb",
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.expHost, host)
+
+			opts := options.Client().ApplyURI(uri)
+			require.NoError(t, opts.Validate())
+			require.NotNil(t, opts.Auth)
+			assert.Equal(t, tc.user, opts.Auth.Username)
+			assert.Equal(t, tc.password, opts.Auth.Password)
+			assert.Equal(t, "admin", opts.Auth.AuthSource)
 		})
 	}
 }
