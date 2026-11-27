@@ -11,10 +11,57 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script="$here/coverage.sh"
-fixtures="$here/testdata/coverage"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+
+# Synthetic coverage profiles, written into the temporary directory so no .cov
+# files are committed. pkg_dip.cov is pkg.cov plus three uncovered blocks, so
+# its merged figure is lower. sub_a.cov repeats a block (the merge must keep the
+# highest count) and covers a mock_ file (the merge must drop it). sub_empty.cov
+# has the mode line and no blocks.
+fixtures="$work/fixtures"
+mkdir -p "$fixtures"
+
+cat > "$fixtures/example.cov" <<'EOF'
+mode: atomic
+gofr.dev/examples/http-server/main.go:10.13,14.2 3 1
+gofr.dev/examples/http-server/main.go:16.40,18.2 1 0
+EOF
+
+cat > "$fixtures/pkg.cov" <<'EOF'
+mode: atomic
+gofr.dev/pkg/gofr/logging/logger.go:20.30,24.16 3 7
+gofr.dev/pkg/gofr/logging/logger.go:24.16,26.3 1 2
+gofr.dev/pkg/gofr/logging/logger.go:28.2,28.10 1 7
+gofr.dev/pkg/gofr/gofr.go:40.20,45.2 4 1
+EOF
+
+cat > "$fixtures/pkg_dip.cov" <<'EOF'
+mode: atomic
+gofr.dev/pkg/gofr/logging/logger.go:20.30,24.16 3 7
+gofr.dev/pkg/gofr/logging/logger.go:24.16,26.3 1 2
+gofr.dev/pkg/gofr/logging/logger.go:28.2,28.10 1 7
+gofr.dev/pkg/gofr/logging/logger.go:22.30,26.16 3 0
+gofr.dev/pkg/gofr/logging/logger.go:26.16,28.3 1 0
+gofr.dev/pkg/gofr/logging/logger.go:28.5,28.12 1 0
+gofr.dev/pkg/gofr/gofr.go:40.20,45.2 4 1
+EOF
+
+cat > "$fixtures/sub_a.cov" <<'EOF'
+mode: atomic
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:12.50,15.2 2 4
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:17.40,19.2 1 0
+gofr.dev/pkg/gofr/datasource/mongo/mongo.go:12.50,15.2 2 1
+gofr.dev/pkg/gofr/datasource/mongo/mock_interfaces.go:5.10,9.2 3 9
+EOF
+
+cat > "$fixtures/sub_b.cov" <<'EOF'
+mode: atomic
+gofr.dev/pkg/gofr/datasource/redis/redis.go:8.30,10.2 1 3
+EOF
+
+printf 'mode: atomic\n' > "$fixtures/sub_empty.cov"
 
 passed=0
 failed=0

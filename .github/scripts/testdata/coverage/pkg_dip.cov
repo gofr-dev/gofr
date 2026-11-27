@@ -1,8 +1,0 @@
-mode: atomic
-gofr.dev/pkg/gofr/logging/logger.go:20.30,24.16 3 7
-gofr.dev/pkg/gofr/logging/logger.go:24.16,26.3 1 2
-gofr.dev/pkg/gofr/logging/logger.go:28.2,28.10 1 7
-gofr.dev/pkg/gofr/logging/logger.go:22.30,26.16 3 0
-gofr.dev/pkg/gofr/logging/logger.go:26.16,28.3 1 0
-gofr.dev/pkg/gofr/logging/logger.go:28.5,28.12 1 0
-gofr.dev/pkg/gofr/gofr.go:40.20,45.2 4 1
