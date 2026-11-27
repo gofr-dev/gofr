@@ -1226,3 +1226,46 @@ func TestAcceptedQueryMediaTypes(t *testing.T) {
 	assert.Contains(t, types, contentTypeOctetStream)
 	assert.NotContains(t, types, contentTypeBinary, "binary/octet-stream is an internal alias, do not advertise it")
 }
+
+// TestRequest_Bind_TypedNilPointer pins what a nil pointer of a concrete type
+// has always returned: nothing is bound, a well-formed body is no error, and a
+// malformed or empty body is still a JSON syntax error. Bind decodes into the
+// pointer it was given, and encoding/json refuses a nil one with
+// "json: Unmarshal(nil *T)", so bindJSON decodes a nil target through &i, as
+// before. Changing either result would turn a handler's 201 into a 500 or a
+// 500 into a 201.
+func TestRequest_Bind_TypedNilPointer(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	tests := []struct {
+		desc    string
+		body    string
+		wantErr bool
+	}{
+		{desc: "valid body", body: `{"name":"x"}`},
+		{desc: "null body", body: `null`},
+		{desc: "malformed body", body: `{"name":"x",`, wantErr: true},
+		{desc: "empty body", body: ``, wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/",
+				strings.NewReader(tc.body)))
+			req.req.Header.Set("Content-Type", "application/json")
+
+			var p *payload
+
+			err := req.Bind(p)
+
+			if tc.wantErr {
+				require.Error(t, err, "body %q must still fail the JSON syntax check", tc.body)
+				return
+			}
+
+			require.NoError(t, err, "a typed-nil Bind target must keep returning nil for body %q", tc.body)
+		})
+	}
+}

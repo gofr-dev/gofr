@@ -1,15 +1,18 @@
 package gofr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -1504,4 +1507,146 @@ func TestErrorLogEntry_Char_PrettyPrint(t *testing.T) {
 	(&ErrorLogEntry{TraceID: "abc123", Error: "went wrong"}).PrettyPrint(&buf)
 
 	assert.Equal(t, "\u001B[38;5;8mabc123 \u001B[38;5;202mwent wrong \n", buf.String())
+}
+
+// largeUpload returns a multipart request whose file part is bigger than the 32 MB that binding keeps in memory,
+// so binding it spools the part to a temporary file.
+func largeUpload(t *testing.T) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+
+	mw := multipart.NewWriter(&body)
+
+	part, err := mw.CreateFormFile("doc", "big.bin")
+	require.NoError(t, err)
+
+	_, err = part.Write(make([]byte, 33<<20))
+	require.NoError(t, err)
+	require.NoError(t, mw.Close())
+
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/upload", &body)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+
+	return r
+}
+
+// tempFiles returns the multipart temporary files left in dir.
+func tempFiles(t *testing.T, dir string) []string {
+	t.Helper()
+
+	files, err := filepath.Glob(filepath.Join(dir, "multipart-*"))
+	require.NoError(t, err)
+
+	return files
+}
+
+// An upload bound past the in-memory limit is spooled to a temporary file, which must be removed once the handler
+// returns, whichever way it returns, but not while a handler that outlived the request timeout can still read it.
+func TestHandler_ServeHTTP_RemovesMultipartTempFiles(t *testing.T) {
+	type upload struct {
+		Doc *multipart.FileHeader `file:"doc"`
+	}
+
+	bind := func(c *Context) (*upload, error) {
+		var u upload
+
+		return &u, c.Bind(&u)
+	}
+
+	tests := []struct {
+		desc    string
+		timeout time.Duration
+		handler func(c *Context) (any, error)
+		expCode int
+	}{
+		{desc: "inline handler", expCode: http.StatusCreated, handler: func(c *Context) (any, error) {
+			u, err := bind(c)
+
+			return u.Doc.Size, err
+		}},
+		{desc: "inline handler that panics", expCode: http.StatusInternalServerError,
+			handler: func(c *Context) (any, error) {
+				_, _ = bind(c)
+
+				panic("handler failed after binding")
+			}},
+		{desc: "handler with a request timeout", timeout: time.Minute, expCode: http.StatusCreated,
+			handler: func(c *Context) (any, error) {
+				u, err := bind(c)
+
+				return u.Doc.Size, err
+			}},
+		{desc: "handler with a request timeout that panics", timeout: time.Minute, expCode: http.StatusInternalServerError,
+			handler: func(c *Context) (any, error) {
+				_, _ = bind(c)
+
+				panic("handler failed after binding")
+			}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("TMPDIR", dir)
+
+			w := httptest.NewRecorder()
+			h := handler{
+				function:       tc.handler,
+				container:      &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+				requestTimeout: tc.timeout,
+			}
+
+			h.ServeHTTP(w, largeUpload(t))
+
+			assert.Equal(t, tc.expCode, w.Code)
+			// With a timeout the handler runs in its own goroutine, which removes the files after replying.
+			assert.Eventually(t, func() bool { return len(tempFiles(t, dir)) == 0 }, 5*time.Second, 10*time.Millisecond)
+		})
+	}
+}
+
+// A handler that outlives REQUEST_TIMEOUT keeps its upload until it returns: the 408 is sent first, and the
+// handler can still open the file it bound.
+func TestHandler_ServeHTTP_KeepsMultipartTempFilesUntilATimedOutHandlerReturns(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+
+	bound, release, opened := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+
+	h := handler{
+		container:      &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+		requestTimeout: 50 * time.Millisecond,
+		function: func(c *Context) (any, error) {
+			var u struct {
+				Doc *multipart.FileHeader `file:"doc"`
+			}
+
+			err := c.Bind(&u)
+
+			close(bound)
+
+			<-release
+
+			f, openErr := u.Doc.Open()
+			if openErr == nil {
+				openErr = f.Close()
+			}
+
+			opened <- openErr
+
+			return nil, err
+		},
+	}
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, largeUpload(t))
+	<-bound
+
+	assert.Equal(t, http.StatusRequestTimeout, w.Code)
+	assert.Len(t, tempFiles(t, dir), 1, "the file must stay while the handler can still read it")
+
+	close(release)
+	require.NoError(t, <-opened)
+	assert.Eventually(t, func() bool { return len(tempFiles(t, dir)) == 0 }, 5*time.Second, 10*time.Millisecond)
 }
