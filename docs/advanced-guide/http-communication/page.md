@@ -166,7 +166,7 @@ GoFr provides its user with additional configurational options while registering
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
 
   Redirects are followed, up to the same limit of 10 that `net/http` applies. The key is sent only to the host it was configured for and to that host's subdomains; it is dropped when a redirect goes to any other host, or when it downgrades from `https` to `http`. This is the rule `net/http` already applies to the `Authorization` header, so every GoFr auth option behaves the same way on a redirect.
-  Headers set with `DefaultHeaders` are not covered by this rule: an `X-Auth-Token` set there is still forwarded to the redirect target. A service whose upstream redirects to a host that needs the key should register that host as its own service with its own `APIKeyConfig`, for example `app.AddHTTPService(eu, https://eu.example.com, apiKey)`, so each key stays bound to the host it belongs to.
+  Headers set with `DefaultHeaders` are not covered by this rule: an `X-Auth-Token` set there is still forwarded to the redirect target. A service whose upstream redirects to a host that needs the key should register that host as its own service with its own `APIKeyConfig`, for example `app.AddHTTPService("eu", "https://eu.example.com", apiKey)`, so each key stays bound to the host it belongs to.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
 
 **Important:** The password must be base64 encoded in your configuration/environment variables. GoFr will decode it internally before creating the Authorization header.
