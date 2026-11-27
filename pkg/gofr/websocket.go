@@ -110,23 +110,60 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 	}()
 }
 
+// maxFailuresWithoutRead is how many consecutive failed passes a connection tolerates when the handler read no
+// message in between. A handler that fails before it reads (an auth guard, say), or returns a value that cannot
+// be serialized, would otherwise repeat that pass forever. The second pass exists because a message read directly
+// from the embedded connection is invisible here: retrying lets such a handler block on its next read instead of
+// losing the connection.
+const maxFailuresWithoutRead = 2
+
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
+	failuresWithoutRead := 0
+
 	for {
-		response, err := handler(ctx)
-		if handleWebSocketError(ctx, "error handling message", err) {
+		reads := conn.ReadCount()
+
+		stop, failed := handleWebSocketPass(ctx, conn, handler)
+		if stop {
 			break
 		}
 
-		message, err := serializeMessage(response)
-		if handleWebSocketError(ctx, "failed to serialize message", err) {
+		if !failed || conn.ReadCount() != reads {
+			failuresWithoutRead = 0
+
 			continue
 		}
 
-		err = conn.WriteMessage(websocket.TextMessage, message)
-		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
+		failuresWithoutRead++
+
+		if failuresWithoutRead >= maxFailuresWithoutRead {
 			break
 		}
 	}
+}
+
+// handleWebSocketPass runs the handler once and writes its response. stop reports that the loop must end;
+// failed reports that this pass produced no response to send.
+func handleWebSocketPass(ctx *Context, conn *websocket.Connection, handler Handler) (stop, failed bool) {
+	response, err := handler(ctx)
+	if err != nil {
+		return handleWebSocketError(ctx, "error handling message", err) || conn.ReadFailed(), true
+	}
+
+	message, err := serializeMessage(response)
+	if err != nil {
+		ctx.Errorf("failed to serialize message: %v", err)
+
+		return conn.ReadFailed(), true
+	}
+
+	if err = conn.WriteMessage(websocket.TextMessage, message); err != nil {
+		ctx.Errorf("failed to write response to websocket: %v", err)
+
+		return true, true
+	}
+
+	return conn.ReadFailed(), false
 }
 
 func handleWebSocketError(ctx *Context, msg string, err error) bool {
@@ -136,10 +173,11 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 
 	ctx.Errorf("%s: %v", msg, err)
 
-	// Check if the error is a WebSocket close error or if the underlying TCP connection is closed.
+	// Check if the error is a WebSocket close error (of any close code) or if the underlying TCP connection is closed.
 	// This prevents unnecessary retries and avoids an infinite loop of read/write operations on the WebSocket.
-	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) ||
+	var closeErr *gWebsocket.CloseError
+
+	return errors.As(err, &closeErr) || errors.Is(err, net.ErrClosed) ||
 		strings.Contains(err.Error(), "broken pipe") ||
 		strings.Contains(err.Error(), "connection reset by peer")
 }
