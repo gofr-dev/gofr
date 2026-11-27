@@ -25,7 +25,7 @@ func (c *Client) establishConnection() error {
 	}
 
 	c.streamManager = newStreamManager(js, c.logger)
-	c.subManager = newSubscriptionManager(batchSize)
+	c.subManager = newSubscriptionManager()
 
 	c.logger.Logf("connected to NATS server '%s'", c.Config.Server)
 

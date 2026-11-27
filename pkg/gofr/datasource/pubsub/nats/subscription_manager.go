@@ -2,38 +2,28 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-const (
-	consumeMessageDelay = 100 * time.Millisecond
-)
-
+// SubscriptionManager delivers one message per Subscribe call, fetching from
+// JetStream only when the application is ready to handle the next message.
+// The broker starts the AckWait timer when a message is delivered, so messages
+// fetched ahead into a buffer would sit past AckWait and get redelivered while
+// their first run is still queued.
 type SubscriptionManager struct {
-	subscriptions map[string]*subscription
-	subMutex      sync.Mutex
-	topicBuffers  map[string]chan *pubsub.Message
-	bufferMutex   sync.RWMutex
-	bufferSize    int
+	consumers     map[string]jetstream.Consumer
+	consumersLock sync.Mutex
 }
 
-type subscription struct {
-	cancel context.CancelFunc
-}
-
-func newSubscriptionManager(bufferSize int) *SubscriptionManager {
+func newSubscriptionManager() *SubscriptionManager {
 	return &SubscriptionManager{
-		subscriptions: make(map[string]*subscription),
-		topicBuffers:  make(map[string]chan *pubsub.Message),
-		bufferSize:    bufferSize,
+		consumers: make(map[string]jetstream.Consumer),
 	}
 }
 
@@ -50,34 +40,19 @@ func (sm *SubscriptionManager) Subscribe(
 		return nil, err
 	}
 
-	sm.subMutex.Lock()
-
-	_, exists := sm.subscriptions[topic]
-	if !exists {
-		cons, err := sm.createOrUpdateConsumer(ctx, js, topic, cfg)
-		if err != nil {
-			sm.subMutex.Unlock()
-			return nil, err
-		}
-
-		subCtx, cancel := context.WithCancel(ctx)
-		sm.subscriptions[topic] = &subscription{cancel: cancel}
-
-		buffer := sm.getOrCreateBuffer(topic)
-		go sm.consumeMessages(subCtx, cons, topic, buffer, cfg, logger)
+	cons, err := sm.consumerFor(ctx, js, topic, cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	sm.subMutex.Unlock()
+	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(cfg.MaxWait))
+	if err != nil {
+		logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
 
-	buffer := sm.getOrCreateBuffer(topic)
-
-	select {
-	case msg := <-buffer:
-		metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
-		return msg, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, err
 	}
+
+	return sm.messageFromBatch(ctx, msgs, topic, logger, metrics)
 }
 
 func (*SubscriptionManager) validateSubscribePrerequisites(js jetstream.JetStream, cfg *Config) error {
@@ -92,18 +67,24 @@ func (*SubscriptionManager) validateSubscribePrerequisites(js jetstream.JetStrea
 	return nil
 }
 
-func (sm *SubscriptionManager) getOrCreateBuffer(topic string) chan *pubsub.Message {
-	sm.bufferMutex.Lock()
-	defer sm.bufferMutex.Unlock()
+// consumerFor returns the durable consumer for the topic, creating it on first use.
+func (sm *SubscriptionManager) consumerFor(
+	ctx context.Context, js jetstream.JetStream, topic string, cfg *Config) (jetstream.Consumer, error) {
+	sm.consumersLock.Lock()
+	defer sm.consumersLock.Unlock()
 
-	if buffer, exists := sm.topicBuffers[topic]; exists {
-		return buffer
+	if cons, exists := sm.consumers[topic]; exists {
+		return cons, nil
 	}
 
-	buffer := make(chan *pubsub.Message, sm.bufferSize)
-	sm.topicBuffers[topic] = buffer
+	cons, err := sm.createOrUpdateConsumer(ctx, js, topic, cfg)
+	if err != nil {
+		return nil, err
+	}
 
-	return buffer
+	sm.consumers[topic] = cons
+
+	return cons, nil
 }
 
 func (*SubscriptionManager) createOrUpdateConsumer(
@@ -121,66 +102,23 @@ func (*SubscriptionManager) createOrUpdateConsumer(
 	return cons, err
 }
 
-func (sm *SubscriptionManager) consumeMessages(
-	ctx context.Context,
-	cons jetstream.Consumer,
-	topic string,
-	buffer chan *pubsub.Message,
-	cfg *Config,
-	logger pubsub.Logger) {
-	// TODO: propagate errors to caller
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if err := sm.fetchAndProcessMessages(ctx, cons, topic, buffer, cfg, logger); err != nil {
-				logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
-			}
-		}
-	}
-}
-
-func (sm *SubscriptionManager) fetchAndProcessMessages(
-	ctx context.Context,
-	cons jetstream.Consumer,
-	topic string,
-	buffer chan *pubsub.Message,
-	cfg *Config,
-	logger pubsub.Logger) error {
-	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(cfg.MaxWait))
-	if err != nil {
-		return sm.handleFetchError(err, topic, logger)
-	}
-
-	return sm.processFetchedMessages(ctx, msgs, topic, buffer, logger)
-}
-
-func (*SubscriptionManager) handleFetchError(err error, topic string, logger pubsub.Logger) error {
-	if !errors.Is(err, context.DeadlineExceeded) {
-		logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
-	}
-
-	time.Sleep(consumeMessageDelay)
-
-	return nil
-}
-
-func (sm *SubscriptionManager) processFetchedMessages(
-	ctx context.Context,
-	msgs jetstream.MessageBatch,
-	topic string,
-	buffer chan *pubsub.Message,
-	logger pubsub.Logger) error {
+// messageFromBatch returns the fetched message, or nil when nothing arrived
+// before the fetch wait expired.
+func (sm *SubscriptionManager) messageFromBatch(
+	ctx context.Context, msgs jetstream.MessageBatch, topic string, logger pubsub.Logger, metrics Metrics) (*pubsub.Message, error) {
 	for msg := range msgs.Messages() {
-		pubsubMsg := sm.createPubSubMessage(ctx, msg, topic)
+		metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
-		if !sm.sendToBuffer(pubsubMsg, buffer) {
-			logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
-		}
+		return sm.createPubSubMessage(ctx, msg, topic), nil
 	}
 
-	return sm.checkBatchError(msgs, topic, logger)
+	if err := msgs.Error(); err != nil {
+		logger.Errorf("Error in message batch for topic %s: %v", topic, err)
+
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (*SubscriptionManager) createPubSubMessage(ctx context.Context, msg jetstream.Msg, topic string) *pubsub.Message {
@@ -195,42 +133,9 @@ func (*SubscriptionManager) createPubSubMessage(ctx context.Context, msg jetstre
 	return pubsubMsg
 }
 
-func (*SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {
-	select {
-	case buffer <- msg:
-		return true
-	default:
-		return false
-	}
-}
-
-func (*SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topic string, logger pubsub.Logger) error {
-	if err := msgs.Error(); err != nil {
-		logger.Errorf("Error in message batch for topic %s: %v", topic, err)
-
-		return err
-	}
-
-	return nil
-}
-
 func (sm *SubscriptionManager) Close() {
-	sm.subMutex.Lock()
+	sm.consumersLock.Lock()
+	defer sm.consumersLock.Unlock()
 
-	for _, sub := range sm.subscriptions {
-		sub.cancel()
-	}
-
-	sm.subscriptions = make(map[string]*subscription)
-	sm.subMutex.Unlock()
-
-	sm.bufferMutex.Lock()
-
-	for _, buffer := range sm.topicBuffers {
-		close(buffer)
-	}
-
-	sm.topicBuffers = make(map[string]chan *pubsub.Message)
-
-	sm.bufferMutex.Unlock()
+	sm.consumers = make(map[string]jetstream.Consumer)
 }

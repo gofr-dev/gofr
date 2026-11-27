@@ -38,7 +38,7 @@ func New(cfg *Config, logger pubsub.Logger) *PubSubWrapper {
 
 	client := &Client{
 		Config:     cfg,
-		subManager: newSubscriptionManager(batchSize),
+		subManager: newSubscriptionManager(),
 		logger:     logger,
 	}
 
