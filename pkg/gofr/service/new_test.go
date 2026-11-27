@@ -674,7 +674,8 @@ func TestNewHTTPService_StopsAfterMaxRedirects(t *testing.T) {
 	}
 
 	assert.ErrorContains(t, err, "stopped after 10 redirects")
-	// Go refuses the 11th request before it is sent, so the server sees exactly 10.\n	assert.EqualValues(t, maxRedirects, requests.Load())
+	// Go refuses the 11th request before it is sent, so the server sees exactly 10.
+	assert.EqualValues(t, maxRedirects, requests.Load())
 }
 
 // TestKeepAPIKey pins the rule to the one net/http uses for the Authorization
