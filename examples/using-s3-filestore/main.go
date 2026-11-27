@@ -2,9 +2,11 @@ package main
 
 import (
 	"io"
+	"path/filepath"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file/s3"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 func main() {
@@ -37,10 +39,13 @@ type fileContent struct {
 // query parameter. The key may contain "/" separators; S3 needs no parent
 // "directory" to exist first.
 func uploadHandler(c *gofr.Context) (any, error) {
-	name := c.Param("name")
+	name, err := objectName(c)
+	if err != nil {
+		return nil, err
+	}
 
 	var in fileContent
-	if err := c.Request.Bind(&in); err != nil {
+	if err = c.Request.Bind(&in); err != nil {
 		return nil, err
 	}
 
@@ -61,7 +66,10 @@ func uploadHandler(c *gofr.Context) (any, error) {
 // back to the caller. io.ReadAll drives the file's Read method to completion,
 // so the full object must round-trip regardless of its size.
 func downloadHandler(c *gofr.Context) (any, error) {
-	name := c.Param("name")
+	name, err := objectName(c)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := c.File.Open(name)
 	if err != nil {
@@ -75,4 +83,16 @@ func downloadHandler(c *gofr.Context) (any, error) {
 	}
 
 	return fileContent{Content: string(data)}, nil
+}
+
+// objectName returns the "name" query parameter. A name that is empty, absolute or
+// escapes through "..", such as "../../etc/passwd", is rejected: with a local file
+// store it would reach files outside the working directory.
+func objectName(c *gofr.Context) (string, error) {
+	name := c.Param("name")
+	if !filepath.IsLocal(name) {
+		return "", gofrHTTP.ErrorInvalidParam{Params: []string{"name"}}
+	}
+
+	return name, nil
 }

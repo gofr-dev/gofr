@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/file/ftp"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 type FileServerType int
@@ -68,9 +70,12 @@ func grepCommandHandler(c *gofr.Context) (any, error) {
 }
 
 func createFileCommandHandler(c *gofr.Context) (any, error) {
-	fileName := c.Param("filename")
+	fileName, err := fileNameParam(c)
+	if err != nil {
+		return nil, err
+	}
 
-	_, err := c.File.Create(fileName)
+	_, err = c.File.Create(fileName)
 	if err != nil {
 		return fmt.Sprintln("File Creation error"), err
 	}
@@ -79,14 +84,29 @@ func createFileCommandHandler(c *gofr.Context) (any, error) {
 }
 
 func rmCommandHandler(c *gofr.Context) (any, error) {
-	fileName := c.Param("filename")
+	fileName, err := fileNameParam(c)
+	if err != nil {
+		return nil, err
+	}
 
-	err := c.File.Remove(fileName)
+	err = c.File.Remove(fileName)
 	if err != nil {
 		return fmt.Sprintln("File removal error"), err
 	}
 
 	return fmt.Sprintln("Successfully removed file:", fileName), nil
+}
+
+// fileNameParam returns the "filename" parameter. A name that is empty, absolute or
+// escapes through "..", such as "../../etc/passwd", is rejected, so that createfile
+// and rm only touch files under the current working directory.
+func fileNameParam(c *gofr.Context) (string, error) {
+	name := c.Param("filename")
+	if !filepath.IsLocal(name) {
+		return "", gofrHTTP.ErrorInvalidParam{Params: []string{"filename"}}
+	}
+
+	return name, nil
 }
 
 // This can be a common function to configure both FTP and SFTP server.

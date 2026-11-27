@@ -195,7 +195,9 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 	q.Set("authSource", "admin")
 	u.RawQuery = q.Encode()
 
-	return u.String(), u.Hostname(), nil
+	// The host is taken from the config, not from u, which carries the password: the host is logged
+	// and used as a metric label, and nothing derived from the credentials may reach either.
+	return u.String(), config.Host, nil
 }
 
 func getDBHost(uri string) (host string, err error) {

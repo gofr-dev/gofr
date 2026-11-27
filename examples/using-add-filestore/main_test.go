@@ -15,6 +15,7 @@ import (
 	"gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -167,4 +168,29 @@ func TestRmCommand(t *testing.T) {
 	output, _ := rmCommandHandler(ctx)
 
 	assert.Contains(t, output, "Successfully removed file: file.txt", "Test failed")
+}
+
+func TestFileCommands_RejectPathOutsideWorkingDirectory(t *testing.T) {
+	handlers := map[string]func(*gofr.Context) (any, error){
+		"createfile": createFileCommandHandler,
+		"rm":         rmCommandHandler,
+	}
+
+	for command, handler := range handlers {
+		for _, fileName := range []string{"", "/etc/passwd", "../file.txt", "dir/../../file.txt"} {
+			t.Run(command+" "+fileName, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+
+				// No call on the mock is expected: the name must be rejected before it reaches the file store.
+				mock := file.NewMockFileSystemProvider(ctrl)
+
+				r := cmd.NewRequest([]string{"command", command, fmt.Sprintf("-filename=%s", fileName)})
+
+				output, err := handler(getContext(r, mock))
+
+				assert.Nil(t, output)
+				assert.Equal(t, gofrHTTP.ErrorInvalidParam{Params: []string{"filename"}}, err)
+			})
+		}
+	}
 }
