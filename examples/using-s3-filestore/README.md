@@ -9,6 +9,9 @@ S3-compatible object store. It registers an S3 file store with
 
 The `<key>` may contain `/` separators (e.g. `uploads/2024/report.txt`); S3 has
 no directories, so no parent prefix needs to exist beforehand.
+A key that is empty, absolute or escapes through `..` (e.g. `../secret.txt`) is
+rejected with `400 Bad Request`, so the handlers stay safe if the store is swapped
+for the local filesystem.
 
 ## Running locally
 

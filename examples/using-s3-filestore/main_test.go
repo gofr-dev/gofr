@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strconv"
@@ -21,8 +22,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
 	gofrS3 "gofr.dev/pkg/gofr/datasource/file/s3"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -289,4 +292,27 @@ func skipIfMinIOUnreachable(t *testing.T) {
 	}
 
 	_ = conn.Close()
+}
+
+// TestHandlers_RejectNameOutsideStore runs without MinIO: the name must be rejected
+// before the handler touches the file store, which the context leaves nil.
+func TestHandlers_RejectNameOutsideStore(t *testing.T) {
+	handlers := map[string]func(*gofr.Context) (any, error){
+		"upload":   uploadHandler,
+		"download": downloadHandler,
+	}
+
+	for handlerName, handler := range handlers {
+		for _, name := range []string{"", "/etc/passwd", "../secret.txt", "uploads/../../secret.txt"} {
+			t.Run(handlerName+" "+name, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, "/files?name="+url.QueryEscape(name), http.NoBody)
+				ctx := &gofr.Context{Context: context.Background(), Request: gofrHTTP.NewRequest(req)}
+
+				result, err := handler(ctx)
+
+				require.Nil(t, result)
+				require.Equal(t, gofrHTTP.ErrorInvalidParam{Params: []string{"name"}}, err)
+			})
+		}
+	}
 }

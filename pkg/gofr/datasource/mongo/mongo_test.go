@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,19 @@ func TestClient_Connect(t *testing.T) {
 			expDatabase: "test",
 			expDBSet:    true,
 		},
+		{
+			desc: "server unreachable with credentials logs and labels the host only",
+			config: Config{Host: "127.0.0.1", Port: 1, User: "admin", Password: "s3cr3t-pw", Database: "test",
+				ConnectionTimeout: 200 * time.Millisecond},
+			setupMocks: func(l *MockLogger, m *MockMetrics) {
+				m.EXPECT().NewHistogram("app_mongo_stats", gomock.Any(), gomock.Any())
+				l.EXPECT().Debugf(gomock.Any(), noArgContains("s3cr3t-pw"), noArgContains("s3cr3t-pw"))
+				l.EXPECT().Errorf(gomock.Any(), "127.0.0.1", noArgContains("s3cr3t-pw"))
+			},
+			expURI:      "127.0.0.1",
+			expDatabase: "test",
+			expDBSet:    true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -67,6 +81,11 @@ func TestClient_Connect(t *testing.T) {
 			require.Equal(t, tc.expDBSet, client.Database != nil)
 		})
 	}
+}
+
+// noArgContains matches a log argument whose formatted value does not contain secret.
+func noArgContains(secret string) gomock.Matcher {
+	return gomock.Cond(func(x any) bool { return !strings.Contains(fmt.Sprint(x), secret) })
 }
 
 func TestGenerateMongoURI(t *testing.T) {
@@ -163,6 +182,14 @@ func TestGenerateMongoURI(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateMongoURI_IPv6Host(t *testing.T) {
+	uri, host, err := generateMongoURI(&Config{User: "admin", Password: "password", Host: "::1", Port: 27017, Database: "mydb"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "mongodb://admin:password@[::1]:27017/mydb?authSource=admin", uri)
+	assert.Equal(t, "::1", host, "the host must be the configured one, without brackets or port")
 }
 
 func TestGetDBHost(t *testing.T) {
