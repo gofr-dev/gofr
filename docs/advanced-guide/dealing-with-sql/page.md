@@ -79,7 +79,7 @@ func Transfer(ctx *gofr.Context) (any, error) {
 		return nil, err
 	}
 
-	defer tx.Rollback() // no-op once Commit has succeeded
+	defer tx.Rollback() // returns sql.ErrTxDone, and is not recorded, once Commit has succeeded
 
 	if _, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance - ? WHERE id = ?", 100, 1); err != nil {
 		return nil, err
@@ -100,8 +100,8 @@ func Transfer(ctx *gofr.Context) (any, error) {
 `Begin` starts the transaction with `context.Background()`, so the request's deadline does not end
 the transaction itself; only the statements given `ctx` are bound to it. To tie the whole
 transaction to the request, or to set the isolation level or a read-only transaction, use
-`BeginTxContext` on the SQL datasource. If the request context is canceled before `Commit`, the
-driver rolls the transaction back. `BeginTxContext` returns the same logging transaction as `Begin`;
+`BeginTxContext` on the SQL datasource. If the request context is canceled before `Commit`,
+`database/sql` rolls the transaction back and `Commit` then returns `sql.ErrTxDone`. `BeginTxContext` returns the same logging transaction as `Begin`;
 the `BeginTx` that `*gofrSQL.DB` inherits from `*sql.DB` still returns a plain `*sql.Tx`, whose
 statements are not logged or recorded in `app_sql_stats`.
 

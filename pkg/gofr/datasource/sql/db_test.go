@@ -1439,6 +1439,96 @@ func TestTx_Rollback(t *testing.T) {
 	}
 }
 
+func TestTx_Rollback_AfterCommitIsNotRecorded(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		db, mock := getDB(t, logging.DEBUG)
+		defer db.DB.Close()
+
+		// Only COMMIT is expected: a ROLLBACK stat would be an unexpected call and fail the test.
+		setupMetrics(t, db, "COMMIT")
+
+		tx := getTransaction(db, mock)
+		mock.ExpectCommit()
+
+		require.NoError(t, tx.Commit())
+
+		err := tx.Rollback()
+		require.ErrorIs(t, err, sql.ErrTxDone)
+	})
+
+	assert.Contains(t, out, "TxCommit COMMIT")
+	assert.NotContains(t, out, "TxRollback")
+}
+
+func TestContextIsPassedOn(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(db *DB, mock sqlmock.Sqlmock, ctx context.Context) error
+	}{
+		{
+			name: "Tx.QueryContext",
+			run: func(db *DB, mock sqlmock.Sqlmock, ctx context.Context) error {
+				tx := getTransaction(db, mock)
+				mock.ExpectQuery("SELECT 1")
+
+				rows, err := tx.QueryContext(ctx, "SELECT 1")
+				if rows != nil {
+					defer rows.Close()
+
+					if rowsErr := rows.Err(); err == nil {
+						err = rowsErr
+					}
+				}
+
+				return err
+			},
+		},
+		{
+			name: "Tx.PrepareContext",
+			run: func(db *DB, mock sqlmock.Sqlmock, ctx context.Context) error {
+				tx := getTransaction(db, mock)
+				mock.ExpectPrepare("SELECT 1")
+
+				stmt, err := tx.PrepareContext(ctx, "SELECT 1")
+				if stmt != nil {
+					stmt.Close()
+				}
+
+				return err
+			},
+		},
+		{
+			name: "DB.PrepareContext",
+			run: func(db *DB, mock sqlmock.Sqlmock, ctx context.Context) error {
+				mock.ExpectPrepare("SELECT 1")
+
+				stmt, err := db.PrepareContext(ctx, "SELECT 1")
+				if stmt != nil {
+					stmt.Close()
+				}
+
+				return err
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := getDB(t, logging.DEBUG)
+			defer db.DB.Close()
+
+			setupMetrics(t, db, gomock.Any())
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := tc.run(db, mock, ctx)
+
+			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
+}
+
 type txSelectUser struct {
 	ID    int
 	Name  string

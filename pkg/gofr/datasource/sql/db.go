@@ -157,8 +157,8 @@ func (d *DB) Begin() (*Tx, error) {
 	return d.BeginTxContext(context.Background(), nil)
 }
 
-// BeginTxContext starts a transaction bound to ctx: if ctx is canceled before Commit, the
-// driver rolls the transaction back. opts may be nil for the driver's default isolation level.
+// BeginTxContext starts a transaction bound to ctx: if ctx is canceled before Commit,
+// database/sql rolls the transaction back and Commit then returns sql.ErrTxDone. opts may be nil for the driver's default isolation level.
 // Statements run on the returned Tx are logged and recorded in app_sql_stats.
 //
 // It is not named BeginTx because DB embeds *sql.DB, whose promoted BeginTx returns a
@@ -298,9 +298,20 @@ func (t *Tx) Commit() error {
 	return t.Tx.Commit()
 }
 
+// Rollback aborts the transaction. Once the transaction is done (committed, rolled back, or
+// rolled back by database/sql after its context was canceled) it returns sql.ErrTxDone without
+// recording or logging a ROLLBACK, so `defer tx.Rollback()` after a successful Commit stays silent.
 func (t *Tx) Rollback() error {
-	defer t.sendOperationStats(time.Now(), "TxRollback", "ROLLBACK")
-	return t.Tx.Rollback()
+	start := time.Now()
+
+	err := t.Tx.Rollback()
+	if errors.Is(err, sql.ErrTxDone) {
+		return err
+	}
+
+	t.sendOperationStats(start, "TxRollback", "ROLLBACK")
+
+	return err
 }
 
 // Select runs a query with args and binds the result of the query to the data.
