@@ -6,25 +6,48 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 const (
-	maxFileSize = 100 * 1024 * 1024 // 100MB
+	maxFileSize  = 100 * 1024 * 1024  // 100MB
+	maxTotalSize = 1024 * 1024 * 1024 // 1GB, for all files in the zip together
 )
 
 var (
-	errMaxFileSize   = errors.New("uncompressed file is greater than file size limit of 100MBs")
+	errMaxFileSize   = errZipTooLarge{msg: "uncompressed file is greater than file size limit of 100MBs"}
+	errMaxTotalSize  = errZipTooLarge{msg: "uncompressed zip content is greater than total size limit of 1GB"}
 	errPathTraversal = errors.New("path traversal attempt detected")
 )
+
+// errZipTooLarge is returned when an uploaded zip exceeds a size limit, so the
+// request is answered with 413 rather than 500.
+type errZipTooLarge struct {
+	msg string
+}
+
+func (e errZipTooLarge) Error() string {
+	return e.msg
+}
+
+func (errZipTooLarge) StatusCode() int {
+	return http.StatusRequestEntityTooLarge
+}
 
 type Zip struct {
 	Files map[string]file
 }
 
 func NewZip(content []byte) (*Zip, error) {
+	return newZip(content, maxTotalSize)
+}
+
+// newZip is NewZip with the total size limit as a parameter, so tests can check it without
+// unzipping a gigabyte.
+func newZip(content []byte, maxTotal int) (*Zip, error) {
 	reader := bytes.NewReader(content)
 
 	zipReader, err := zip.NewReader(reader, int64(len(content)))
@@ -33,6 +56,8 @@ func NewZip(content []byte) (*Zip, error) {
 	}
 	// Create a map to store file contents
 	files := make(map[string]file)
+
+	var totalSize int
 
 	for _, zrf := range zipReader.File {
 		// Validate file name to prevent path traversal attacks at ZIP parse time. Reject entries with absolute paths or path traversal sequences
@@ -49,6 +74,14 @@ func NewZip(content []byte) (*Zip, error) {
 		buf, err := copyToBuffer(f, zrf.UncompressedSize64)
 		if err != nil {
 			return nil, err
+		}
+
+		// Reject the archive when all unzipped files together exceed maxTotalSize.
+		totalSize += buf.Len()
+		if totalSize > maxTotal {
+			f.Close()
+
+			return nil, errMaxTotalSize
 		}
 
 		files[cleanName] = file{
