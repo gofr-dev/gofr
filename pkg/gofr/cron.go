@@ -189,7 +189,8 @@ func (j *job) run(parent context.Context, cntnr *container.Container) {
 		Start(parent, j.name)
 	defer span.End()
 
-	// The request carries the span context so the logger gets this run's trace ID.
+	// The request carries the span context so the logger gets this run's trace ID. newContext
+	// boxes it, so a job calling Trace from its own goroutines does not race.
 	c := newContext(nil, noopRequest{ctx: ctx}, cntnr)
 
 	c.Infof("Starting cron job: %s", j.name)

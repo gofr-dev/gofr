@@ -140,8 +140,9 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 	// Use the existing newContext function with noopRequest
 	gofrCtx := newContext(nil, noopRequest{}, a.container)
 
-	// Set the context for cancellation support
-	gofrCtx.Context = ctx
+	// Set the context for cancellation support, keeping the box newContext made so a hook calling
+	// Trace from its own goroutines does not race.
+	gofrCtx.setContext(ctx)
 
 	for i, hook := range a.onStartHooks {
 		// Add panic recovery to prevent entire application crash

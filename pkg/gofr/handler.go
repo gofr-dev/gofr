@@ -71,8 +71,6 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newHTTPContext(w, r, h.container)
-
 	// Carry the SpanContext (a value type, no allocation) rather than eagerly
 	// formatting the trace ID. TraceID().String() allocates a 32-character
 	// string on every request, but the only consumer is logError, which runs
@@ -81,15 +79,18 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	isWebSocket := websocket.IsWebSocketUpgrade(r)
 
-	if isWebSocket {
-		// If the request is a WebSocket upgrade, do not apply the timeout
-		c.Context = r.Context()
-	} else if h.requestTimeout != 0 {
-		ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
-		defer cancel()
+	// A WebSocket upgrade gets no timeout. The timeout context is built before the Context so
+	// it is the Context's first context rather than a later replacement (see ctxBox).
+	reqCtx := r.Context()
 
-		c.Context = ctx
+	if !isWebSocket && h.requestTimeout != 0 {
+		var cancel context.CancelFunc
+
+		reqCtx, cancel = context.WithTimeout(reqCtx, h.requestTimeout)
+		defer cancel()
 	}
+
+	c := newHTTPContextWith(reqCtx, w, r, h.container)
 
 	var (
 		result any
@@ -183,8 +184,8 @@ func (h handler) serveInline(c *Context, spanCtx trace.SpanContext) (result any,
 // ctx.Done or panicked branch.
 //
 // c.Context is a location both goroutines DO touch: h.function runs in the
-// spawned goroutine and is free to reassign it (App.WebSocket does, to
-// thread the connection through it), while this goroutine's select used to
+// spawned goroutine and is free to reassign it (a user handler may assign
+// the field directly), while this goroutine's select used to
 // read c.Context.Done() directly — a data race, since nothing ordered the
 // two accesses. See the watchCtx snapshot below, taken before the goroutine
 // is spawned, for the fix.
@@ -194,7 +195,7 @@ func (h handler) serveWithGoroutine(c *Context, spanCtx trace.SpanContext, r *ht
 
 	// Snapshot the context to watch for cancellation before spawning the
 	// handler goroutine below. h.function may reassign c.Context while it
-	// runs (App.WebSocket does, to thread the connection through it) —
+	// runs (a user handler may assign the field directly) —
 	// reading c.Context in the select instead of here would race that
 	// write. watchCtx is a local copy this goroutine alone reads, so the
 	// write in the spawned goroutine and this read never overlap.

@@ -379,6 +379,173 @@ func TestContext_GetCorrelationID(t *testing.T) {
 	})
 }
 
+type traceTestKey struct{}
+
+// newTraceTestContext builds a Context the way the framework does, on a request whose context
+// already carries a root span.
+func newTraceTestContext(t *testing.T) (*Context, oteltrace.Span) {
+	t.Helper()
+
+	ctx, root := otel.GetTracerProvider().Tracer("test").Start(t.Context(), "root")
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/x", http.NoBody)
+
+	return newContext(nil, gofrHTTP.NewRequest(req), &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}), root
+}
+
+// hammerTrace runs goroutines that call Trace on c while others read c the way a handler does.
+// It proves nothing on its own: the race detector is what flags a data race between them.
+func hammerTrace(c *Context) {
+	var wg sync.WaitGroup
+
+	for range 4 {
+		wg.Go(func() {
+			for range 100 {
+				c.Trace("work").End()
+			}
+		})
+
+		wg.Go(func() {
+			for range 100 {
+				_, _ = c.Deadline()
+				_ = c.Done()
+				_ = c.Err()
+				_ = c.Value(traceTestKey{})
+				_ = c.GetCorrelationID()
+
+				c.Info("reading")
+			}
+		})
+	}
+
+	wg.Wait()
+}
+
+// Issue #3823: Trace may run on a goroutine the handler started (a gRPC stream's Recv, a worker)
+// while other goroutines use the same Context. Run with -race; without it this test cannot fail.
+func TestContext_Trace_ConcurrentWithReaders(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	c, root := newTraceTestContext(t)
+	defer root.End()
+
+	hammerTrace(c)
+
+	assert.Equal(t, root.SpanContext().TraceID().String(), c.GetCorrelationID())
+}
+
+// A Context built as a struct literal (gofr-cli's generated gRPC wrappers do this) gets the same
+// guarantee once its first Trace has returned. Run with -race.
+func TestContext_Trace_HandBuiltContext(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	c := &Context{Context: t.Context(), Container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)}}
+
+	c.Trace("first").End()
+
+	hammerTrace(c)
+
+	assert.NoError(t, c.Err())
+}
+
+// Each Trace starts a child of the span the previous Trace left current, and the Context keeps
+// the request's trace ID throughout.
+func TestContext_Trace_SequentialNests(t *testing.T) {
+	rec := tracetest.NewSpanRecorder()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSpanProcessor(rec)))
+
+	c, root := newTraceTestContext(t)
+	defer root.End()
+
+	a := c.Trace("a")
+	b := c.Trace("b")
+
+	assert.Equal(t, b.SpanContext(), oteltrace.SpanFromContext(c).SpanContext(), "the latest span is current")
+
+	b.End()
+	a.End()
+
+	ended := rec.Ended()
+	require.Len(t, ended, 2)
+
+	assert.Equal(t, "b", ended[0].Name())
+	assert.Equal(t, a.SpanContext().SpanID(), ended[0].Parent().SpanID(), "b is a child of a")
+	assert.Equal(t, "a", ended[1].Name())
+	assert.Equal(t, root.SpanContext().SpanID(), ended[1].Parent().SpanID(), "a is a child of the request span")
+
+	assert.Equal(t, root.SpanContext().TraceID().String(), c.GetCorrelationID())
+}
+
+// A context.Context taken from c before Trace follows c, so it sees the span Trace started.
+func TestContext_Trace_EarlierContextSeesLaterSpan(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	c, root := newTraceTestContext(t)
+	defer root.End()
+
+	saved := c.Context
+
+	span := c.Trace("later")
+	defer span.End()
+
+	assert.Equal(t, span.SpanContext(), oteltrace.SpanFromContext(saved).SpanContext())
+}
+
+// Deriving the next context from currentContext, as Trace and App.WebSocket do, must not make the
+// box hold a context whose parent is the box: a lookup for any missing key would then loop forever.
+func TestContext_Trace_NoCycle(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	c, root := newTraceTestContext(t)
+	defer root.End()
+
+	defer c.Trace("a").End()
+
+	c.setContext(context.WithValue(c.currentContext(), traceTestKey{}, "conn"))
+
+	defer c.Trace("b").End()
+
+	assert.Equal(t, "conn", c.Value(traceTestKey{}))
+	assert.Nil(t, c.Value("missing"))
+	assert.NoError(t, c.Err())
+}
+
+// A cron job's Context must already hold a box when the job starts: a job that calls Trace from
+// its own goroutines while others read the Context must not write the field. Run with -race.
+func TestContext_Trace_CronJobContext(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	var boxed bool
+
+	j := &job{name: "trace-job", fn: func(c *Context) {
+		_, boxed = c.Context.(*ctxBox)
+
+		hammerTrace(c)
+	}}
+
+	j.run(context.Background(), &container.Container{Logger: logging.NewMockLogger(logging.ERROR)})
+
+	assert.True(t, boxed, "a cron job's Context must hold a ctxBox before its first Trace")
+}
+
+// The same holds for the Context given to OnStart hooks. Run with -race.
+func TestContext_Trace_OnStartHookContext(t *testing.T) {
+	otel.SetTracerProvider(trace.NewTracerProvider())
+
+	var boxed bool
+
+	app := New()
+	app.OnStart(func(c *Context) error {
+		_, boxed = c.Context.(*ctxBox)
+
+		hammerTrace(c)
+
+		return nil
+	})
+
+	require.NoError(t, app.runOnStartHooks(t.Context()))
+	assert.True(t, boxed, "an OnStart hook's Context must hold a ctxBox before its first Trace")
+}
+
 // BenchmarkContext_New measures the cost of constructing a fresh
 // *gofr.Context per request via newContext. Today this allocates the
 // Context struct itself plus a ContextLogger that re-extracts the
