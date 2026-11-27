@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cloud.google.com/go/cloudsqlconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -129,15 +130,94 @@ func TestSettings_PostgresDSN(t *testing.T) {
 // TestSettings_PostgresDSN_Escaping verifies values containing DSN-significant
 // characters are quoted instead of breaking out into additional libpq keywords.
 func TestSettings_PostgresDSN_Escaping(t *testing.T) {
-	s := settings{
-		instanceConnectionName: "proj:us-central1:inst",
-		user:                   "app-sa@proj.iam",
-		database:               "ap p' sslmode=require",
+	testCases := []struct {
+		desc     string
+		database string
+		expOut   string
+	}{
+		{
+			desc:     "space and quote",
+			database: "ap p' sslmode=require",
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p\' sslmode=require' sslmode=disable`,
+		},
+		{
+			desc:     "tab",
+			database: "ap\tdb",
+			expOut:   "host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap\tdb' sslmode=disable",
+		},
+		{
+			desc:     "already quoted",
+			database: "'ap p'",
+			expOut:   "host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p' sslmode=disable",
+		},
+		{
+			desc:     "already escaped space and backslash",
+			database: `ap\ p\\db`,
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname=ap\ p\\db sslmode=disable`,
+		},
+		{
+			desc:     "already escaped quote",
+			database: `\'abc`,
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname=\'abc sslmode=disable`,
+		},
+		{
+			desc:     "already escaped quote inside a word",
+			database: `it\'s`,
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname=it\'s sslmode=disable`,
+		},
+		{
+			desc:     "leading quote with an escaped pair",
+			database: `'a\\b`,
+			expOut:   `host=proj:us-central1:inst user=app-sa@proj.iam dbname='\'a\\\\b' sslmode=disable`,
+		},
 	}
 
-	assert.Equal(t,
-		`host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p\' sslmode=require' sslmode=disable`,
-		s.postgresDSN())
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := settings{
+				instanceConnectionName: "proj:us-central1:inst",
+				user:                   "app-sa@proj.iam",
+				database:               tc.database,
+			}
+
+			assert.Equal(t, tc.expOut, s.postgresDSN())
+		})
+	}
+}
+
+// TestSettings_PostgresDSN_ParsedBack reads the DSN with pgconn, the parser this
+// datasource connects through, so it pins the values Postgres receives rather than the
+// string. cloudsql has quoted these values since v0.1.2, so a value that is already
+// written the way libpq reads it now arrives decoded where it used to arrive literally.
+func TestSettings_PostgresDSN_ParsedBack(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		user     string
+		database string
+		expUser  string
+		expDB    string
+	}{
+		{desc: "plain values", user: "app-sa@proj.iam", database: "app", expUser: "app-sa@proj.iam", expDB: "app"},
+		{desc: "space is quoted", user: "app user", database: "my db", expUser: "app user", expDB: "my db"},
+		{desc: "quoted value is read decoded", user: "'x'", database: "'db'", expUser: "x", expDB: "db"},
+		{desc: "escaped space is read decoded", user: `my\ user`, database: `my\ db`, expUser: "my user", expDB: "my db"},
+		{desc: "escaped backslash is read decoded", user: `a\\b`, database: `a\\b`, expUser: `a\b`, expDB: `a\b`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := settings{
+				instanceConnectionName: "proj:us-central1:inst",
+				user:                   tc.user,
+				database:               tc.database,
+			}
+
+			parsed, err := pgconn.ParseConfig(s.postgresDSN())
+			require.NoError(t, err)
+			assert.Equal(t, tc.expUser, parsed.User)
+			assert.Equal(t, tc.expDB, parsed.Database)
+		})
+	}
 }
 
 func TestSettings_ConnectorOptions(t *testing.T) {
