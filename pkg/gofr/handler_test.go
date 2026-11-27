@@ -1708,8 +1708,12 @@ func TestHandler_HideInternalErrors(t *testing.T) {
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
 		{"classified 400 with data keeps its message", true, "partial", gofrHTTP.ErrorInvalidParam{Params: []string{"id"}},
 			http.StatusPartialContent, `{"data":"partial","error":{"message":"'1' invalid parameter(s): id"}}`},
-		{"status 0 is sent as 500 and keeps its message", true, nil, zeroStatusError{},
+		{"status 0 is sent as 500, switch off keeps the message", false, nil, zeroStatusError{},
 			http.StatusInternalServerError, `{"error":{"message":"secret: vault token rejected"}}`},
+		{"status 0 is sent as 500 and hidden", true, nil, zeroStatusError{},
+			http.StatusInternalServerError, `{"error":{"message":"Internal Server Error"}}`},
+		{"status 0 with data is 206 and hidden", true, "partial", zeroStatusError{},
+			http.StatusPartialContent, `{"data":"partial","error":{"message":"Internal Server Error"}}`},
 		{"custom 500 keeps its message and custom fields", true, nil, marshaledServerError{},
 			http.StatusInternalServerError, `{"error":{"message":"payment provider is down, retry later","code":"DB_UNAVAILABLE"}}`},
 		{"pointer to datasource.ErrorDB is hidden", true, nil, &datasource.ErrorDB{Err: errDriverDetail},
@@ -1760,6 +1764,7 @@ func TestApp_HideInternalErrorsConfig(t *testing.T) {
 	for i, tc := range testCases {
 		testutil.NewServerConfigs(t)
 		t.Setenv("HIDE_INTERNAL_ERRORS", tc.value)
+		errhide.Enable(false) // New only turns the switch on, so start each case from off
 
 		w := httptest.NewRecorder()
 

@@ -20,7 +20,12 @@ func New() *App {
 	app.container = container.NewContainer(app.Config)
 
 	// Read before the servers are built: the gRPC server adds its interceptor only when this is on.
-	errhide.Enable(readHideInternalErrors(app.Config, app.container.Logger))
+	// The switch is process-wide: an app only ever turns it on, so a later app that leaves it off
+	// cannot change what an earlier app's clients receive.
+	if readHideInternalErrors(app.Config, app.container.Logger) {
+		errhide.Enable(true)
+		errhide.SetLogger(app.container.Logger)
+	}
 
 	app.initTracer()
 	app.initMetricsServer()

@@ -177,6 +177,7 @@ described under [Where it applies](#where-it-applies)):
 
 - the error does not implement `StatusCode() int`, such as an error from `errors.New`, a raw driver error, or any
   error wrapped with `fmt.Errorf("...: %w", err)` (the wrapper does not carry the status code of the error inside it), or
+- its `StatusCode()` returns 0, which the responder sends as 500, or
 - the error is a `datasource.ErrorDB` (or `*datasource.ErrorDB`), which usually carries the driver's own text.
 
 Every other error keeps its message, because an error that declares a status code was written for clients. This
@@ -193,8 +194,9 @@ includes GoFr's predefined errors, such as `ErrorEntityNotFound` or `ErrorInvali
 
 > [!WARNING]
 > A message is kept whenever the error declares a status code, so text you put in your own errors still reaches
-> clients. Custom `ResponseMarshaller` fields are also still returned. This option keeps unclassified and database
-> error text out of responses; it does not inspect what your own errors say.
+> clients. Custom `ResponseMarshaller` fields are NOT hidden either: when an error's message is replaced, its
+> custom fields are still returned as they are, so keep internal detail out of them. This option keeps unclassified
+> and database error text out of responses; it does not inspect what your own errors say.
 
 #### Example:
 ```go
@@ -235,17 +237,20 @@ With `HIDE_INTERNAL_ERRORS=true`, the response is:
   `status` error is sent as `codes.Internal` with the message `Internal Server Error`, instead of `codes.Unknown`
   with the error's text. This includes your own errors with a `StatusCode()`, such as a custom 500 or
   `ErrorEntityNotFound`: return a `status.Error` with the code and message you want the client to see. A `status`
-  error is sent with its own message, including one passed on from a downstream gRPC call; when it is wrapped with
-  `%w`, the client sees the wrapper's full text. `context.Canceled` and `context.DeadlineExceeded` keep their code;
-  when wrapped, the wrapper's text is dropped. With the option off, the interceptor chain is unchanged.
+  error returned as is is sent with its own message, including one passed on from a downstream gRPC call. When a
+  `status` error is wrapped with `%w`, the client still gets its code but the message is replaced with
+  `Internal Server Error`, because the wrapper's text can carry internal detail. `context.Canceled` and
+  `context.DeadlineExceeded` keep their code; when wrapped, the wrapper's text is dropped. With the option off, the
+  interceptor chain is unchanged.
 - **MCP:** a tool's error, and an error from the hook that runs before a tool, reach the AI client as
   `Internal Server Error`.
 
 > [!NOTE]
 > - The original error is still logged on the server (for HTTP handlers, with the request's trace ID), so the real
->   cause can be found for the request the client reports. Two exceptions: GoFr does not log a stream source's error,
->   nor the error of a custom `AuthProvider` passed to `middleware.AuthMiddleware` (the built-in authentication
->   errors have a status code and are not hidden), so log those where they are created if you need them.
+>   cause can be found for the request the client reports. A stream source's error, and the error of a custom
+>   `AuthProvider` passed to `middleware.AuthMiddleware`, are logged when their text is replaced, without a trace ID.
+> - The switch is process-wide, not per app: once any `gofr.New()` in the process reads `HIDE_INTERNAL_ERRORS=true`,
+>   it stays on for every app in the process, even one created later with the option unset or `false`.
 > - Two GoFr messages that contain no internal detail are not replaced: the stream frame
 >   `stream value could not be encoded` and the MCP tool panic text `tool execution failed`.
 > - Any value other than `true` or `false` logs a warning at startup and keeps the default behavior.

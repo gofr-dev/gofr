@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	gofrHttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/internal/errhide"
 )
 
 // AuthMethod represents a custom type to define the different authentication methods supported.
@@ -53,6 +54,10 @@ func AuthMiddleware(a AuthProvider) func(handler http.Handler) http.Handler {
 
 			authHeader, err := a.ExtractAuthHeader(r)
 			if err != nil {
+				if errhide.Enabled() && errhide.Hides(err) {
+					errhide.Reportf("auth provider failed, error hidden from the client: %v", err)
+				}
+
 				responder := gofrHttp.NewResponder(w, r.Method)
 				responder.Respond(nil, err)
 

@@ -117,3 +117,33 @@ func TestStream_HideInternalErrors_Panic(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `{"error":"Internal Server Error"}`)
 	assert.NotContains(t, rec.Body.String(), "boom")
 }
+
+type captureLogger struct{ lines []string }
+
+func (c *captureLogger) Errorf(format string, args ...any) {
+	c.lines = append(c.lines, fmt.Sprintf(format, args...))
+}
+
+func TestStream_HideInternalErrors_Logged(t *testing.T) {
+	logger := &captureLogger{}
+
+	errhide.SetLogger(logger)
+	t.Cleanup(func() { errhide.SetLogger(nil) })
+
+	for _, on := range []bool{true, false} {
+		hideErrors(t, on)
+
+		logger.lines = nil
+
+		NewResponder(httptest.NewRecorder(), http.MethodGet).
+			Respond(resTypes.Stream{Source: &sliceSource{items: []any{"a"}, err: errDriverText}}, nil)
+
+		if on {
+			if assert.Len(t, logger.lines, 1) {
+				assert.Contains(t, logger.lines[0], errDriverText.Error())
+			}
+		} else {
+			assert.Empty(t, logger.lines, "off: nothing is replaced, so nothing is logged")
+		}
+	}
+}

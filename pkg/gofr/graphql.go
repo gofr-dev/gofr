@@ -27,9 +27,14 @@ import (
 	"gofr.dev/pkg/gofr/internal/errhide"
 )
 
-// errResolverHidden is what graphql-go puts in errors[].message for a resolver error that
-// HIDE_INTERNAL_ERRORS hides.
-var errResolverHidden = errors.New(errhide.Message) //nolint:staticcheck // the text must equal what clients receive
+// hiddenResolverError is what graphql-go puts in errors[].message for a resolver error that
+// HIDE_INTERNAL_ERRORS hides. A type, not errors.New: the message is capitalized on purpose (it must
+// equal what other transports send), which ST1005 flags in an error string.
+type hiddenResolverError struct{}
+
+func (hiddenResolverError) Error() string { return errhide.Message }
+
+var errResolverHidden = hiddenResolverError{}
 
 var (
 	errSchemaMissing = errors.New("GraphQL schema file missing: ./configs/schema.graphqls")

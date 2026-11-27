@@ -36,6 +36,7 @@ func TestHides(t *testing.T) {
 		{"pointer to ErrorDB", &datasource.ErrorDB{Err: errDriver}, true},
 		{"custom 500", statusError{"payment provider is down, retry later", http.StatusInternalServerError}, false},
 		{"custom 404 carrying driver text", statusError{errDriver.Error(), http.StatusNotFound}, false},
+		{"custom status 0, sent as 500", statusError{errDriver.Error(), 0}, true},
 		{"GoFr entity not found", gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "1"}, false},
 		{"wrapped error with a status code", fmt.Errorf("load user: %w", gofrHTTP.ErrorEntityNotFound{Name: "id", Value: "1"}), true},
 	}
@@ -43,6 +44,25 @@ func TestHides(t *testing.T) {
 	for _, tc := range tests {
 		assert.Equal(t, tc.want, errhide.Hides(tc.err), tc.desc)
 	}
+}
+
+type captureLogger struct{ lines []string }
+
+func (c *captureLogger) Errorf(format string, args ...any) {
+	c.lines = append(c.lines, fmt.Sprintf(format, args...))
+}
+
+func TestReportf(t *testing.T) {
+	errhide.SetLogger(nil)
+	t.Cleanup(func() { errhide.SetLogger(nil) })
+
+	errhide.Reportf("no logger set: %v", errDriver) // must not panic
+
+	logger := &captureLogger{}
+	errhide.SetLogger(logger)
+	errhide.Reportf("stream source failed: %v", errDriver)
+
+	assert.Equal(t, []string{"stream source failed: " + errDriver.Error()}, logger.lines)
 }
 
 func TestApply(t *testing.T) {

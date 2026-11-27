@@ -122,7 +122,12 @@ func (r Responder) pump(rc *http.ResponseController, s resTypes.Stream, items <-
 // the done marker. The source's error text is replaced when HIDE_INTERNAL_ERRORS hides it.
 func (r Responder) finishStream(rc *http.ResponseController, s resTypes.Stream, readErr error) {
 	if readErr != nil {
+		if errhide.Enabled() && errhide.Hides(readErr) {
+			errhide.Reportf("stream source failed, error hidden from the client: %v", readErr)
+		}
+
 		_ = r.writeErrorText(rc, s.Format, errhide.Apply(readErr))
+
 		return
 	}
 

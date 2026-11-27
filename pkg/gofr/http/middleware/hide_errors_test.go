@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,5 +53,42 @@ func TestAuthMiddleware_HideInternalErrors(t *testing.T) {
 
 		assert.Equal(t, tc.err.StatusCode(), w.Code, tc.desc)
 		assert.JSONEq(t, tc.want, w.Body.String(), tc.desc)
+	}
+}
+
+type captureLogger struct{ lines []string }
+
+func (c *captureLogger) Errorf(format string, args ...any) {
+	c.lines = append(c.lines, fmt.Sprintf(format, args...))
+}
+
+func TestAuthMiddleware_HideInternalErrors_Logged(t *testing.T) {
+	logger := &captureLogger{}
+
+	errhide.SetLogger(logger)
+
+	prev := errhide.Enabled()
+
+	t.Cleanup(func() {
+		errhide.SetLogger(nil)
+		errhide.Enable(prev)
+	})
+
+	errhide.Enable(true)
+
+	serve := func(err ErrorHTTP) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/orders", http.NoBody)
+
+		AuthMiddleware(lookupAuthProvider{err: err})(http.NotFoundHandler()).ServeHTTP(w, r)
+	}
+
+	serve(ErrorInvalidAuthorizationHeader{key: headerAuthorization})
+	assert.Empty(t, logger.lines, "an error that is not hidden is not logged")
+
+	serve(datasource.ErrorDB{Err: errKeyLookup})
+
+	if assert.Len(t, logger.lines, 1) {
+		assert.Contains(t, logger.lines[0], errKeyLookup.Error())
 	}
 }

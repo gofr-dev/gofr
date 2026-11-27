@@ -59,6 +59,7 @@ func runGraphQLHideCases(t *testing.T, tests []gqlHideCase, resolver func(error)
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Setenv("METRICS_PORT", "0")
 			t.Setenv("HIDE_INTERNAL_ERRORS", tc.hide)
+			errhide.Enable(false) // New only turns the switch on, so start each case from off
 			t.Chdir(setupSchema(t, `type Query { fail: String }`))
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql",

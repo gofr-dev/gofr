@@ -44,18 +44,28 @@ func hideErrorsStreamInterceptor(logger logging.Logger) grpc.StreamServerInterce
 	}
 }
 
-// hideGRPCError keeps errors whose text gRPC clients are meant to see: status errors, also when
-// wrapped (status.FromError unwraps them, and the client then sees the wrapper's full text), and a
-// bare context.Canceled or context.DeadlineExceeded, which gRPC sends with its own code. A wrapped
-// context error keeps its code but not the wrapper's text, which can carry query or address detail.
+// hideGRPCError keeps errors whose text gRPC clients are meant to see: a status error returned as is,
+// and a bare context.Canceled or context.DeadlineExceeded, which gRPC sends with its own code. A
+// wrapped status or context error keeps its code but not the wrapper's text (status.FromError
+// unwraps, and the client would then see the wrapper's full text, which can carry query or address detail).
 // Everything else becomes a generic Internal status. replaced reports whether out differs from err.
 func hideGRPCError(err error) (replaced bool, out error) {
 	if err == nil {
 		return false, nil
 	}
 
-	if _, ok := status.FromError(err); ok {
-		return false, err
+	if st, ok := status.FromError(err); ok {
+		// Direct assertion on purpose: a wrapped status must not pass.
+		if _, direct := err.(interface{ GRPCStatus() *status.Status }); direct {
+			return false, err
+		}
+
+		// Wrapped: FromError made the wrapper's full text the message, so keep only the code.
+		if out := status.New(st.Code(), errhide.Message).Err(); out != nil {
+			return true, out
+		}
+
+		return true, errGRPCHidden // a wrapped OK status has no error to carry
 	}
 
 	for _, ctxErr := range []error{context.Canceled, context.DeadlineExceeded} {
