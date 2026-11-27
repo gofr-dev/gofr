@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsCatchAll(t *testing.T) {
@@ -26,6 +27,30 @@ func TestIsCatchAll(t *testing.T) {
 
 	for i, tc := range testCases {
 		assert.Equal(t, tc.want, IsCatchAll(tc.route), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestIsBuiltIn(t *testing.T) {
+	router := mux.NewRouter()
+
+	testCases := []struct {
+		desc  string
+		route *mux.Route
+		want  bool
+	}{
+		{"marked route", MarkBuiltIn(router.Path("/.well-known/alive")), true},
+		{"second route marked with the same name", MarkBuiltIn(router.Path("/favicon.ico")), true},
+		{"unmarked route", router.Path("/.well-known/jwks.json"), false},
+		{"catch-all is not built in", MarkCatchAll(router.PathPrefix("/")), false},
+		{"nil route", nil, false},
+	}
+
+	for i, tc := range testCases {
+		assert.Equal(t, tc.want, IsBuiltIn(tc.route), "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		if tc.route != nil {
+			require.NoError(t, tc.route.GetError(), "TEST[%d], Failed.\n%s: marking must not break the route", i, tc.desc)
+		}
 	}
 }
 
