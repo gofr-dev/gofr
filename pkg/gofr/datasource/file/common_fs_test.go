@@ -786,25 +786,75 @@ func TestCommonFileSystem_Open_NewReaderError(t *testing.T) {
 	assert.Equal(t, errTest, err)
 }
 
-func TestCommonFileSystem_OpenFile_LocalRDWR_Success(t *testing.T) {
-	ctrl, _, fs := setupCommonFS(t)
+func TestCommonFileSystem_OpenFile_RDWRNeverOpensAppHostFileForRemoteProvider(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("report.csv", []byte("local copy"), 0o600))
+
+	ctrl, mockProvider, fs := setupCommonFS(t)
 	defer ctrl.Finish()
 
-	tmp, err := os.CreateTemp(t.TempDir(), "commonfs_test_*")
+	// O_RDWR without O_CREATE is not supported by a cloud provider, even though a file
+	// with that name exists on the app host.
+	f, err := fs.OpenFile("report.csv", os.O_RDWR, DefaultFileMode)
 
+	require.ErrorIs(t, err, errUnsupportedFlags)
+	assert.Nil(t, f)
+
+	// O_RDWR|O_CREATE writes through the provider instead of the app host's disk.
+	writer := &bufWriteCloser{}
+	mockProvider.EXPECT().NewWriter(gomock.Any(), "report.csv").Return(writer)
+	mockProvider.EXPECT().NewWriter(gomock.Any(), "new.csv").Return(&bufWriteCloser{})
+
+	f, err = fs.OpenFile("report.csv", os.O_RDWR|os.O_CREATE, DefaultFileMode)
 	require.NoError(t, err)
 
-	_, err = tmp.WriteString("content")
+	_, err = f.Write([]byte("remote"))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	assert.Equal(t, "remote", writer.String())
 
+	f, err = fs.OpenFile("new.csv", os.O_RDWR|os.O_CREATE, DefaultFileMode)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	content, err := os.ReadFile("report.csv")
+	require.NoError(t, err)
+	assert.Equal(t, "local copy", string(content))
+	assert.NoFileExists(t, "new.csv")
+}
+
+func TestCommonFileSystem_OpenFile_LocalRDWR(t *testing.T) {
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.WriteFile("data.txt", []byte("hello world"), 0o600))
+
+	store := &CommonFileSystem{Provider: &localProvider{}, Location: localLocation}
+
+	f, err := store.OpenFile("data.txt", os.O_RDWR, DefaultFileMode)
 	require.NoError(t, err)
 
-	tmp.Close()
-	defer os.Remove(tmp.Name())
-
-	f, err := fs.OpenFile(tmp.Name(), os.O_RDWR, 0644)
-
+	buf := make([]byte, 5)
+	_, err = io.ReadFull(f, buf)
 	require.NoError(t, err)
-	assert.NotNil(t, f)
+	assert.Equal(t, "hello", string(buf))
+
+	_, err = f.WriteAt([]byte("W"), 6)
+	require.NoError(t, err)
+
+	// Seek and ReadAt return an error instead of dereferencing a nil provider.
+	_, err = f.Seek(0, io.SeekStart)
+	require.ErrorIs(t, err, errProviderNil)
+
+	_, err = f.ReadAt(buf, 0)
+	require.ErrorIs(t, err, errProviderNil)
+
+	// Close fails with "file already closed": the handle's reader and writer are the same
+	// *os.File, which CommonFile closes twice. #4578 gives the local store its own file
+	// type, after which this local O_RDWR path is removed.
+	require.ErrorIs(t, f.Close(), os.ErrClosed)
+
+	content, err := os.ReadFile("data.txt")
+	require.NoError(t, err)
+	assert.Equal(t, "hello World", string(content))
 }
 
 func TestCommonFileSystem_OpenFile_Append_Success(t *testing.T) {
@@ -1347,7 +1397,7 @@ func TestCommonFileSystem_Mkdir_ExistingAndWriterEdgeCases(t *testing.T) {
 	}
 }
 
-func TestCommonFileSystem_OpenFile_RDWRLocalOpenFails(t *testing.T) {
+func TestCommonFileSystem_OpenFile_RDWRThroughProvider(t *testing.T) {
 	missing := t.TempDir() + "/missing-dir/file.txt"
 
 	tests := []struct {

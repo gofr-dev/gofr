@@ -23,6 +23,9 @@ var (
 	// errWriteAtNotSupported is returned when WriteAt is called on cloud storage.
 	errWriteAtNotSupported = errors.New("WriteAt not supported for cloud storage")
 
+	// errSeekNotSupported is returned when Seek is called on a file being written to cloud storage.
+	errSeekNotSupported = errors.New("seek not supported for files being written to cloud storage")
+
 	// errWriterNil is returned when NewWriter returns nil.
 	errWriterNil = errors.New("NewWriter returned nil")
 )
@@ -154,6 +157,11 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 		return 0, io.EOF
 	}
 
+	if f.provider == nil {
+		msg = "no storage provider to read from"
+		return 0, errProviderNil
+	}
+
 	ctx := context.Background()
 
 	// Create range reader for this specific read
@@ -283,6 +291,18 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	if err != nil {
 		msg = fmt.Sprintf("invalid seek offset: %v", err)
 		return 0, err
+	}
+
+	// A writer to cloud storage only appends, so its write offset cannot move. A local
+	// file (an *os.File writer) is read from the disk below instead.
+	if _, onDisk := f.writer.(*os.File); f.body == nil && f.writer != nil && !onDisk {
+		msg = "seek not supported on a file being written to cloud storage"
+		return 0, errSeekNotSupported
+	}
+
+	if f.provider == nil {
+		msg = "no storage provider to read from"
+		return 0, errProviderNil
 	}
 
 	ctx := context.Background()

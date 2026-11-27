@@ -5,7 +5,9 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -683,5 +685,109 @@ func TestCommonFile_Seek_InvalidOffsetAndOldReaderClose(t *testing.T) {
 			assert.Equal(t, tt.expPos, pos)
 			require.ErrorIs(t, err, tt.expErr)
 		})
+	}
+}
+
+func TestCommonFile_Seek_CloudWriterNotSupported(t *testing.T) {
+	writer := &bufWriteCloser{}
+	f := &CommonFile{name: "upload.bin", writer: writer, provider: &localProvider{}}
+
+	_, err := f.Write([]byte("data"))
+	require.NoError(t, err)
+
+	pos, err := f.Seek(0, io.SeekStart)
+
+	require.ErrorIs(t, err, errSeekNotSupported)
+	assert.Equal(t, int64(0), pos)
+	assert.Equal(t, "data", writer.String())
+
+	// An offset that was out of range before is still reported as out of range.
+	_, err = f.Seek(1, io.SeekStart)
+	require.ErrorIs(t, err, ErrOutOfRange)
+}
+
+func TestCommonFile_Seek_LocalWriterReadsFromDisk(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out.txt")
+
+	writer, err := os.Create(path)
+	require.NoError(t, err)
+
+	_, err = writer.WriteString("hello")
+	require.NoError(t, err)
+
+	// A local file being written is not a cloud writer: Seek opens a reader on the disk.
+	f := &CommonFile{name: path, writer: writer, provider: &localProvider{}}
+
+	pos, err := f.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), pos)
+
+	content, err := io.ReadAll(f)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", string(content))
+	require.NoError(t, f.Close())
+}
+
+func TestCommonFile_SeekAndReadAt_WithoutProvider(t *testing.T) {
+	f := &CommonFile{name: "f.txt", size: 10, body: io.NopCloser(strings.NewReader("0123456789"))}
+
+	_, err := f.Seek(1, io.SeekStart)
+	require.ErrorIs(t, err, errProviderNil)
+
+	_, err = f.ReadAt(make([]byte, 2), 1)
+	require.ErrorIs(t, err, errProviderNil)
+
+	// Offsets that were out of range before are still reported as out of range.
+	_, err = f.Seek(-1, io.SeekStart)
+	require.ErrorIs(t, err, ErrOutOfRange)
+
+	_, err = f.ReadAt(make([]byte, 2), 11)
+	require.ErrorIs(t, err, ErrOutOfRange)
+}
+
+func TestCommonFile_ReadAtWhileClosing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	provider := NewMockStorageProvider(ctrl)
+
+	provider.EXPECT().NewRangeReader(gomock.Any(), "f.txt", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ any, _ string, off, length int64) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader("0123456789"[off : off+length])), nil
+		}).AnyTimes()
+
+	f := &CommonFile{
+		provider: provider,
+		name:     "f.txt",
+		size:     10,
+		body:     io.NopCloser(strings.NewReader("0123456789")),
+		writer:   &bufWriteCloser{},
+	}
+
+	// Run with -race: ReadAt goes through the provider and does not touch the reader and
+	// writer that Close releases.
+	var (
+		wg       sync.WaitGroup
+		closeErr error
+		reads    = make([]string, 8)
+		readErrs = make([]error, 8)
+	)
+
+	for i := range reads {
+		wg.Go(func() {
+			buf := make([]byte, 4)
+
+			n, err := f.ReadAt(buf, 2)
+			reads[i], readErrs[i] = string(buf[:n]), err
+		})
+	}
+
+	wg.Go(func() { closeErr = f.Close() })
+
+	wg.Wait()
+
+	require.NoError(t, closeErr)
+
+	for i := range reads {
+		require.NoError(t, readErrs[i])
+		assert.Equal(t, "2345", reads[i])
 	}
 }
