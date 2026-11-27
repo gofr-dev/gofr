@@ -44,8 +44,9 @@ func WithHook(h Hook) Option {
 	}
 }
 
-// WithLogger sets the logger used to report responses that could not be encoded or written.
-// Without it, such failures are not logged.
+// WithLogger sets the logger used to report responses that could not be encoded or written, and
+// tool or hook errors whose text HIDE_INTERNAL_ERRORS keeps from the client. Without it, neither is
+// logged.
 //
 // A write failure is only seen for responses larger than net/http's 2 KB response buffer: a
 // smaller body is buffered and Write returns nil even if the client has already gone. So a

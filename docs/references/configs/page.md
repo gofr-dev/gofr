@@ -239,6 +239,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Upper bound on one round of health checks, as a duration (`2s`). Backends that have not answered by then are left out of the response and the aggregate status is DEGRADED. Datasources whose health check honors its context are canceled at that deadline. Once every outstanding check has returned, the next probe checks them again. Checks that cannot be canceled keep running after the round is abandoned: the SQL, Redis and PubSub health checks take no context, and a few datasources (such as Couchbase and NATS KV) don't yet honor the one they receive. While one of those is still running, a probe reports DEGRADED with no per-dependency detail rather than starting a second round against the same unresponsive backend. Unset or `0` means the round is bounded only by each backend client's own timeout.
 -  disabled
 
+---
+
+-  HIDE_INTERNAL_ERRORS
+-  When `true`, an error that does not implement `StatusCode() int`, or is a `datasource.ErrorDB`, reaches clients as `Internal Server Error` instead of its own text. This covers HTTP responses (including middleware), SSE/NDJSON error frames, GraphQL `errors[].message` and MCP tool errors; errors that declare a status code, including a custom 500, keep their text, and status codes do not change. gRPC classifies by gRPC status instead: anything that is not a `status` error (nor a context cancellation or deadline) is sent as `codes.Internal` with `Internal Server Error`. See [Hiding Internal Error Details](/docs/advanced-guide/gofr-errors#hiding-internal-error-details).
+-  false
+
 {% /table %}
 
 ## HTTP

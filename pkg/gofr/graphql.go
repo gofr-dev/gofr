@@ -24,7 +24,17 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/internal/errhide"
 )
+
+// hiddenResolverError is what graphql-go puts in errors[].message for a resolver error that
+// HIDE_INTERNAL_ERRORS hides. A type, not errors.New: the message is capitalized on purpose (it must
+// equal what other transports send), which ST1005 flags in an error string.
+type hiddenResolverError struct{}
+
+func (hiddenResolverError) Error() string { return errhide.Message }
+
+var errResolverHidden = hiddenResolverError{}
 
 var (
 	errSchemaMissing = errors.New("GraphQL schema file missing: ./configs/schema.graphqls")
@@ -359,7 +369,7 @@ func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) gr
 // getResolver binds a handler of type gofr.Handler to a GraphQL field.
 // Arguments are accessed inside the handler via c.Bind().
 func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolveFn {
-	return func(p graphql.ResolveParams) (any, error) {
+	return func(p graphql.ResolveParams) (res any, err error) {
 		ctx, span := m.tracer.Start(p.Context, "graphql-resolver-"+name)
 		defer span.End()
 
@@ -368,13 +378,32 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 		gReq := &graphQLRequest{ctx: ctx, params: p.Args}
 		c := newContext(noopResponder{}, gReq, m.container)
 
-		res, err := h(c)
+		// graphql-go recovers a resolver panic itself and sends the panic value as errors[].message.
+		// With HIDE_INTERNAL_ERRORS on, recover first: log the panic and send the generic message.
+		// Off, the panic reaches graphql-go unchanged.
+		if errhide.Enabled() {
+			defer func() {
+				if r := recover(); r != nil {
+					logPanic(m.container.Logger, r)
+
+					res, err = nil, errResolverHidden
+				}
+			}()
+		}
+
+		res, err = h(c)
 		duration := time.Since(start).Microseconds()
 
 		resolverType := m.getResolverType(name)
 
 		if err != nil {
 			c.Error(&GraphQLLog{Resolver: name, Type: resolverType, Duration: duration, Error: err.Error()})
+
+			// The original error is logged above; the client sees only the generic message.
+			if errhide.Enabled() && errhide.Hides(err) {
+				return nil, errResolverHidden
+			}
+
 			return nil, err
 		}
 

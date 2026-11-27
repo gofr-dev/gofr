@@ -23,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofr_grpc "gofr.dev/pkg/gofr/grpc"
+	"gofr.dev/pkg/gofr/internal/errhide"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -147,12 +148,20 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 	// Internal status that recovery turns the panic into, and its span ended.
 	recoverPanic := grpc_recovery.WithRecoveryHandlerContext(grpcPanicHandler(c.Logger))
 
-	middleware := make([]grpc.UnaryServerInterceptor, 0, defaultInterceptorCount)
+	middleware := make([]grpc.UnaryServerInterceptor, 0, defaultInterceptorCount+1)
+	streamMiddleware := make([]grpc.StreamServerInterceptor, 0, defaultInterceptorCount+1)
+
+	// HIDE_INTERNAL_ERRORS: outermost, so observability inside it logs the original error and the
+	// client gets the generic one. Off leaves the chain as it was.
+	if errhide.Enabled() {
+		middleware = append(middleware, hideErrorsUnaryInterceptor())
+		streamMiddleware = append(streamMiddleware, hideErrorsStreamInterceptor(c.Logger))
+	}
+
 	middleware = append(middleware,
 		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()),
 		grpc_recovery.UnaryServerInterceptor(recoverPanic))
 
-	streamMiddleware := make([]grpc.StreamServerInterceptor, 0, defaultInterceptorCount)
 	streamMiddleware = append(streamMiddleware,
 		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()),
 		grpc_recovery.StreamServerInterceptor(recoverPanic))
