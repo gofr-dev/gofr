@@ -158,6 +158,11 @@ func main() {
 
 To customize your gRPC server, use `AddGRPCServerOptions()`.
 
+> Note: The gRPC server is built when the first service is registered, so call `AddGRPCServerOptions()` before
+> registering services. Options added later, such as TLS credentials, are not applied, and GoFr logs an error.
+> Interceptors and the `Enable*Auth` methods work before or after registering services. Interceptors added after
+> registering run after those added before, in the order added.
+
 ### Example: Enabling TLS & other ServerOptions
 ```go
 func main() {
@@ -388,6 +393,7 @@ GoFr's gRPC implementation includes built-in error handling and validation:
 **Port Availability**: Checks if the specified port is available before starting the server
 **Server Creation**: Validates server creation and provides detailed error messages
 **Container Injection**: Validates container injection into gRPC services with detailed logging
+**Panic Recovery**: A panic in a unary or streaming handler is logged on the server at `ERROR` with its stack trace, and the client receives only `codes.Internal` with the message `Internal Server Error`. The call still appears in the gRPC access log and metrics.
 
 Port Configuration
 ```bash
