@@ -35,7 +35,18 @@ Testing is a crucial aspect of software development, and adherence to these guid
 2. **Test Coverage:**
 
 -   No new code should decrease the existing code coverage for the packages and files.
-> The `code-climate` coverage check will not pass if there is any decrease in the test-coverage before and after any new PR is submitted.
+-   The `Code Coverage` job in `.github/workflows/go.yml` (`parse_coverage`) enforces this on every PR. It merges the
+    Example, PKG and submodule coverage profiles into one figure, reported to one decimal place, and fails when:
+    -   the figure is below the **94% floor**. Maintainers raise the floor by hand as coverage grows;
+    -   on a pull request, the figure is lower than the latest figure recorded for the base branch (`main` or
+        `development`) by its most recent push run. There is no override label. If no recorded figure exists, for
+        example because the last push run is older than the 90-day artifact retention, the job passes with a warning
+        and only the floor applies;
+    -   a coverage profile is missing or empty, or the merged profile holds two different blocks over the same lines
+        of one file, which means a stale profile was merged.
+-   Coverage tests run with `-count=1`, so a cached test result can never replay an out-of-date profile.
+-   The checks live in `.github/scripts/coverage.sh`. Its self-test, `bash .github/scripts/coverage_test.sh`, runs
+    in CI before the real gate.
 
 
 

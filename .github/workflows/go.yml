@@ -222,8 +222,12 @@ jobs:
             # which returns 0), so the job goes green on red tests (#3812).
             set -eo pipefail
             export APP_ENV=test
-            # Run tests for the examples directory with coverage
-            go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
+            # Run tests for the examples directory with coverage.
+            # -count=1 on every coverage run in this file: a cached test result
+            # replays the coverage profile it was recorded with, which can
+            # describe an older version of the source. That is how the figure
+            # fell to 92.3% with no test removed (#4155).
+            go test ./examples/... -count=1 -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
@@ -318,7 +322,8 @@ jobs:
             # statements; the tree measures 10,482, and the figure went from
             # 86.5% to 90.0% without a new test being written (#4202).
             exit_code=0
-            go test -v -short -race -covermode=atomic \
+            # -count=1: never replay a cached coverage profile (#4155).
+            go test -count=1 -v -short -race -covermode=atomic \
               -coverpkg=./pkg/gofr/... -coverprofile=root_pkg.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
@@ -333,7 +338,7 @@ jobs:
             # not the pkg/gofr/datasource/* submodules (those are separate Go
             # modules, covered by Submodule-Unit-Testing).
             exit_code=0
-            go test -v -covermode=atomic \
+            go test -count=1 -v -covermode=atomic \
               -coverpkg=./pkg/gofr/... -coverprofile=sub_pkgs.cov ./pkg/gofr/... || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in gofr sub-packages tests"
@@ -386,9 +391,24 @@ jobs:
     # the submodule artifact — it did not wait for it either, and started before
     # those uploads had finished.
     needs: [ Example-Unit-Testing,PKG-Unit-Testing,Submodule-Unit-Testing ]
+    # actions: read lets the no-drop step list and download the base branch's
+    # coverage-total artifact. A fork PR's read-only token has it too.
+    permissions:
+      contents: read
+      actions: read
+    env:
+      # Raised by hand as coverage grows; CONTRIBUTING.md states the rule.
+      COVERAGE_FLOOR: '94'
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v7
+
+      # The gates below are only as good as coverage.sh. Its self-test runs
+      # first on every event, so a change that leaves a guard passing
+      # everything fails here instead of going quietly inert.
+      - name: Self-test the coverage gate
+        shell: bash
+        run: bash .github/scripts/coverage_test.sh
 
       # `go tool cover` below needs a Go toolchain. This job previously ran it
       # with no setup-go step at all, silently depending on whatever Go the
@@ -405,58 +425,84 @@ jobs:
         with:
           path: artifacts
 
-      # Merge the coverage reports from Example, PKG and submodule tests.
-      # The submodule profiles were previously produced and then read by
-      # nothing, so the published figure covered neither pkg/gofr/datasource/*
-      # nor pkg/gofr/metrics/exporters/* while appearing to be a whole-repo
-      # number. The glob is quoted-safe and fails loudly if it matches nothing.
+      # Merge the Example, PKG and submodule profiles. upload_coverage runs the
+      # same command, so the figure gated here is the figure published to qlty.
+      # It fails when a profile is missing or empty, or when the merged profile
+      # holds two different blocks over the same lines of one file: that is a
+      # stale profile, the cause of the 92.3% dip in #4155.
       - name: Merge Coverage Files
-        working-directory: artifacts
-        run: |
-          shopt -s nullglob
-          submodule_profiles=(./submodule-coverage-reports/*.cov)
-          if [ ${#submodule_profiles[@]} -eq 0 ]; then
-            echo "::error::no submodule coverage profiles found — the merged figure would silently exclude them"
-            exit 1
-          fi
-          echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
-          echo "mode: atomic" > merged_profile.cov
-          # `| grep -v '/mock_'` matches the PKG job, which strips generated
-          # mocks before it uploads its profile. Without it here the two halves
-          # of one number are computed under different rules: pkg/gofr excludes
-          # its mocks while the submodules count theirs, and gomock mocks are
-          # heavily exercised by the tests that use them, so the merged figure
-          # is flattered by generated code. 66 mock_*.go files live under the
-          # submodules.
-          grep -h -v "mode:" \
-            ./Example-Test-Report/profile.cov \
-            ./PKG-Coverage-Report/profile.cov \
-            "${submodule_profiles[@]}" | grep -v '/mock_' >> merged_profile.cov
+        shell: bash
+        run: bash .github/scripts/coverage.sh merge artifacts artifacts/merged_profile.cov
 
-      # Calculate and output the total code coverage percentage.
-      # This is written to the job summary rather than only echoed into a log —
-      # previously the value went to $GITHUB_ENV and was read by nobody, since
-      # its only consumer (a 92% threshold gate) was commented out.
+      # The figure, to one decimal place as `go tool cover` reports it. Both
+      # gates below compare this value, so what the summary shows is what was
+      # gated.
       - name: Parse code-coverage value
-        working-directory: artifacts
+        id: total
+        shell: bash
         run: |
-          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
-          codeCoverage=${codeCoverage%?}
-          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-          echo "✅ Total Code Coverage: $codeCoverage%"
+          figure=$(bash .github/scripts/coverage.sh total artifacts/merged_profile.cov)
+          echo "figure=$figure" >> "$GITHUB_OUTPUT"
+          echo "Total Code Coverage: $figure%"
           {
             echo "### Code coverage"
             echo ""
-            echo "**${codeCoverage}%** across examples, pkg/gofr and the submodules."
+            echo "**${figure}%** across examples, pkg/gofr and the submodules."
             echo ""
-            echo "Includes the datasource and metrics-exporter submodules, which"
-            echo "were excluded from this figure before #3866."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # NOTE: a coverage threshold gate belongs here, and used to exist as a
-  # commented-out 92% check. Whether to restore it and at what floor is
-  # tracked in #4155 — it cannot be decided until a run has published the
-  # post-merge figure.
+      - name: Coverage floor
+        shell: bash
+        env:
+          FIGURE: ${{ steps.total.outputs.figure }}
+        run: bash .github/scripts/coverage.sh floor "$FIGURE" "$COVERAGE_FLOOR"
+
+      # Push runs on main and development record their figure. A PR reads the
+      # newest one for its base branch as the no-drop baseline. Recorded even
+      # when the floor fails, so the baseline is always the real figure.
+      - name: Record coverage figure for the branch
+        if: ${{ !cancelled() && steps.total.outcome == 'success' && github.event_name == 'push' }}
+        shell: bash
+        env:
+          FIGURE: ${{ steps.total.outputs.figure }}
+        run: printf '%s\n' "$FIGURE" > coverage-total.txt
+
+      - name: Upload coverage figure
+        if: ${{ !cancelled() && steps.total.outcome == 'success' && github.event_name == 'push' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-total
+          path: coverage-total.txt
+          if-no-files-found: error
+
+      # No PR may lower overall coverage (CONTRIBUTING.md). The baseline is the
+      # coverage-total artifact of the newest push run on the base branch. Only
+      # runs of this repository count: a fork PR's run could otherwise upload
+      # its own coverage-total and set the baseline for everyone else. When no
+      # artifact exists (none uploaded yet, or the last push run is older than
+      # the 90-day retention) the check passes with a warning and only the
+      # floor applies. An API failure fails the step; it never reads as "no
+      # baseline". Runs even when the floor failed, so both results show.
+      - name: Coverage must not drop below the base branch
+        if: ${{ !cancelled() && steps.total.outcome == 'success' && github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.base_ref }}
+          FIGURE: ${{ steps.total.outputs.figure }}
+        run: |
+          run_id=$(gh api "repos/$REPO/actions/artifacts?name=coverage-total&per_page=100" \
+            --jq "[.artifacts[] | select(.expired == false
+                    and .workflow_run.head_branch == \"$BASE\"
+                    and .workflow_run.head_repository_id == .workflow_run.repository_id)][0].workflow_run.id // empty")
+          baseline=""
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" -R "$REPO" -n coverage-total -D baseline
+            baseline=$(tr -d '[:space:]' < baseline/coverage-total.txt)
+            echo "Baseline: $baseline% from run $run_id on $BASE"
+          fi
+          bash .github/scripts/coverage.sh nodrop "$FIGURE" "$baseline" "$BASE"
 
   # Job for testing submodules inside the pkg directory
   Submodule-Unit-Testing:
@@ -569,7 +615,9 @@ jobs:
               # submodule profiles were written in the default "set" mode, so
               # the merge combined 0/1 flags with hit counts under an atomic
               # header.
-              go test ./... -v -covermode=atomic -coverprofile="${module_name}.cov" -coverpkg=./...
+              #
+              # -count=1: never replay a cached coverage profile (#4155).
+              go test ./... -count=1 -v -covermode=atomic -coverprofile="${module_name}.cov" -coverpkg=./...
 
               # Copy coverage file to the coverage_reports directory
               cp "${module_name}.cov" "$COVERAGE_DIR/"
@@ -628,36 +676,15 @@ jobs:
         with:
           path: artifacts
 
-      # Merge coverage from example, pkg and submodule tests. Kept identical to
-      # the merge in parse_coverage so the number published to qlty and the
-      # number reported on the PR cannot drift apart.
+      # The same merge parse_coverage runs, so the number published to qlty and
+      # the number gated on the PR cannot drift apart. Its missing-profile and
+      # stale-profile guards also keep a bad figure from being published.
       - name: Merge Coverage Files
-        working-directory: artifacts
-        run: |
-          shopt -s nullglob
-          submodule_profiles=(./submodule-coverage-reports/*.cov)
-          if [ ${#submodule_profiles[@]} -eq 0 ]; then
-            echo "::error::no submodule coverage profiles found — refusing to publish a figure that silently excludes them"
-            exit 1
-          fi
-          echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
-          echo "mode: atomic" > merged_profile.cov
-          # `| grep -v '/mock_'` matches the PKG job, which strips generated
-          # mocks before it uploads its profile. Without it here the two halves
-          # of one number are computed under different rules: pkg/gofr excludes
-          # its mocks while the submodules count theirs, and gomock mocks are
-          # heavily exercised by the tests that use them, so the merged figure
-          # is flattered by generated code. 66 mock_*.go files live under the
-          # submodules.
-          grep -h -v "mode:" \
-            ./Example-Test-Report/profile.cov \
-            ./PKG-Coverage-Report/profile.cov \
-            "${submodule_profiles[@]}" | grep -v '/mock_' >> merged_profile.cov
-
-          # Generate and print total coverage percentage
-          echo "Total Coverage:"
-          go tool cover -func=merged_profile.cov | tail -n 1
         shell: bash
+        run: |
+          bash .github/scripts/coverage.sh merge artifacts artifacts/merged_profile.cov
+          figure=$(bash .github/scripts/coverage.sh total artifacts/merged_profile.cov)
+          echo "Total Coverage: $figure%"
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
