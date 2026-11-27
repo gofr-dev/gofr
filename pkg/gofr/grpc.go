@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -224,10 +225,8 @@ func (g *grpcServer) ensureServer() (*grpc.Server, error) {
 	// runLate* runs the interceptors added after this point; copies keep g.interceptors as given.
 	// The box interceptors go after both, so no interceptor, early or late, can wrap the box away
 	// before the handler sees it.
-	unary := append(append(make([]grpc.UnaryServerInterceptor, 0, len(g.interceptors)+2), g.interceptors...),
-		g.runLateUnary, boxUnaryInterceptor)
-	stream := append(append(make([]grpc.StreamServerInterceptor, 0, len(g.streamInterceptors)+2),
-		g.streamInterceptors...), g.runLateStream, boxStreamInterceptor)
+	unary := append(slices.Clone(g.interceptors), g.runLateUnary, boxUnaryInterceptor)
+	stream := append(slices.Clone(g.streamInterceptors), g.runLateStream, boxStreamInterceptor)
 
 	interceptorOption := grpc.ChainUnaryInterceptor(unary...)
 	streamOpt := grpc.ChainStreamInterceptor(stream...)
