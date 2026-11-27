@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -399,6 +401,88 @@ func TestNewZip_EntryErrors(t *testing.T) {
 			assert.Nil(t, z)
 		})
 	}
+}
+
+func TestNewZip_TotalSizeLimit(t *testing.T) {
+	const limit = 1000
+
+	tests := []struct {
+		name     string
+		sizes    []int
+		expFiles int
+		expErr   error
+	}{
+		{name: "entries adding up to the limit", sizes: []int{limit / 2, limit / 2}, expFiles: 2},
+		{name: "entries adding up to one byte over the limit", sizes: []int{limit / 2, limit/2 + 1},
+			expErr: errMaxTotalSize},
+		{name: "many small entries over the limit", sizes: []int{limit / 4, limit / 4, limit / 4, limit / 4, 1},
+			expErr: errMaxTotalSize},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			z, err := newZip(zeroFilledZip(t, tt.sizes...), limit)
+
+			require.ErrorIs(t, err, tt.expErr)
+			assert.Equal(t, tt.expFiles, fileCount(z))
+		})
+	}
+}
+
+// Two 60 MB entries are accepted, as they were before the total limit existed.
+func TestNewZip_AcceptsEntriesOverOldTotal(t *testing.T) {
+	z, err := NewZip(zeroFilledZip(t, 60<<20, 60<<20))
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, fileCount(z))
+}
+
+func TestZipSizeErrors_StatusCode(t *testing.T) {
+	for _, err := range []error{errMaxFileSize, errMaxTotalSize} {
+		var responder interface{ StatusCode() int }
+
+		require.ErrorAs(t, err, &responder)
+		assert.Equal(t, 413, responder.StatusCode(), err.Error())
+	}
+}
+
+// fileCount returns the number of files in z, or 0 when NewZip returned no Zip.
+func fileCount(z *Zip) int {
+	if z == nil {
+		return 0
+	}
+
+	return len(z.Files)
+}
+
+// zeroFilledZip builds a deflated archive with one entry of zero bytes per size, so a small
+// archive can declare a large uncompressed size.
+func zeroFilledZip(t *testing.T, sizes ...int) []byte {
+	t.Helper()
+
+	buf := bytes.NewBuffer(nil)
+	zipWriter := zip.NewWriter(buf)
+
+	for i, size := range sizes {
+		w, err := zipWriter.Create(fmt.Sprintf("part-%d.bin", i))
+		require.NoError(t, err)
+
+		_, err = io.CopyN(w, zeroReader{}, int64(size))
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, zipWriter.Close())
+
+	return buf.Bytes()
+}
+
+// zeroReader is an endless reader of zero bytes.
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+
+	return len(p), nil
 }
 
 func TestCreateLocalCopies_DirectoryCreationErrors(t *testing.T) {

@@ -35,6 +35,11 @@ func (f *FileSystem) CreateWithOptions(ctx context.Context, name string, opts *f
 		Message:   &msg,
 	}, time.Now())
 
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
+
 	contentType := mime.TypeByExtension(path.Ext(name))
 	// Default to attachment so the file must be downloaded before being opened,
 	// matching Create's behavior.
