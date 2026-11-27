@@ -136,6 +136,7 @@ func (*formData) setFile(value reflect.Value, header []*multipart.FileHeader) (b
 	if err != nil {
 		return false, err
 	}
+	defer f.Close()
 
 	content, err := io.ReadAll(f)
 	if err != nil {
