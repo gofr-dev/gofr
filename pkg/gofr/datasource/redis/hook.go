@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"regexp"
@@ -100,20 +101,48 @@ func (r *redisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 // ProcessPipelineHook implements the redis.ProcessPipelineHook interface.
+// It logs every command it receives: all of a plain pipeline, and for a
+// transaction the MULTI and EXEC that go-redis wraps around the commands.
 func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
 
-		logged := cmds[:len(cmds)-1]
 		if r.config.hideArgs {
-			r.sendOperationStats(start, queryPipeline, maskPipeline(logged))
+			r.sendOperationStats(start, queryPipeline, maskPipeline(cmds))
 		} else {
-			r.sendOperationStats(start, queryPipeline, logged)
+			r.sendOperationStats(start, queryPipeline, pipelineCmds(cmds))
 		}
 
 		return err
 	}
+}
+
+// pipelineCmds logs each pipelined command with its reply, e.g. "get key: value".
+// The text is built only when the entry is written, so a Debug entry that the
+// logger drops (LOG_LEVEL above DEBUG) costs nothing per command. A redis.Cmder
+// has no exported fields, so logging the commands themselves would print each
+// one as {} in JSON.
+type pipelineCmds []redis.Cmder
+
+// MarshalJSON writes the commands as a JSON array of strings.
+func (p pipelineCmds) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.texts())
+}
+
+// String writes the commands as fmt prints a []string, e.g. "[get key: value]".
+func (p pipelineCmds) String() string {
+	return fmt.Sprint(p.texts())
+}
+
+func (p pipelineCmds) texts() []string {
+	logged := make([]string, len(p))
+
+	for i, cmd := range p {
+		logged[i] = cmd.String()
+	}
+
+	return logged
 }
 
 // maskCmdArgs keeps the command name (the first argument) and replaces every

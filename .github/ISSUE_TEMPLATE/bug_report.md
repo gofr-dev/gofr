@@ -34,7 +34,7 @@ If applicable, add screenshots to help explain your problem.
 **Environments (please complete the following information):**
 - OS: [e.g. Linux]
 - gofr version [e.g. v1.5.0]
-- go version [e.g. 1.21]
+- go version [e.g. 1.26]
 
 **More description**
 Add any other context about the problem here.
