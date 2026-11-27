@@ -76,8 +76,8 @@ func opensSQLFromConfig(conf config.Config, logger logging.Logger) bool {
 }
 
 // dbAuth resolves DB_AUTH, defaulting to password. DB_IAM_AUTH=true, parsed as the
-// cloudsql module parses it, also selects iam: released cloudsql versions read only
-// DB_IAM_AUTH, so it is accepted without a deprecation warning until they read DB_AUTH.
+// cloudsql module parses it, also selects iam: the cloudsql module reads only
+// DB_IAM_AUTH, so it is accepted without a deprecation warning until cloudsql reads DB_AUTH.
 func dbAuth(conf config.Config) (string, error) {
 	raw := strings.TrimSpace(conf.Get("DB_AUTH"))
 	auth := strings.ToLower(raw)

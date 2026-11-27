@@ -289,8 +289,8 @@ func (a *App) AddSQLDB(c SQLConnector) {
 		// none (DB_AUTH=iam, or no DB_* config), say so instead of leaving ctx.SQL nil in silence.
 		if isNilDatasource(a.container.SQL) {
 			a.Logger().Errorf("the SQL connector supplied no connection and none was opened from the DB_* config, " +
-				"so SQL is not available; with DB_AUTH=iam, check that the connector reads DB_AUTH " +
-				"(released cloudsql versions read only DB_IAM_AUTH=true)")
+				"so SQL is not available; with DB_AUTH=iam and the cloudsql module, set DB_IAM_AUTH=true, " +
+				"which is the key cloudsql reads")
 		}
 
 		return
