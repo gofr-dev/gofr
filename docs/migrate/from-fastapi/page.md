@@ -96,7 +96,7 @@ FastAPI users typically reach for SQLAlchemy / Tortoise / Motor. In GoFr, SQL an
 app.AddMongo(mongo.New(mongo.Config{/* ... */}))
 ```
 
-Then access them inside the handler via `c.SQL`, `c.Redis`, `c.Mongo`. GoFr supports SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), MongoDB, Redis, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph and SurrealDB. SQL/Mongo/Redis/Dgraph migrations are first-class — see the [datasources reference](/docs/datasources).
+Then access them inside the handler via `c.SQL`, `c.Redis`, `c.Mongo`. GoFr supports SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), MongoDB, Redis, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph and SurrealDB. SQL/Mongo/Redis/Dgraph migrations are first-class — see the [datasources reference](/docs/datasources/getting-started).
 
 ## Observability
 
