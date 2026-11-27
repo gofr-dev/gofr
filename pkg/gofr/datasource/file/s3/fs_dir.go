@@ -48,6 +48,11 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 		Message:   &msg,
 	}, time.Now())
 
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
+
 	directories := strings.Split(name, string(filepath.Separator))
 
 	var currentdir string
@@ -103,6 +108,11 @@ func (f *FileSystem) RemoveAll(name string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return errS3ClientNotInitialized
+	}
 
 	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
@@ -160,6 +170,11 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
 
 	filePath = name + string(filepath.Separator)
 
@@ -308,6 +323,11 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		Message:   &msg,
 	}, time.Now())
 
+	if f.conn == nil {
+		msg = errS3ClientNotInitialized.Error()
+		return nil, errS3ClientNotInitialized
+	}
+
 	filetype := typeFile
 
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
@@ -381,5 +401,9 @@ func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 
 	fl.Duration = duration
 
-	f.logger.Debug(fl)
+	// New may be used before GoFr injects a logger. Do not replace the
+	// nil-client error with a nil-logger panic in that case.
+	if f.logger != nil {
+		f.logger.Debug(fl)
+	}
 }
