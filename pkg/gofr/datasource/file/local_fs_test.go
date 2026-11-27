@@ -544,6 +544,44 @@ func TestLocalFileSystem_OpenFile_CreateFlags(t *testing.T) {
 	require.ErrorIs(t, f.Close(), ErrFileNotFound)
 }
 
+func TestLocalFileSystem_OpenFile_PermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can open a read-only file for writing")
+	}
+
+	t.Chdir(t.TempDir())
+	writeTestFile(t, "readonly.txt", "keep")
+	require.NoError(t, os.Chmod("readonly.txt", 0o444))
+
+	fs := newTestLocalFS(t)
+
+	tests := []struct {
+		desc string
+		flag int
+	}{
+		{desc: "write only", flag: os.O_WRONLY},
+		{desc: "read and write", flag: os.O_RDWR},
+		{desc: "append", flag: os.O_WRONLY | os.O_APPEND},
+		{desc: "create and truncate", flag: os.O_CREATE | os.O_WRONLY | os.O_TRUNC},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// The error is returned together with a non-nil file whose Write and Close
+			// return the same error.
+			f, err := fs.OpenFile("readonly.txt", tc.flag, 0o644)
+			require.ErrorIs(t, err, os.ErrPermission)
+			require.NotNil(t, f)
+
+			_, writeErr := f.Write([]byte("x"))
+			require.ErrorIs(t, writeErr, err)
+			require.ErrorIs(t, f.Close(), err)
+		})
+	}
+
+	assert.Equal(t, "keep", readTestFile(t, "readonly.txt"))
+}
+
 func TestLocalFileSystem_OpenFile_ReadWriteHandle(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTestFile(t, "data.txt", "hello world")

@@ -89,8 +89,14 @@ func (l *localFileSystem) Open(name string) (File, error) {
 
 // OpenFile opens the named file with the given flags and permissions like os.OpenFile.
 // With O_CREATE, missing parent directories are created first. A missing file returns
-// ErrFileNotFound. If a file opened for writing cannot be opened, the error is returned
-// together with a non-nil File whose Write and Close return it.
+// ErrFileNotFound.
+//
+// If a file opened for writing cannot be opened, OpenFile returns the error together
+// with a non-nil File whose Write and Close return that error too. The non-nil File is
+// deliberate: as with Create, code that ignores the error gets it from Write and Close
+// instead of a nil pointer panic. Unlike Create, the error is also returned, so that an
+// O_CREATE|O_EXCL open, as used for a lock file, reports a file that already exists.
+// A failed read-only open returns a nil File.
 func (l *localFileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
 	startTime := time.Now()
 
