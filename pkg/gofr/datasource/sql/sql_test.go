@@ -156,6 +156,44 @@ func TestNewSQL_DialectLogs(t *testing.T) {
 	}
 }
 
+// NewSQL opens whatever connection its config describes and ignores DB_AUTH: the
+// container decides whether to call it. dbresolver calls NewSQL for each replica with
+// the app's config, so a replica with its own user and password must still open when
+// the primary uses DB_AUTH=iam.
+func TestNewSQL_IgnoresDBAuth(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		auth      string
+		legacyIAM string
+	}{
+		{desc: "iam", auth: "iam"},
+		{desc: "legacy flag", legacyIAM: "true"},
+		{desc: "unknown value", auth: "token"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			conf := map[string]string{
+				"DB_DIALECT":  sqlite,
+				"DB_NAME":     filepath.Join(t.TempDir(), "t.db"),
+				"DB_AUTH":     tc.auth,
+				"DB_IAM_AUTH": tc.legacyIAM,
+			}
+
+			var db *DB
+
+			testutil.StderrOutputForFunc(func() {
+				testutil.StdoutOutputForFunc(func() {
+					db = NewSQL(config.NewMockConfig(conf), logging.NewLogger(logging.DEBUG), newConnectorMetrics(t))
+				})
+			})
+
+			require.NotNil(t, db)
+			require.NoError(t, db.Close())
+		})
+	}
+}
+
 func TestNewSQL_GetDBDialect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
