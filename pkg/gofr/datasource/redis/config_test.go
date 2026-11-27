@@ -128,6 +128,114 @@ func TestGetRedisConfig_TLS_InvalidFiles(t *testing.T) {
 	assert.Nil(t, conf.TLS.RootCAs)
 }
 
+// writeTestClientKeyPair writes a self-signed client certificate and its private key to temporary files
+// and returns their paths.
+func writeTestClientKeyPair(t *testing.T) (certPath, keyPath string) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "test-client"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, "client.pem")
+	keyPath = filepath.Join(dir, "client-key.pem")
+
+	require.NoError(t, os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+	require.NoError(t, os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600))
+
+	return certPath, keyPath
+}
+
+func TestGetRedisConfig_TLS_ClientKeyPair(t *testing.T) {
+	certPath, keyPath := writeTestClientKeyPair(t)
+	otherCertPath, _ := writeTestClientKeyPair(t)
+
+	tests := []struct {
+		name      string
+		certPath  string
+		wantCerts int
+		wantErr   string
+	}{
+		{name: "matching cert and key are loaded", certPath: certPath, wantCerts: 1},
+		{name: "mismatched cert and key are logged and skipped", certPath: otherCertPath, wantErr: "failed to load client cert/key pair"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, _, stderr := getRedisConfigWithLogs(t, map[string]string{
+				"REDIS_HOST":        "localhost",
+				"REDIS_TLS_ENABLED": "true",
+				"REDIS_TLS_CERT":    tc.certPath,
+				"REDIS_TLS_KEY":     keyPath,
+			})
+
+			require.NotNil(t, conf.TLS)
+			assert.Len(t, conf.TLS.Certificates, tc.wantCerts)
+			assert.Contains(t, stderr, tc.wantErr)
+		})
+	}
+}
+
+func TestGetRedisConfig_PubSubCommon(t *testing.T) {
+	tests := []struct {
+		name        string
+		env         map[string]string
+		wantBuffer  int
+		wantTimeout time.Duration
+		wantLimit   int
+	}{
+		{
+			name: "valid values are applied",
+			env: map[string]string{
+				"REDIS_PUBSUB_BUFFER_SIZE": "25", "REDIS_PUBSUB_QUERY_TIMEOUT": "3s", "REDIS_PUBSUB_QUERY_LIMIT": "4",
+			},
+			wantBuffer: 25, wantTimeout: 3 * time.Second, wantLimit: 4,
+		},
+		{
+			name: "non numeric values fall back to the defaults",
+			env: map[string]string{
+				"REDIS_PUBSUB_BUFFER_SIZE": "many", "REDIS_PUBSUB_QUERY_TIMEOUT": "soon", "REDIS_PUBSUB_QUERY_LIMIT": "lots",
+			},
+			wantBuffer: defaultPubSubBufferSize, wantTimeout: defaultPubSubQueryTimeout, wantLimit: defaultPubSubQueryLimit,
+		},
+		{
+			name: "zero or negative sizes fall back to the defaults",
+			env: map[string]string{
+				"REDIS_PUBSUB_BUFFER_SIZE": "0", "REDIS_PUBSUB_QUERY_LIMIT": "-3",
+			},
+			wantBuffer: defaultPubSubBufferSize, wantTimeout: defaultPubSubQueryTimeout, wantLimit: defaultPubSubQueryLimit,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.env["REDIS_HOST"] = "localhost"
+			tc.env["PUBSUB_BACKEND"] = "REDIS"
+
+			conf := testGetRedisConfig(t, tc.env)
+
+			assert.Equal(t, tc.wantBuffer, conf.PubSubBufferSize)
+			assert.Equal(t, tc.wantTimeout, conf.PubSubQueryTimeout)
+			assert.Equal(t, tc.wantLimit, conf.PubSubQueryLimit)
+		})
+	}
+}
+
 func TestGetRedisConfig_PubSubStreams(t *testing.T) {
 	conf := testGetRedisConfig(t, map[string]string{
 		"PUBSUB_BACKEND":               "REDIS",
