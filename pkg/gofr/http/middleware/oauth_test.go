@@ -312,34 +312,36 @@ func Test_getPublicKeys_ClosesBodyOnNonOKStatus(t *testing.T) {
 // drain, net/http abandons the connection on Close and opens a new one for every fetch.
 func Test_getPublicKeys_ReusesConnection(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
-		var conns int32
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			var conns int32
 
-		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(status)
-			_, _ = w.Write([]byte(`{"keys":[]}`))
-		}))
-		srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
-			if s == http.StateNew {
-				atomic.AddInt32(&conns, 1)
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"keys":[]}`))
+			}))
+			srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+				if s == http.StateNew {
+					atomic.AddInt32(&conns, 1)
+				}
 			}
-		}
-		srv.Start()
+			srv.Start()
+			defer srv.Close()
 
-		client := &http.Client{Transport: &http.Transport{MaxIdleConns: 10, MaxIdleConnsPerHost: 10}}
-		provider := reusableJWKSProvider{client: client, url: srv.URL}
+			transport := &http.Transport{MaxIdleConns: 10, MaxIdleConnsPerHost: 10}
+			defer transport.CloseIdleConnections()
 
-		const fetches = 10
-		for range fetches {
-			_, _ = getPublicKeys(t.Context(), provider, "/jwks")
-		}
+			client := &http.Client{Transport: transport}
+			provider := reusableJWKSProvider{client: client, url: srv.URL}
 
-		time.Sleep(100 * time.Millisecond)
+			const fetches = 10
+			for range fetches {
+				_, _ = getPublicKeys(t.Context(), provider, "/jwks")
+			}
 
-		assert.LessOrEqualf(t, atomic.LoadInt32(&conns), int32(2),
-			"status %d: %d fetches opened %d connections; the body must be drained so the connection is reused",
-			status, fetches, atomic.LoadInt32(&conns))
-
-		srv.Close()
+			assert.LessOrEqualf(t, atomic.LoadInt32(&conns), int32(2),
+				"status %d: %d fetches opened %d connections; the body must be drained so the connection is reused",
+				status, fetches, atomic.LoadInt32(&conns))
+		})
 	}
 }
 
@@ -352,7 +354,10 @@ type reusableJWKSProvider struct {
 
 func (p reusableJWKSProvider) GetWithHeaders(ctx context.Context, path string, _ map[string]any,
 	_ map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, p.url+path, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url+path, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
 
 	return p.client.Do(req)
 }
