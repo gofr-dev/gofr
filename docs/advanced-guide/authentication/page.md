@@ -130,6 +130,8 @@ It involves sending the prefix `Bearer` trailed by the encoded token within the 
 Enable OAuth 2.0 to authenticate requests. Use `EnableOAuth(jwks-endpoint, refresh_interval, options ...jwt.ParserOption)` to configure GoFr.
 It returns an error when the JWKS endpoint is not a valid `http`/`https` URL with a host, or when `refresh_interval` is not a positive number of seconds; no middleware is installed in that case.
 
+GoFr selects the key by the `kid` header of the token. If the token has no `kid` and the JWKS has exactly one key, GoFr uses that key. If the JWKS has more than one key, the token must have a `kid`.
+
 ```go
 func main() {
 	app := gofr.New()

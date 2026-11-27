@@ -44,13 +44,23 @@ func (JWKNotFound) Error() string {
 }
 
 // Get retrieves a public key from the PublicKeys map by its key ID.
+// If kid is empty and exactly one public key is available, that key is returned.
 func (p *PublicKeys) Get(kid string) *rsa.PublicKey {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	key := p.keys[strings.TrimSpace(kid)]
+	trimmed := strings.TrimSpace(kid)
+	if key, ok := p.keys[trimmed]; ok {
+		return key
+	}
 
-	return key
+	if trimmed == "" && len(p.keys) == 1 {
+		for _, key := range p.keys {
+			return key
+		}
+	}
+
+	return nil
 }
 
 type JWKSProvider interface {
@@ -290,8 +300,12 @@ func getPublicKeyFunc(provider PublicKeyProvider) (func(token *jwt.Token) (any, 
 	}
 
 	return func(token *jwt.Token) (any, error) {
-		kid := token.Header["kid"]
-		jwks := provider.Get(fmt.Sprint(kid))
+		var kid string
+		if v := token.Header["kid"]; v != nil {
+			kid = fmt.Sprint(v)
+		}
+
+		jwks := provider.Get(kid)
 
 		if jwks == nil {
 			return nil, JWKNotFound{}

@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -458,6 +459,80 @@ func TestAuthStreamInterceptors(t *testing.T) {
 			assert.Equal(t, tc.expCode, status.Code(err))
 			assert.Equal(t, tc.expCalled, called)
 			assert.Equal(t, tc.expValue, gotValue)
+		})
+	}
+}
+
+// kidRecordingProvider returns key only for the kid it is asked with, so a test sees which kid the interceptor used.
+type kidRecordingProvider struct {
+	kid string
+	key *rsa.PublicKey
+}
+
+func (p kidRecordingProvider) Get(kid string) *rsa.PublicKey {
+	if kid != p.kid {
+		return nil
+	}
+
+	return p.key
+}
+
+func TestOAuthUnaryInterceptor_TokenWithoutKid(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	signToken := func(kid any) string {
+		tkn := jwt.NewWithClaims(jwt.SigningMethodRS256,
+			jwt.MapClaims{"sub": "user", "exp": time.Now().Add(time.Hour).Unix()})
+		if kid != nil {
+			tkn.Header["kid"] = kid
+		}
+
+		str, sErr := tkn.SignedString(key)
+		require.NoError(t, sErr)
+
+		return str
+	}
+
+	tests := []struct {
+		desc      string
+		token     string
+		provider  auth.PublicKeyProvider
+		expStatus codes.Code
+	}{
+		{
+			desc:      "missing kid finds single-key provider registered for empty kid",
+			token:     signToken(nil),
+			provider:  kidRecordingProvider{kid: "", key: &key.PublicKey},
+			expStatus: codes.OK,
+		},
+		{
+			desc:      "integer kid 123 is formatted as string and finds key",
+			token:     signToken(123),
+			provider:  kidRecordingProvider{kid: "123", key: &key.PublicKey},
+			expStatus: codes.OK,
+		},
+		{
+			desc:      "array kid is formatted as string representation and rejected when not found",
+			token:     signToken([]string{"kA"}),
+			provider:  kidRecordingProvider{kid: "", key: &key.PublicKey},
+			expStatus: codes.Unauthenticated,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx := metadata.NewIncomingContext(t.Context(), metadata.MD{"authorization": []string{"Bearer " + tc.token}})
+			interceptor := OAuthUnaryInterceptor(tc.provider)
+
+			resp, err := interceptor(ctx, nil, nil, func(context.Context, any) (any, error) { return "ok", nil })
+			if tc.expStatus == codes.OK {
+				require.NoError(t, err)
+				require.Equal(t, "ok", resp)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tc.expStatus, status.Code(err))
+			}
 		})
 	}
 }
