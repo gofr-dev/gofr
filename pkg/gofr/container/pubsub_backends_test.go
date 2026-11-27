@@ -4,11 +4,13 @@ package container
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
+	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -81,4 +83,63 @@ func TestContainer_googleConfigFromEnv_Defaults(t *testing.T) {
 	assert.Equal(t, google.DefaultMaxOutstandingMessages, cfg.MaxOutstandingMessages)
 	assert.Equal(t, google.DefaultMaxOutstandingBytes, cfg.MaxOutstandingBytes)
 	assert.Equal(t, google.DefaultNumGoroutines, cfg.NumGoroutines)
+}
+
+func TestContainer_mqttConfigFromEnv_Retain(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	testCases := []struct {
+		desc          string
+		configs       map[string]string
+		wantPublish   bool
+		wantRetrieved bool
+	}{
+		{desc: "unset", configs: map[string]string{}},
+		{desc: "MQTT_PUBLISH_RETAINED", configs: map[string]string{"MQTT_PUBLISH_RETAINED": "true"}, wantPublish: true},
+		{desc: "deprecated MQTT_RETRIEVE_RETAINED", configs: map[string]string{"MQTT_RETRIEVE_RETAINED": "true"}, wantRetrieved: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := c.mqttConfigFromEnv(config.NewMockConfig(tc.configs))
+
+			assert.Equal(t, tc.wantPublish, cfg.PublishRetained)
+			assert.Equal(t, tc.wantRetrieved, cfg.RetrieveRetained) //nolint:staticcheck // the deprecated key must keep working
+		})
+	}
+}
+
+func TestContainer_mqttConfigFromEnv(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	cfg := c.mqttConfigFromEnv(config.NewMockConfig(map[string]string{
+		"MQTT_PROTOCOL":         "ssl",
+		"MQTT_HOST":             "broker",
+		"MQTT_PORT":             "8883",
+		"MQTT_USER":             "u",
+		"MQTT_PASSWORD":         "p",
+		"MQTT_CLIENT_ID_SUFFIX": "id",
+		"MQTT_QOS":              "2",
+		"MQTT_MESSAGE_ORDER":    "true",
+		"MQTT_KEEP_ALIVE":       "7s",
+	}))
+
+	assert.Equal(t, &mqtt.Config{
+		Protocol: "ssl", Hostname: "broker", Port: 8883, Username: "u", Password: "p",
+		ClientID: "id", QoS: 2, Order: true, KeepAlive: 7 * time.Second,
+	}, cfg)
+}
+
+func TestContainer_mqttConfigFromEnv_Defaults(t *testing.T) {
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	cfg := c.mqttConfigFromEnv(config.NewMockConfig(map[string]string{
+		"MQTT_PORT": "not-a-number",
+		"MQTT_QOS":  "1",
+	}))
+
+	assert.Equal(t, "tcp", cfg.Protocol)
+	assert.Equal(t, 0, cfg.Port)
+	assert.Equal(t, byte(1), cfg.QoS)
+	assert.Equal(t, 30*time.Second, cfg.KeepAlive)
 }
