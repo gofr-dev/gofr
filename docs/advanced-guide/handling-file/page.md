@@ -462,7 +462,7 @@ for reader.Next() {
 
 To open a file with default settings, use the `Open` command, which provides read and seek permissions only. For write permissions, use `OpenFile` with the appropriate file modes.
 
-> Note: In FTP, file permissions are not differentiated; both `Open` and `OpenFile` allow all file operations regardless of specified permissions.
+> Note: On GCS, Azure File Storage and FTP, `OpenFile` opens a file either for reading or for writing through the store, and a write replaces the stored file. So `os.O_RDWR` on its own returns an error; combine it with `os.O_CREATE` or `os.O_TRUNC` to write the file. On these stores, `WriteAt` and `Seek` on a file being written return an error. The `os.O_RDWR` and `WriteAt` part of the example below works only on the local file system.
 
 ```go
 csvFile, _ := ctx.File.Open("my_file.csv")
@@ -474,6 +474,7 @@ _, _ = file.Read(b)
 
 csvFile.Close()
 
+// Local file system only: open for reading and writing in place.
 csvFile, err = ctx.File.OpenFile("my_file.csv", os.O_RDWR, os.ModePerm)
 
 // WriteAt writes the buffer content at the specified offset.
