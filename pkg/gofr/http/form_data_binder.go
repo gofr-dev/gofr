@@ -188,6 +188,10 @@ func setIntField(field reflect.Value, data any) error {
 }
 
 func setFloatField(field reflect.Value, data any) error {
+	if val, ok := data.(int); ok {
+		data = float64(val)
+	}
+
 	if val, ok := data.(float64); ok {
 		field.SetFloat(val)
 		return nil

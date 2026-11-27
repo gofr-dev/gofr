@@ -87,15 +87,15 @@ a request that looks correct can bind nothing.
   - To bind multipart-form data or url-encoded form, we can use the Bind method similarly. The struct fields should be tagged appropriately
     to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`
 
-```go
-type Data struct {
-	Name string `form:"name"`
+  ```go
+  type Data struct {
+      Name string `form:"name"`
 
-	Compressed file.Zip `file:"upload"`
+      Compressed file.Zip `file:"upload"`
 
-	FileHeader *multipart.FileHeader `file:"file_upload"`
-}
-```
+      FileHeader *multipart.FileHeader `file:"file_upload"`
+  }
+  ```
 
   - The `form` tag is used to bind non-file fields.
   - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
@@ -103,6 +103,22 @@ type Data struct {
     a `*multipart.FileHeader` must be opened and read inside the handler, not in a goroutine that outlives it.
   - A `file.Zip` field is unzipped in memory. Each file in it must be at most 100 MB uncompressed, and all of its
     files together at most 1 GB; a larger archive makes `Bind` return an error with status `413`.
+  - JSON objects in form fields can bind to structs. A numeric value such as `2` or `2.5` can bind to a `float32` or `float64` field.
+    For example, set the value of the `item` form field to `{"Price":2}`.
+    The value `2` binds to `Item.Price`.
+
+    ```go
+    type ProductForm struct {
+        Item struct {
+            Price float64
+        } `form:"item"`
+    }
+
+    var form ProductForm
+    if err := ctx.Bind(&form); err != nil {
+        return nil, err
+    }
+    ```
 
 
 - `HostName()` - to access the host name for the incoming request
