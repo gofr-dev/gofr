@@ -73,11 +73,16 @@ func TestLivePermissions(t *testing.T) {
 
 	exp := time.Now().Add(time.Hour).Unix()
 
-	// token signs a valid token for subject; an empty subject leaves "sub" out.
-	token := func(subject string) string {
+	// token signs a valid token for subject; an empty subject leaves "sub" out. Any permissions are put
+	// in the token's own permissions claim, which the store's answer must replace.
+	token := func(subject string, permissions ...any) string {
 		claims := jwt.MapClaims{"aud": "orders-api", "exp": exp, "iss": issuer}
 		if subject != "" {
 			claims["sub"] = subject
+		}
+
+		if len(permissions) > 0 {
+			claims[permissionsClaim] = permissions
 		}
 
 		tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -114,6 +119,13 @@ func TestLivePermissions(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", token("bob")), "bob does not hold orders:write")
 	assert.Equal(t, http.StatusForbidden, call(http.MethodGet, "/orders", token("carol")), "an unknown subject holds nothing")
 	assert.Equal(t, http.StatusForbidden, call(http.MethodGet, "/orders", token("")), "a token without a subject holds nothing")
+
+	// Permissions the token carries itself are never trusted: the store's answer replaces them, and a
+	// token without a subject has them removed.
+	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", token("bob", "orders:write")),
+		"bob's token claims orders:write, but the store does not grant it")
+	assert.Equal(t, http.StatusForbidden, call(http.MethodPost, "/orders", token("", "orders:write")),
+		"a token without a subject must not be authorized from its own permissions claim")
 
 	// Revoking in the store denies the next request with the SAME token; granting restores it.
 	store.revoke("alice", "orders:write")

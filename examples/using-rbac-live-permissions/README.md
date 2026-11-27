@@ -13,7 +13,8 @@ for every option.
    request. The middleware trusts the token's `sub`, so the token must be checked first.
 2. `livePermissions` reads `sub`, looks up what the store grants that subject now, with a timeout,
    and adds the result to the claims as a `permissions` claim (a `[]any`, which is how RBAC reads
-   an array claim).
+   an array claim). The store's answer replaces any `permissions` claim the token carries itself,
+   and a token without a `sub` has that claim removed, so only the store grants access.
 3. `EnableRBAC` loads `configs/rbac.json`, whose `"permissionsClaimPath": "permissions"` makes it
    authorize from that claim.
 

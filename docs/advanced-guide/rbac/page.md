@@ -299,7 +299,11 @@ func livePermissions(lookup func(ctx context.Context, sub string) ([]string, err
 
 			sub, _ := claims["sub"].(string)
 			if sub == "" {
-				next.ServeHTTP(w, r) // no permissions claim, so RBAC answers 403
+				// Drop any permissions claim the token carries itself, so RBAC answers 403.
+				stripped := maps.Clone(claims)
+				delete(stripped, "permissions")
+
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, stripped)))
 
 				return
 			}

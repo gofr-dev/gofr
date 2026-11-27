@@ -150,7 +150,9 @@ func livePermissions(lookup func(ctx context.Context, sub string) ([]string, err
 
 			sub, _ := claims["sub"].(string)
 			if sub == "" {
-				next.ServeHTTP(w, r) // no permissions claim, so RBAC answers 403
+				// No subject to look up. Drop any permissions claim the token itself carries, so RBAC
+				// sees none and answers 403 instead of trusting a list the store never confirmed.
+				next.ServeHTTP(w, withoutPermissions(r, claims))
 
 				return
 			}
@@ -178,6 +180,19 @@ func livePermissions(lookup func(ctx context.Context, sub string) ([]string, err
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, merged)))
 		})
 	}
+}
+
+// withoutPermissions returns r with the permissions claim removed from its claims. The claims are
+// copied: the token's own map must not change under other readers.
+func withoutPermissions(r *http.Request, claims jwt.MapClaims) *http.Request {
+	if _, ok := claims[permissionsClaim]; !ok {
+		return r
+	}
+
+	stripped := maps.Clone(claims)
+	delete(stripped, permissionsClaim)
+
+	return r.WithContext(context.WithValue(r.Context(), middleware.JWTClaim, stripped))
 }
 
 func status(_ *gofr.Context) (any, error) {
