@@ -482,7 +482,7 @@ if err != nil {
 
 > Note: For GCS, Azure and FTP, `ReadAt` follows `io.ReaderAt`: when it fills fewer than `len(b)` bytes it returns an error. That error is `io.EOF` when the read reached the end of the object, or the storage error (for example a dropped connection) otherwise, together with the bytes read before it.
 
-> Note: For GCS, Azure and FTP, `Open` returns `file.ErrFileNotFound` (`os.ErrNotExist`) only when the object does not exist. Any other storage error, such as a store that has not connected yet or a denied request, is returned as is, so it is not mistaken for a missing file.
+> Note: For the local store, GCS, Azure and FTP, `Open` (and `OpenFile` with read-only flags) returns `file.ErrFileNotFound` (`os.ErrNotExist`) only when the file does not exist. Any other storage error, such as a store that has not connected yet, a denied request, or on the local store a path through a regular file (`data.txt/x` gives `not a directory`), is returned as is, so it is not mistaken for a missing file.
 
 ### Getting Information of the file/directory
 
