@@ -7,7 +7,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azfile v1.7.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.62.0
+	gofr.dev v1.63.1
 )
 
 require (

@@ -43,11 +43,11 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
-	golang.org/x/term v0.47.0
-	golang.org/x/text v0.43.0
+	golang.org/x/term v0.48.0
+	golang.org/x/text v0.44.0
 	golang.org/x/time v0.16.0
-	google.golang.org/api v0.311.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e
+	google.golang.org/api v0.315.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -74,7 +74,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.11 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.24 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.25 // indirect
 	github.com/googleapis/gax-go/v2 v2.27.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
@@ -106,7 +106,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	google.golang.org/genproto v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
 	modernc.org/libc v1.80.1 // indirect
