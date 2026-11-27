@@ -214,3 +214,7 @@ func Test_ClickHouseCommitMigration_NilUsedDatasources(t *testing.T) {
 	err := m.commitMigration(c, &data)
 	assert.NoError(t, err)
 }
+
+func TestClickHouseMigrator_Name(t *testing.T) {
+	assert.Equal(t, "Clickhouse", clickHouseMigrator{}.name())
+}

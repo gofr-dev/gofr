@@ -353,3 +353,75 @@ func Test_MongoCommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	err := migratorWithMongo.commitMigration(mockContainer, &td)
 	assert.NoError(t, err)
 }
+
+func Test_MongoLock_StaleLockCleanupFailureIsLoggedAndLockStillAcquired(t *testing.T) {
+	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
+	mockLogger := container.NewMockLogger(gomock.NewController(t))
+	mockContainer.Logger = mockLogger
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(0), errMongoConn)
+	mockMongo.EXPECT().InsertOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(struct{}{}, nil)
+	mockLogger.EXPECT().Errorf("failed to cleanup stale MongoDB lock: %v", errMongoConn)
+	mockLogger.EXPECT().Debug("Mongo lock acquired successfully")
+
+	err := migratorWithMongo.lock(ctx, cancel, mockContainer, "owner-1")
+
+	require.NoError(t, err)
+}
+
+func Test_MongoBeginTransaction_DelegatesToInnerMigrator(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, _ := container.NewMockContainer(t)
+	m := mongoMigrator{migrator: mockMigrator}
+
+	expected := transactionData{MigrationNumber: 3}
+
+	mockMigrator.EXPECT().beginTransaction(mockContainer).Return(expected)
+
+	assert.Equal(t, expected, m.beginTransaction(mockContainer))
+}
+
+func Test_MongoRollback_RollsBackInnerMigratorAndLogsFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, _ := container.NewMockContainer(t)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockContainer.Logger = mockLogger
+	m := mongoMigrator{migrator: mockMigrator}
+
+	data := transactionData{MigrationNumber: 7}
+
+	gomock.InOrder(
+		mockMigrator.EXPECT().rollback(mockContainer, &data),
+		mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(7)),
+	)
+
+	m.rollback(mockContainer, &data)
+}
+
+func Test_MongoName(t *testing.T) {
+	assert.Equal(t, "Mongo", mongoMigrator{}.name())
+}
+
+func Test_isMongoCollectionExistsError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		exp  bool
+	}{
+		{"nil error", nil, false},
+		{"already exists", errMongoAlreadyExists, true},
+		{"namespace exists", errMongoNamespaceExists, true},
+		{"unrelated error", errMongoConn, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.exp, isMongoCollectionExistsError(tc.err))
+		})
+	}
+}

@@ -680,3 +680,70 @@ func TestOracleMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
 	err := m.commitMigration(mockContainer, &data)
 	assert.NoError(t, err)
 }
+
+func TestOracleMigrator_CommitMigration_Failures(t *testing.T) {
+	tests := []struct {
+		name   string
+		setup  func(ctrl *gomock.Controller, lg *container.MockLogger) container.OracleTx
+		expErr error
+	}{
+		{
+			name: "nil transaction is rejected",
+			setup: func(_ *gomock.Controller, lg *container.MockLogger) container.OracleTx {
+				lg.EXPECT().Error("invalid Oracle transaction")
+
+				return nil
+			},
+			expErr: errInvalidOracleTransaction,
+		},
+		{
+			name: "commit failure is returned without recording the migration",
+			setup: func(ctrl *gomock.Controller, lg *container.MockLogger) container.OracleTx {
+				tx := container.NewMockOracleTx(ctrl)
+				tx.EXPECT().Commit().Return(sql.ErrConnDone)
+				lg.EXPECT().Errorf("failed to commit Oracle transaction: %v", sql.ErrConnDone)
+
+				return tx
+			},
+			expErr: sql.ErrConnDone,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockContainer, _ := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			mockContainer.Logger = mockLogger
+			m := oracleMigrator{migrator: NewMockmigrator(ctrl)}
+
+			data := transactionData{
+				MigrationNumber: 1,
+				StartTime:       time.Now().UTC(),
+				OracleTx:        tc.setup(ctrl, mockLogger),
+				UsedDatasources: map[string]bool{},
+			}
+
+			err := m.commitMigration(mockContainer, &data)
+
+			require.ErrorIs(t, err, tc.expErr)
+		})
+	}
+}
+
+func TestOracleMigrator_BeginTransaction_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockContainer, _ := container.NewMockContainer(t)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockContainer.Logger = mockLogger
+	mockOracle := container.NewMockOracleDB(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := oracleMigrator{Oracle: mockOracle, migrator: mockMigrator}
+
+	mockOracle.EXPECT().Begin().Return(nil, errOracleSystemError)
+	mockLogger.EXPECT().Errorf("unable to begin Oracle transaction: %v", errOracleSystemError)
+
+	td := m.beginTransaction(mockContainer)
+
+	assert.Equal(t, transactionData{}, td)
+}

@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
@@ -910,4 +911,154 @@ func newSQLOnlyMockContainer(t *testing.T) (*container.Container, *container.Moc
 	mockContainer.ScyllaDB = nil
 
 	return mockContainer, mocks
+}
+
+func TestRun_GetAppliedMigrationsError(t *testing.T) {
+	mockContainer, mocks := newSQLOnlyMockContainer(t)
+
+	ran := false
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(Datasource) error { ran = true; return nil }},
+	}
+
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).WillReturnError(errRandomDB)
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+		Run(migrationMap, mockContainer)
+	})
+
+	assert.Contains(t, logs, "migration failed: could not verify migration state from datasources, err: sql: "+errRandomDB.Error())
+	assert.NotContains(t, logs, "running migration")
+	assert.False(t, ran, "migration must not run")
+	require.NoError(t, mocks.SQL.ExpectationsWereMet())
+}
+
+func Test_acquireLockAndRun_GetAppliedMigrationsErrorUnderLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, _ := container.NewMockContainer(t)
+
+	ran := false
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(Datasource) error { ran = true; return nil }},
+	}
+
+	mockMigrator.EXPECT().lock(gomock.Any(), gomock.Any(), mockContainer, gomock.Any()).Return(nil)
+	mockMigrator.EXPECT().getAppliedMigrations(mockContainer).Return(nil, errRandomDB)
+	mockMigrator.EXPECT().unlock(mockContainer, gomock.Any()).Return(nil)
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+		acquireLockAndRun(mockContainer, mockMigrator, &Datasource{}, migrationMap, []int64{1})
+	})
+
+	assert.Contains(t, logs, "migration failed: could not verify migration state under lock, err: "+errRandomDB.Error())
+	assert.False(t, ran, "migration must not run")
+}
+
+func Test_runMigrations_LockRefreshFailure(t *testing.T) {
+	tests := []struct {
+		name   string
+		setup  func(m *Mockmigrator, cancel context.CancelFunc, ran *int) map[int64]Migrate
+		expLog string
+		expRan int
+	}{
+		{
+			name: "lock lost before the transaction begins",
+			setup: func(_ *Mockmigrator, cancel context.CancelFunc, ran *int) map[int64]Migrate {
+				cancel()
+
+				return map[int64]Migrate{1: {UP: func(Datasource) error { *ran++; return nil }}}
+			},
+			expLog: "migration 1 aborted: lock refresh failed\n",
+		},
+		{
+			name: "lock lost after the transaction begins rolls back without running",
+			setup: func(m *Mockmigrator, cancel context.CancelFunc, ran *int) map[int64]Migrate {
+				m.EXPECT().beginTransaction(gomock.Any()).DoAndReturn(func(*container.Container) transactionData {
+					cancel()
+
+					return transactionData{}
+				})
+				m.EXPECT().rollback(gomock.Any(), gomock.Any())
+
+				return map[int64]Migrate{1: {UP: func(Datasource) error { *ran++; return nil }}}
+			},
+			expLog: "migration 1 aborted: lock refresh failed\n",
+		},
+		{
+			name: "lock lost during execution rolls back and does not commit",
+			setup: func(m *Mockmigrator, cancel context.CancelFunc, ran *int) map[int64]Migrate {
+				m.EXPECT().beginTransaction(gomock.Any()).Return(transactionData{})
+				m.EXPECT().rollback(gomock.Any(), gomock.Any())
+
+				return map[int64]Migrate{1: {UP: func(Datasource) error { *ran++; cancel(); return nil }}}
+			},
+			expLog: "migration 1 aborted: lock refresh failed during execution",
+			expRan: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMigrator := NewMockmigrator(ctrl)
+			mockContainer, _ := container.NewMockContainer(t)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			var ran int
+
+			migrationMap := tc.setup(mockMigrator, cancel, &ran)
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+				runMigrations(ctx, mockContainer, mockMigrator, &Datasource{}, migrationMap, []int64{1}, 0)
+			})
+
+			assert.Contains(t, logs, tc.expLog)
+			assert.Equal(t, tc.expRan, ran)
+		})
+	}
+}
+
+func Test_isNil(t *testing.T) {
+	var (
+		nilPtr   *int
+		nilSlice []int
+		nilMap   map[string]int
+		nilFunc  func()
+		nilChan  chan int
+		value    = 5
+	)
+
+	tests := []struct {
+		name string
+		in   any
+		exp  bool
+	}{
+		{"untyped nil", nil, true},
+		{"nil pointer", nilPtr, true},
+		{"nil slice", nilSlice, true},
+		{"nil map", nilMap, true},
+		{"nil func", nilFunc, true},
+		{"nil chan", nilChan, true},
+		{"non-nil pointer", &value, false},
+		{"non-nil slice", []int{1}, false},
+		{"non-nillable kind", value, false},
+		{"struct value", struct{}{}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.exp, isNil(tc.in))
+		})
+	}
 }

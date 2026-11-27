@@ -1573,6 +1573,30 @@ func Test_OpenTSDBRollback(t *testing.T) {
 	}
 }
 
+func Test_OpenTSDBRollback_TemporaryFileCannotBeRemoved(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockContainer.Logger = mockLogger
+	filePath := filepath.Join(t.TempDir(), "migrations.json")
+
+	require.NoError(t, os.MkdirAll(filepath.Join(filePath+".tmp", "nested"), 0700))
+
+	om := &openTSDBMigrator{filePath: filePath, migrator: mockMigrator}
+	data := transactionData{MigrationNumber: 3}
+
+	gomock.InOrder(
+		mockLogger.EXPECT().Debugf("Failed to clean up temporary migration file: %v", gomock.Any()),
+		mockMigrator.EXPECT().rollback(mockContainer, &data),
+		mockLogger.EXPECT().Fatalf("Migration %v failed.", int64(3)),
+	)
+
+	om.rollback(mockContainer, &data)
+
+	assert.DirExists(t, filePath+".tmp")
+}
+
 func Test_OpenTSDBMigratorDelegation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockContainer, _ := container.NewMockContainer(t)
