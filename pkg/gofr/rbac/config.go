@@ -38,11 +38,20 @@ var (
 	// errInvalidPermissionsClaimPath is returned when permissionsClaimPath cannot be parsed, which would
 	// otherwise deny every request without a word.
 	errInvalidPermissionsClaimPath = errors.New("permissionsClaimPath cannot be parsed")
+
+	// errInvalidDefaultPolicy is returned when defaultPolicy is neither "allow" nor "deny".
+	errInvalidDefaultPolicy = errors.New(`defaultPolicy must be "allow" or "deny"`)
 )
 
 // extractionFailuresMetric counts requests whose role or permissions could not be read. App.EnableRBAC
 // registers it, once per app.
 const extractionFailuresMetric = "rbac_role_extraction_failures"
+
+// Values of the defaultPolicy setting, compared after folding case and trimming spaces.
+const (
+	policyAllow = "allow"
+	policyDeny  = "deny"
+)
 
 // Modes reported in the startup line, naming where authorization reads from.
 const (
@@ -155,6 +164,27 @@ type Config struct {
 	// rules holds every (method, path) rule ordered most-specific-first, and is the
 	// single source of truth for resolving a request that no exact key matches.
 	rules []endpointRule `json:"-" yaml:"-"`
+
+	// deny is the defaultPolicy setting of the config file read as a switch: true refuses a request no
+	// rule matches. LoadPermissions sets it; a Config built in code is neither validated nor linked
+	// with the app's other configs and always allows. It is unexported so the setting stays a file-only
+	// option and no new public symbol is needed for it.
+	deny bool
+
+	// group is every config the app installed, which gofr sets once routes are registered. It is nil
+	// for a config used on its own, which then stands for itself.
+	group *group
+}
+
+// fileConfig is what a config file decodes into: Config plus the file-only defaultPolicy setting, which
+// is read in LoadPermissions and kept on Config as the unexported deny.
+type fileConfig struct {
+	Config `yaml:",inline"`
+
+	// DefaultPolicy is what happens to a request no rule matches: "allow" serves it, "deny" refuses it.
+	// The value ignores letter case and surrounding spaces. Empty means "allow", so existing configs
+	// are unchanged; any other value fails the config load.
+	DefaultPolicy string `json:"defaultPolicy,omitempty" yaml:"defaultPolicy,omitempty"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -170,22 +200,24 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 		return nil, fmt.Errorf("failed to read RBAC config file %s: %w", path, err)
 	}
 
-	var config Config
+	var file fileConfig
 
 	// Detect file format by extension
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(data, &config); err != nil {
+		if err := yaml.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("failed to parse YAML config file %s: %w", path, err)
 		}
 	case ".json", "":
-		if err := json.Unmarshal(data, &config); err != nil {
+		if err := json.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON config file %s: %w", path, err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported config file format: %s (supported: .json, .yaml, .yml): %w", ext, errUnsupportedFormat)
 	}
+
+	config := file.Config
 
 	// Set dependencies
 	config.Logger = logger
@@ -196,6 +228,13 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("invalid RBAC config: %w", err)
 	}
+
+	deny, policyErr := parsePolicy(file.DefaultPolicy)
+	if policyErr != nil {
+		return nil, fmt.Errorf("invalid RBAC config: %w", policyErr)
+	}
+
+	config.deny = deny
 
 	// Process unified config to build internal maps
 	if err := config.processUnifiedConfig(); err != nil {
@@ -209,10 +248,17 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	return &config, nil
 }
 
-// logStartup logs the mode RBAC runs in, and warns about a roles section permissions mode never reads.
+// logStartup logs the mode and default policy RBAC runs with, and warns about a roles section
+// permissions mode never reads.
 func (c *Config) logStartup(logger datasource.Logger) {
 	mode, source := c.mode()
-	logger.Infof("RBAC enabled: mode=%s, source=%s", mode, source)
+
+	policy := policyAllow
+	if c.deny {
+		policy = policyDeny
+	}
+
+	logger.Infof("RBAC enabled: mode=%s, source=%s, defaultPolicy=%s", mode, source, policy)
 
 	if mode == modePermissions && len(c.Roles) > 0 {
 		logger.Warnf("RBAC: permissionsClaimPath is set, so the roles section is ignored; " +
@@ -258,6 +304,24 @@ func (c *Config) validate() error {
 	}
 
 	return nil
+}
+
+// parsePolicy reports whether the defaultPolicy setting denies. Case and surrounding spaces are ignored, as for
+// GOFR_RBAC_ROUTE_CHECK. An empty value allows, and anything else but "allow" and "deny" is an
+// error: a typo in a security setting must not quietly mean allow.
+func parsePolicy(value string) (deny bool, err error) {
+	if value == "" {
+		return false, nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case policyAllow:
+		return false, nil
+	case policyDeny:
+		return true, nil
+	default:
+		return false, fmt.Errorf("%w, got %q", errInvalidDefaultPolicy, value)
+	}
 }
 
 // validateClaimModes rejects claim settings that would otherwise be ambiguous or silently ignored.
@@ -345,7 +409,8 @@ func (*Config) checkRegexIndicators(path string, index int) error {
 
 // processUnifiedConfig processes the unified Roles and Endpoints config
 // and builds internal maps for efficient lookup.
-// Config is read-only after initialization, so no mutex is needed.
+// Config is written during setup and read-only once requests are served, so no mutex is needed. The group
+// pointer is the one field written later, once, when gofr links the configs before serving.
 func (c *Config) processUnifiedConfig() error {
 	c.initializeMaps()
 	c.buildRolePermissionsMap()
