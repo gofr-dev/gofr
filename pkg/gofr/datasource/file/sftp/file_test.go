@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -180,6 +181,75 @@ func TestSftpFile_ReadAll_JSONArray(t *testing.T) {
 	jr, ok := reader.(*jsonReader)
 	require.True(t, ok)
 	assert.Equal(t, json.Delim('['), jr.token)
+}
+
+func TestJSONReader_Scan(t *testing.T) {
+	client := newInMemClient(t)
+
+	type row struct {
+		Name string `json:"name"`
+	}
+
+	tests := []struct {
+		desc    string
+		content string
+		expRows []row
+		expErr  bool
+	}{
+		{desc: "every element in order", content: `[{"name":"a"},{"name":"b"}]`, expRows: []row{{"a"}, {"b"}}},
+		{desc: "empty array", content: `[]`, expRows: []row{}},
+		{desc: "single object", content: `{"name":"a"}`, expRows: []row{{"a"}}},
+		{desc: "element of the wrong type", content: `["a"]`, expRows: []row{}, expErr: true},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// A strict mock: reading a valid file must log nothing.
+			f := sftpFile{
+				File:   writeRemoteFile(t, client, fmt.Sprintf("/json/scan-%d.json", i), tc.content),
+				logger: NewMockLogger(gomock.NewController(t)),
+			}
+
+			reader, err := f.ReadAll()
+			require.NoError(t, err)
+
+			rows := make([]row, 0)
+
+			for reader.Next() {
+				var r row
+
+				if err = reader.Scan(&r); err != nil {
+					break
+				}
+
+				rows = append(rows, r)
+			}
+
+			if tc.expErr {
+				var typeErr *json.UnmarshalTypeError
+				require.ErrorAs(t, err, &typeErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tc.expRows, rows)
+		})
+	}
+}
+
+func TestJSONReader_RewindError(t *testing.T) {
+	client := newInMemClient(t)
+	logger := NewMockLogger(gomock.NewController(t))
+	f := sftpFile{File: writeRemoteFile(t, client, "/json/rewind.json", `{"name":"a"}`), logger: logger}
+
+	// A closed file cannot be rewound, which ReadAll cannot reach: its first token read fails first.
+	require.NoError(t, f.File.Close())
+	logger.EXPECT().Errorf("failed to rewind JSON file for reading as object %v", gomock.Any())
+
+	reader, err := f.createJSONObjectReader()
+
+	require.ErrorIs(t, err, os.ErrClosed)
+	assert.Nil(t, reader)
 }
 
 func TestSftpFile_ReadAll_JSONErrors(t *testing.T) {

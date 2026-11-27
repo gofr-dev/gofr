@@ -115,32 +115,28 @@ func (om *openTSDBMigrator) createEmptyMigrationFile(c *container.Container) err
 	return nil
 }
 
-// getLastMigration reads JSON file to find the highest applied migration version.
-func (om *openTSDBMigrator) getLastMigration(c *container.Container) (int64, error) {
+// getAppliedMigrations reads JSON file to find every applied migration version.
+func (om *openTSDBMigrator) getAppliedMigrations(c *container.Container) (map[int64]struct{}, error) {
 	om.mu.Lock()
 	defer om.mu.Unlock()
 
-	var lastMigration int64
-
 	migrations, err := om.loadMigrationsUnsafe()
 	if err != nil {
-		return -1, fmt.Errorf("opentsdb: %w", err)
+		return nil, fmt.Errorf("opentsdb: %w", err)
+	}
+
+	c.Debugf("JSON migration file applied migrations: %v", len(migrations))
+
+	applied, err := om.migrator.getAppliedMigrations(c)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, m := range migrations {
-		if m.Version > lastMigration {
-			lastMigration = m.Version
-		}
+		applied[m.Version] = struct{}{}
 	}
 
-	c.Debugf("JSON migration file last migration: %v", lastMigration)
-
-	baseMigration, err := om.migrator.getLastMigration(c)
-	if err != nil {
-		return -1, err
-	}
-
-	return max(lastMigration, baseMigration), nil
+	return applied, nil
 }
 
 // beginTransaction delegates to base migrator.

@@ -193,12 +193,24 @@ func TestBasicAuthMiddleware_validateCredentials(t *testing.T) {
 			username: "newUser",
 			password: "",
 			users:    users,
-			success:  true,
+			success:  false,
 		},
 		{
 			username: "unknownUser",
 			password: "storedPass",
 			users:    users,
+			success:  false,
+		},
+		{
+			username: "",
+			password: "",
+			users:    map[string]string{"": ""},
+			success:  false,
+		},
+		{
+			username: "",
+			password: "storedPass",
+			users:    map[string]string{"": "storedPass"},
 			success:  false,
 		},
 	}
@@ -228,13 +240,17 @@ func TestBasicAuthMiddleware(t *testing.T) {
 			expStatus: http.StatusUnauthorized},
 		{desc: "valid credentials", header: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
 			expStatus: http.StatusOK, expValue: "user"},
+		// "Og==" is base64 of ":", matching the stored empty username and password.
+		{desc: "empty username and password", header: "Basic Og==", expStatus: http.StatusUnauthorized},
+		{desc: "empty stored password", header: "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:")),
+			expStatus: http.StatusUnauthorized},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			var gotValue any
 
-			handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"user": "password"}})(
+			handler := BasicAuthMiddleware(BasicAuthProvider{Users: map[string]string{"user": "password", "": "", "admin": ""}})(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					gotValue = r.Context().Value(Username)
 
