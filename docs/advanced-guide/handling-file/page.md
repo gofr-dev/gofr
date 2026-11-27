@@ -484,7 +484,11 @@ if err != nil {
 }
 ```
 
-> Note: On the local file system, `Open` and `OpenFile` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. If `Create` cannot create the file, the returned file's `Write` and `Close` return the error. As on the other stores, `ReadAt` returns `file.ErrOutOfRange` for a negative offset or one at or past the end of the file, and `Seek` returns an error matching `file.ErrOutOfRange` for a negative offset or, on a file opened only for reading, one past the end. A file opened for writing can seek past the end, where a later `Write` extends it.
+> Note: For the local store, GCS, Azure and FTP, `ReadAt` follows `io.ReaderAt`: when it fills fewer than `len(b)` bytes it returns an error. That error is `io.EOF` when the read reached the end of the file, including a read that starts exactly at the end, or the storage error (for example a dropped connection) otherwise, together with the bytes read before it. A negative offset, or one past the end of the file, returns `file.ErrOutOfRange`.
+
+> Note: For the local store, GCS, Azure and FTP, `Open` (and `OpenFile` with read-only flags) returns `file.ErrFileNotFound` (`os.ErrNotExist`) only when the file does not exist. Any other storage error, such as a store that has not connected yet, a denied request, or on the local store a path through a regular file (`data.txt/x` gives `not a directory`), is returned as is, so it is not mistaken for a missing file.
+
+> Note: On the local file system, `Open` and `OpenFile` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. If `Create` cannot create the file, the returned file's `Write` and `Close` return the error. As on the other stores, `Seek` returns an error matching `file.ErrOutOfRange` for a negative offset or, on a file opened only for reading, one past the end. A file opened for writing can seek past the end, where a later `Write` extends it.
 
 ### Getting Information of the file/directory
 

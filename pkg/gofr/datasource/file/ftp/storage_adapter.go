@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/textproto"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -27,7 +28,7 @@ var (
 	errSameSourceAndDest       = errors.New("source and destination are the same")
 	errFailedToCreateReader    = errors.New("failed to create reader")
 	errFailedToCreateWriter    = errors.New("failed to create writer")
-	errObjectNotFound          = errors.New("object not found")
+	errObjectNotFound          = notFoundError("object not found")
 	errFailedToGetObjectAttrs  = errors.New("failed to get object attrs")
 	errFailedToDeleteObject    = errors.New("failed to delete object")
 	errFailedToListObjects     = errors.New("failed to list objects")
@@ -35,6 +36,14 @@ var (
 	errWriterAlreadyClosed     = errors.New("writer already closed")
 	errFTPConfigInvalid        = errors.New("invalid FTP configuration: host and port are required")
 )
+
+// notFoundError is the type of errObjectNotFound. It also matches os.ErrNotExist, so the
+// file store records a missing object as NOT_FOUND instead of ERROR.
+type notFoundError string
+
+func (e notFoundError) Error() string { return string(e) }
+
+func (notFoundError) Is(target error) bool { return target == os.ErrNotExist }
 
 // Config represents the FTP configuration.
 type Config struct {

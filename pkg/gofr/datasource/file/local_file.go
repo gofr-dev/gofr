@@ -55,8 +55,8 @@ func (f *localFile) Read(p []byte) (int, error) {
 }
 
 // ReadAt implements io.ReaderAt with the bounds of the other stores: a negative offset,
-// or one at or past the end of the file, returns ErrOutOfRange, and a read cut short by
-// the end of the file returns the bytes read without an error.
+// or one past the end of the file, returns ErrOutOfRange, and a read that fills fewer than
+// len(p) bytes because the file ended, including one starting at the end, returns io.EOF.
 func (f *localFile) ReadAt(p []byte, off int64) (int, error) {
 	startTime := time.Now()
 
@@ -72,12 +72,13 @@ func (f *localFile) readAt(p []byte, off int64) (int, error) {
 	}
 
 	n, err := f.file.ReadAt(p, off)
-	if errors.Is(err, io.EOF) {
-		if n == 0 {
+
+	// os.File.ReadAt already follows io.ReaderAt; only an offset past the end, which it also
+	// reports as io.EOF, is out of range, as it is on the other stores.
+	if n == 0 && errors.Is(err, io.EOF) {
+		if info, statErr := f.file.Stat(); statErr == nil && off > info.Size() {
 			return 0, ErrOutOfRange
 		}
-
-		return n, nil
 	}
 
 	return n, err

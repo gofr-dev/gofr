@@ -234,8 +234,8 @@ func TestLocalFile_ReadAt(t *testing.T) {
 		wantErr error
 	}{
 		{desc: "inside the file", off: 2, want: "2345"},
-		{desc: "cut short by the end", off: 8, want: "89"},
-		{desc: "at the end", off: 10, wantErr: ErrOutOfRange},
+		{desc: "cut short by the end", off: 8, want: "89", wantErr: io.EOF},
+		{desc: "at the end", off: 10, wantErr: io.EOF},
 		{desc: "past the end", off: 11, wantErr: ErrOutOfRange},
 		{desc: "negative offset", off: -1, wantErr: ErrOutOfRange},
 	}

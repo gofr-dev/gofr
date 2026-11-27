@@ -142,9 +142,19 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 
 	defer f.observe(OpReadAt, startTime, &st, &msg)
 
-	if off < 0 || off >= f.size {
+	// A negative size means the provider did not report one (see ObjectInfo.Size), so only a
+	// known size bounds the offset; otherwise the range read decides. Size 0 is an empty object.
+	sizeKnown := f.size >= 0
+
+	switch {
+	case off < 0, f.isDir, sizeKnown && off > f.size:
 		msg = fmt.Sprintf("offset %d out of range [0, %d]", off, f.size)
 		return 0, ErrOutOfRange
+	case sizeKnown && off == f.size:
+		st = StatusSuccess
+		msg = fmt.Sprintf("ReadAt 0 bytes from %q at offset %d: end of object", f.name, off)
+
+		return 0, io.EOF
 	}
 
 	if f.provider == nil {
@@ -162,14 +172,49 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	}
 	defer reader.Close()
 
-	n, err := io.ReadFull(reader, p)
-	if err != nil && errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		msg = fmt.Sprintf("ReadAt failed: %v", err)
+	// io.ReaderAt requires a non-nil error whenever n < len(p): io.EOF only when the object
+	// really ended (the reader said so, or the known size was reached), the reader's own error
+	// otherwise. io.ReadFull is not used because it turns the reader's early io.EOF into
+	// io.ErrUnexpectedEOF, which is also what net/http returns for a body cut short.
+	n, err := readUntilDone(reader, p)
+	if f.endedAtSize(err, off, n) {
+		err = io.EOF
+	}
+
+	if err != nil && !errors.Is(err, io.EOF) {
+		msg = fmt.Sprintf("ReadAt failed after %d bytes: %v", n, err)
 		return n, err
 	}
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("ReadAt %d bytes from %q at offset %d", n, f.name, off)
+
+	return n, err
+}
+
+// endedAtSize reports whether a range read cut short with io.ErrUnexpectedEOF stopped exactly at
+// the object's known size, which is a clean end of the object rather than a truncated body.
+func (f *CommonFile) endedAtSize(err error, off int64, n int) bool {
+	return f.size >= 0 && errors.Is(err, io.ErrUnexpectedEOF) && off+int64(n) == f.size
+}
+
+// readUntilDone fills p from r, stopping early only on an error, which it returns unchanged
+// (including io.EOF and io.ErrUnexpectedEOF) so the caller can tell a clean end from a cut body.
+func readUntilDone(r io.Reader, p []byte) (int, error) {
+	n := 0
+
+	for n < len(p) {
+		m, err := r.Read(p[n:])
+		n += m
+
+		if err != nil {
+			if n == len(p) && errors.Is(err, io.EOF) {
+				return n, nil
+			}
+
+			return n, err
+		}
+	}
 
 	return n, nil
 }
@@ -242,7 +287,7 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	defer f.observe(OpSeek, startTime, &st, &msg)
 
 	// Calculate new position
-	newPos, err := ValidateSeekOffset(whence, offset, f.currentPos, f.size)
+	newPos, err := ValidateSeekOffset(whence, offset, f.currentPos, f.Size())
 	if err != nil {
 		msg = fmt.Sprintf("invalid seek offset: %v", err)
 		return 0, err
@@ -331,9 +376,10 @@ func (f *CommonFile) Name() string {
 	return f.name
 }
 
-// Size returns the file size in bytes. Returns 0 for directories.
+// Size returns the file size in bytes. Returns 0 for directories and when the provider
+// did not report a size.
 func (f *CommonFile) Size() int64 {
-	return f.size
+	return max(f.size, 0)
 }
 
 // ModTime returns the last modification time.
