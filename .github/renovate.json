@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["github-actions"],
+  "dependencyDashboard": {"enabled": false},
+  "schedule": ["before 6am on monday"],
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Dependabot owns `uses:` actions; turn every github-actions depType off.",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "description": "Allowlist: only the Go and Node.js versions in `with:` (setup-go go-version, setup-node node-version), which Dependabot cannot update. Other `with:` inputs Renovate reads, such as golangci-lint-action's `version`, stay off.",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "matchDepNames": ["go", "node"],
+      "enabled": true,
+      "groupName": "runtime versions"
+    }
+  ]
+}
