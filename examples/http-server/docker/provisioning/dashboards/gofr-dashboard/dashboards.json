@@ -3806,7 +3806,7 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_redis_pool_misses_total{}[$__rate_interval]))",
+          "expr": "sum(rate(app_redis_pool_misses{}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "Misses/s",
           "range": true,
@@ -3818,7 +3818,7 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_redis_pool_timeouts_total{}[$__rate_interval]))",
+          "expr": "sum(rate(app_redis_pool_timeouts{}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "Timeouts/s",
           "range": true,

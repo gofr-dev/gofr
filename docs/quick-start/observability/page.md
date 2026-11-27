@@ -200,27 +200,27 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
-- app_redis_pool_hits_total
-- counter
-- Number of times a free connection was found in the Redis pool. Label: `hostname`.
+- app_redis_pool_hits
+- gauge
+- Cumulative number of times a free connection was found in the Redis pool. Label: `hostname`.
 
 ---
 
-- app_redis_pool_misses_total
-- counter
-- Number of times no free connection was found in the Redis pool, so a new one was dialed. Label: `hostname`.
+- app_redis_pool_misses
+- gauge
+- Cumulative number of times no free connection was found in the Redis pool, so a new one was dialed. Label: `hostname`.
 
 ---
 
-- app_redis_pool_timeouts_total
-- counter
-- Number of times waiting for a Redis pool connection timed out. Label: `hostname`.
+- app_redis_pool_timeouts
+- gauge
+- Cumulative number of times waiting for a Redis pool connection timed out. Label: `hostname`.
 
 ---
 
-- app_redis_pool_stale_conns_total
-- counter
-- Number of stale connections removed from the Redis pool. Label: `hostname`.
+- app_redis_pool_stale_conns
+- gauge
+- Cumulative number of stale connections removed from the Redis pool. Label: `hostname`.
 
 ---
 
@@ -326,7 +326,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 {% /table %}
 
-The Redis pool metrics (`app_redis_pool_*`, `app_redis_open_connections`, `app_redis_idle_connections`) come from the primary Redis client only and are sampled every 10 seconds. The Redis Pub/Sub client (`PUBSUB_BACKEND=REDIS`) has its own connection pool, which is not covered. The hits, misses, timeouts and stale connections counters only appear after their first event, so graph them with `rate()` or `increase()`.
+The Redis pool metrics (`app_redis_pool_*`, `app_redis_open_connections`, `app_redis_idle_connections`) come from the primary Redis client only and are sampled every 10 seconds. The Redis Pub/Sub client (`PUBSUB_BACKEND=REDIS`) has its own connection pool, which is not covered. The hits, misses, timeouts and stale connections gauges hold cumulative totals since the client started, so graph them with `rate()` or `increase()`.
 
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
 

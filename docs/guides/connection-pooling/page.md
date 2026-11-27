@@ -115,11 +115,11 @@ psql -c "SELECT count(*) FROM pg_stat_activity WHERE datname='orders';"
 
 # In-cluster — SQL and Redis pool metrics, plus command-latency histograms via /metrics
 # (GoFr exposes app_sql_open_connections + app_sql_inUse_connections gauges for SQL,
-# app_redis_open_connections + app_redis_idle_connections gauges and app_redis_pool_*_total counters
-# (hits, misses, timeouts, stale_conns) for Redis, and app_sql_stats / app_redis_stats histograms
-# for command latency. Graph the counters with rate().
-# Rising app_redis_pool_misses_total with flat hits means connections are not being reused;
-# rising app_redis_pool_timeouts_total means the pool is exhausted.)
+# app_redis_open_connections + app_redis_idle_connections gauges and app_redis_pool_* gauges holding
+# cumulative totals (hits, misses, timeouts, stale_conns) for Redis, and app_sql_stats / app_redis_stats
+# histograms for command latency. Graph the cumulative totals with rate() or increase().
+# Rising app_redis_pool_misses with flat hits means connections are not being reused;
+# rising app_redis_pool_timeouts means the pool is exhausted.)
 curl http://orders-api.prod:2121/metrics | grep -E 'app_sql_(open|inUse)_connections|app_redis_(pool_|open_|idle_)|app_(sql|redis)_stats'
 ```
 

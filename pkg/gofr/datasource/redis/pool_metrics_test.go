@@ -37,6 +37,8 @@ type fakePoolMetrics struct {
 	gauges   map[string]float64
 	labels   map[string][]string
 	gaugeSet chan struct{}
+
+	gaugeCalls int
 }
 
 func newFakePoolMetrics() *fakePoolMetrics {
@@ -61,6 +63,7 @@ func (f *fakePoolMetrics) IncrementCounter(_ context.Context, name string, label
 func (f *fakePoolMetrics) SetGauge(name string, value float64, labels ...string) {
 	f.mu.Lock()
 	f.gauges[name] = value
+	f.gaugeCalls++
 	f.labels[name] = labels
 	f.mu.Unlock()
 
@@ -68,13 +71,6 @@ func (f *fakePoolMetrics) SetGauge(name string, value float64, labels ...string)
 	case f.gaugeSet <- struct{}{}:
 	default:
 	}
-}
-
-func (f *fakePoolMetrics) counter(name string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	return f.counters[name]
 }
 
 func (f *fakePoolMetrics) gauge(name string) float64 {
@@ -112,11 +108,11 @@ func TestPushPoolMetrics_ExportsStatsUntilStopped(t *testing.T) {
 		t.Fatal("pushPoolMetrics did not return after stop was closed")
 	}
 
-	// The stats never change, so however many samples ran the counters equal the totals.
-	assert.Equal(t, 10, metrics.counter(poolHitsMetric))
-	assert.Equal(t, 3, metrics.counter(poolMissesMetric))
-	assert.Equal(t, 2, metrics.counter(poolTimeoutsMetric))
-	assert.Equal(t, 1, metrics.counter(poolStaleConnsMetric))
+	// The stats never change, so however many samples ran the gauges equal the totals.
+	assert.InDelta(t, 10, metrics.gauge(poolHitsMetric), 0)
+	assert.InDelta(t, 3, metrics.gauge(poolMissesMetric), 0)
+	assert.InDelta(t, 2, metrics.gauge(poolTimeoutsMetric), 0)
+	assert.InDelta(t, 1, metrics.gauge(poolStaleConnsMetric), 0)
 	assert.InDelta(t, 5, metrics.gauge(poolOpenConnsMetric), 0)
 	assert.InDelta(t, 4, metrics.gauge(poolIdleConnsMetric), 0)
 }
@@ -138,64 +134,45 @@ func TestPushPoolMetrics_DoesNotSampleBeforeFirstInterval(t *testing.T) {
 	assert.Zero(t, client.calls.Load())
 }
 
-func TestRecordPoolStats_CountersFollowTotalsAcrossSamples(t *testing.T) {
+func TestRecordPoolStats_ExportsLatestValuesWithOneCallPerMetric(t *testing.T) {
 	metrics := newFakePoolMetrics()
 
-	last := recordPoolStats(&redis.PoolStats{Hits: 5, Misses: 2, Timeouts: 1, StaleConns: 1, TotalConns: 3, IdleConns: 2},
-		poolTotals{}, metrics, testPoolHost)
+	recordPoolStats(&redis.PoolStats{Hits: 5, Misses: 2, Timeouts: 1, StaleConns: 1, TotalConns: 3, IdleConns: 2},
+		metrics, testPoolHost)
+	recordPoolStats(&redis.PoolStats{Hits: 9, Misses: 2, Timeouts: 4, StaleConns: 1, TotalConns: 6, IdleConns: 1},
+		metrics, testPoolHost)
 
-	assert.Equal(t, poolTotals{hits: 5, misses: 2, timeouts: 1, stale: 1}, last)
-
-	last = recordPoolStats(&redis.PoolStats{Hits: 9, Misses: 2, Timeouts: 4, StaleConns: 1, TotalConns: 6, IdleConns: 1},
-		last, metrics, testPoolHost)
-
-	assert.Equal(t, poolTotals{hits: 9, misses: 2, timeouts: 4, stale: 1}, last)
-	assert.Equal(t, 9, metrics.counter(poolHitsMetric))
-	assert.Equal(t, 2, metrics.counter(poolMissesMetric))
-	assert.Equal(t, 4, metrics.counter(poolTimeoutsMetric))
-	assert.Equal(t, 1, metrics.counter(poolStaleConnsMetric))
-
-	// Gauges hold the latest value, not a running sum.
+	// Gauges hold the latest value, not a running sum, and nothing is incremented.
+	assert.InDelta(t, 9, metrics.gauge(poolHitsMetric), 0)
+	assert.InDelta(t, 2, metrics.gauge(poolMissesMetric), 0)
+	assert.InDelta(t, 4, metrics.gauge(poolTimeoutsMetric), 0)
+	assert.InDelta(t, 1, metrics.gauge(poolStaleConnsMetric), 0)
 	assert.InDelta(t, 6, metrics.gauge(poolOpenConnsMetric), 0)
 	assert.InDelta(t, 1, metrics.gauge(poolIdleConnsMetric), 0)
+	assert.Empty(t, metrics.counters)
+	assert.Equal(t, 12, metrics.gaugeCalls)
 
 	for _, name := range []string{poolHitsMetric, poolOpenConnsMetric, poolIdleConnsMetric} {
 		assert.Equal(t, []string{"hostname", testPoolHost}, metrics.labels[name], name)
 	}
 }
 
-func TestRecordPoolStats_UnchangedStatsAddNothing(t *testing.T) {
-	metrics := newFakePoolMetrics()
-	stats := &redis.PoolStats{Hits: 4, Misses: 1, Timeouts: 2, StaleConns: 3}
-
-	last := recordPoolStats(stats, poolTotals{}, metrics, testPoolHost)
-	last = recordPoolStats(stats, last, metrics, testPoolHost)
-
-	assert.Equal(t, 4, metrics.counter(poolHitsMetric))
-	assert.Equal(t, 1, metrics.counter(poolMissesMetric))
-	assert.Equal(t, 2, metrics.counter(poolTimeoutsMetric))
-	assert.Equal(t, 3, metrics.counter(poolStaleConnsMetric))
-	assert.Equal(t, poolTotals{hits: 4, misses: 1, timeouts: 2, stale: 3}, last)
-}
-
-func TestRecordPoolStats_CounterWrapAround(t *testing.T) {
+func TestRecordPoolStats_LargeAndResetTotals(t *testing.T) {
 	metrics := newFakePoolMetrics()
 
-	last := recordPoolStats(&redis.PoolStats{Hits: ^uint32(0) - 1}, poolTotals{hits: ^uint32(0) - 1}, metrics, testPoolHost)
-	recordPoolStats(&redis.PoolStats{Hits: 2}, last, metrics, testPoolHost)
+	recordPoolStats(&redis.PoolStats{Hits: ^uint32(0)}, metrics, testPoolHost)
+	assert.InDelta(t, float64(^uint32(0)), metrics.gauge(poolHitsMetric), 0)
 
-	// From MaxUint32-1 to 2 is a growth of 4.
-	assert.Equal(t, 4, metrics.counter(poolHitsMetric))
+	// A pool reset simply lowers the gauge; there is no delta to underflow.
+	recordPoolStats(&redis.PoolStats{Hits: 2}, metrics, testPoolHost)
+	assert.InDelta(t, 2, metrics.gauge(poolHitsMetric), 0)
 }
 
 func TestRecordPoolStats_NilStats(t *testing.T) {
 	metrics := newFakePoolMetrics()
-	last := poolTotals{hits: 7}
 
-	got := recordPoolStats(nil, last, metrics, testPoolHost)
+	recordPoolStats(nil, metrics, testPoolHost)
 
-	// A nil snapshot records nothing and keeps the previous baseline.
-	assert.Equal(t, last, got)
 	assert.Empty(t, metrics.counters)
 	assert.Empty(t, metrics.gauges)
 }
