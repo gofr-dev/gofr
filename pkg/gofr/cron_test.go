@@ -149,6 +149,14 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 			expErrString: "unable to parse",
 		},
 		{
+			desc: "characters after a step",
+			schedules: []string{
+				"*/5abc * * * *",
+				"* 1-10/2abc * * *",
+			},
+			expErrString: "unable to parse",
+		},
+		{
 			desc: "zero step",
 			schedules: []string{
 				"*/0 * * * *",

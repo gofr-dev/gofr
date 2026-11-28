@@ -38,7 +38,8 @@ The `n` in `*/n` is a step and must be greater than 0, and the start of a range 
 `*/0` and `10-5` are rejected: `AddCronJob` logs the error and does not add the job. A step can also follow a range, as in
 `10-30/5`, and can be mixed with other values in a comma separated list, for example `*/30,45` in the minute field runs at
 minutes 0, 30 and 45. A comma separated list must not have an empty value, so `*/30,`, `5,,6` and `,5` are
-rejected in the same way.
+rejected in the same way. A step must not be followed by other characters either, so `*/5abc` and `1-10/2abc` are
+rejected too.
 
 ## Adding cron jobs in GoFr applications
 Adding cron jobs to GoFr applications is made easy with a simple injection of user's function to the cron table maintained
