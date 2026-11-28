@@ -28,6 +28,8 @@ For HTTP request logs (emitted by the request-logging middleware), the value of 
 
 For gRPC request logs (`pkg/gofr/grpc/log.go`), the value of `message` is a structured log record with the fields `id`, `startTime`, `responseTime` (microseconds), `responseTimeUnit` (`µs`), `method` and `statusCode`; streaming calls also include `streamType`.
 
+For outbound HTTP service calls (`AddHTTPService`), the value of `message` is a structured log record with the fields `timestamp`, `latency` (microseconds), `latencyUnit` (`µs`), `correlationId`, `responseCode`, `httpMethod` and `uri`. A failed call also has `errorMessage`.
+
 A typical container log stream therefore looks like:
 
 ```json
