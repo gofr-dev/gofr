@@ -164,9 +164,6 @@ GoFr provides its user with additional configurational options while registering
   **Important**: `ConnectionPoolConfig` must be applied **first** when using multiple options, as it needs access to the underlying HTTP client transport.
 
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
-
-  Redirects are followed, up to the same limit of 10 that `net/http` applies. The key is sent only to the host it was configured for and to that host's subdomains; it is dropped when a redirect goes to any other host, or when it downgrades from `https` to `http`. This is the rule `net/http` already applies to the `Authorization` header, so every GoFr auth option behaves the same way on a redirect.
-  Headers set with `DefaultHeaders` are not covered by this rule: an `X-Auth-Token` set there is still forwarded to the redirect target. A service whose upstream redirects to a host that needs the key should register that host as its own service with its own `APIKeyConfig`, for example `app.AddHTTPService("eu", "https://eu.example.com", apiKey)`, so each key stays bound to the host it belongs to.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
 
 **Important:** The password must be base64 encoded in your configuration/environment variables. GoFr will decode it internally before creating the Authorization header.
@@ -357,6 +354,11 @@ GoFr publishes the following metrics for HTTP service communication:
 - `app_http_retry_budget_exhausted_total`: Retries skipped because the `RetryConfig`'s `Budget` was spent. (labels: `service`)
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
 - `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
+
+If the service address carries credentials (`https://user:pass@host` or `https://token@host`), they are replaced
+with `REDACTED` in the `path` label, in the service's request and error logs, in span names and in the errors the
+service returns. The request itself still uses the address as given.
+
 ## Related production guides
 
 - **Distributed Tracing**: [Trace inter-service HTTP calls end-to-end](/docs/guides/distributed-tracing) — context propagation across GoFr's HTTP client.
