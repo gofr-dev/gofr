@@ -703,7 +703,7 @@ func expectRateLimitEval(mock redismock.ClientMock) *redismock.ExpectedCmd {
 		}
 
 		return nil
-	}).ExpectEval(tokenBucketScript, []string{"gofr:ratelimit:svc"}, 2, float64(5), int64(10*time.Second), int64(0))
+	}).ExpectEval(tokenBucketScript, []string{"gofr:ratelimit:svc"}, 2, float64(5), int64(10*time.Second), int64(600), int64(0))
 }
 
 func TestRedisRateLimiterStore_CleanupIsNoOp(t *testing.T) {
@@ -828,4 +828,52 @@ func runRedisBucketSteps(t *testing.T, base int64, cfg RateLimiterConfig, seed m
 	}
 
 	assert.Equal(t, 10*time.Minute, mr.TTL("gofr:ratelimit:svc"))
+}
+
+func TestRedisBucketTTL(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		cfg    RateLimiterConfig
+		expTTL int64
+	}{
+		{"fast limiter keeps the 10 minute floor", RateLimiterConfig{Requests: 5, Window: time.Second, Burst: 10}, 600},
+		{"full refill of exactly 10 minutes", RateLimiterConfig{Requests: 1, Window: time.Minute, Burst: 10}, 600},
+		{"5 per hour with burst 10 needs 2 hours", RateLimiterConfig{Requests: 5, Window: time.Hour, Burst: 10}, 7200},
+		{"fractional seconds are rounded up", RateLimiterConfig{Requests: 7, Window: 2 * time.Hour, Burst: 1}, 1029},
+		{"zero burst keeps the floor", RateLimiterConfig{Requests: 1, Window: time.Hour, Burst: 0}, 600},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expTTL, redisBucketTTL(&tc.cfg))
+		})
+	}
+}
+
+func TestRedisRateLimiterStore_SlowBucketSurvivesIdle(t *testing.T) {
+	cfg := RateLimiterConfig{Requests: 5, Window: time.Hour, Burst: 10}
+	base := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano()
+
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	store := NewRedisRateLimiterStore(&gofrRedis.Redis{Client: client})
+
+	for i := 0; i < 10; i++ {
+		allowed, _, err := store.allowAt(t.Context(), "svc", cfg, base)
+		require.NoError(t, err)
+		require.True(t, allowed, "request %d of the burst", i)
+	}
+
+	assert.Equal(t, 2*time.Hour, mr.TTL("gofr:ratelimit:svc"))
+
+	mr.FastForward(11 * time.Minute)
+
+	allowed, retry, err := store.allowAt(t.Context(), "svc", cfg, base+int64(11*time.Minute))
+
+	require.NoError(t, err)
+	assert.False(t, allowed, "an idle bucket must not come back full before it has refilled")
+	assert.Positive(t, retry)
 }

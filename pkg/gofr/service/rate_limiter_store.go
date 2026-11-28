@@ -224,7 +224,8 @@ local key = KEYS[1]
 local burst = tonumber(ARGV[1])
 local requests = tonumber(ARGV[2])
 local window_ns = tonumber(ARGV[3])
-local now = tonumber(ARGV[4])
+local ttl = tonumber(ARGV[4])
+local now = tonumber(ARGV[5])
 
 -- Fetch bucket
 local bucket = redis.call("HMGET", key, "tokens", "last_refill")
@@ -256,10 +257,20 @@ else
 end
 
 redis.call("HSET", key, "tokens", tokens, "last_refill", last_refill)
-redis.call("EXPIRE", key, 600)
+redis.call("EXPIRE", key, ttl)
 
 return {allowed, retry_after}
 `
+
+// redisBucketTTL returns how long, in whole seconds, a Redis bucket key is kept after its last use: the time an
+// empty bucket takes to refill completely, and never less than bucketTTL. Expiring a key earlier would hand the
+// next caller a full bucket before it has earned one, which lets a slow limiter through early.
+func redisBucketTTL(config *RateLimiterConfig) int64 {
+	fullRefill := newTokenBucket(config).burstInterval // capped at maxRefillPeriod, so the addition cannot overflow
+	second := int64(time.Second)
+
+	return max(int64(bucketTTL/time.Second), (fullRefill+second-1)/second)
+}
 
 // RedisRateLimiterStore implements RateLimiterStore using Redis.
 type RedisRateLimiterStore struct {
@@ -284,7 +295,8 @@ func (r *RedisRateLimiterStore) allowAt(ctx context.Context, key string, config 
 		config.Burst,                // ARGV[1]: burst
 		config.Requests,             // ARGV[2]: requests
 		config.Window.Nanoseconds(), // ARGV[3]: window_ns
-		now,                         // ARGV[4]: now (nanoseconds)
+		redisBucketTTL(&config),     // ARGV[4]: ttl (seconds)
+		now,                         // ARGV[5]: now (nanoseconds)
 	)
 
 	result, err := cmd.Result()
