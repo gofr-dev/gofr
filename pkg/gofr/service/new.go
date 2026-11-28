@@ -36,6 +36,9 @@ const (
 // TestMethodQueryMatchesInboundConstant pins this string to the inbound one.
 const methodQuery = "QUERY"
 
+// maxRedirects mirrors the limit Go applies when following redirects.
+const maxRedirects = 10
+
 // redactedUserInfo replaces the credentials of a service address wherever the address is logged,
 // used as a metric label or used as a span name.
 const redactedUserInfo = "REDACTED"
@@ -108,8 +111,7 @@ type httpClient interface {
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
-		// using default HTTP client to do HTTP communication
-		Client:  &http.Client{},
+		Client:  &http.Client{CheckRedirect: redirectPolicy},
 		url:     serviceAddress,
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logger,
@@ -138,6 +140,52 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	}
 
 	return svc
+}
+
+// redirectPolicy keeps the api key on the same rules net/http uses for the
+// Authorization header: it survives a redirect to the same host or a subdomain
+// of it (the port is ignored) and is dropped when the scheme goes from https to
+// anything else. Every other redirect target loses the header.
+func redirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+
+	if len(via) > 0 && !keepAPIKey(req.URL, via[0].URL) {
+		req.Header.Del(xAPIKeyHeader)
+	}
+
+	return nil
+}
+
+// keepAPIKey reports whether the api key may follow a redirect from initial to dest.
+func keepAPIKey(dest, initial *url.URL) bool {
+	// net/http does not forward credentials when a redirect downgrades https to http.
+	if initial.Scheme == "https" && dest.Scheme != "https" {
+		return false
+	}
+
+	return isDomainOrSubdomain(strings.ToLower(dest.Hostname()), strings.ToLower(initial.Hostname()))
+}
+
+// isDomainOrSubdomain reports whether sub is parent or a subdomain of it.
+// It mirrors the helper net/http uses for credentials on redirects.
+func isDomainOrSubdomain(sub, parent string) bool {
+	if sub == parent {
+		return true
+	}
+
+	// An IPv6 literal is never a subdomain. Checking for ":" and "%" also keeps a
+	// zone identifier such as "::1%.example.com" from matching "example.com".
+	if strings.ContainsAny(sub, ":%") {
+		return false
+	}
+
+	if !strings.HasSuffix(sub, parent) {
+		return false
+	}
+
+	return len(sub) > len(parent) && sub[len(sub)-len(parent)-1] == '.'
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
