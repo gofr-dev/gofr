@@ -258,6 +258,11 @@ func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigration
 		return fmt.Errorf("failed to sync temporary file: %w", err)
 	}
 
+	// Close the temp file first: Windows cannot rename a file that is still open
+	if err = tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+
 	// Atomically replace original file with temp file
 	if err = os.Rename(tmpFilePath, om.filePath); err != nil {
 		return fmt.Errorf("failed to rename temporary file: %w", err)
