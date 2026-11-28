@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -260,6 +261,106 @@ func Test_getPublicKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+type failingBody struct {
+	closed bool
+}
+
+func (*failingBody) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func (b *failingBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+type failingJWKSProvider struct {
+	statusCode int
+	body       *failingBody
+}
+
+func (p failingJWKSProvider) GetWithHeaders(_ context.Context, _ string, _ map[string]any,
+	_ map[string]string) (*http.Response, error) {
+	return &http.Response{StatusCode: p.statusCode, Body: p.body}, nil
+}
+
+func Test_getPublicKeys_ClosesBodyOnReadError(t *testing.T) {
+	body := &failingBody{}
+
+	_, err := getPublicKeys(t.Context(), failingJWKSProvider{statusCode: http.StatusOK, body: body}, "/jwks")
+
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.True(t, body.closed, "the response body must be closed when reading it fails")
+}
+
+func Test_getPublicKeys_ClosesBodyOnNonOKStatus(t *testing.T) {
+	body := &failingBody{}
+
+	_, err := getPublicKeys(t.Context(), failingJWKSProvider{
+		statusCode: http.StatusInternalServerError,
+		body:       body,
+	}, "/jwks")
+
+	require.ErrorIs(t, err, errInvalidURL)
+	assert.True(t, body.closed, "the response body must be closed when status is not 200 OK")
+}
+
+// Test_getPublicKeys_ReusesConnection pins that getPublicKeys drains the body so the keep-alive
+// connection is reused across refreshes, on the success path and on the non-200 path. Without the
+// drain, net/http abandons the connection on Close and opens a new one for every fetch.
+func Test_getPublicKeys_ReusesConnection(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			var conns int32
+
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"keys":[]}`))
+			}))
+			srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+				if s == http.StateNew {
+					atomic.AddInt32(&conns, 1)
+				}
+			}
+
+			srv.Start()
+			defer srv.Close()
+
+			transport := &http.Transport{MaxIdleConns: 10, MaxIdleConnsPerHost: 10}
+			defer transport.CloseIdleConnections()
+
+			client := &http.Client{Transport: transport}
+			provider := reusableJWKSProvider{client: client, url: srv.URL}
+
+			const fetches = 10
+			for range fetches {
+				_, _ = getPublicKeys(t.Context(), provider, "/jwks")
+			}
+
+			assert.LessOrEqualf(t, atomic.LoadInt32(&conns), int32(2),
+				"status %d: %d fetches opened %d connections; the body must be drained so the connection is reused",
+				status, fetches, atomic.LoadInt32(&conns))
+		})
+	}
+}
+
+// reusableJWKSProvider is a real-client provider, like gofr's httpService: the response Body is a
+// real net/http body over a real keep-alive connection.
+type reusableJWKSProvider struct {
+	client *http.Client
+	url    string
+}
+
+func (p reusableJWKSProvider) GetWithHeaders(ctx context.Context, path string, _ map[string]any,
+	_ map[string]string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url+path, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.client.Do(req)
 }
 
 func TestPublicKeys_updateKeys(t *testing.T) {

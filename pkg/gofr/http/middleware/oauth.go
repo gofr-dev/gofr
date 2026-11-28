@@ -29,6 +29,10 @@ var (
 
 const jwtRegexPattern = "^[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+$"
 
+// discardedBodyLimit bounds how much of an unread JWKS response body is drained before close, so a
+// hostile body cannot force an unbounded read. A JWKS error body is small, so 4 KB is enough.
+const discardedBodyLimit = 4 << 10
+
 // PublicKeys stores a map of public keys identified by their key ID (kid).
 type PublicKeys struct {
 	mu   sync.RWMutex
@@ -114,6 +118,16 @@ func getPublicKeys(ctx context.Context, provider JWKSProvider, path string) (JWK
 		return keys, err
 	}
 
+	if resp.Body != nil {
+		// Drain a bounded amount before closing so net/http can reuse the keep-alive connection:
+		// it only reuses a connection whose body reached EOF, so a Close on an unread body
+		// (for example the non-200 path) makes the transport abandon the connection instead.
+		defer func() {
+			_, _ = io.CopyN(io.Discard, resp.Body, discardedBodyLimit)
+			_ = resp.Body.Close()
+		}()
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return keys, errInvalidURL
 	}
@@ -126,8 +140,6 @@ func getPublicKeys(ctx context.Context, provider JWKSProvider, path string) (JWK
 	if err != nil {
 		return keys, err
 	}
-
-	resp.Body.Close()
 
 	err = json.Unmarshal(body, &keys)
 
