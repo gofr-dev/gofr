@@ -13,6 +13,9 @@ real-time applications like chat, notifications, and live updates. GoFr provides
 into your application. By leveraging GoFr's WebSocket support and customizable upgrader options,
 users can efficiently manage real-time communication in your applications.
 
+Only routes registered with `app.WebSocket` are upgraded to WebSocket connections. An upgrade request sent to any
+other route is served as that route's normal HTTP response.
+
 ## Usage in GoFr
 
 Here is a simple example to set up a WebSocket server in GoFr:

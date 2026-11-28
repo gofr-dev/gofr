@@ -70,6 +70,7 @@ func (a *App) add(method, pattern string, h Handler) {
 		container:      a.container,
 		requestTimeout: time.Duration(reqTimeout) * time.Second,
 		builtIn:        a.registeringBuiltIns,
+		webSocket:      a.registeringWebSocket,
 	}
 
 	// RFC 10008: a QUERY request MUST carry a Content-Type the server can

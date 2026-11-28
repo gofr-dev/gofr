@@ -69,11 +69,14 @@ type App struct {
 
 	// registeringBuiltIns is set while httpServerSetup registers GoFr's own routes.
 	registeringBuiltIns bool
-	rbacEnabled         bool // set by the first EnableRBAC that installs a config; guards its metric registration
-	subscriptionManager SubscriptionManager
-	graphqlManager      graphQLRunner
-	onStartHooks        []func(ctx *Context) error
-	mu                  sync.Mutex
+
+	// registeringWebSocket is set while App.WebSocket registers its route.
+	registeringWebSocket bool
+	rbacEnabled          bool // set by the first EnableRBAC that installs a config; guards its metric registration
+	subscriptionManager  SubscriptionManager
+	graphqlManager       graphQLRunner
+	onStartHooks         []func(ctx *Context) error
+	mu                   sync.Mutex
 
 	// readinessChecks are the application-registered readiness checks for /.well-known/health,
 	// evaluated in registration order; empty means the endpoint keeps its default behavior.
@@ -290,9 +293,7 @@ func (a *App) httpServerSetup() {
 			}
 		}
 
-		if h, ok := route.GetHandler().(handler); ok && h.builtIn {
-			routemark.MarkBuiltIn(route)
-		}
+		markKnownRoutes(route)
 
 		routes.add(route, met)
 
@@ -302,6 +303,24 @@ func (a *App) httpServerSetup() {
 	a.rbacRoutes = routes.routes
 
 	*a.httpServer.router.RegisteredRoutes = registeredMethods
+}
+
+// markKnownRoutes names the routes httpServerSetup can identify from the handler
+// they were registered with: GoFr's own routes and WebSocket routes. The mark is
+// the mux route name, so it holds under either route matcher.
+func markKnownRoutes(route *mux.Route) {
+	h, ok := route.GetHandler().(handler)
+	if !ok {
+		return
+	}
+
+	if h.builtIn {
+		routemark.MarkBuiltIn(route)
+	}
+
+	if h.webSocket {
+		routemark.MarkWebSocket(route)
+	}
 }
 
 func (a *App) startSubscriptions(ctx context.Context) error {
