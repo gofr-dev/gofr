@@ -58,6 +58,26 @@ func TestQueryLog_PrettyPrint(t *testing.T) {
 	}
 }
 
+func TestQueryLog_String(t *testing.T) {
+	tests := []struct {
+		name string
+		args any
+		want string
+	}{
+		{name: "nil args render as empty", args: nil, want: ""},
+		{name: "slice of args is joined by spaces", args: []any{"set", "key", 1}, want: "set key 1"},
+		{name: "other args are formatted as is", args: []string{"a", "b"}, want: "[a b]"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ql := &QueryLog{Query: "set", Args: tc.args}
+
+			assert.Equal(t, tc.want, ql.String())
+		})
+	}
+}
+
 // queryLogRecorder is a datasource.Logger that keeps every *QueryLog passed to
 // Debug, so a test can assert on the logged Args rather than on printed output.
 type queryLogRecorder struct {

@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -3231,4 +3232,674 @@ func TestPubSub_MessageValueLog(t *testing.T) {
 			assert.Equal(t, []string{tc.wantValue}, logs.messageValues("SUB"))
 		})
 	}
+}
+
+// messageLogRecorder is a datasource.Logger that keeps the formatted text of every
+// Debugf, Infof and Errorf call so a test can assert on what was logged.
+type messageLogRecorder struct {
+	queryLogRecorder
+
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (r *messageLogRecorder) recordf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.msgs = append(r.msgs, fmt.Sprintf(format, args...))
+}
+
+func (r *messageLogRecorder) Debugf(format string, args ...any) { r.recordf(format, args...) }
+func (r *messageLogRecorder) Infof(format string, args ...any)  { r.recordf(format, args...) }
+func (r *messageLogRecorder) Errorf(format string, args ...any) { r.recordf(format, args...) }
+
+func (r *messageLogRecorder) messages() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return append([]string(nil), r.msgs...)
+}
+
+func (r *messageLogRecorder) contains(substr string) bool {
+	for _, m := range r.messages() {
+		if strings.Contains(m, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// commandRecorder is a redis.Hook that keeps the text of every command sent through the client.
+type commandRecorder struct {
+	mu   sync.Mutex
+	cmds []string
+}
+
+func (*commandRecorder) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (r *commandRecorder) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		r.mu.Lock()
+		r.cmds = append(r.cmds, cmd.String())
+		r.mu.Unlock()
+
+		return next(ctx, cmd)
+	}
+}
+
+func (*commandRecorder) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (r *commandRecorder) sent(substr string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, c := range r.cmds {
+		if strings.Contains(c, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func newAnyMetrics(t *testing.T) *MockMetrics {
+	t.Helper()
+
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	return mockMetrics
+}
+
+// newRecordedPubSub builds a PubSub on top of miniredis with the given Config and a logger that records messages.
+func newRecordedPubSub(t *testing.T, cfg *Config, metrics Metrics) (*PubSub, *messageLogRecorder) {
+	t.Helper()
+
+	client, base := newMiniredisClient(t, true)
+	cfg.HostName, cfg.Port = base.HostName, base.Port
+
+	rec := &messageLogRecorder{}
+	ps := newPubSub(client, cfg, rec, metrics)
+
+	t.Cleanup(func() { _ = ps.Close() })
+
+	return ps, rec
+}
+
+func registerReceiveChan(ps *PubSub, topic string, size int) chan *pubsub.Message {
+	ch := make(chan *pubsub.Message, size)
+
+	ps.mu.Lock()
+	ps.receiveChan[topic] = ch
+	ps.chanClosed[topic] = false
+	ps.closeOnce[topic] = &sync.Once{}
+	ps.mu.Unlock()
+
+	return ch
+}
+
+func TestPubSub_Subscribe_NotConnectedLogsRetry(t *testing.T) {
+	client, cfg := newMiniredisClient(t, false)
+	rec := &messageLogRecorder{}
+	ps := newPubSub(client, cfg, rec, newAnyMetrics(t))
+
+	t.Cleanup(func() { _ = ps.Close() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	result := make(chan *pubsub.Message, 1)
+
+	go func() {
+		msg, _ := ps.Subscribe(ctx, "orders")
+		result <- msg
+	}()
+
+	require.Eventually(t, func() bool {
+		return rec.contains("Redis not connected, retrying subscribe for topic 'orders'")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	cancel()
+
+	select {
+	case msg := <-result:
+		assert.Nil(t, msg)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Subscribe did not return after the context was canceled")
+	}
+}
+
+func TestPubSub_Subscribe_EmptyModeDefaultsToStreams(t *testing.T) {
+	const topic = "orders"
+
+	metrics := NewMockMetrics(gomock.NewController(t))
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", topic, "consumer_group", "grp").Times(1)
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", topic, "consumer_group", "grp").Times(1)
+	metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	ps, _ := newRecordedPubSub(t, &Config{
+		PubSubStreamsConfig: &StreamsConfig{ConsumerGroup: "grp", Block: 50 * time.Millisecond},
+	}, metrics)
+
+	received := make(chan *pubsub.Message, 1)
+
+	go func() {
+		msg, _ := ps.Subscribe(t.Context(), topic)
+		received <- msg
+	}()
+
+	require.Eventually(t, func() bool {
+		groups, err := ps.client.XInfoGroups(t.Context(), topic).Result()
+
+		return err == nil && len(groups) == 1 && groups[0].Name == "grp"
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, ps.Publish(t.Context(), topic, []byte("hello")))
+
+	select {
+	case msg := <-received:
+		require.NotNil(t, msg)
+		assert.Equal(t, "hello", string(msg.Value))
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not receive the published message")
+	}
+}
+
+func TestPubSub_EnsureSubscription_BufferSize(t *testing.T) {
+	tests := []struct {
+		name       string
+		bufferSize int
+		wantCap    int
+	}{
+		{name: "zero buffer size falls back to the default", bufferSize: 0, wantCap: defaultPubSubBufferSize},
+		{name: "configured buffer size is used", bufferSize: 7, wantCap: 7},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ps, _ := newRecordedPubSub(t, &Config{PubSubBufferSize: tc.bufferSize}, newAnyMetrics(t))
+
+			ch := ps.ensureSubscription(t.Context(), "orders")
+
+			assert.Equal(t, tc.wantCap, cap(ch))
+		})
+	}
+}
+
+func TestPubSub_EnsureSubscription_ReturnsExistingChannel(t *testing.T) {
+	ps, _ := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	first := ps.ensureSubscription(t.Context(), "orders")
+	second := ps.ensureSubscription(t.Context(), "orders")
+
+	assert.Equal(t, first, second)
+	assert.Len(t, ps.subWg, 1)
+}
+
+func TestPubSub_RunSubscriptionLoop_StopsBeforeSubscribing(t *testing.T) {
+	register := func(ps *PubSub, topic string, cancel context.CancelFunc) {
+		ps.subStarted[topic] = struct{}{}
+		ps.subCancel[topic] = cancel
+	}
+
+	tests := []struct {
+		name     string
+		topic    string
+		prepare  func(ps *PubSub, topic string, cancel context.CancelFunc)
+		wantLogs []string
+	}{
+		{
+			name:  "canceled context returns without subscribing",
+			topic: "orders",
+			prepare: func(ps *PubSub, topic string, cancel context.CancelFunc) {
+				register(ps, topic, cancel)
+				cancel()
+			},
+		},
+		{
+			name:    "topic that is no longer subscribed returns without subscribing",
+			topic:   "orders",
+			prepare: func(*PubSub, string, context.CancelFunc) {},
+		},
+		{
+			name:    "permanent failure is logged once and stops the loop",
+			topic:   "invalid topic",
+			prepare: register,
+			wantLogs: []string{
+				"consumer group not configured for stream 'invalid topic'",
+				"Permanent failure detected for topic 'invalid topic': consumer group not configured for stream: invalid topic",
+				"Subscription for topic 'invalid topic' stopped due to permanent failure",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			tc.prepare(ps, tc.topic, cancel)
+
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+
+			done := make(chan struct{})
+
+			go func() {
+				ps.runSubscriptionLoop(ctx, tc.topic, wg, cancel)
+				close(done)
+			}()
+
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("runSubscriptionLoop did not return")
+			}
+
+			assert.Equal(t, tc.wantLogs, rec.messages())
+		})
+	}
+}
+
+func TestPubSub_SubscribeToStream_BlockDuration(t *testing.T) {
+	tests := []struct {
+		name      string
+		block     time.Duration
+		wantBlock string
+	}{
+		{name: "unset block falls back to one second", block: 0, wantBlock: "block 1000 streams"},
+		{name: "configured block is passed to XREADGROUP", block: 50 * time.Millisecond, wantBlock: "block 50 streams"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const topic = "orders"
+
+			ps, _ := newRecordedPubSub(t, &Config{
+				PubSubStreamsConfig: &StreamsConfig{ConsumerGroup: "grp", ConsumerName: "c1", Block: tc.block},
+			}, newAnyMetrics(t))
+
+			cmds := &commandRecorder{}
+			ps.client.AddHook(cmds)
+
+			registerReceiveChan(ps, topic, 10)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			done := make(chan error, 1)
+
+			go func() { done <- ps.subscribeToStream(ctx, topic) }()
+
+			require.Eventually(t, func() bool { return cmds.sent("xreadgroup") }, 5*time.Second, 5*time.Millisecond)
+
+			cancel()
+
+			select {
+			case err := <-done:
+				require.NoError(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("subscribeToStream did not return after the context was canceled")
+			}
+
+			assert.True(t, cmds.sent(tc.wantBlock))
+		})
+	}
+}
+
+func TestPubSub_SubscribeToStream_NoReceiveChannelSendsNoRead(t *testing.T) {
+	const topic = "orders"
+
+	ps, _ := newRecordedPubSub(t, &Config{
+		PubSubStreamsConfig: &StreamsConfig{ConsumerGroup: "grp", Block: 50 * time.Millisecond},
+	}, newAnyMetrics(t))
+
+	cmds := &commandRecorder{}
+	ps.client.AddHook(cmds)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*subscribeRetryInterval)
+	defer cancel()
+
+	require.NoError(t, ps.subscribeToStream(ctx, topic))
+
+	assert.False(t, cmds.sent("xreadgroup"))
+
+	groups, err := ps.client.XInfoGroups(t.Context(), topic).Result()
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	assert.Zero(t, groups[0].Consumers)
+}
+
+func TestPubSub_CreateConsumerGroup_BusyGroupIsSuccess(t *testing.T) {
+	ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	assert.True(t, ps.createConsumerGroup(t.Context(), "orders", "grp"))
+	assert.True(t, ps.createConsumerGroup(t.Context(), "orders", "grp"))
+	assert.Empty(t, rec.messages())
+}
+
+func TestPubSub_GetAvailableCapacity_Unavailable(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(ps *PubSub, topic string)
+	}{
+		{name: "topic without a receive channel", setup: func(*PubSub, string) {}},
+		{
+			name: "closed channel",
+			setup: func(ps *PubSub, topic string) {
+				registerReceiveChan(ps, topic, 5)
+				ps.chanClosed[topic] = true
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ps, _ := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+			tc.setup(ps, "orders")
+
+			assert.Zero(t, ps.getAvailableCapacity("orders"))
+		})
+	}
+}
+
+func TestPubSub_ReadPendingMessages(t *testing.T) {
+	const (
+		topic    = "orders"
+		group    = "grp"
+		consumer = "c1"
+	)
+
+	createGroup := func(t *testing.T, ps *PubSub) {
+		t.Helper()
+
+		require.NoError(t, ps.client.XGroupCreateMkStream(t.Context(), topic, group, "0").Err())
+	}
+
+	tests := []struct {
+		name          string
+		count         int64
+		setup         func(t *testing.T, ps *PubSub)
+		want          bool
+		wantMarked    bool
+		wantDelivered []string
+		wantLog       string
+		wantLogCount  int
+	}{
+		{name: "non positive count reads nothing", count: 0, setup: func(*testing.T, *PubSub) {}},
+		{
+			name:  "unacknowledged message is redelivered",
+			count: 5,
+			setup: func(t *testing.T, ps *PubSub) {
+				t.Helper()
+				createGroup(t, ps)
+				require.NoError(t, ps.client.XAdd(t.Context(), &redis.XAddArgs{
+					Stream: topic, Values: map[string]any{payloadKey: "first"},
+				}).Err())
+				require.NoError(t, ps.client.XReadGroup(t.Context(), &redis.XReadGroupArgs{
+					Group: group, Consumer: consumer, Streams: []string{topic, ">"}, Count: 1, Block: -1,
+				}).Err())
+			},
+			want:          true,
+			wantMarked:    true,
+			wantDelivered: []string{"first"},
+		},
+		{
+			name:       "group without pending messages reports nothing read",
+			count:      5,
+			setup:      createGroup,
+			wantMarked: true,
+		},
+		{
+			name:         "missing group is logged and reports nothing read",
+			count:        5,
+			setup:        func(*testing.T, *PubSub) {},
+			wantMarked:   true,
+			wantLog:      "error reading pending messages for stream 'orders'",
+			wantLogCount: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+			ch := registerReceiveChan(ps, topic, 10)
+
+			tc.setup(t, ps)
+
+			got := ps.readPendingMessages(t.Context(), topic, group, consumer, tc.count)
+
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantMarked, ps.pendingRead[topic])
+
+			var delivered []string
+
+			for len(ch) > 0 {
+				delivered = append(delivered, string((<-ch).Value))
+			}
+
+			assert.Equal(t, tc.wantDelivered, delivered)
+
+			assert.Len(t, rec.messages(), tc.wantLogCount)
+			assert.Contains(t, strings.Join(rec.messages(), "\n"), tc.wantLog)
+		})
+	}
+}
+
+func TestPubSub_ReadNewMessages_NonPositiveCountReadsNothing(t *testing.T) {
+	tests := []struct {
+		name  string
+		count int64
+	}{
+		{name: "zero count", count: 0},
+		{name: "negative count", count: -1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const topic = "orders"
+
+			ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+			ch := registerReceiveChan(ps, topic, 10)
+
+			require.NoError(t, ps.client.XGroupCreateMkStream(t.Context(), topic, "grp", "$").Err())
+			require.NoError(t, ps.client.XAdd(t.Context(), &redis.XAddArgs{
+				Stream: topic, Values: map[string]any{payloadKey: "waiting"},
+			}).Err())
+
+			ps.readNewMessages(t.Context(), topic, "grp", "c1", tc.count, time.Millisecond)
+
+			assert.Empty(t, ch)
+			assert.Empty(t, rec.messages())
+
+			groups, err := ps.client.XInfoGroups(t.Context(), topic).Result()
+			require.NoError(t, err)
+			require.Len(t, groups, 1)
+			assert.Zero(t, groups[0].Pending)
+			assert.Zero(t, groups[0].Consumers)
+		})
+	}
+}
+
+func TestPubSub_DispatchMessage_ChannelClosedWithoutFlag_Recovers(t *testing.T) {
+	const topic = "orders"
+
+	ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+	ch := make(chan *pubsub.Message, 1)
+	ps.receiveChan[topic] = ch
+
+	close(ch)
+
+	assert.NotPanics(t, func() {
+		ps.dispatchMessage(t.Context(), topic, pubsub.NewMessage(t.Context()))
+	})
+	assert.Equal(t, []string{"channel closed for topic 'orders' during dispatch"}, rec.messages())
+}
+
+func TestPubSub_Unsubscribe_UnknownTopicLeavesStateUntouched(t *testing.T) {
+	ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	canceled := false
+	ps.subCancel["orders"] = func() { canceled = true }
+
+	require.NoError(t, ps.unsubscribe("orders"))
+
+	assert.False(t, canceled)
+	assert.Contains(t, ps.subCancel, "orders")
+	assert.Empty(t, rec.messages())
+}
+
+func TestPubSub_WaitForGoroutine_UnknownTopic(t *testing.T) {
+	ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	assert.NotPanics(t, func() { ps.waitForGoroutine("orders") })
+	assert.Empty(t, rec.messages())
+}
+
+func TestPubSub_WaitForGoroutines_TimeoutIsLogged(t *testing.T) {
+	tests := []struct {
+		name string
+		wait func(ps *PubSub, topic string, wg *sync.WaitGroup)
+	}{
+		{
+			name: "waitForGoroutine",
+			wait: func(ps *PubSub, topic string, wg *sync.WaitGroup) {
+				ps.subWg[topic] = wg
+				ps.waitForGoroutine(topic)
+			},
+		},
+		{
+			name: "cleanupStreamConsumers",
+			wait: func(ps *PubSub, topic string, wg *sync.WaitGroup) {
+				ps.subWg[topic] = wg
+				ps.cleanupStreamConsumers(topic)
+			},
+		},
+		{
+			name: "waitForAllGoroutines",
+			wait: func(ps *PubSub, topic string, wg *sync.WaitGroup) {
+				ps.waitForAllGoroutines(map[string]*sync.WaitGroup{topic: wg})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+
+			t.Cleanup(wg.Done)
+
+			tc.wait(ps, "orders", wg)
+
+			assert.True(t, rec.contains("timeout waiting for subscription goroutine for topic 'orders'"))
+		})
+	}
+}
+
+func TestPubSub_QueryStream_PayloadTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []redis.XMessage
+		want     []byte
+	}{
+		{
+			name: "string and byte payloads are joined by a newline",
+			messages: []redis.XMessage{
+				{ID: "1-0", Values: map[string]any{payloadKey: "first"}},
+				{ID: "2-0", Values: map[string]any{payloadKey: []byte("second")}},
+			},
+			want: []byte("first\nsecond"),
+		},
+		{
+			name: "unsupported payload types are skipped",
+			messages: []redis.XMessage{
+				{ID: "1-0", Values: map[string]any{payloadKey: 42}},
+				{ID: "2-0", Values: map[string]any{payloadKey: []byte("kept")}},
+			},
+			want: []byte("kept"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			ps := &PubSub{client: db, config: &Config{}}
+
+			mock.ExpectXRangeN("orders", "-", "+", int64(10)).SetVal(tc.messages)
+
+			got, err := ps.queryStream(t.Context(), "orders", time.Second, 10)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestPubSub_CollectMessages_ContextExpiresWhileWaiting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	ch := make(chan *redis.Message, 1)
+	ch <- &redis.Message{Payload: "msg1"}
+
+	result := (&PubSub{}).collectMessages(ctx, ch, 2)
+
+	assert.Equal(t, []byte("msg1"), result)
+}
+
+func TestPubSub_Close_CancelsStreamConsumers(t *testing.T) {
+	ps, _ := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	canceled := false
+	ps.streamConsumers["orders"] = &streamConsumer{stream: "orders", cancel: func() { canceled = true }}
+
+	require.NoError(t, ps.Close())
+
+	assert.True(t, canceled)
+	assert.Empty(t, ps.streamConsumers)
+}
+
+func TestPubSub_UnsubscribeFromRedis_ClosedConnectionIsLogged(t *testing.T) {
+	const topic = "orders"
+
+	ps, rec := newRecordedPubSub(t, &Config{}, newAnyMetrics(t))
+
+	redisPubSub := ps.client.Subscribe(t.Context(), topic)
+	require.NoError(t, redisPubSub.Close())
+
+	ps.subPubSub[topic] = redisPubSub
+
+	ps.unsubscribeFromRedis(topic)
+
+	assert.True(t, rec.contains("failed to unsubscribe from Redis channel 'orders'"))
+}
+
+func TestPubSub_ReadPendingMessages_NilReplyReportsNothingRead(t *testing.T) {
+	const topic = "orders"
+
+	db, mock := redismock.NewClientMock()
+	rec := &messageLogRecorder{}
+	ps := &PubSub{client: db, config: &Config{}, logger: rec, pendingRead: make(map[string]bool)}
+
+	mock.ExpectXReadGroup(&redis.XReadGroupArgs{
+		Group: "grp", Consumer: "c1", Streams: []string{topic, "0"}, Count: 5,
+	}).RedisNil()
+
+	assert.False(t, ps.readPendingMessages(t.Context(), topic, "grp", "c1", 5))
+	assert.True(t, ps.pendingRead[topic])
+	assert.Empty(t, rec.messages())
+	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -404,6 +404,32 @@ func TestRetryConnect(t *testing.T) {
 	}
 }
 
+func TestRetryConnect_LogsFailedAttemptsUntilStopped(t *testing.T) {
+	client, cfg := newMiniredisClient(t, false)
+	rec := &messageLogRecorder{}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		retryConnect(client, cfg, rec, 5*time.Millisecond, stop)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		return rec.contains("could not connect to redis at '" + cfg.addr() + "' on database 0")
+	}, 5*time.Second, 10*time.Millisecond)
+
+	close(stop)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("retryConnect did not stop after the stop signal")
+	}
+
+	assert.False(t, rec.contains("connected to redis successfully"))
+}
+
 // findSpan returns the last span with the given name sent to the Redis on port, or nil.
 // Matching the port keeps out spans from clients of other tests that use the global provider.
 func findSpan(spans tracetest.SpanStubs, name, port string) *tracetest.SpanStub {

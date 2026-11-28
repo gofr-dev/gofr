@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 	"time"
@@ -625,6 +626,96 @@ func TestSQLMigrator_StartRefreshError(t *testing.T) {
 		require.Error(t, ctx.Err())
 	case <-time.After(defaultRefresh * 2):
 		t.Error("Expected context to be canceled, but timed out")
+	}
+}
+
+func TestSQLMigrator_getAppliedMigrations_ScanError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mocks.SQL.ExpectQuery(getSQLGoFrMigrationVersions).
+		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow("not-a-number"))
+
+	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
+	applied, err := m.getAppliedMigrations(mockContainer)
+
+	require.ErrorContains(t, err, "converting driver.Value type string")
+	assert.Nil(t, applied)
+}
+
+func TestSQLMigrator_StartRefresh_LockLost(t *testing.T) {
+	tests := []struct {
+		name      string
+		dialect   string
+		query     string
+		result    driver.Result
+		expFormat string
+		expArg    any
+	}{
+		{
+			name:      "rows affected error",
+			dialect:   "mysql",
+			query:     updateLockMySQL,
+			result:    sqlmock.NewErrorResult(errSQLExec),
+			expFormat: "failed to check rows affected for SQL lock: %v",
+			expArg:    errSQLExec,
+		},
+		{
+			name:      "lock row no longer owned",
+			dialect:   "mysql",
+			query:     updateLockMySQL,
+			result:    sqlmock.NewResult(0, 0),
+			expFormat: "%v",
+			expArg:    errSQLLockRefreshFailed,
+		},
+		{
+			name:      "postgres lock row no longer owned",
+			dialect:   postgres,
+			query:     updateLockPostgres,
+			result:    sqlmock.NewResult(0, 0),
+			expFormat: "%v",
+			expArg:    errSQLLockRefreshFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			mockContainer.Logger = mockLogger
+
+			m := sqlMigrator{SQL: mockContainer.SQL, migrator: NewMockmigrator(ctrl)}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			mocks.SQL.ExpectExec(tc.query).
+				WithArgs(sqlmock.AnyArg(), lockKey, "1").
+				WillReturnResult(tc.result)
+
+			mockLogger.EXPECT().Errorf(tc.expFormat, tc.expArg)
+
+			done := make(chan struct{})
+
+			go func() {
+				m.startRefresh(ctx, cancel, mockContainer, "1", tc.dialect)
+				close(done)
+			}()
+
+			select {
+			case <-done:
+			case <-time.After(defaultRefresh * 3):
+				t.Fatal("startRefresh did not return after the lock was lost")
+			}
+
+			require.ErrorIs(t, ctx.Err(), context.Canceled)
+			require.NoError(t, mocks.SQL.ExpectationsWereMet())
+		})
 	}
 }
 

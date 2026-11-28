@@ -498,3 +498,66 @@ func TestRedisMigrator_Unlock_NotOwned(t *testing.T) {
 		})
 	}
 }
+
+type hsetErrPipeliner struct {
+	goRedis.Pipeliner
+	err error
+}
+
+func (p hsetErrPipeliner) HSet(ctx context.Context, _ string, _ ...any) *goRedis.IntCmd {
+	cmd := goRedis.NewIntCmd(ctx)
+	cmd.SetErr(p.err)
+
+	return cmd
+}
+
+func TestRedisMigrator_CommitMigration_RecordErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		startTime time.Time
+		pipeline  func(client *goRedis.Client) goRedis.Pipeliner
+		expErr    string
+	}{
+		{
+			name:      "record that cannot be marshaled",
+			startTime: time.Date(10000, time.January, 1, 0, 0, 0, 0, time.UTC),
+			pipeline:  func(client *goRedis.Client) goRedis.Pipeliner { return client.TxPipeline() },
+			expErr:    "year outside of range",
+		},
+		{
+			name:      "hset failure",
+			startTime: time.Now(),
+			pipeline: func(*goRedis.Client) goRedis.Pipeliner {
+				return hsetErrPipeliner{err: errRedis}
+			},
+			expErr: errRedis.Error(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c, _ := container.NewMockContainer(t)
+			mockLogger := container.NewMockLogger(ctrl)
+			c.Logger = mockLogger
+
+			s := miniredis.RunT(t)
+			client := goRedis.NewClient(&goRedis.Options{Addr: s.Addr()})
+			m := redisMigrator{Redis: client, migrator: NewMockmigrator(ctrl)}
+
+			data := transactionData{
+				MigrationNumber: 1,
+				StartTime:       tc.startTime,
+				RedisTx:         tc.pipeline(client),
+				UsedDatasources: map[string]bool{dsRedis: true},
+			}
+
+			mockLogger.EXPECT().Errorf("migration %v for Redis failed with err: %v", "1", gomock.Any())
+
+			err := m.commitMigration(c, &data)
+
+			require.ErrorContains(t, err, tc.expErr)
+			assert.Empty(t, s.HGet("gofr_migrations", "1"))
+		})
+	}
+}
