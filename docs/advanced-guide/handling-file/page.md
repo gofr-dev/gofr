@@ -424,7 +424,10 @@ for _, entry := range entries {
 ### Creating and Save a File with Content
 
 ```go
-file, _ := ctx.File.Create("my_file.text")
+file, err := ctx.File.Create("my_file.text")
+if err != nil {
+	return nil, err
+}
 
 _, _ = file.Write([]byte("Hello World!"))
 
@@ -459,7 +462,7 @@ for reader.Next() {
 
 To open a file with default settings, use the `Open` command, which provides read and seek permissions only. For write permissions, use `OpenFile` with the appropriate file modes.
 
-> Note: In FTP, file permissions are not differentiated; both `Open` and `OpenFile` allow all file operations regardless of specified permissions.
+> Note: On GCS, Azure File Storage and FTP, `OpenFile` opens a file either for reading or for writing through the store, and a write replaces the stored file. So `os.O_RDWR` on its own returns an error; combine it with `os.O_CREATE` or `os.O_TRUNC` to write the file. On these stores, `WriteAt` and `Seek` on a file being written return an error. The `os.O_RDWR` and `WriteAt` part of the example below works only on the local file system.
 
 ```go
 csvFile, _ := ctx.File.Open("my_file.csv")
@@ -471,6 +474,7 @@ _, _ = file.Read(b)
 
 csvFile.Close()
 
+// Local file system only: open for reading and writing in place.
 csvFile, err = ctx.File.OpenFile("my_file.csv", os.O_RDWR, os.ModePerm)
 
 // WriteAt writes the buffer content at the specified offset.
@@ -479,6 +483,8 @@ if err != nil {
      return nil, err
 }
 ```
+
+> Note: On the local file system, `Open` and `OpenFile` behave like the `os` functions of the same name and return `os` errors, except that a missing file returns `file.ErrFileNotFound`. Check for it with `errors.Is(err, file.ErrFileNotFound)`, which also matches `os.ErrNotExist`. If `Create` cannot create the file, the returned file's `Write` and `Close` return the error. As on the other stores, `ReadAt` returns `file.ErrOutOfRange` for a negative offset or one at or past the end of the file, and `Seek` returns an error matching `file.ErrOutOfRange` for a negative offset or, on a file opened only for reading, one past the end. A file opened for writing can seek past the end, where a later `Write` extends it.
 
 ### Getting Information of the file/directory
 
@@ -514,6 +520,8 @@ To move file from one location to another provide current location as source and
 err := ctx.File.Rename("old_name.text", "new_name.text")
 ```
 
+> Note: On the local file system, `Rename` behaves like `os.Rename` and also creates any missing parent directories of the destination. Across filesystems, only a regular file can be moved: it is copied with its mode and modification time, and then the original is removed. Moving a directory or symlink to another filesystem returns the error from `os.Rename`.
+
 ### Deleting Files
 
 `Remove` deletes a single file
@@ -524,7 +532,7 @@ err := ctx.File.Rename("old_name.text", "new_name.text")
 err := ctx.File.Remove("my_dir")
 ```
 
-The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory will be reset to its parent directory.
+The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory is left as it is, so change to an existing directory before you use relative paths again.
 
 > Note: In S3, RemoveAll only supports deleting directories and will return an error if a file path (as indicated by a file extension) is provided for S3.
 > GCS and Azure File Storage handle both files and directories.

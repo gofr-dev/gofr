@@ -175,6 +175,12 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 // Shutdown stops the service(s) and close the application.
 // It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
 func (a *App) Shutdown(ctx context.Context) error {
+	// Cancel running cron jobs' contexts and stop new runs before the servers
+	// drain, so jobs get the whole grace period to wind down.
+	if a.cron != nil {
+		a.cron.halt()
+	}
+
 	var err error
 	if a.httpServer != nil {
 		err = errors.Join(err, a.httpServer.Shutdown(ctx))
