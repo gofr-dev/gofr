@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
@@ -38,11 +39,18 @@ const methodQuery = "QUERY"
 // maxRedirects mirrors the limit Go applies when following redirects.
 const maxRedirects = 10
 
+// redactedUserInfo replaces the credentials of a service address wherever the address is logged,
+// used as a metric label or used as a span name.
+const redactedUserInfo = "REDACTED"
+
 type httpService struct {
 	*http.Client
 	trace.Tracer
-	url  string
-	name string
+	url string
+	// redactedURL is url with its credentials replaced, set only when url carries any. It is
+	// what logs, the metric label and span names show.
+	redactedURL string
+	name        string
 	Logger
 	Metrics
 
@@ -108,6 +116,10 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logger,
 		Metrics: metrics,
+	}
+
+	if redacted := redactAddress(serviceAddress); redacted != serviceAddress {
+		h.redactedURL = redacted
 	}
 
 	var svc HTTP
@@ -237,7 +249,13 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	ctx, span := h.Tracer.Start(ctx, uri)
+	// The request is sent to uri; logURI is the same address without its credentials.
+	logURI := uri
+	if h.redactedURL != "" {
+		logURI = strings.TrimRight(h.redactedURL+"/"+path, "/")
+	}
+
+	ctx, span := h.Tracer.Start(ctx, logURI)
 	defer span.End()
 
 	// Attach client-side trace handling for HTTP request, but only when
@@ -254,7 +272,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	// Create the HTTP request with the tracing context.
 	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err
+		return nil, h.redactError(err)
 	}
 
 	var isContentTypeSet bool
@@ -281,7 +299,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		Timestamp:     time.Now(),
 		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
-		URI:           uri,
+		URI:           logURI,
 	}
 
 	requestStart := time.Now()
@@ -293,6 +311,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
+		err = h.redactError(err)
+
 		log.ResponseCode = http.StatusServiceUnavailable
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
@@ -312,7 +332,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
 		labels := []string{
-			metricLabelPath, h.url,
+			metricLabelPath, h.logAddress(),
 			metricLabelMethod, method,
 			metricLabelStatus, fmt.Sprintf("%v", statusCode),
 		}
@@ -357,4 +377,60 @@ func (a attributesOption) AddOption(h HTTP) HTTP {
 // WithAttributes returns an Option that sets the attributes of the HTTP service.
 func WithAttributes(attributes map[string]string) Options {
 	return attributesOption(attributes)
+}
+
+// logAddress returns the service address as logs, the metric label and span names show it.
+func (h *httpService) logAddress() string {
+	if h.redactedURL != "" {
+		return h.redactedURL
+	}
+
+	return h.url
+}
+
+// redactError replaces the address inside a *url.Error, which net/http returns for a failed
+// request and net/url for an address it cannot parse. net/http masks only a password
+// (user:***@), so a token used as the user name would otherwise reach the logs and the caller.
+// A service whose address has no credentials gets its errors back unchanged.
+func (h *httpService) redactError(err error) error {
+	if h.redactedURL == "" {
+		return err
+	}
+
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		// The URL starts with the service address unless net/http has already masked its password
+		// (user:***@), so swap in the known redacted address and parse only in that case. Parsing a
+		// URL whose path has a bad escape would fail and lose the host.
+		if rest, ok := strings.CutPrefix(urlErr.URL, h.url); ok {
+			urlErr.URL = h.redactedURL + rest
+		} else {
+			urlErr.URL = redactAddress(urlErr.URL)
+		}
+	}
+
+	return err
+}
+
+// redactAddress returns address with its userinfo (https://user:pass@host) replaced, so it can be
+// logged, used as a metric label or used as a span name. An address without userinfo is returned
+// unchanged.
+func redactAddress(address string) string {
+	if !strings.Contains(address, "@") {
+		return address
+	}
+
+	u, err := url.Parse(address)
+	if err != nil {
+		// A bad escape in a password fails the parse; drop everything up to the last '@'.
+		return redactedUserInfo + address[strings.LastIndex(address, "@"):]
+	}
+
+	if u.User == nil {
+		return address
+	}
+
+	u.User = url.User(redactedUserInfo)
+
+	return u.String()
 }
