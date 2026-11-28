@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -15,6 +16,13 @@ import (
 var errSubscriberHandlerPanic = errors.New("subscriber handler panicked")
 
 type SubscribeFunc func(c *Context) error
+
+// redeliverer is implemented by a message whose backend would otherwise skip it when it is left uncommitted.
+// On Kafka, the reader has already moved past the message, and commits are cumulative, so the next successful
+// message would commit past it.
+type redeliverer interface {
+	Redeliver()
+}
 
 type SubscriptionManager struct {
 	container     *container.Container
@@ -80,11 +88,15 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 		return handler(ctx)
 	}(msgCtx)
 	if errors.Is(err, errSubscriberHandlerPanic) {
+		redeliver(msg)
+
 		return nil
 	}
 
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
+		redeliver(msg)
+
 		return err
 	}
 
@@ -94,6 +106,13 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	}
 
 	return nil
+}
+
+// redeliver asks the backend to deliver msg again when it would not do so for an uncommitted message on its own.
+func redeliver(msg *pubsub.Message) {
+	if r, ok := msg.Committer.(redeliverer); ok {
+		r.Redeliver()
+	}
 }
 
 type panicLog struct {

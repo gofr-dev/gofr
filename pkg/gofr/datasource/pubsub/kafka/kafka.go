@@ -252,7 +252,9 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	m := pubsub.NewMessage(ctx)
 	m.Value = msg.Value
 	m.Topic = topic
-	m.Committer = newKafkaMessage(&msg, reader, k.logger)
+	committer := newKafkaMessage(&msg, reader, k.logger)
+	committer.release = func(r Reader) { k.releaseReader(topic, r) }
+	m.Committer = committer
 
 	end := time.Since(start)
 
@@ -277,6 +279,25 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
 	return m, err
+}
+
+// releaseReader closes reader and removes it from the reader map, if it is still the reader for topic, so that the
+// next Subscribe on topic creates a new one.
+func (k *kafkaClient) releaseReader(topic string, reader Reader) {
+	k.mu.Lock()
+
+	if k.reader[topic] != reader {
+		k.mu.Unlock()
+
+		return
+	}
+
+	delete(k.reader, topic)
+	k.mu.Unlock()
+
+	if err := reader.Close(); err != nil {
+		k.logger.Errorf("failed to close kafka reader for topic %s: %v", topic, err)
+	}
 }
 
 func (k *kafkaClient) Close() (err error) {

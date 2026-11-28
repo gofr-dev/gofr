@@ -1059,3 +1059,89 @@ func TestKafkaClient_GetReadContext(t *testing.T) {
 		assert.NoError(t, parent.Err(), "cancel must not cancel the caller's context")
 	})
 }
+
+func TestKafkaClient_releaseReader(t *testing.T) {
+	errClose := testutil.CustomError{ErrorMessage: "close failed"}
+
+	tests := []struct {
+		desc       string
+		released   func(current, other *MockReader) Reader
+		setup      func(current, other *MockReader)
+		expRemains bool
+		expLog     string
+	}{
+		{
+			desc:     "current reader is closed and removed",
+			released: func(current, _ *MockReader) Reader { return current },
+			setup:    func(current, _ *MockReader) { current.EXPECT().Close().Return(nil) },
+		},
+		{
+			desc:       "a reader that was already replaced leaves the map alone",
+			released:   func(_, other *MockReader) Reader { return other },
+			setup:      func(*MockReader, *MockReader) {},
+			expRemains: true,
+		},
+		{
+			desc:     "close error is logged and the reader is still removed",
+			released: func(current, _ *MockReader) Reader { return current },
+			setup:    func(current, _ *MockReader) { current.EXPECT().Close().Return(errClose) },
+			expLog:   "failed to close kafka reader for topic orders: close failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			current, other := NewMockReader(ctrl), NewMockReader(ctrl)
+			tc.setup(current, other)
+
+			k := &kafkaClient{reader: map[string]Reader{"orders": current}}
+
+			out := testutil.StderrOutputForFunc(func() {
+				k.logger = logging.NewMockLogger(logging.ERROR)
+				k.releaseReader("orders", tc.released(current, other))
+			})
+
+			_, remains := k.reader["orders"]
+			assert.Equal(t, tc.expRemains, remains)
+			assert.Contains(t, out, tc.expLog)
+		})
+	}
+}
+
+func TestKafkaClient_Subscribe_RedeliverStartsANewReader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockReader := NewMockReader(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConnection := NewMockConnection(ctrl)
+
+	k := &kafkaClient{
+		dialer:  &kafka.Dialer{},
+		reader:  map[string]Reader{"orders": mockReader},
+		conn:    &multiConn{conns: []Connection{mockConnection}},
+		logger:  logging.NewMockLogger(logging.ERROR),
+		config:  Config{ConsumerGroupID: "consumer", Brokers: []string{"kafkabroker"}, OffSet: -1},
+		metrics: mockMetrics,
+	}
+
+	fetched := kafka.Message{Topic: "orders", Partition: 0, Offset: 7, Value: []byte("m1")}
+
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockReader.EXPECT().FetchMessage(gomock.Any()).Return(fetched, nil)
+
+	msg, err := k.Subscribe(t.Context(), "orders")
+	require.NoError(t, err)
+
+	redeliverer, ok := msg.Committer.(interface{ Redeliver() })
+	require.True(t, ok, "a kafka message must support Redeliver")
+
+	gomock.InOrder(
+		mockReader.EXPECT().CommitMessages(gomock.Any(), kafka.Message{Topic: "orders", Partition: 0, Offset: 6}).Return(nil),
+		mockReader.EXPECT().Close().Return(nil),
+	)
+
+	redeliverer.Redeliver()
+
+	assert.NotContains(t, k.reader, "orders", "the next Subscribe must create a new reader")
+}

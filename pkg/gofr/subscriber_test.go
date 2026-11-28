@@ -73,13 +73,18 @@ const (
 	topicHandleSubErr   = "handle-sub-err"
 )
 
-// countingCommitter records Commit calls for tests.
+// countingCommitter records Commit and Redeliver calls for tests.
 type countingCommitter struct {
-	n int
+	n           int
+	redelivered int
 }
 
 func (c *countingCommitter) Commit() {
 	c.n++
+}
+
+func (c *countingCommitter) Redeliver() {
+	c.redelivered++
 }
 
 // handleSubscriptionTestPubSub returns messages with a counting committer for selected topics.
@@ -153,6 +158,51 @@ func TestSubscriptionManager_handleSubscription_HandlerErrorDoesNotCommit(t *tes
 	require.ErrorIs(t, err, errHandlerFail, "handler error must propagate so startSubscriber can back off")
 	require.NotNil(t, ps.lastCommitter)
 	require.Zero(t, ps.lastCommitter.n, "handler error must not commit")
+}
+
+func TestSubscriptionManager_handleSubscription_Redelivery(t *testing.T) {
+	tests := []struct {
+		desc           string
+		topic          string
+		handler        SubscribeFunc
+		expCommits     int
+		expRedelivered int
+	}{
+		{
+			desc:       "successful handler commits and does not redeliver",
+			topic:      topicHandleSubOK,
+			handler:    func(*Context) error { return nil },
+			expCommits: 1,
+		},
+		{
+			desc:           "handler error asks for redelivery",
+			topic:          topicHandleSubErr,
+			handler:        func(*Context) error { return errHandlerFail },
+			expRedelivered: 1,
+		},
+		{
+			desc:           "handler panic asks for redelivery",
+			topic:          topicHandleSubPanic,
+			handler:        func(*Context) error { panic("boom") },
+			expRedelivered: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ps := &handleSubscriptionTestPubSub{}
+			s := SubscriptionManager{container: &container.Container{
+				Logger: logging.NewMockLogger(logging.FATAL),
+				PubSub: ps,
+			}}
+
+			_ = s.handleSubscription(t.Context(), tc.topic, tc.handler)
+
+			require.NotNil(t, ps.lastCommitter)
+			assert.Equal(t, tc.expCommits, ps.lastCommitter.n)
+			assert.Equal(t, tc.expRedelivered, ps.lastCommitter.redelivered)
+		})
+	}
 }
 
 var errPanicValue = errors.New("panic error value")
