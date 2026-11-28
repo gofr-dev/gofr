@@ -414,3 +414,99 @@ func TestSerializeMessage_Error(t *testing.T) {
 		})
 	}
 }
+
+// Test_WebSocket_UpgradeOnPlainRouteIsIgnored pins the fix for gofr#4635: an Upgrade header sent
+// to a route registered via app.GET must not be upgraded. Before the fix the middleware upgraded
+// any route, the hijacked connection was never closed, and repeated upgrade requests leaked file
+// descriptors. After the fix the request is served as plain HTTP and nothing is registered in
+// the hub — while a route registered via app.WebSocket still upgrades normally. Both route
+// matchers are covered: the middleware reads the matched route differently under each (mux
+// populates it, the trie records it in the request context).
+func Test_WebSocket_UpgradeOnPlainRouteIsIgnored(t *testing.T) {
+	tests := []struct {
+		name      string
+		routerEnv string
+	}{
+		{"mux matcher", ""},
+		{"trie matcher", "trie"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GOFR_ROUTER", tc.routerEnv)
+			testUpgradeOnPlainRouteIsIgnored(t)
+		})
+	}
+}
+
+func testUpgradeOnPlainRouteIsIgnored(t *testing.T) {
+	t.Helper()
+
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.GET("/hello", func(*Context) (any, error) {
+		return "hi", nil
+	})
+
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		var message string
+
+		if err := ctx.Bind(&message); err != nil {
+			return nil, err
+		}
+
+		return fmt.Sprintf("Received: %s", message), nil
+	})
+
+	go app.Run()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Upgrade headers on the plain route must be ignored: a normal 200 JSON
+	// response, not a 101, and nothing registered in the hub — even after many
+	// repeated upgrade requests, which is what leaked file descriptors.
+	for i := 0; i < 20; i++ {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/hello", http.NoBody)
+		require.NoError(t, err)
+
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		_ = resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "iteration %d: plain route must answer 200, not upgrade", i)
+		assert.Contains(t, string(body), "hi", "iteration %d: plain route must answer with its handler", i)
+	}
+
+	assert.Empty(t, app.httpServer.ws.ListConnections(),
+		"no upgrade request to the plain route may register a connection in the hub")
+
+	// The WebSocket route itself must still upgrade and echo.
+	wsURL := "ws" + server.URL[len("http"):] + "/ws"
+
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	require.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte("Hello, WebSocket!")))
+
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
+	assert.Equal(t, "Received: Hello, WebSocket!", string(message))
+
+	require.NoError(t, ws.Close())
+}

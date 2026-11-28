@@ -12,6 +12,7 @@ import (
 
 	gWebsocket "github.com/gorilla/websocket"
 
+	"gofr.dev/pkg/gofr/internal/routemark"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -27,8 +28,13 @@ func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 // WebSocket registers a handler function for a WebSocket route. This method allows you to define a route handler for
 // WebSocket connections. It internally handles the WebSocket handshake and provides a `websocket.Connection` object
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
+//
+// The route is marked as a WebSocket route, and only such a route is ever upgraded to a WebSocket
+// connection: an Upgrade header sent to any other route is ignored and the request is served as
+// plain HTTP. Upgrading every route leaked the hijacked connection — no handler ever closed it —
+// so repeated upgrade requests to an ordinary route exhausted file descriptors (gofr#4635).
 func (a *App) WebSocket(route string, handler Handler) {
-	a.GET(route, func(ctx *Context) (any, error) {
+	routemark.MarkWebSocket(a.add("GET", route, func(ctx *Context) (any, error) {
 		connID, ok := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
 		if !ok {
 			// The request never went through the WebSocket upgrade middleware
@@ -58,7 +64,7 @@ func (a *App) WebSocket(route string, handler Handler) {
 		handleWebSocketConnection(ctx, conn, handler)
 
 		return nil, nil
-	})
+	}))
 }
 
 // AddWSService registers a WebSocket service, establishes a persistent connection, and optionally handles reconnection.

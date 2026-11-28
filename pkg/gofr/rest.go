@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel/trace"
 
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -53,7 +54,7 @@ func (a *App) QUERY(pattern string, handler Handler) {
 	a.add(MethodQuery, pattern, handler)
 }
 
-func (a *App) add(method, pattern string, h Handler) {
+func (a *App) add(method, pattern string, h Handler) *mux.Route {
 	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
@@ -80,7 +81,7 @@ func (a *App) add(method, pattern string, h Handler) {
 		routeHandler = queryContentTypeGuard(routeHandler, a.container.Logger)
 	}
 
-	a.httpServer.router.Add(method, pattern, routeHandler)
+	return a.httpServer.router.Add(method, pattern, routeHandler)
 }
 
 // queryContentTypeGuard enforces RFC 10008's Content-Type requirement on

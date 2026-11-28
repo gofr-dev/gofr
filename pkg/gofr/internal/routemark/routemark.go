@@ -20,6 +20,13 @@ const catchAllName = "gofr.catch-all"
 // route otherwise, so the name is free to carry the mark.
 const builtInName = "gofr.built-in"
 
+// webSocketName is the name a route registered through App.WebSocket carries. The WebSocket
+// upgrade middleware upgrades only a route carrying this mark: an Upgrade header on any other
+// route must be ignored, or the hijacked connection is never closed and file descriptors leak
+// (gofr#4635). A route is marked at registration time, never by path, so a plain route that
+// happens to share a WebSocket route's template is not mistaken for one.
+const webSocketName = "gofr.websocket"
+
 // ctxKey is the private context key under which the trie router stores the matched route. It
 // exists because, once the trie router bypasses mux's ServeHTTP, mux.CurrentRoute(r) is no longer
 // populated. A pointer is stored rather than the template string: it fits in an interface without
@@ -36,6 +43,17 @@ func MarkCatchAll(route *mux.Route) *mux.Route {
 // IsCatchAll reports whether route is the route MarkCatchAll marked. A nil route is not.
 func IsCatchAll(route *mux.Route) bool {
 	return route != nil && route.GetName() == catchAllName
+}
+
+// MarkWebSocket marks route as a WebSocket route, registered through App.WebSocket, and returns it.
+// Only such a route may be upgraded to a WebSocket connection; see webSocketName.
+func MarkWebSocket(route *mux.Route) *mux.Route {
+	return route.Name(webSocketName)
+}
+
+// IsWebSocket reports whether route is one MarkWebSocket marked. A nil route is not.
+func IsWebSocket(route *mux.Route) bool {
+	return route != nil && route.GetName() == webSocketName
 }
 
 // With returns r carrying route as the matched route. A nil route is a no-op so unmatched requests
