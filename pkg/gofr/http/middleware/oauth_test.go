@@ -324,6 +324,7 @@ func Test_getPublicKeys_ReusesConnection(t *testing.T) {
 					atomic.AddInt32(&conns, 1)
 				}
 			}
+
 			srv.Start()
 			defer srv.Close()
 
