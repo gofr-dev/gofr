@@ -3553,7 +3553,7 @@ func TestPubSub_SubscribeToStream_BlockDuration(t *testing.T) {
 	}
 }
 
-func TestPubSub_SubscribeToStream_NoCapacityBacksOff(t *testing.T) {
+func TestPubSub_SubscribeToStream_NoReceiveChannelSendsNoRead(t *testing.T) {
 	const topic = "orders"
 
 	ps, _ := newRecordedPubSub(t, &Config{

@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,10 +170,10 @@ func TestGetRedisConfig_TLS_ClientKeyPair(t *testing.T) {
 		name      string
 		certPath  string
 		wantCerts int
-		wantErr   string
+		wantLog   bool
 	}{
 		{name: "matching cert and key are loaded", certPath: certPath, wantCerts: 1},
-		{name: "mismatched cert and key are logged and skipped", certPath: otherCertPath, wantErr: "failed to load client cert/key pair"},
+		{name: "mismatched cert and key are logged and skipped", certPath: otherCertPath, wantLog: true},
 	}
 
 	for _, tc := range tests {
@@ -186,7 +187,7 @@ func TestGetRedisConfig_TLS_ClientKeyPair(t *testing.T) {
 
 			require.NotNil(t, conf.TLS)
 			assert.Len(t, conf.TLS.Certificates, tc.wantCerts)
-			assert.Contains(t, stderr, tc.wantErr)
+			assert.Equal(t, tc.wantLog, strings.Contains(stderr, "failed to load client cert/key pair"))
 		})
 	}
 }

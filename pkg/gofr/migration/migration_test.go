@@ -932,6 +932,7 @@ func TestRun_GetAppliedMigrationsError(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "migration failed: could not verify migration state from datasources, err: sql: "+errRandomDB.Error())
+	assert.NotContains(t, logs, "could not acquire locks")
 	assert.NotContains(t, logs, "running migration")
 	assert.False(t, ran, "migration must not run")
 	require.NoError(t, mocks.SQL.ExpectationsWereMet())
