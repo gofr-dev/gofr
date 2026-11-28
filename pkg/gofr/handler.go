@@ -49,6 +49,10 @@ type handler struct {
 
 	// builtIn marks a route GoFr registered for itself; httpServerSetup reads it during its walk.
 	builtIn bool
+
+	// webSocket marks a route registered through App.WebSocket; httpServerSetup reads it
+	// during its walk, the same way it reads builtIn.
+	webSocket bool
 }
 
 // handlerOutcome carries the (result, error) pair from the per-request
